@@ -1,0 +1,193 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  PARENT
+  COACH
+  SUBSCRIBER
+}
+
+enum ActivityType {
+  DIAPER_CHANGE
+  NAP
+  BOTTLE
+  MEAL
+  SNACK
+  ACTIVITY
+  TASK_CHECKLIST
+  BEHAVIOR
+  OTHER
+}
+
+enum ProgressStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  PASSED
+  FAILED
+}
+
+model User {
+  id        String       @id @default(uuid())
+  email     String       @unique
+  name      String?
+  password  String?
+  role      Role         @default(PARENT)
+  centers   CenterUser[]
+  children  Child[]
+  teacherClasses TeacherClass[]
+  recordedActivities ActivityLog[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model Center {
+  id          String          @id @default(uuid())
+  name        String
+  address     String?
+  users       CenterUser[]
+  classes     ClassRoom[]
+  children    Child[]
+  lessons     Lesson[]
+  checklists  TaskChecklist[]
+  subscription Subscription?
+  createdAt   DateTime        @default(now())
+}
+
+model CenterUser {
+  id       String  @id @default(uuid())
+  user     User    @relation(fields: [userId], references: [id])
+  userId   String
+  center   Center  @relation(fields: [centerId], references: [id])
+  centerId String
+  role     Role
+
+  @@unique([userId, centerId])
+}
+
+model ClassRoom {
+  id        String       @id @default(uuid())
+  name      String
+  center    Center       @relation(fields: [centerId], references: [id])
+  centerId  String
+  children  Child[]
+  teachers  TeacherClass[]
+}
+
+model TeacherClass {
+  id       String     @id @default(uuid())
+  teacher  User       @relation(fields: [teacherId], references: [id])
+  teacherId String
+  classRoom ClassRoom @relation(fields: [classId], references: [id])
+  classId   String
+
+  @@unique([teacherId, classId])
+}
+
+model Child {
+  id          String       @id @default(uuid())
+  firstName   String
+  lastName    String?
+  birthDate   DateTime?
+  center      Center       @relation(fields: [centerId], references: [id])
+  centerId    String
+  classRoom   ClassRoom?   @relation(fields: [classRoomId], references: [id])
+  classRoomId String?
+  progress    Progress[]
+  activities  ActivityLog[]
+  completedTasks ChildTask[]
+  parent      User?        @relation(fields: [parentId], references: [id])
+  parentId    String?
+  createdAt   DateTime     @default(now())
+}
+
+model Lesson {
+  id        String    @id @default(uuid())
+  title     String
+  description String?
+  center    Center    @relation(fields: [centerId], references: [id])
+  centerId  String
+  media     String[]  @default([])
+  progress  Progress[]
+}
+
+model Progress {
+  id           String          @id @default(uuid())
+  child        Child           @relation(fields: [childId], references: [id])
+  childId      String
+  lesson       Lesson          @relation(fields: [lessonId], references: [id])
+  lessonId     String
+  status       ProgressStatus  @default(NOT_STARTED)
+  goalIndex    Int             @default(1)
+  achievedAt   DateTime?
+  nextGoals    Progress[]      @relation("GoalProgression")
+  previousGoal Progress?       @relation("GoalProgression", fields: [previousGoalId], references: [id])
+  previousGoalId String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@unique([childId, lessonId, goalIndex])
+}
+
+model ActivityLog {
+  id            String       @id @default(uuid())
+  child         Child        @relation(fields: [childId], references: [id])
+  childId       String
+  type          ActivityType @default(OTHER)
+  details       Json?
+  notes         String?
+  recordedBy    User?        @relation(fields: [recordedById], references: [id])
+  recordedById  String?
+  createdAt     DateTime     @default(now())
+  isBackdated   Boolean      @default(false)
+}
+
+model TaskChecklist {
+  id         String   @id @default(uuid())
+  title      String
+  description String?
+  center     Center   @relation(fields: [centerId], references: [id])
+  centerId   String
+  tasks      Task[]
+  createdAt  DateTime @default(now())
+}
+
+model Task {
+  id          String      @id @default(uuid())
+  title       String
+  checklist   TaskChecklist @relation(fields: [checklistId], references: [id])
+  checklistId String
+  policyLink  String?
+  mediaLink   String?
+  completed   ChildTask[]
+  createdAt   DateTime    @default(now())
+}
+
+model ChildTask {
+  id         String   @id @default(uuid())
+  child      Child    @relation(fields: [childId], references: [id])
+  childId    String
+  task       Task     @relation(fields: [taskId], references: [id])
+  taskId     String
+  completedAt DateTime?
+
+  @@unique([childId, taskId])
+}
+
+model Subscription {
+  id         String   @id @default(uuid())
+  center     Center   @relation(fields: [centerId], references: [id])
+  centerId   String   @unique
+  tier       String
+  active     Boolean  @default(true)
+  expiresAt  DateTime?
+  paymentInfo Json?
+}

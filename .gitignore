@@ -2,6 +2,9 @@ node_modules/
 .next/
 build/
 dist/
+.env
+.env.*
+!.env.example
 .env.local
 .env.*.local
 *.log

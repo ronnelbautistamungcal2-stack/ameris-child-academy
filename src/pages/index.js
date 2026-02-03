@@ -9,9 +9,9 @@ export default function Home() {
   useEffect(() => {
     if (status === "loading") return;
     if (session) {
-      router.push("/dashboard");
+      router.replace("/dashboard");
     } else {
-      router.push("/login");
+      router.replace("/login");
     }
   }, [session, status, router]);
 

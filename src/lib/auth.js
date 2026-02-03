@@ -1,10 +1,11 @@
 import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth-options";
 
 /**
  * Get session on server-side with full user context.
  */
 export async function getSession(req, res) {
-  return getServerSession(req, res);
+  return getServerSession(req, res, authOptions);
 }
 
 /**
@@ -35,6 +36,7 @@ export async function hasAccessToCenter(userId, centerId) {
     where: { id: userId },
     include: { centers: true },
   });
+  if (!user) return false;
   if (user.role === "ADMIN") return true;
-  return user.centers.some((c) => c.centerId === centerId);
+  return (user.centers || []).some((c) => c.centerId === centerId);
 }

@@ -12,6 +12,18 @@ export default async function handler(req, res) {
       centers = await prisma.center.findMany({
         include: { users: true, classes: true, subscription: true },
       });
+    } else if (session.user.role === "PARENT") {
+      const children = await prisma.child.findMany({
+        where: { parentId: session.user.id },
+        select: { centerId: true },
+      });
+      const centerIds = [...new Set(children.map((c) => c.centerId))];
+      centers = centerIds.length
+        ? await prisma.center.findMany({
+            where: { id: { in: centerIds } },
+            include: { users: true, classes: true, subscription: true },
+          })
+        : [];
     } else {
       const user = await prisma.user.findUnique({
         where: { id: session.user.id },
@@ -25,7 +37,7 @@ export default async function handler(req, res) {
           },
         },
       });
-      centers = user.centers.map((c) => c.center);
+      centers = (user?.centers || []).map((c) => c.center);
     }
     return res.status(200).json(centers);
   }

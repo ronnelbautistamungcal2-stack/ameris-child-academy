@@ -1,118 +1,76 @@
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/router";
-import { useEffect } from "react";
-import Link from "next/link";
+import AppShell from "@/components/shell/AppShell";
+import { useRequireRole } from "@/hooks/useRequireRole";
 
 export default function SettingsPage() {
-  const { data: session, status } = useSession();
-  const router = useRouter();
+  const { session, status, allowed } = useRequireRole(
+    ["ADMIN", "TEACHER", "PARENT", "COACH", "SUBSCRIBER"],
+    "/login",
+  );
 
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/login");
-    }
-  }, [status, router]);
-
-  if (status === "loading") return <p>Loading...</p>;
+  if (status === "loading")
+    return <div className="p-6 text-sm text-gray-600">Loading...</div>;
+  if (!allowed)
+    return <div className="p-6 text-sm text-gray-600">Redirecting...</div>;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f3f4f6" }}>
-      {/* Header */}
-      <header
-        style={{
-          background: "white",
-          borderBottom: "1px solid #e5e7eb",
-          padding: "1rem",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: 1200,
-            margin: "0 auto",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <h1 style={{ margin: 0, fontSize: 24 }}>Ameris Child Academy</h1>
-          <Link
-            href="/dashboard"
-            style={{ color: "#2563eb", textDecoration: "none" }}
-          >
-            ← Back to Dashboard
-          </Link>
-        </div>
-      </header>
+    <AppShell
+      title="Account Settings"
+      userName={session?.user?.name || session?.user?.email}
+      userLabel={session?.user?.email}
+      navItems={[
+        { href: "/dashboard", label: "Dashboard" },
+        { href: "/settings", label: "Account Settings" },
+      ]}
+      showBack={false}
+    >
+      <div className="rounded-2xl border border-gray-200 bg-white p-6">
+        <h2 className="text-lg font-extrabold text-gray-900">Account</h2>
+        <p className="mt-1 text-sm text-gray-600">
+          Your profile and basic account information.
+        </p>
 
-      {/* Main Content */}
-      <main style={{ maxWidth: 800, margin: "2rem auto", padding: "0 20px" }}>
-        <div
-          style={{
-            background: "white",
-            padding: 24,
-            borderRadius: 8,
-            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-          }}
-        >
-          <h2>Account Settings</h2>
-
-          <div style={{ marginTop: "2rem" }}>
-            <h3>Profile Information</h3>
-            <div
-              style={{
-                background: "#f9fafb",
-                padding: 16,
-                borderRadius: 4,
-                marginTop: 12,
-              }}
-            >
-              <p>
-                <strong>Name:</strong> {session?.user?.name || "Not set"}
-              </p>
-              <p>
-                <strong>Email:</strong> {session?.user?.email}
-              </p>
-              <p>
-                <strong>Role:</strong> {session?.user?.role}
-              </p>
-              <p>
-                <strong>User ID:</strong>{" "}
-                <code
-                  style={{
-                    background: "#f0f0f0",
-                    padding: "2px 6px",
-                    borderRadius: 2,
-                  }}
-                >
-                  {session?.user?.id}
-                </code>
-              </p>
+        <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+            <Field label="Name" value={session?.user?.name || "Not set"} />
+            <Field label="Email" value={session?.user?.email || "—"} />
+            <Field label="Role" value={session?.user?.role || "—"} />
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                User ID
+              </div>
+              <div className="mt-1 font-mono text-xs text-gray-900">
+                {session?.user?.id}
+              </div>
             </div>
           </div>
-
-          <div
-            style={{
-              marginTop: "2rem",
-              paddingTop: "2rem",
-              borderTop: "1px solid #e5e7eb",
-            }}
-          >
-            <h3 style={{ color: "#dc2626" }}>Danger Zone</h3>
-            <button
-              style={{
-                padding: "8px 16px",
-                background: "#dc2626",
-                color: "white",
-                border: "none",
-                borderRadius: 4,
-                cursor: "pointer",
-              }}
-            >
-              Delete Account
-            </button>
-          </div>
         </div>
-      </main>
+
+        <div className="mt-6 border-t border-gray-200 pt-6">
+          <h3 className="text-sm font-extrabold text-red-700">Danger Zone</h3>
+          <p className="mt-1 text-sm text-gray-600">
+            Account deletion is not implemented yet.
+          </p>
+          <button
+            type="button"
+            className="mt-3 rounded-2xl bg-red-500 px-4 py-2 text-sm font-extrabold text-white hover:bg-red-600"
+            onClick={() => alert("Delete account not implemented yet")}
+          >
+            Delete Account
+          </button>
+        </div>
+      </div>
+    </AppShell>
+  );
+}
+
+function Field({ label, value }) {
+  return (
+    <div>
+      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+        {label}
+      </div>
+      <div className="mt-1 font-semibold text-gray-900">{value}</div>
     </div>
   );
 }
+

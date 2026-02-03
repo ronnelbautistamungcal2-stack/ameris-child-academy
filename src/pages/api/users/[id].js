@@ -48,7 +48,31 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Only admins can delete users" });
     }
 
-    await prisma.user.delete({ where: { id } });
+    if (session.user.id === id) {
+      return res.status(400).json({ error: "You cannot delete your own user" });
+    }
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.teacherClass.deleteMany({ where: { teacherId: id } });
+        await tx.centerUser.deleteMany({ where: { userId: id } });
+        await tx.activityLog.updateMany({
+          where: { recordedById: id },
+          data: { recordedById: null },
+        });
+        await tx.child.updateMany({
+          where: { parentId: id },
+          data: { parentId: null },
+        });
+
+        await tx.user.delete({ where: { id } });
+      });
+    } catch (e) {
+      return res
+        .status(409)
+        .json({ error: e?.message || "Unable to delete user" });
+    }
+
     return res.status(204).end();
   }
 

@@ -3,6 +3,15 @@ import { promises as fs } from "fs";
 import path from "path";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+const ALLOWED_EXTENSIONS = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".webp",
+  ".gif",
+  ".pdf",
+]);
 
 export const config = {
   api: {
@@ -30,15 +39,36 @@ export default async function handler(req, res) {
     }
 
     try {
+      if (typeof file !== "string" || typeof fileName !== "string") {
+        return res.status(400).json({ error: "Invalid payload" });
+      }
+
       // Ensure upload directory exists
       await fs.mkdir(UPLOAD_DIR, { recursive: true });
 
       // Decode base64 file
       const buffer = Buffer.from(file, "base64");
+      if (!buffer.length) {
+        return res.status(400).json({ error: "Invalid base64 file" });
+      }
+      if (buffer.length > MAX_UPLOAD_BYTES) {
+        return res.status(413).json({ error: "File too large" });
+      }
+
       const fileExt = path.extname(fileName);
+      if (!ALLOWED_EXTENSIONS.has(fileExt.toLowerCase())) {
+        return res.status(400).json({ error: "File type not allowed" });
+      }
+
       const baseName = path.basename(fileName, fileExt);
       const timestamp = Date.now();
-      const uniqueFileName = `${baseName}_${timestamp}${fileExt}`;
+      const safeBaseName = baseName
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "")
+        .slice(0, 80) || "upload";
+      const uniqueFileName = `${safeBaseName}_${timestamp}${fileExt.toLowerCase()}`;
       const filePath = path.join(UPLOAD_DIR, uniqueFileName);
 
       // Write file

@@ -4,11 +4,19 @@ import { useRouter } from "next/router";
 import Link from "next/link";
 
 export default function Login() {
-  const [email, setEmail] = useState("admin@demo.com");
-  const [password, setPassword] = useState("adminpass");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+
+  const callbackUrlRaw = router.query?.callbackUrl;
+  const callbackUrl =
+    typeof callbackUrlRaw === "string"
+      ? callbackUrlRaw
+      : Array.isArray(callbackUrlRaw)
+        ? callbackUrlRaw[0]
+        : null;
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -21,7 +29,7 @@ export default function Login() {
     });
     setLoading(false);
     if (res && !res.error) {
-      router.push("/dashboard");
+      router.replace(callbackUrl || "/dashboard");
     } else {
       setError(res?.error || "Login failed");
     }
@@ -132,23 +140,27 @@ export default function Login() {
         }}
       />
 
-      <div
-        style={{
-          background: "#f3f4f6",
-          padding: 12,
-          borderRadius: 4,
-          fontSize: 14,
-        }}
-      >
-        <p style={{ margin: "0 0 8px 0", fontWeight: 500 }}>
-          Demo Credentials:
-        </p>
-        <p style={{ margin: "4px 0" }}>Admin: admin@demo.com / adminpass</p>
-        <p style={{ margin: "4px 0" }}>
-          Teacher: teacher@demo.com / teacherpass
-        </p>
-        <p style={{ margin: "4px 0" }}>Parent: parent@demo.com / parentpass</p>
-      </div>
+      {process.env.NODE_ENV !== "production" && (
+        <div
+          style={{
+            background: "#f3f4f6",
+            padding: 12,
+            borderRadius: 4,
+            fontSize: 14,
+          }}
+        >
+          <p style={{ margin: "0 0 8px 0", fontWeight: 500 }}>
+            Demo Credentials:
+          </p>
+          <p style={{ margin: "4px 0" }}>Admin: admin@demo.com / adminpass</p>
+          <p style={{ margin: "4px 0" }}>
+            Teacher: teacher@demo.com / teacherpass
+          </p>
+          <p style={{ margin: "4px 0" }}>
+            Parent: parent@demo.com / parentpass
+          </p>
+        </div>
+      )}
     </div>
   );
 }

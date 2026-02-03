@@ -17,6 +17,23 @@ export default async function handler(req, res) {
       });
       return res.status(200).json(children);
     }
+    if (session.user.role === "SUBSCRIBER") {
+      const memberships = await prisma.centerUser.findMany({
+        where: { userId: session.user.id, role: "SUBSCRIBER" },
+        select: { centerId: true },
+      });
+      const centerIds = memberships.map((m) => m.centerId);
+      if (!centerIds.length) return res.status(403).json({ error: "Forbidden" });
+      const active = await prisma.subscription.findFirst({
+        where: { centerId: { in: centerIds }, active: true },
+      });
+      if (!active) return res.status(402).json({ error: "Subscription inactive" });
+      const children = await prisma.child.findMany({
+        where: { centerId: centerId ? centerId : { in: centerIds } },
+        include: { progress: true, activities: true },
+      });
+      return res.status(200).json(children);
+    }
     return res.status(403).json({ error: "Forbidden" });
   }
 

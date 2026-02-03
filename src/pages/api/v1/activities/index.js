@@ -12,6 +12,9 @@ export default async function handler(req, res) {
     // List activity logs for a child
     if (!["ADMIN", "TEACHER", "COACH"].includes(session.user.role)) {
       if (session.user.role === "PARENT") {
+        if (!childId) {
+          return res.status(400).json({ error: "childId is required" });
+        }
         const child = await prisma.child.findUnique({
           where: { id: childId },
         });

@@ -1,162 +1,549 @@
-import { useSession, signOut } from "next-auth/react";
-import { useRouter } from "next/router";
-import { useEffect } from "react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
+import { useRouter } from "next/router";
+import { useEffect, useMemo, useState } from "react";
+import { apiJson } from "@/lib/api";
+import AppShell from "@/components/shell/AppShell";
+
+const NAV_BASE = [{ href: "/dashboard", label: "Dashboard" }];
+
+const NAV_PARENT = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/parent/children", label: "My Children" },
+  { href: "/parent/progress", label: "Progress & Goals" },
+  { href: "/parent/forms", label: "Enrollment Docs" },
+  { href: "/parent/billing", label: "Billing" },
+  { href: "/parent/messages", label: "Messages" },
+  { href: "/parent/policies", label: "Policies" },
+  { href: "/settings", label: "Account Settings" },
+];
+
+const NAV_TEACHER = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/teacher", label: "Teacher Console" },
+  { href: "/teacher/children", label: "My Children" },
+  { href: "/teacher/logs", label: "Daily Logging" },
+  { href: "/teacher/checklists", label: "Checklists" },
+  { href: "/teacher/lessons", label: "Lesson Plans" },
+  { href: "/teacher/policies", label: "Policies" },
+  { href: "/teacher/metrics", label: "Reports" },
+  { href: "/settings", label: "Account Settings" },
+];
+
+const NAV_COACH = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/coach/compliance", label: "Compliance" },
+  { href: "/coach/checklists", label: "Follow-ups" },
+  { href: "/coach/training", label: "Training" },
+  { href: "/coach/reports", label: "Reports" },
+  { href: "/coach/policies", label: "Policies" },
+  { href: "/settings", label: "Account Settings" },
+];
+
+const NAV_SUBSCRIBER = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/subscriber", label: "Subscription" },
+  { href: "/settings", label: "Account Settings" },
+];
+
+const NAV_ADMIN = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/admin/users", label: "Access Controls" },
+  { href: "/admin/teachers", label: "Teachers" },
+  { href: "/admin/centers", label: "Centers" },
+  { href: "/admin/classes", label: "Classrooms" },
+  { href: "/admin/children", label: "Students" },
+  { href: "/admin/lessons", label: "Lesson Plans" },
+  { href: "/admin/checklists", label: "Checklists" },
+  { href: "/admin/activity-overrides", label: "Activity Overrides" },
+  { href: "/admin/subscriptions", label: "Subscriptions" },
+  { href: "/settings", label: "Account Settings" },
+];
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
+  const role = session?.user?.role;
+  const name = session?.user?.name || session?.user?.email || "Welcome";
+
+  const [centers, setCenters] = useState([]);
+  const [centerId, setCenterId] = useState("");
+  const [children, setChildren] = useState([]);
+  const [childId, setChildId] = useState("");
+  const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/login");
-    }
+    if (status === "unauthenticated") router.replace("/login");
   }, [status, router]);
 
-  if (status === "loading") return <p>Loading...</p>;
+  const nav = useMemo(() => {
+    if (role === "ADMIN") return NAV_ADMIN;
+    if (role === "TEACHER") return NAV_TEACHER;
+    if (role === "COACH") return NAV_COACH;
+    if (role === "SUBSCRIBER") return NAV_SUBSCRIBER;
+    if (role === "PARENT") return NAV_PARENT;
+    return NAV_BASE;
+  }, [role]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+
+    (async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const c = await apiJson("/api/v1/centers");
+        const centersArr = Array.isArray(c) ? c : [];
+        setCenters(centersArr);
+
+        if (role === "PARENT") {
+          const kids = await apiJson("/api/v1/children");
+          const kidsArr = Array.isArray(kids) ? kids : [];
+          setChildren(kidsArr);
+          setChildId(kidsArr[0]?.id || "");
+        } else {
+          const defaultCenterId =
+            typeof router.query.centerId === "string"
+              ? router.query.centerId
+              : centersArr.length === 1
+                ? centersArr[0].id
+                : "";
+          setCenterId(defaultCenterId);
+        }
+      } catch (e) {
+        setError(e.message || "Failed to load dashboard");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [status, role, router.query.centerId]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    if (role === "PARENT") return;
+    if (!centerId) {
+      setChildren([]);
+      setChildId("");
+      return;
+    }
+
+    (async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const kids = await apiJson(
+          `/api/v1/children?centerId=${encodeURIComponent(centerId)}`,
+        );
+        const kidsArr = Array.isArray(kids) ? kids : [];
+        setChildren(kidsArr);
+        const selected =
+          typeof router.query.childId === "string"
+            ? router.query.childId
+            : kidsArr[0]?.id || "";
+        setChildId(selected);
+      } catch (e) {
+        setError(e.message || "Failed to load children");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [status, role, centerId, router.query.childId]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    if (!childId) {
+      setActivities([]);
+      return;
+    }
+
+    (async () => {
+      try {
+        const list = await apiJson(
+          `/api/v1/activities?childId=${encodeURIComponent(childId)}`,
+        );
+        setActivities(Array.isArray(list) ? list.slice(0, 6) : []);
+      } catch {
+        setActivities([]);
+      }
+    })();
+  }, [status, childId]);
+
+  const selectedChild = useMemo(() => {
+    return children.find((c) => c.id === childId) || null;
+  }, [children, childId]);
+
+  const subscriptionSummary = useMemo(() => {
+    const c = centers[0];
+    if (!c?.subscription) return null;
+    return {
+      centerName: c.name,
+      tier: c.subscription.tier || "—",
+      active: !!c.subscription.active,
+      expiresAt: c.subscription.expiresAt ? new Date(c.subscription.expiresAt) : null,
+    };
+  }, [centers]);
+
+  if (status === "loading")
+    return <div className="p-6 text-sm text-gray-600">Loading...</div>;
+  if (!session)
+    return <div className="p-6 text-sm text-gray-600">Redirecting...</div>;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f3f4f6" }}>
-      {/* Header */}
-      <header
-        style={{
-          background: "white",
-          borderBottom: "1px solid #e5e7eb",
-          padding: "1rem",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: 1200,
-            margin: "0 auto",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <h1 style={{ margin: 0, fontSize: 24 }}>Ameris Child Academy</h1>
-          <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-            <span style={{ color: "#666" }}>
-              {session?.user?.name || session?.user?.email}
-              <br />
-              <small style={{ color: "#999" }}>
-                Role: {session?.user?.role}
-              </small>
-            </span>
-            <button
-              onClick={() => signOut({ redirect: "/login" })}
-              style={{
-                padding: "8px 16px",
-                background: "#ef4444",
-                color: "white",
-                border: "none",
-                borderRadius: 4,
-                cursor: "pointer",
-              }}
-            >
-              Sign Out
-            </button>
-          </div>
-        </div>
-      </header>
+    <AppShell
+      title="Dashboard"
+      userName={session?.user?.name || session?.user?.email}
+      userLabel={session?.user?.email}
+      navItems={nav}
+      showBack={false}
+    >
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_340px]">
+        <section className="min-w-0 space-y-4">
+              <div className="rounded-2xl border border-gray-200 bg-gradient-to-r from-blue-50 to-cyan-50 p-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-blue-700/70">
+                      Welcome back
+                    </div>
+                    <h2 className="mt-1 truncate text-2xl font-extrabold text-gray-900">
+                      {name}!
+                    </h2>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {role === "PARENT"
+                        ? "Your children are ready for a great day."
+                        : role === "TEACHER"
+                          ? "Jump into daily logging, lessons, and checklists."
+                          : role === "ADMIN"
+                            ? "Manage classrooms, students, and staff — with full control."
+                            : "Welcome."}
+                    </p>
+                  </div>
 
-      {/* Main Content */}
-      <main style={{ maxWidth: 1200, margin: "2rem auto", padding: "0 20px" }}>
-        <div
-          style={{
-            background: "white",
-            padding: 24,
-            borderRadius: 8,
-            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-          }}
-        >
-          <h2>Welcome, {session?.user?.name || "User"}!</h2>
-          <p style={{ color: "#666", marginBottom: "2rem" }}>
-            You are logged in as <strong>{session?.user?.email}</strong> with
-            role <strong>{session?.user?.role}</strong>
-          </p>
+                  {(role === "ADMIN" || role === "TEACHER") && centers.length ? (
+                    <div className="w-full max-w-xs">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Center
+                      </div>
+                      <select
+                        value={centerId}
+                        onChange={(e) => setCenterId(e.target.value)}
+                        className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                      >
+                        <option value="">Select a center…</option>
+                        {centers.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
 
-          {/* Navigation Grid */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-              gap: 16,
-              marginTop: "2rem",
-            }}
-          >
-            <NavCard
-              title="Activities"
-              description="Log and view child activities"
-              href="/activities"
-              icon="📋"
-            />
-            <NavCard
-              title="Children"
-              description="Manage enrolled children"
-              href="/children"
-              icon="👶"
-            />
-            <NavCard
-              title="Progress"
-              description="Track learning progress"
-              href="/progress"
-              icon="📈"
-            />
-            <NavCard
-              title="Settings"
-              description="Account and preferences"
-              href="/settings"
-              icon="⚙️"
-            />
-          </div>
+              <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-extrabold text-gray-900">
+                      {role === "PARENT" ? "My Children" : "Children"}
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {role === "PARENT"
+                        ? "Quick access to your child profiles and recent activity."
+                        : role === "TEACHER"
+                          ? "Limited to your assigned centers/classrooms."
+                          : "Select a center to view children."}
+                    </p>
+                  </div>
+                  {role === "ADMIN" ? (
+                    <Link
+                      href="/admin/children"
+                      className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+                    >
+                      Manage Students
+                    </Link>
+                  ) : role === "TEACHER" ? (
+                    <Link
+                      href="/teacher/children"
+                      className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+                    >
+                      View All
+                    </Link>
+                  ) : null}
+                </div>
 
-          {/* Session Info */}
-          <div
-            style={{
-              marginTop: "3rem",
-              padding: "1rem",
-              background: "#f0f9ff",
-              borderRadius: 4,
-              borderLeft: "4px solid #2563eb",
-            }}
-          >
-            <p style={{ margin: 0, fontSize: 14, color: "#0369a1" }}>
-              <strong>Session Token:</strong>{" "}
-              {session?.user?.id?.substring(0, 12)}...
-            </p>
-          </div>
-        </div>
-      </main>
-    </div>
+                {error ? (
+                  <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                    {error}
+                  </div>
+                ) : null}
+
+                {loading ? (
+                  <div className="mt-4 text-sm text-gray-600">Loading…</div>
+                ) : role !== "PARENT" && !centerId ? (
+                  <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                    Select a center to load children.
+                  </div>
+                ) : children.length === 0 ? (
+                  <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                    No children found.
+                  </div>
+                ) : (
+                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                    {children.slice(0, 8).map((ch) => {
+                      const active = ch.id === childId;
+                      return (
+                        <button
+                          key={ch.id}
+                          type="button"
+                          onClick={() => setChildId(ch.id)}
+                          className={[
+                            "rounded-2xl border p-4 text-left transition",
+                            active
+                              ? "border-blue-200 bg-blue-50"
+                              : "border-gray-200 bg-white hover:bg-gray-50",
+                          ].join(" ")}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-sm font-extrabold text-gray-700">
+                              {initials(ch.firstName, ch.lastName)}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-extrabold text-gray-900">
+                                {ch.firstName} {ch.lastName || ""}
+                              </div>
+                              <div className="truncate text-xs text-gray-500">
+                                {ch.classRoomId ? `Class: ${ch.classRoomId}` : "Class: —"}
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                <h3 className="text-base font-extrabold text-gray-900">
+                  Enrollment & Policies
+                </h3>
+                <p className="mt-1 text-sm text-gray-600">
+                  Quick links to documents, policies, and training resources.
+                </p>
+
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <QuickTile
+                    title="Policies & Handbook"
+                    subtitle="Procedures & guidelines"
+                    href={
+                      role === "PARENT"
+                        ? "/parent/policies"
+                        : role === "COACH"
+                          ? "/coach/policies"
+                          : "/teacher/policies"
+                    }
+                  />
+                  <QuickTile
+                    title="Lesson Plans"
+                    subtitle="Training media & materials"
+                    href={
+                      role === "TEACHER"
+                        ? "/teacher/lessons"
+                        : role === "ADMIN"
+                          ? "/admin/lessons"
+                          : "/teacher/lessons"
+                    }
+                    disabled={role === "PARENT"}
+                  />
+                  <QuickTile
+                    title="Checklists"
+                    subtitle="Daily/weekly tasks"
+                    href={
+                      role === "ADMIN"
+                        ? "/admin/checklists"
+                        : role === "COACH"
+                          ? "/coach/checklists"
+                          : "/teacher/checklists"
+                    }
+                    disabled={role === "PARENT" || role === "SUBSCRIBER"}
+                  />
+                </div>
+              </div>
+            </section>
+
+            <aside className="space-y-4">
+              <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-extrabold text-gray-900">
+                    Recent Activity
+                  </h3>
+                  {selectedChild ? (
+                    <span className="text-xs font-semibold text-gray-500">
+                      {selectedChild.firstName}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-3 space-y-2">
+                  {childId && activities.length ? (
+                    activities.map((a) => (
+                      <div
+                        key={a.id}
+                        className="rounded-xl border border-gray-200 bg-gray-50 p-3"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-sm font-extrabold text-gray-900">
+                            {a.type}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {new Date(a.createdAt).toLocaleString()}
+                          </div>
+                        </div>
+                        <div className="mt-1 text-sm text-gray-700">
+                          {a.notes || "—"}
+                        </div>
+                        {a.isBackdated ? (
+                          <div className="mt-2 text-xs font-semibold text-amber-700">
+                            Backdated
+                          </div>
+                        ) : null}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+                      Select a child to view recent activity.
+                    </div>
+                  )}
+                </div>
+
+                {role === "TEACHER" && childId ? (
+                  <Link
+                    href={`/teacher/logs?centerId=${encodeURIComponent(centerId || "")}&childId=${encodeURIComponent(childId)}`}
+                    className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-3 py-2 text-sm font-extrabold text-white hover:bg-blue-700"
+                  >
+                    Log Activity
+                  </Link>
+                ) : role === "ADMIN" && childId ? (
+                  <Link
+                    href={`/admin/activity-overrides?centerId=${encodeURIComponent(centerId || "")}&childId=${encodeURIComponent(childId)}`}
+                    className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-3 py-2 text-sm font-extrabold text-white hover:bg-blue-700"
+                  >
+                    Override Activity
+                  </Link>
+                ) : null}
+              </div>
+
+              {role === "PARENT" ? (
+                <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-base font-extrabold text-gray-900">
+                      Billing
+                    </h3>
+                    {subscriptionSummary ? (
+                      <span className="text-xs font-semibold text-gray-500">
+                        {subscriptionSummary.tier}
+                      </span>
+                    ) : null}
+                  </div>
+                  {subscriptionSummary ? (
+                    <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                      <div className="font-semibold text-gray-900">
+                        {subscriptionSummary.centerName}
+                      </div>
+                      <div className="mt-1">
+                        Status:{" "}
+                        <span className="font-semibold">
+                          {subscriptionSummary.active ? "Active" : "Inactive"}
+                        </span>
+                      </div>
+                      <div className="mt-1">
+                        Expires:{" "}
+                        <span className="font-semibold">
+                          {subscriptionSummary.expiresAt
+                            ? subscriptionSummary.expiresAt.toLocaleDateString()
+                            : "—"}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="mt-3 w-full rounded-xl bg-blue-600 px-3 py-2 text-sm font-extrabold text-white hover:bg-blue-700"
+                        onClick={() => alert("Billing flow not implemented yet")}
+                      >
+                        Pay Now
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+                      Billing details not available yet.
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              {role === "ADMIN" ? (
+                <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                  <h3 className="text-base font-extrabold text-gray-900">
+                    Admin Shortcuts
+                  </h3>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <Shortcut href="/admin/users" label="RBAC" />
+                    <Shortcut href="/admin/teachers" label="Teachers" />
+                    <Shortcut href="/admin/children" label="Students" />
+                    <Shortcut href="/admin/classes" label="Classrooms" />
+                    <Shortcut href="/admin/lessons" label="Lessons" />
+                    <Shortcut href="/admin/subscriptions" label="Subscriptions" />
+                  </div>
+                </div>
+              ) : null}
+        </aside>
+      </div>
+
+      <div className="mt-4 text-xs text-gray-500">
+        User ID: <span className="font-mono">{session?.user?.id}</span>
+      </div>
+    </AppShell>
   );
 }
 
-function NavCard({ title, description, href, icon }) {
-  return (
-    <Link href={href} style={{ textDecoration: "none" }}>
-      <div
-        style={{
-          padding: 20,
-          border: "1px solid #e5e7eb",
-          borderRadius: 8,
-          cursor: "pointer",
-          transition: "all 0.2s",
-          background: "white",
-        }}
-        onMouseOver={(e) => {
-          e.currentTarget.style.borderColor = "#2563eb";
-          e.currentTarget.style.boxShadow = "0 4px 6px rgba(0,0,0,0.1)";
-        }}
-        onMouseOut={(e) => {
-          e.currentTarget.style.borderColor = "#e5e7eb";
-          e.currentTarget.style.boxShadow = "none";
-        }}
-      >
-        <div style={{ fontSize: 32, marginBottom: 8 }}>{icon}</div>
-        <h3 style={{ margin: "0 0 4px 0", fontSize: 18 }}>{title}</h3>
-        <p style={{ margin: 0, fontSize: 14, color: "#666" }}>{description}</p>
+function initials(firstName, lastName) {
+  const f = (firstName || "").trim().slice(0, 1).toUpperCase();
+  const l = (lastName || "").trim().slice(0, 1).toUpperCase();
+  return `${f}${l}` || "C";
+}
+
+function QuickTile({ title, subtitle, href, disabled = false }) {
+  if (disabled) {
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+        <div className="font-extrabold text-gray-900">{title}</div>
+        <div className="mt-1 text-sm text-gray-600">{subtitle}</div>
+        <div className="mt-2 text-xs font-semibold text-gray-500">
+          Not available for your role
+        </div>
       </div>
+    );
+  }
+
+  return (
+    <Link
+      href={href}
+      className="block rounded-2xl border border-gray-200 bg-white p-4 hover:bg-gray-50"
+    >
+      <div className="font-extrabold text-gray-900">{title}</div>
+      <div className="mt-1 text-sm text-gray-600">{subtitle}</div>
+    </Link>
+  );
+}
+
+function Shortcut({ href, label }) {
+  return (
+    <Link
+      href={href}
+      className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-center font-semibold text-gray-800 hover:bg-gray-50"
+    >
+      {label}
     </Link>
   );
 }

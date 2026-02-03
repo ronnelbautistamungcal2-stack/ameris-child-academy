@@ -1,10 +1,10 @@
-import { io } from 'socket.io-client'
+import { io } from "socket.io-client";
 
-let socket
+let socket;
 
 export function getSocket() {
   if (!socket) {
-    socket = io(undefined, { path: '/socket.io' })
+    socket = io(undefined, { path: "/socket.io" });
   }
-  return socket
+  return socket;
 }

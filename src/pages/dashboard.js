@@ -4,61 +4,13 @@ import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "@/lib/api";
 import AppShell from "@/components/shell/AppShell";
+import { ADMIN_NAV_ITEMS } from "@/components/admin/adminNav";
+import { TEACHER_NAV_ITEMS } from "@/components/teacher/teacherNav";
+import { PARENT_NAV_ITEMS } from "@/components/parent/parentNav";
+import { COACH_NAV_ITEMS } from "@/components/coach/coachNav";
+import { SUBSCRIBER_NAV_ITEMS } from "@/components/subscriber/subscriberNav";
 
 const NAV_BASE = [{ href: "/dashboard", label: "Dashboard" }];
-
-const NAV_PARENT = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/parent/children", label: "My Children" },
-  { href: "/parent/progress", label: "Progress & Goals" },
-  { href: "/parent/forms", label: "Enrollment Docs" },
-  { href: "/parent/billing", label: "Billing" },
-  { href: "/parent/messages", label: "Messages" },
-  { href: "/parent/policies", label: "Policies" },
-  { href: "/settings", label: "Account Settings" },
-];
-
-const NAV_TEACHER = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/teacher", label: "Teacher Console" },
-  { href: "/teacher/children", label: "My Children" },
-  { href: "/teacher/logs", label: "Daily Logging" },
-  { href: "/teacher/checklists", label: "Checklists" },
-  { href: "/teacher/lessons", label: "Lesson Plans" },
-  { href: "/teacher/policies", label: "Policies" },
-  { href: "/teacher/metrics", label: "Reports" },
-  { href: "/settings", label: "Account Settings" },
-];
-
-const NAV_COACH = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/coach/compliance", label: "Compliance" },
-  { href: "/coach/checklists", label: "Follow-ups" },
-  { href: "/coach/training", label: "Training" },
-  { href: "/coach/reports", label: "Reports" },
-  { href: "/coach/policies", label: "Policies" },
-  { href: "/settings", label: "Account Settings" },
-];
-
-const NAV_SUBSCRIBER = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/subscriber", label: "Subscription" },
-  { href: "/settings", label: "Account Settings" },
-];
-
-const NAV_ADMIN = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/admin/users", label: "Access Controls" },
-  { href: "/admin/teachers", label: "Teachers" },
-  { href: "/admin/centers", label: "Centers" },
-  { href: "/admin/classes", label: "Classrooms" },
-  { href: "/admin/children", label: "Students" },
-  { href: "/admin/lessons", label: "Lesson Plans" },
-  { href: "/admin/checklists", label: "Checklists" },
-  { href: "/admin/activity-overrides", label: "Activity Overrides" },
-  { href: "/admin/subscriptions", label: "Subscriptions" },
-  { href: "/settings", label: "Account Settings" },
-];
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
@@ -79,12 +31,19 @@ export default function Dashboard() {
     if (status === "unauthenticated") router.replace("/login");
   }, [status, router]);
 
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    if (session?.user?.role === "ADMIN") {
+      router.replace("/admin/dashboard");
+    }
+  }, [status, session?.user?.role, router]);
+
   const nav = useMemo(() => {
-    if (role === "ADMIN") return NAV_ADMIN;
-    if (role === "TEACHER") return NAV_TEACHER;
-    if (role === "COACH") return NAV_COACH;
-    if (role === "SUBSCRIBER") return NAV_SUBSCRIBER;
-    if (role === "PARENT") return NAV_PARENT;
+    if (role === "ADMIN") return ADMIN_NAV_ITEMS;
+    if (role === "TEACHER") return TEACHER_NAV_ITEMS;
+    if (role === "COACH") return COACH_NAV_ITEMS;
+    if (role === "SUBSCRIBER") return SUBSCRIBER_NAV_ITEMS;
+    if (role === "PARENT") return PARENT_NAV_ITEMS;
     return NAV_BASE;
   }, [role]);
 
@@ -196,6 +155,7 @@ export default function Dashboard() {
       title="Dashboard"
       userName={session?.user?.name || session?.user?.email}
       userLabel={session?.user?.email}
+      userImageUrl={session?.user?.pictureUrl}
       navItems={nav}
       showBack={false}
     >

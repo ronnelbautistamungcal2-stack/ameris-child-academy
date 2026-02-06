@@ -1,0 +1,12 @@
+export const ADMIN_NAV_ITEMS = [
+  { href: "/admin/dashboard", label: "Dashboard" },
+  { href: "/settings", label: "Profile" },
+  { href: "/admin/users", label: "Employee List" },
+  { href: "/admin/centers", label: "Centers" },
+  { href: "/admin/classes", label: "Classrooms" },
+  { href: "/admin/children", label: "Children" },
+  { href: "/admin/lessons", label: "Curriculum" },
+  { href: "/admin/reports", label: "Reports" },
+  { href: "/admin/teacher-logging-alerts", label: "Teacher Logging Alerts" },
+  { href: "/admin/messages", label: "Messages" },
+];

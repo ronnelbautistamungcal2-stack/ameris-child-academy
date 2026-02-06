@@ -27,9 +27,14 @@ export default async function handler(req, res) {
   const user = session.user;
 
   if (req.method === "GET") {
+    const { centerId, all } = req.query;
+    const adminAll = user.role === "ADMIN" && (all === "1" || all === "true");
+
     const threads = await prisma.messageThread.findMany({
       where: {
-        participants: { some: { userId: user.id } },
+        ...(adminAll
+          ? { ...(centerId ? { centerId } : {}) }
+          : { participants: { some: { userId: user.id } } }),
       },
       include: {
         participants: { include: { user: true } },
@@ -112,4 +117,3 @@ export default async function handler(req, res) {
   res.setHeader("Allow", ["GET", "POST"]);
   res.status(405).end();
 }
-

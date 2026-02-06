@@ -35,14 +35,38 @@ enum ProgressStatus {
   FAILED
 }
 
+enum OutboundEmailStatus {
+  QUEUED
+  SENDING
+  SENT
+  FAILED
+  CANCELED
+}
+
+enum AuditAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  EXPORT
+  EMAIL_SENT
+}
+
 model User {
   id                 String              @id @default(uuid())
   email              String              @unique
   name               String?
   password           String?
+  dob                DateTime?
+  hireDate           DateTime?
+  aboutMe            String?
+  pictureUrl         String?
   role               Role                @default(PARENT)
   centers            CenterUser[]
   children           Child[]
+  guardianships      ChildGuardian[]
   teacherClasses     TeacherClass[]
   recordedActivities ActivityLog[]
   threadParticipants ThreadParticipant[]
@@ -51,23 +75,30 @@ model User {
   createdInvites     CenterInvite[]      @relation("InvitesCreated")
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
+  ProgressEntry      ProgressEntry[]
+  AuditLog           AuditLog[]
+  OutboundEmail      OutboundEmail[]
 }
 
 model Center {
-  id              String           @id @default(uuid())
-  name            String
-  address         String?
-  users           CenterUser[]
-  classes         ClassRoom[]
-  children        Child[]
-  lessons         Lesson[]
-  checklists      TaskChecklist[]
-  subscription    Subscription?
-  messageThreads  MessageThread[]
-  formTemplates   FormTemplate[]
-  policyDocuments PolicyDocument[]
-  invites         CenterInvite[]
-  createdAt       DateTime         @default(now())
+  id               String           @id @default(uuid())
+  name             String
+  address          String?
+  users            CenterUser[]
+  classes          ClassRoom[]
+  children         Child[]
+  attendances      Attendance[]
+  lessonCategories LessonCategory[]
+  lessons          Lesson[]
+  checklists       TaskChecklist[]
+  subscription     Subscription?
+  messageThreads   MessageThread[]
+  formTemplates    FormTemplate[]
+  policyDocuments  PolicyDocument[]
+  invites          CenterInvite[]
+  auditLogs        AuditLog[]
+  outboundEmails   OutboundEmail[]
+  createdAt        DateTime         @default(now())
 }
 
 model CenterUser {
@@ -111,39 +142,131 @@ model Child {
   classRoomId     String?
   progress        Progress[]
   activities      ActivityLog[]
+  attendances     Attendance[]
   completedTasks  ChildTask[]
   parent          User?            @relation(fields: [parentId], references: [id])
   parentId        String?
+  guardians       ChildGuardian[]
   formSubmissions FormSubmission[]
   createdAt       DateTime         @default(now())
+  OutboundEmail   OutboundEmail[]
+}
+
+model ChildGuardian {
+  id              String   @id @default(uuid())
+  child           Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  childId         String
+  guardian        User     @relation(fields: [guardianId], references: [id], onDelete: Cascade)
+  guardianId      String
+  relationship    String?
+  isPrimary       Boolean  @default(false)
+  receivesUpdates Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  @@unique([childId, guardianId])
+  @@index([guardianId])
+}
+
+model LessonCategory {
+  id          String   @id @default(uuid())
+  center      Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  name        String
+  description String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lessons Lesson[]
+
+  @@unique([centerId, name])
+  @@index([centerId, sortOrder])
 }
 
 model Lesson {
-  id          String     @id @default(uuid())
-  title       String
-  description String?
-  center      Center     @relation(fields: [centerId], references: [id])
-  centerId    String
-  media       String[]   @default([])
-  progress    Progress[]
+  id               String              @id @default(uuid())
+  title            String
+  description      String?
+  center           Center              @relation(fields: [centerId], references: [id])
+  centerId         String
+  category         LessonCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  categoryId       String?
+  media            String[]            @default([])
+  goals            LessonGoal[]
+  progress         Progress[]
+  remediationsFrom LessonRemediation[] @relation("LessonRemediationsFrom")
+  remediationsTo   LessonRemediation[] @relation("LessonRemediationsTo")
+}
+
+model LessonGoal {
+  id              String   @id @default(uuid())
+  lesson          Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lessonId        String
+  goalIndex       Int
+  title           String
+  description     String?
+  passingCriteria Json?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  progress Progress[]
+
+  @@unique([lessonId, goalIndex])
+  @@index([lessonId, active])
+}
+
+model LessonRemediation {
+  id           String   @id @default(uuid())
+  fromLesson   Lesson   @relation("LessonRemediationsFrom", fields: [fromLessonId], references: [id], onDelete: Cascade)
+  fromLessonId String
+  toLesson     Lesson   @relation("LessonRemediationsTo", fields: [toLessonId], references: [id], onDelete: Cascade)
+  toLessonId   String
+  reason       String?
+  createdAt    DateTime @default(now())
+
+  @@unique([fromLessonId, toLessonId])
+  @@index([fromLessonId])
+  @@index([toLessonId])
 }
 
 model Progress {
-  id             String         @id @default(uuid())
-  child          Child          @relation(fields: [childId], references: [id])
+  id             String          @id @default(uuid())
+  child          Child           @relation(fields: [childId], references: [id])
   childId        String
-  lesson         Lesson         @relation(fields: [lessonId], references: [id])
+  lesson         Lesson          @relation(fields: [lessonId], references: [id])
   lessonId       String
-  status         ProgressStatus @default(NOT_STARTED)
-  goalIndex      Int            @default(1)
+  status         ProgressStatus  @default(NOT_STARTED)
+  goalIndex      Int             @default(1)
+  lessonGoal     LessonGoal?     @relation(fields: [lessonGoalId], references: [id], onDelete: SetNull)
+  lessonGoalId   String?
   achievedAt     DateTime?
-  nextGoals      Progress[]     @relation("GoalProgression")
-  previousGoal   Progress?      @relation("GoalProgression", fields: [previousGoalId], references: [id])
+  nextGoals      Progress[]      @relation("GoalProgression")
+  previousGoal   Progress?       @relation("GoalProgression", fields: [previousGoalId], references: [id])
   previousGoalId String?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  entries        ProgressEntry[]
 
   @@unique([childId, lessonId, goalIndex])
+  @@index([childId, status])
+  @@index([lessonId, status])
+}
+
+model ProgressEntry {
+  id           String         @id @default(uuid())
+  progress     Progress       @relation(fields: [progressId], references: [id], onDelete: Cascade)
+  progressId   String
+  status       ProgressStatus
+  notes        String?
+  details      Json?
+  media        String[]       @default([])
+  recordedBy   User?          @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedById String?
+  occurredAt   DateTime       @default(now())
+
+  @@index([progressId, occurredAt])
+  @@index([recordedById, occurredAt])
 }
 
 model ActivityLog {
@@ -157,6 +280,23 @@ model ActivityLog {
   recordedById String?
   createdAt    DateTime     @default(now())
   isBackdated  Boolean      @default(false)
+}
+
+model Attendance {
+  id           String    @id @default(uuid())
+  day          DateTime
+  center       Center    @relation(fields: [centerId], references: [id])
+  centerId     String
+  child        Child     @relation(fields: [childId], references: [id])
+  childId      String
+  checkedInAt  DateTime?
+  checkedOutAt DateTime?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([childId, day])
+  @@index([centerId, day])
 }
 
 model TaskChecklist {
@@ -202,16 +342,16 @@ model Subscription {
 }
 
 model CenterInvite {
-  id          String   @id @default(uuid())
-  code        String   @unique
-  center      Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  id          String    @id @default(uuid())
+  code        String    @unique
+  center      Center    @relation(fields: [centerId], references: [id], onDelete: Cascade)
   centerId    String
   role        Role
-  active      Boolean  @default(true)
+  active      Boolean   @default(true)
   expiresAt   DateTime?
-  createdBy   User?    @relation("InvitesCreated", fields: [createdById], references: [id])
+  createdBy   User?     @relation("InvitesCreated", fields: [createdById], references: [id])
   createdById String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   @@index([centerId])
 }
@@ -287,4 +427,49 @@ model PolicyDocument {
   url         String
   roles       Role[]
   createdAt   DateTime @default(now())
+}
+
+model AuditLog {
+  id         String      @id @default(uuid())
+  center     Center?     @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId   String?
+  actor      User?       @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId    String?
+  action     AuditAction
+  entityType String
+  entityId   String?
+  ip         String?
+  userAgent  String?
+  metadata   Json?
+  createdAt  DateTime    @default(now())
+
+  @@index([centerId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
+}
+
+model OutboundEmail {
+  id          String              @id @default(uuid())
+  center      Center?             @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String?
+  child       Child?              @relation(fields: [childId], references: [id], onDelete: SetNull)
+  childId     String?
+  createdBy   User?               @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  to          String
+  cc          String[]            @default([])
+  bcc         String[]            @default([])
+  subject     String
+  template    String?
+  payload     Json?
+  status      OutboundEmailStatus @default(QUEUED)
+  scheduledAt DateTime            @default(now())
+  sentAt      DateTime?
+  error       String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([status, scheduledAt])
+  @@index([centerId, createdAt])
+  @@index([childId, createdAt])
 }

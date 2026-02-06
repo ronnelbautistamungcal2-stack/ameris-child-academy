@@ -16,6 +16,10 @@ export default function AdminUsers() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("PARENT");
   const [centerId, setCenterId] = useState("");
+  const [dob, setDob] = useState("");
+  const [hireDate, setHireDate] = useState("");
+  const [aboutMe, setAboutMe] = useState("");
+  const [pictureUrl, setPictureUrl] = useState("");
 
   async function refresh() {
     setError("");
@@ -49,6 +53,10 @@ export default function AdminUsers() {
     setPassword("");
     setRole("PARENT");
     setCenterId("");
+    setDob("");
+    setHireDate("");
+    setAboutMe("");
+    setPictureUrl("");
   }
 
   function startEdit(user) {
@@ -58,6 +66,10 @@ export default function AdminUsers() {
     setRole(user.role || "PARENT");
     setPassword("");
     setCenterId("");
+    setDob(user.dob ? String(user.dob).slice(0, 10) : "");
+    setHireDate(user.hireDate ? String(user.hireDate).slice(0, 10) : "");
+    setAboutMe(user.aboutMe || "");
+    setPictureUrl(user.pictureUrl || "");
   }
 
   async function createUser(e) {
@@ -72,6 +84,10 @@ export default function AdminUsers() {
           password,
           role,
           centerId: centerId || undefined,
+          dob: dob || null,
+          hireDate: hireDate || null,
+          aboutMe: aboutMe || null,
+          pictureUrl: pictureUrl || null,
         }),
       });
       resetForm();
@@ -88,7 +104,15 @@ export default function AdminUsers() {
     try {
       await apiJson(`/api/v1/users/${editing.id}`, {
         method: "PUT",
-        body: JSON.stringify({ name: name || null, role }),
+        body: JSON.stringify({
+          name: name || null,
+          role,
+          password: password || undefined,
+          dob: dob || null,
+          hireDate: hireDate || null,
+          aboutMe: aboutMe || null,
+          pictureUrl: pictureUrl || null,
+        }),
       });
       resetForm();
       await refresh();
@@ -132,14 +156,13 @@ export default function AdminUsers() {
                 disabled={!!editing}
               />
             </Field>
-            <Field label={editing ? "Password (create only)" : "Password"}>
+            <Field label={editing ? "New Password (optional)" : "Password"}>
               <input
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 style={inputStyle}
                 type="password"
                 required={!editing}
-                disabled={!!editing}
               />
             </Field>
           </div>
@@ -184,6 +207,43 @@ export default function AdminUsers() {
                 Clear
               </button>
             </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 10 }}>
+            <Field label="DOB">
+              <input
+                value={dob}
+                onChange={(e) => setDob(e.target.value)}
+                style={inputStyle}
+                type="date"
+              />
+            </Field>
+            <Field label="DOH">
+              <input
+                value={hireDate}
+                onChange={(e) => setHireDate(e.target.value)}
+                style={inputStyle}
+                type="date"
+              />
+            </Field>
+            <Field label="Picture URL">
+              <input
+                value={pictureUrl}
+                onChange={(e) => setPictureUrl(e.target.value)}
+                style={inputStyle}
+                placeholder="https://…"
+              />
+            </Field>
+          </div>
+
+          <div style={{ marginTop: 10 }}>
+            <Field label="About Me">
+              <textarea
+                value={aboutMe}
+                onChange={(e) => setAboutMe(e.target.value)}
+                style={{ ...inputStyle, minHeight: 90, resize: "vertical" }}
+              />
+            </Field>
           </div>
         </form>
 
@@ -343,4 +403,3 @@ const dangerButton = {
   cursor: "pointer",
   fontWeight: 600,
 };
-

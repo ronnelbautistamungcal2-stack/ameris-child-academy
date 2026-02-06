@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
 
 export function useRequireRole(allowedRoles, redirectTo = "/dashboard") {
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
   const router = useRouter();
 
   useEffect(() => {
@@ -21,6 +21,5 @@ export function useRequireRole(allowedRoles, redirectTo = "/dashboard") {
   const role = session?.user?.role;
   const allowed = !!role && allowedRoles.includes(role);
 
-  return { session, status, allowed };
+  return { session, status, allowed, update };
 }
-

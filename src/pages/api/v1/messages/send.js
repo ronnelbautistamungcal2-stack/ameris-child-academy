@@ -28,6 +28,13 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
+  if (!isParticipant && user.role === "ADMIN") {
+    // Ensure admins show up in thread participant lists once they interact.
+    await prisma.threadParticipant
+      .create({ data: { threadId, userId: user.id } })
+      .catch(() => null);
+  }
+
   if (thread.centerId && user.role !== "ADMIN") {
     const ok = await hasAccessToCenter(user.id, thread.centerId);
     if (!ok) return res.status(403).json({ error: "Forbidden" });
@@ -49,4 +56,3 @@ export default async function handler(req, res) {
 
   return res.status(201).json(message);
 }
-

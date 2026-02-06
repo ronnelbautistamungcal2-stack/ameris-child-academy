@@ -1,17 +1,6 @@
 import AppShell from "@/components/shell/AppShell";
 import { useRequireRole } from "@/hooks/useRequireRole";
-
-const NAV = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/teacher", label: "Teacher Console" },
-  { href: "/teacher/children", label: "My Children" },
-  { href: "/teacher/logs", label: "Daily Logging" },
-  { href: "/teacher/checklists", label: "Checklists" },
-  { href: "/teacher/lessons", label: "Lesson Plans" },
-  { href: "/teacher/policies", label: "Policies" },
-  { href: "/teacher/metrics", label: "Reports" },
-  { href: "/settings", label: "Account Settings" },
-];
+import { TEACHER_NAV_ITEMS } from "@/components/teacher/teacherNav";
 
 export default function TeacherLayout({ title, children }) {
   const { session, status, allowed } = useRequireRole(
@@ -28,7 +17,8 @@ export default function TeacherLayout({ title, children }) {
       title={title || "Teacher"}
       userName={session?.user?.name || session?.user?.email}
       userLabel={session?.user?.email}
-      navItems={NAV}
+      userImageUrl={session?.user?.pictureUrl}
+      navItems={TEACHER_NAV_ITEMS}
       showBack={false}
     >
       {children}

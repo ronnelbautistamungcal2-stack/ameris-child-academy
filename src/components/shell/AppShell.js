@@ -7,6 +7,7 @@ export default function AppShell({
   title,
   userName,
   userLabel,
+  userImageUrl,
   navItems,
   children,
   right,
@@ -25,6 +26,11 @@ export default function AppShell({
 
   const activePath = (router.asPath || "/").split("?")[0] || "/";
   const userDisplay = userName || userLabel || "Account";
+  const settingsLabel = useMemo(() => {
+    const match = (navItems || []).find((i) => i?.href === "/settings");
+    return match?.label || "Account Settings";
+  }, [navItems]);
+  const avatarUrl = typeof userImageUrl === "string" && userImageUrl.trim() ? userImageUrl.trim() : "";
 
   const initials = useMemo(() => {
     const src = (userName || userLabel || "").trim();
@@ -167,12 +173,23 @@ export default function AppShell({
                   <div className="text-right">
                     <div className="text-sm font-semibold text-gray-900">{userDisplay}</div>
                     <Link href="/settings" className="text-xs font-semibold text-sky-600 hover:text-sky-700">
-                      Account Settings
+                      {settingsLabel}
                     </Link>
                   </div>
-                  <div className="grid h-10 w-10 place-items-center rounded-full bg-emerald-100 text-sm font-extrabold text-emerald-700">
-                    {initials}
-                  </div>
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt="Profile"
+                      className="h-10 w-10 rounded-full border border-gray-200 object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <div className="grid h-10 w-10 place-items-center rounded-full bg-emerald-100 text-sm font-extrabold text-emerald-700">
+                      {initials}
+                    </div>
+                  )}
                 </div>
 
                 {showBackComputed && backHref ? (

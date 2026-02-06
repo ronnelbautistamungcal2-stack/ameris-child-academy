@@ -14,7 +14,11 @@ export default async function handler(req, res) {
 
     const lesson = await prisma.lesson.findUnique({
       where: { id },
-      include: { progress: { include: { child: true } } },
+      include: {
+        category: true,
+        goals: { orderBy: { goalIndex: "asc" } },
+        remediationsFrom: { include: { toLesson: true } },
+      },
     });
     if (!lesson) return res.status(404).json({ error: "Lesson not found" });
     return res.status(200).json(lesson);
@@ -33,7 +37,11 @@ export default async function handler(req, res) {
         description,
         media,
       },
-      include: { progress: true },
+      include: {
+        category: true,
+        goals: { orderBy: { goalIndex: "asc" } },
+        remediationsFrom: { include: { toLesson: true } },
+      },
     });
 
     return res.status(200).json(lesson);

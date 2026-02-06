@@ -11,7 +11,16 @@ export default async function handler(req, res) {
   if (req.method === "GET") {
     const progress = await prisma.progress.findUnique({
       where: { id },
-      include: { child: true, lesson: true, nextGoals: true },
+      include: {
+        child: true,
+        lesson: true,
+        lessonGoal: true,
+        nextGoals: true,
+        entries: {
+          orderBy: { occurredAt: "desc" },
+          include: { recordedBy: { select: { id: true, name: true, email: true } } },
+        },
+      },
     });
 
     if (!progress) return res.status(404).json({ error: "Progress not found" });

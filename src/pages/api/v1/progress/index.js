@@ -48,14 +48,20 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "childId and lessonId required" });
     }
 
+    const normalizedGoalIndex = Number(goalIndex || 1);
+    const lessonGoal = await prisma.lessonGoal.findUnique({
+      where: { lessonId_goalIndex: { lessonId, goalIndex: normalizedGoalIndex } },
+    });
+
     const progress = await prisma.progress.create({
       data: {
         childId: cId,
         lessonId,
         status: status || "NOT_STARTED",
-        goalIndex: goalIndex || 1,
+        goalIndex: normalizedGoalIndex,
+        lessonGoalId: lessonGoal?.id || null,
       },
-      include: { child: true, lesson: true },
+      include: { child: true, lesson: true, entries: true },
     });
 
     return res.status(201).json(progress);

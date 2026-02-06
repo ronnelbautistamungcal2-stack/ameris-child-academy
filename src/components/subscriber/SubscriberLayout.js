@@ -1,11 +1,6 @@
 import AppShell from "@/components/shell/AppShell";
 import { useRequireRole } from "@/hooks/useRequireRole";
-
-const NAV_SUBSCRIBER = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/subscriber", label: "Subscription" },
-  { href: "/settings", label: "Account Settings" },
-];
+import { SUBSCRIBER_NAV_ITEMS } from "@/components/subscriber/subscriberNav";
 
 export default function SubscriberLayout({ title, children }) {
   const { session, status, allowed } = useRequireRole(
@@ -22,7 +17,8 @@ export default function SubscriberLayout({ title, children }) {
       title={title || "Subscriber"}
       userName={session?.user?.name || session?.user?.email}
       userLabel={session?.user?.email}
-      navItems={NAV_SUBSCRIBER}
+      userImageUrl={session?.user?.pictureUrl}
+      navItems={SUBSCRIBER_NAV_ITEMS}
       backHref="/dashboard"
     >
       {children}

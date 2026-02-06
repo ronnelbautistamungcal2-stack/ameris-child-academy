@@ -1,5 +1,13 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import bcrypt from "bcryptjs";
+
+function parseDateOrNull(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return d;
+}
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -28,10 +36,42 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    const { name, email, role } = req.body;
+    const body = req.body || {};
+    const { name, role, dob, hireDate, aboutMe, pictureUrl, password } = body;
     const updateData = {};
-    if (name) updateData.name = name;
-    if (role && session.user.role === "ADMIN") updateData.role = role;
+
+    if ("name" in body) updateData.name = name ? String(name) : null;
+    if ("role" in body && session.user.role === "ADMIN" && role)
+      updateData.role = role;
+
+    if ("dob" in body) {
+      const parsed = parseDateOrNull(dob);
+      if (parsed === undefined) return res.status(400).json({ error: "Invalid dob" });
+      updateData.dob = parsed;
+    }
+
+    if ("hireDate" in body) {
+      const parsed = parseDateOrNull(hireDate);
+      if (parsed === undefined)
+        return res.status(400).json({ error: "Invalid hireDate" });
+      updateData.hireDate = parsed;
+    }
+
+    if ("aboutMe" in body)
+      updateData.aboutMe = aboutMe ? String(aboutMe).slice(0, 5000) : null;
+
+    if ("pictureUrl" in body)
+      updateData.pictureUrl = pictureUrl ? String(pictureUrl).slice(0, 2000) : null;
+
+    if ("password" in body && password) {
+      if (session.user.role !== "ADMIN") {
+        return res.status(403).json({ error: "Only admins can reset passwords" });
+      }
+      if (String(password).length < 8) {
+        return res.status(400).json({ error: "Password must be at least 8 characters" });
+      }
+      updateData.password = await bcrypt.hash(String(password), 10);
+    }
 
     const user = await prisma.user.update({
       where: { id },

@@ -4,6 +4,7 @@ export const TEACHER_NAV_ITEMS = [
   { href: "/teacher/children", label: "My Children" },
   { href: "/teacher/progress", label: "Progress Tracking" },
   { href: "/teacher/logs", label: "Daily Logging" },
+  { href: "/teacher/milestone-checklists", label: "Milestone Checklist" },
   { href: "/teacher/checklists", label: "Checklists" },
   { href: "/teacher/lessons", label: "Lesson Plans" },
   { href: "/teacher/policies", label: "Policies" },

@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import xlsx from "xlsx";
+import { canonicalizeLessonCategoryName } from "./lessonCategoryNormalization.mjs";
 
 function normalizeHeader(value) {
   return String(value || "")
@@ -64,12 +65,6 @@ function col(index, ...names) {
   return -1;
 }
 
-function normalizeCategoryName(value) {
-  const s = String(value || "").trim();
-  if (!s) return "";
-  return s.replace(/\s+/g, " ");
-}
-
 export async function importStepsLibrary({
   prisma,
   centerId,
@@ -116,17 +111,19 @@ export async function importStepsLibrary({
   };
 
   async function getOrCreateCategory(categoryName) {
-    const name = normalizeCategoryName(categoryName);
+    const name = canonicalizeLessonCategoryName(categoryName);
     if (!name) return null;
     const cached = categoryByName.get(name.toLowerCase());
     if (cached) return cached;
 
-    const existing = await prisma.lessonCategory.findFirst({
-      where: { centerId, name },
+    const matches = await prisma.lessonCategory.findMany({
+      where: { centerId, name: { equals: name, mode: "insensitive" } },
+      orderBy: { createdAt: "asc" },
     });
-    if (existing) {
-      categoryByName.set(name.toLowerCase(), existing);
-      return existing;
+    if (matches.length) {
+      const preferred = matches.find((c) => c.name === name) || matches[0];
+      categoryByName.set(name.toLowerCase(), preferred);
+      return preferred;
     }
 
     const created = await prisma.lessonCategory.create({
@@ -136,6 +133,7 @@ export async function importStepsLibrary({
     categoryByName.set(name.toLowerCase(), created);
     return created;
   }
+
 
   async function getOrCreateLesson({ title, description, categoryId, media }) {
     const normalizedTitle = String(title || "").trim();
@@ -319,4 +317,3 @@ export async function importStepsLibrary({
 
   return summary;
 }
-

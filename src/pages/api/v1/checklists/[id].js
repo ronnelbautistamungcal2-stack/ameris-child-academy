@@ -47,11 +47,19 @@ export default async function handler(req, res) {
     if (role !== "ADMIN") {
       return res.status(403).json({ error: "Only admins can delete checklists" });
     }
-    await prisma.taskChecklist.delete({ where: { id } });
+
+    // TaskChecklist -> Task -> ChildTask uses RESTRICT FKs in the DB migrations,
+    // so we must delete dependent rows explicitly.
+    await prisma.$transaction(async (tx) => {
+      await tx.childTask.deleteMany({
+        where: { task: { checklistId: id } },
+      });
+      await tx.task.deleteMany({ where: { checklistId: id } });
+      await tx.taskChecklist.delete({ where: { id } });
+    });
     return res.status(204).end();
   }
 
   res.setHeader("Allow", ["GET", "PUT", "DELETE"]);
   res.status(405).end();
 }
-

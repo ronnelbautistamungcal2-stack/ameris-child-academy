@@ -140,6 +140,36 @@ export default function AdminLessons() {
     }
   }
 
+  async function normalizeCategories() {
+    if (!centerId) {
+      setError("Select a center first.");
+      return;
+    }
+    if (
+      !confirm(
+        "Normalize lesson categories for this center? This will merge duplicates (ex: 'development' -> 'Development').",
+      )
+    ) {
+      return;
+    }
+
+    setImporting(true);
+    setImportResult(null);
+    setError("");
+    try {
+      const result = await apiJson("/api/v1/lessons/normalize-categories", {
+        method: "POST",
+        body: JSON.stringify({ centerId }),
+      });
+      setImportResult(result);
+      await loadLessons(centerId);
+    } catch (e) {
+      setError(e.message || "Normalization failed");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   async function createLesson(e) {
     e.preventDefault();
     if (!centerId) {
@@ -246,6 +276,14 @@ export default function AdminLessons() {
           >
             {importing ? "Importing…" : "Import Steps Library"}
           </button>
+          <button
+            type="button"
+            style={secondaryButton}
+            onClick={normalizeCategories}
+            disabled={importing || !centerId}
+          >
+            {importing ? "Working…" : "Normalize Categories"}
+          </button>
           <div style={{ fontSize: 12, color: "#6b7280" }}>
             Uses <code style={codePill}>public/uploads/StepsofProgressionLibrary.xlsx</code>
           </div>
@@ -263,10 +301,20 @@ export default function AdminLessons() {
               color: "#111827",
             }}
           >
-            Imported {importResult.rowsImported || 0} rows (
-            {importResult.goalsCreated || 0} new steps,{" "}
-            {importResult.lessonsCreated || 0} new lessons,{" "}
-            {importResult.categoriesCreated || 0} new categories).
+            {"rowsImported" in importResult ? (
+              <>
+                Imported {importResult.rowsImported || 0} rows (
+                {importResult.goalsCreated || 0} new steps,{" "}
+                {importResult.lessonsCreated || 0} new lessons,{" "}
+                {importResult.categoriesCreated || 0} new categories).
+              </>
+            ) : (
+              <>
+                Normalized categories: {importResult.categoriesRenamed || 0} renamed,{" "}
+                {importResult.categoriesDeleted || 0} merged/removed,{" "}
+                {importResult.lessonsReassigned || 0} lessons reassigned.
+              </>
+            )}
           </div>
         ) : null}
 
@@ -558,4 +606,3 @@ const dangerButton = {
   cursor: "pointer",
   fontWeight: 600,
 };
-

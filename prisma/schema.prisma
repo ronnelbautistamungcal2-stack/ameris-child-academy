@@ -54,6 +54,20 @@ enum AuditAction {
   EMAIL_SENT
 }
 
+enum ChecklistPeriod {
+  DAY
+  WEEK
+  MONTH
+}
+
+enum MilestoneItemKind {
+  POLICY
+  PROCEDURE
+  VIDEO
+  LESSON
+  OTHER
+}
+
 model User {
   id                 String              @id @default(uuid())
   email              String              @unique
@@ -78,6 +92,7 @@ model User {
   ProgressEntry      ProgressEntry[]
   AuditLog           AuditLog[]
   OutboundEmail      OutboundEmail[]
+  milestoneChecklistCompletions MilestoneChecklistItemCompletion[]
 }
 
 model Center {
@@ -98,6 +113,7 @@ model Center {
   invites          CenterInvite[]
   auditLogs        AuditLog[]
   outboundEmails   OutboundEmail[]
+  milestoneChecklistPlans MilestoneChecklistPlan[]
   createdAt        DateTime         @default(now())
 }
 
@@ -150,6 +166,7 @@ model Child {
   formSubmissions FormSubmission[]
   createdAt       DateTime         @default(now())
   OutboundEmail   OutboundEmail[]
+  milestoneChecklistCompletions MilestoneChecklistItemCompletion[]
 }
 
 model ChildGuardian {
@@ -196,6 +213,7 @@ model Lesson {
   progress         Progress[]
   remediationsFrom LessonRemediation[] @relation("LessonRemediationsFrom")
   remediationsTo   LessonRemediation[] @relation("LessonRemediationsTo")
+  milestoneChecklistItems MilestoneChecklistItem[]
 }
 
 model LessonGoal {
@@ -211,6 +229,7 @@ model LessonGoal {
   updatedAt       DateTime @updatedAt
 
   progress Progress[]
+  milestoneChecklistItems MilestoneChecklistItem[]
 
   @@unique([lessonId, goalIndex])
   @@index([lessonId, active])
@@ -307,6 +326,65 @@ model TaskChecklist {
   centerId    String
   tasks       Task[]
   createdAt   DateTime @default(now())
+}
+
+model MilestoneChecklistPlan {
+  id          String          @id @default(uuid())
+  center      Center          @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  title       String
+  description String?
+  period      ChecklistPeriod
+  periodStart DateTime
+  active      Boolean         @default(true)
+  items       MilestoneChecklistItem[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([centerId, period, periodStart, title])
+  @@index([centerId, period, periodStart])
+}
+
+model MilestoneChecklistItem {
+  id               String                 @id @default(uuid())
+  plan             MilestoneChecklistPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planId           String
+  sortOrder        Int                    @default(0)
+  title            String
+  kind             MilestoneItemKind      @default(OTHER)
+  url              String?
+  policyDocument   PolicyDocument?        @relation(fields: [policyDocumentId], references: [id], onDelete: SetNull)
+  policyDocumentId String?
+  lesson           Lesson?                @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  lessonId         String?
+  lessonGoal       LessonGoal?            @relation(fields: [lessonGoalId], references: [id], onDelete: SetNull)
+  lessonGoalId     String?
+  notes            String?
+  completions      MilestoneChecklistItemCompletion[]
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  @@index([planId, sortOrder])
+  @@index([lessonId])
+  @@index([lessonGoalId])
+  @@index([policyDocumentId])
+}
+
+model MilestoneChecklistItemCompletion {
+  id           String                 @id @default(uuid())
+  item         MilestoneChecklistItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId       String
+  child        Child                  @relation(fields: [childId], references: [id], onDelete: Cascade)
+  childId      String
+  completedAt  DateTime?
+  recordedBy   User?                  @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedById String?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  @@unique([childId, itemId])
+  @@index([childId, completedAt])
+  @@index([itemId, completedAt])
 }
 
 model Task {
@@ -427,6 +505,7 @@ model PolicyDocument {
   url         String
   roles       Role[]
   createdAt   DateTime @default(now())
+  milestoneChecklistItems MilestoneChecklistItem[]
 }
 
 model AuditLog {

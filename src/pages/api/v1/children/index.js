@@ -1,6 +1,37 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
+function normalizeDocs(value) {
+  const arr = Array.isArray(value) ? value : [];
+  return arr
+    .map((d) => (d && typeof d === "object" ? d : null))
+    .filter(Boolean)
+    .map((d) => ({
+      url: typeof d.url === "string" ? d.url : "",
+      originalName: typeof d.originalName === "string" ? d.originalName : null,
+      mimeType: typeof d.mimeType === "string" ? d.mimeType : null,
+      size: Number.isFinite(Number(d.size)) ? Number(d.size) : null,
+      uploadedAt: d.uploadedAt ? String(d.uploadedAt) : null,
+    }))
+    .filter((d) => d.url);
+}
+
+function normalizeFeedingPlan(value) {
+  if (!value || typeof value !== "object") return null;
+  const foods = typeof value.foods === "string" ? value.foods : "";
+  const formula = typeof value.formula === "string" ? value.formula : "";
+  const bottlesPerDayRaw = value.bottlesPerDay;
+  const bottlesPerDay = bottlesPerDayRaw === "" || bottlesPerDayRaw === null || bottlesPerDayRaw === undefined ? null : Number(bottlesPerDayRaw);
+  const bottleNotes = typeof value.bottleNotes === "string" ? value.bottleNotes : "";
+
+  return {
+    foods: foods.trim() ? foods.trim() : null,
+    formula: formula.trim() ? formula.trim() : null,
+    bottlesPerDay: Number.isFinite(bottlesPerDay) ? bottlesPerDay : null,
+    bottleNotes: bottleNotes.trim() ? bottleNotes.trim() : null,
+  };
+}
+
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
@@ -66,6 +97,11 @@ export default async function handler(req, res) {
       centerId: cId,
       classRoomId,
       parentId,
+      emergencyContact,
+      allergies,
+      healthAssessmentDocuments,
+      enrollmentDocuments,
+      feedingPlan,
     } = req.body;
     if (!firstName || !cId) {
       return res.status(400).json({ error: "firstName and centerId required" });
@@ -79,6 +115,17 @@ export default async function handler(req, res) {
         centerId: cId,
         classRoomId,
         parentId,
+        emergencyContact:
+          typeof emergencyContact === "string" && emergencyContact.trim()
+            ? emergencyContact.trim()
+            : null,
+        allergies:
+          typeof allergies === "string" && allergies.trim()
+            ? allergies.trim()
+            : null,
+        healthAssessmentDocuments: normalizeDocs(healthAssessmentDocuments),
+        enrollmentDocuments: normalizeDocs(enrollmentDocuments),
+        feedingPlan: normalizeFeedingPlan(feedingPlan),
       },
       include: { progress: true, activities: true },
     });

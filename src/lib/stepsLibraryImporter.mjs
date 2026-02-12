@@ -65,6 +65,14 @@ function col(index, ...names) {
   return -1;
 }
 
+function normalizeKind(value, fallback = "PACKAGE") {
+  const v = String(value || "").trim().toUpperCase();
+  if (v === "PROGRAM") return "PROGRAM";
+  if (v === "PACKAGE") return "PACKAGE";
+  if (v === "DOMAIN") return "DOMAIN";
+  return fallback;
+}
+
 export async function importStepsLibrary({
   prisma,
   centerId,
@@ -75,6 +83,9 @@ export async function importStepsLibrary({
     "StepsofProgressionLibrary.xlsx",
   ),
   includeCondensedSheet = false,
+  categorySource = "category", // "subject" (recommended) or "category"
+  categoryKind = "PACKAGE", // PACKAGE | PROGRAM | DOMAIN
+  forceKindUpdate = false,
 }) {
   if (!centerId) throw new Error("centerId is required");
 
@@ -110,8 +121,14 @@ export async function importStepsLibrary({
     rowsSkippedNoStep: 0,
   };
 
-  async function getOrCreateCategory(categoryName) {
-    const name = canonicalizeLessonCategoryName(categoryName);
+  function canonicalizeGroupName(value) {
+    const v = canonicalizeLessonCategoryName(value);
+    return v || null;
+  }
+
+  async function getOrCreateCategory({ name: rawName, groupName }) {
+    const desiredKind = normalizeKind(categoryKind, "PACKAGE");
+    const name = canonicalizeLessonCategoryName(rawName);
     if (!name) return null;
     const cached = categoryByName.get(name.toLowerCase());
     if (cached) return cached;
@@ -122,12 +139,30 @@ export async function importStepsLibrary({
     });
     if (matches.length) {
       const preferred = matches.find((c) => c.name === name) || matches[0];
+      const next = {};
+      if (!preferred.kind) next.kind = desiredKind;
+      if (
+        forceKindUpdate &&
+        desiredKind &&
+        String(preferred.kind || "").toUpperCase() !== desiredKind
+      ) {
+        next.kind = desiredKind;
+      }
+      if (!preferred.groupName && groupName) next.groupName = groupName;
+      if (Object.keys(next).length) {
+        const updated = await prisma.lessonCategory.update({
+          where: { id: preferred.id },
+          data: next,
+        });
+        categoryByName.set(name.toLowerCase(), updated);
+        return updated;
+      }
       categoryByName.set(name.toLowerCase(), preferred);
       return preferred;
     }
 
     const created = await prisma.lessonCategory.create({
-      data: { centerId, name },
+      data: { centerId, name, kind: desiredKind, groupName: groupName || null },
     });
     summary.categoriesCreated += 1;
     categoryByName.set(name.toLowerCase(), created);
@@ -145,7 +180,11 @@ export async function importStepsLibrary({
 
     const existing = await prisma.lesson.findFirst({
       where: { centerId, title: normalizedTitle },
-      include: { goals: { select: { id: true, title: true, goalIndex: true } } },
+      include: {
+        goals: {
+          select: { id: true, title: true, goalIndex: true, description: true, passingCriteria: true },
+        },
+      },
     });
 
     if (existing) {
@@ -170,7 +209,9 @@ export async function importStepsLibrary({
           where: { id: existing.id },
           data: nextData,
           include: {
-            goals: { select: { id: true, title: true, goalIndex: true } },
+            goals: {
+              select: { id: true, title: true, goalIndex: true, description: true, passingCriteria: true },
+            },
           },
         });
         summary.lessonsUpdated += 1;
@@ -189,7 +230,9 @@ export async function importStepsLibrary({
         categoryId: categoryId || null,
         media: Array.isArray(media) ? media : [],
       },
-      include: { goals: { select: { id: true, title: true, goalIndex: true } } },
+      include: {
+        goals: { select: { id: true, title: true, goalIndex: true, description: true, passingCriteria: true } },
+      },
     });
     summary.lessonsCreated += 1;
     lessonByKey.set(key, created);
@@ -248,24 +291,39 @@ export async function importStepsLibrary({
         continue;
       }
 
-      const lessonName = String(lessonTitle || "").trim() || normalizedStep;
-      const category = await getOrCreateCategory(categoryName);
+      const rawStep = String(step ?? "");
+      const rawLesson = String(lessonTitle ?? "");
+      const rawCategory = String(categoryName ?? "");
+      const rawSubject = String(subject ?? "");
+      const rawRef = String(ref ?? "");
+      const rawAge = String(age ?? "");
+      const rawTerm = String(term ?? "");
+      const rawTestingQuestion = String(testingQuestion ?? "");
+      const rawResource = String(resource ?? "");
+      const rawAdditional = String(additional ?? "");
+      const rawNotes = String(notes ?? "");
+
+      const lessonName = rawLesson.trim() || rawStep.trim() || normalizedStep;
+
+      const groupName = canonicalizeGroupName(rawCategory);
+      const sourceName =
+        String(categorySource || "").toLowerCase() === "category"
+          ? rawCategory
+          : rawSubject || rawCategory;
+
+      const category = await getOrCreateCategory({
+        name: sourceName,
+        groupName,
+      });
 
       const media = [
         ...splitResources(resource).filter(looksLikeLink),
         ...splitResources(additional).filter(looksLikeLink),
       ];
 
-      const descriptionPieces = [];
-      if (subject) descriptionPieces.push(`Subject: ${String(subject).trim()}`);
-      if (age) descriptionPieces.push(`Age: ${String(age).trim()}`);
-      const lessonDescription = descriptionPieces.length
-        ? descriptionPieces.join(" • ")
-        : null;
-
       const lesson = await getOrCreateLesson({
         title: lessonName,
-        description: lessonDescription,
+        description: null,
         categoryId: category?.id || null,
         media,
       });
@@ -277,6 +335,50 @@ export async function importStepsLibrary({
         ),
       );
       if (existingGoalTitles.has(normalizedStep.toLowerCase())) {
+        const existingGoal = (lesson.goals || []).find(
+          (g) =>
+            String(g.title || "").trim().toLowerCase() === normalizedStep.toLowerCase(),
+        );
+        if (existingGoal?.id) {
+          const existingPc =
+            existingGoal.passingCriteria && typeof existingGoal.passingCriteria === "object"
+              ? existingGoal.passingCriteria
+              : {};
+          const nextPc = { ...existingPc };
+          const incomingPc = {
+            reference: rawRef,
+            term: rawTerm,
+            lesson: rawLesson,
+            stepOfProgression: rawStep,
+            testingQuestion: rawTestingQuestion,
+            resource: rawResource,
+            additionalResources: rawAdditional,
+            notes: rawNotes,
+            age: rawAge,
+            category: rawCategory,
+            subject: rawSubject,
+            sheet: sheetName,
+          };
+
+          for (const [k, v] of Object.entries(incomingPc)) {
+            const cur = nextPc[k];
+            const hasCur = cur !== null && cur !== undefined && String(cur) !== "";
+            const hasNext = v !== null && v !== undefined && String(v) !== "";
+            if (!hasCur && hasNext) nextPc[k] = v;
+            if (!hasCur && !hasNext && (cur === null || cur === undefined)) nextPc[k] = v;
+          }
+
+          await prisma.lessonGoal.update({
+            where: { id: existingGoal.id },
+            data: {
+              passingCriteria: nextPc,
+              description:
+                existingGoal.description && String(existingGoal.description) !== ""
+                  ? undefined
+                  : rawTestingQuestion || null,
+            },
+          });
+        }
         summary.goalsSkippedExisting += 1;
         summary.rowsImported += 1;
         continue;
@@ -292,16 +394,20 @@ export async function importStepsLibrary({
         data: {
           lessonId: lesson.id,
           goalIndex,
-          title: normalizedStep,
-          description: String(testingQuestion || "").trim() || null,
+          title: rawStep,
+          description: rawTestingQuestion || null,
           passingCriteria: {
-            reference: String(ref || "").trim() || null,
-            age: String(age || "").trim() || null,
-            term: String(term || "").trim() || null,
-            subject: String(subject || "").trim() || null,
-            resource: String(resource || "").trim() || null,
-            additionalResources: String(additional || "").trim() || null,
-            notes: String(notes || "").trim() || null,
+            reference: rawRef,
+            term: rawTerm,
+            lesson: rawLesson,
+            stepOfProgression: rawStep,
+            testingQuestion: rawTestingQuestion,
+            resource: rawResource,
+            additionalResources: rawAdditional,
+            notes: rawNotes,
+            age: rawAge,
+            category: rawCategory,
+            subject: rawSubject,
             sheet: sheetName,
           },
         },
@@ -311,7 +417,7 @@ export async function importStepsLibrary({
       summary.rowsImported += 1;
 
       // Keep cache in sync to make indexing/skipping correct within the same import run
-      lesson.goals = [...(lesson.goals || []), { title: normalizedStep, goalIndex }];
+      lesson.goals = [...(lesson.goals || []), { title: rawStep, goalIndex }];
     }
   }
 

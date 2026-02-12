@@ -14,7 +14,7 @@ export default async function handler(req, res) {
 
     const lesson = await prisma.lesson.findUnique({
       where: { id },
-      include: { progress: { include: { child: true } } },
+      include: { category: true, progress: { include: { child: true } } },
     });
     if (!lesson) return res.status(404).json({ error: "Lesson not found" });
     return res.status(200).json(lesson);
@@ -25,15 +25,19 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    const { title, description, media } = req.body;
+    const { title, description, media, categoryId } = req.body;
     const lesson = await prisma.lesson.update({
       where: { id },
       data: {
         title,
         description,
         media,
+        categoryId:
+          Object.prototype.hasOwnProperty.call(req.body, "categoryId")
+            ? categoryId || null
+            : undefined,
       },
-      include: { progress: true },
+      include: { category: true, progress: true },
     });
 
     return res.status(200).json(lesson);

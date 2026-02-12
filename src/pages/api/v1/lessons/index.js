@@ -13,6 +13,10 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
+    if (!centerId && session.user.role !== "ADMIN") {
+      return res.status(400).json({ error: "centerId is required" });
+    }
+
     if (centerId && session.user.role !== "ADMIN") {
       const hasAccess = await hasAccessToCenter(session.user.id, centerId);
       if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
@@ -34,7 +38,7 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    const { title, description, centerId: cId, media } = req.body;
+    const { title, description, centerId: cId, media, categoryId } = req.body;
     if (!title || !cId)
       return res.status(400).json({ error: "Title and centerId required" });
 
@@ -44,6 +48,7 @@ export default async function handler(req, res) {
         description,
         centerId: cId,
         media: media || [],
+        categoryId: categoryId || null,
       },
       include: {
         category: true,

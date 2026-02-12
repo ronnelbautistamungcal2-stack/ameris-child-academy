@@ -36,6 +36,9 @@ export default function Dashboard() {
     if (session?.user?.role === "ADMIN") {
       router.replace("/admin/dashboard");
     }
+    if (session?.user?.role === "TEACHER") {
+      router.replace("/teacher/dashboard");
+    }
   }, [status, session?.user?.role, router]);
 
   const nav = useMemo(() => {

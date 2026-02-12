@@ -83,7 +83,20 @@ export default function AppShell({
           Navigation
         </div>
         <div className="space-y-1">
-          {navItems.map((item) => {
+          {(navItems || []).map((item, idx) => {
+            if (!item) return null;
+            if (item.kind === "section") {
+              return (
+                <div
+                  key={`section:${item.label || idx}`}
+                  className="pt-3 text-[11px] font-semibold uppercase tracking-wide text-gray-400"
+                >
+                  {item.label || "Section"}
+                </div>
+              );
+            }
+
+            if (!item.href) return null;
             const active = isActive(item.href);
             return (
               <Link

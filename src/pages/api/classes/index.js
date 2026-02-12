@@ -1,6 +1,16 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
+function parseOptionalInt(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const num = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(num) || !Number.isInteger(num)) {
+    throw new Error("capacity must be an integer");
+  }
+  if (num < 0) throw new Error("capacity must be >= 0");
+  return num;
+}
+
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
@@ -26,12 +36,27 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    const { name, centerId: cId } = req.body;
+    const { name, centerId: cId, capacity, ageRange } = req.body;
     if (!name || !cId)
       return res.status(400).json({ error: "Name and centerId required" });
 
+    let parsedCapacity = null;
+    try {
+      parsedCapacity = parseOptionalInt(capacity);
+    } catch (e) {
+      return res.status(400).json({ error: e.message || "Invalid capacity" });
+    }
+
     const classroom = await prisma.classRoom.create({
-      data: { name, centerId: cId },
+      data: {
+        name,
+        centerId: cId,
+        capacity: parsedCapacity,
+        ageRange:
+          typeof ageRange === "string" && ageRange.trim()
+            ? ageRange.trim()
+            : null,
+      },
       include: { children: true, teachers: true },
     });
 

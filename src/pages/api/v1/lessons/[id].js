@@ -29,13 +29,17 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    const { title, description, media } = req.body;
+    const { title, description, media, categoryId } = req.body;
     const lesson = await prisma.lesson.update({
       where: { id },
       data: {
         title,
         description,
         media,
+        categoryId:
+          Object.prototype.hasOwnProperty.call(req.body, "categoryId")
+            ? categoryId || null
+            : undefined,
       },
       include: {
         category: true,

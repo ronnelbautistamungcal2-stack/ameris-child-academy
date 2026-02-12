@@ -1,7 +1,10 @@
 node_modules/
 .next/
+.next-build/
+.next-build.old-*/
 build/
 dist/
+out/
 .env
 .env.*
 !.env.example
@@ -9,6 +12,13 @@ dist/
 .env.*.local
 *.log
 .DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.vercel/
+coverage/
+.eslintcache
+.turbo/
 public/uploads/*
 !public/uploads/.gitkeep
 .prisma/

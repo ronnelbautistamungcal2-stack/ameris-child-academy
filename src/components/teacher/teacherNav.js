@@ -1,13 +1,19 @@
 export const TEACHER_NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/teacher", label: "Teacher Console" },
-  { href: "/teacher/children", label: "My Children" },
-  { href: "/teacher/progress", label: "Progress Tracking" },
-  { href: "/teacher/logs", label: "Daily Logging" },
-  { href: "/teacher/milestone-checklists", label: "Milestone Checklist" },
+  { href: "/teacher/dashboard", label: "Dashboard" },
+
+  { kind: "section", label: "Classroom" },
+  { href: "/teacher/classroom", label: "My Classroom" },
+  { href: "/teacher/logs", label: "Log Activity" },
+  { href: "/teacher/alerts", label: "Alerts" },
+
+  { kind: "section", label: "Planning" },
   { href: "/teacher/checklists", label: "Checklists" },
-  { href: "/teacher/lessons", label: "Lesson Plans" },
-  { href: "/teacher/policies", label: "Policies" },
-  { href: "/teacher/metrics", label: "Reports" },
-  { href: "/settings", label: "Account Settings" },
+
+  { kind: "section", label: "Performance & Training" },
+  { href: "/teacher/training", label: "My Performance & Training" },
+  { href: "/teacher/time-off", label: "Time Off Request" },
+
+  { kind: "section", label: "Resources" },
+  { href: "/teacher/policies", label: "Policies & Procedures" },
+  { href: "/teacher/reports", label: "Reports" },
 ];

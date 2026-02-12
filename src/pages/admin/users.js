@@ -1,6 +1,6 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import { apiJson } from "@/lib/api";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const ROLES = ["ADMIN", "TEACHER", "PARENT", "COACH", "SUBSCRIBER"];
 
@@ -10,6 +10,7 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -43,10 +44,12 @@ export default function AdminUsers() {
   }, []);
 
   const sorted = useMemo(() => {
-    return [...users].sort((a, b) => (a.email || "").localeCompare(b.email || ""));
+    return [...users].sort((a, b) =>
+      (a.email || "").localeCompare(b.email || ""),
+    );
   }, [users]);
 
-  function resetForm() {
+  const resetForm = useCallback(() => {
     setEditing(null);
     setName("");
     setEmail("");
@@ -57,9 +60,9 @@ export default function AdminUsers() {
     setHireDate("");
     setAboutMe("");
     setPictureUrl("");
-  }
+  }, []);
 
-  function startEdit(user) {
+  const startEdit = useCallback((user) => {
     setEditing(user);
     setName(user.name || "");
     setEmail(user.email || "");
@@ -70,7 +73,45 @@ export default function AdminUsers() {
     setHireDate(user.hireDate ? String(user.hireDate).slice(0, 10) : "");
     setAboutMe(user.aboutMe || "");
     setPictureUrl(user.pictureUrl || "");
-  }
+  }, []);
+
+  const openCreate = useCallback(() => {
+    setError("");
+    resetForm();
+    setModalOpen(true);
+  }, [resetForm]);
+
+  const openEdit = useCallback(
+    (user) => {
+      setError("");
+      startEdit(user);
+      setModalOpen(true);
+    },
+    [startEdit],
+  );
+
+  const closeModal = useCallback(() => {
+    setModalOpen(false);
+    setError("");
+    resetForm();
+  }, [resetForm]);
+
+  useEffect(() => {
+    if (!modalOpen) return;
+
+    const prevOverflow = document?.body?.style?.overflow || "";
+    document.body.style.overflow = "hidden";
+
+    function onKeyDown(e) {
+      if (e.key === "Escape") closeModal();
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [modalOpen, closeModal]);
 
   async function createUser(e) {
     e.preventDefault();
@@ -91,6 +132,7 @@ export default function AdminUsers() {
         }),
       });
       resetForm();
+      setModalOpen(false);
       await refresh();
     } catch (e2) {
       setError(e2.message || "Failed to create user");
@@ -115,6 +157,7 @@ export default function AdminUsers() {
         }),
       });
       resetForm();
+      setModalOpen(false);
       await refresh();
     } catch (e2) {
       setError(e2.message || "Failed to update user");
@@ -135,17 +178,48 @@ export default function AdminUsers() {
   return (
     <AdminLayout title="Users & Roles">
       <Panel>
-        <h2 style={{ marginTop: 0 }}>Users & Role-Based Access</h2>
-        <p style={{ color: "#6b7280", marginTop: 6 }}>
-          Create/modify/delete users and set roles (ADMIN/TEACHER/PARENT/etc).
-        </p>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <h2 style={{ marginTop: 0 }}>Users & Role-Based Access</h2>
+            <p style={{ color: "#6b7280", marginTop: 6 }}>
+              Create/modify/delete users and set roles (ADMIN/TEACHER/PARENT/etc).
+            </p>
+          </div>
+          <button type="button" style={primaryButton} onClick={openCreate}>
+            + Add User
+          </button>
+        </div>
 
-        {error ? <ErrorBanner message={error} /> : null}
+        {error && !modalOpen ? <ErrorBanner message={error} /> : null}
 
-        <form onSubmit={editing ? saveEdit : createUser} style={{ marginTop: 12 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+        {modalOpen ? (
+          <Modal
+            title={editing ? "Edit User" : "Add User"}
+            onClose={closeModal}
+          >
+            {error ? <ErrorBanner message={error} /> : null}
+            <form onSubmit={editing ? saveEdit : createUser}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: 10,
+            }}
+          >
             <Field label="Name">
-              <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                style={inputStyle}
+              />
             </Field>
             <Field label="Email">
               <input
@@ -170,46 +244,11 @@ export default function AdminUsers() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr 1fr auto",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
               gap: 10,
               marginTop: 10,
             }}
           >
-            <Field label="Role">
-              <select value={role} onChange={(e) => setRole(e.target.value)} style={inputStyle}>
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label={editing ? "Assign Center (create only)" : "Assign Center"}>
-              <select
-                value={centerId}
-                onChange={(e) => setCenterId(e.target.value)}
-                style={inputStyle}
-                disabled={!!editing}
-              >
-                <option value="">(none)</option>
-                {centers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <div style={{ display: "flex", alignItems: "end", gap: 8 }}>
-              <button type="submit" style={primaryButton}>
-                {editing ? "Save" : "Create"}
-              </button>
-              <button type="button" style={secondaryButton} onClick={resetForm}>
-                Clear
-              </button>
-            </div>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 10 }}>
             <Field label="DOB">
               <input
                 value={dob}
@@ -245,7 +284,60 @@ export default function AdminUsers() {
               />
             </Field>
           </div>
-        </form>
+          
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: 10,
+              marginTop: 10,
+            }}
+          >
+            <Field label="Role">
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                style={inputStyle}
+              >
+                {ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field
+              label={editing ? "Assign Center (create only)" : "Assign Center"}
+            >
+              <select
+                value={centerId}
+                onChange={(e) => setCenterId(e.target.value)}
+                style={inputStyle}
+                disabled={!!editing}
+              >
+                <option value="">(none)</option>
+                {centers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <div style={{ display: "flex", alignItems: "end", gap: 8 }}>
+              <button type="button" style={secondaryButton} onClick={resetForm}>
+                Clear
+              </button>
+              <button type="button" style={secondaryButton} onClick={closeModal}>
+                Cancel
+              </button>
+              <button type="submit" style={primaryButton}>
+                {editing ? "Save" : "Create"}
+              </button>
+            </div>
+          </div>
+            </form>
+          </Modal>
+        ) : null}
 
         <div style={{ marginTop: 16 }}>
           {loading ? (
@@ -270,10 +362,18 @@ export default function AdminUsers() {
                     </td>
                     <td style={tdStyle}>
                       <div style={{ display: "flex", gap: 8 }}>
-                        <button type="button" style={secondaryButton} onClick={() => startEdit(u)}>
+                        <button
+                          type="button"
+                          style={secondaryButton}
+                          onClick={() => openEdit(u)}
+                        >
                           Edit
                         </button>
-                        <button type="button" style={dangerButton} onClick={() => deleteUser(u.id)}>
+                        <button
+                          type="button"
+                          style={dangerButton}
+                          onClick={() => deleteUser(u.id)}
+                        >
                           Delete
                         </button>
                       </div>
@@ -311,10 +411,43 @@ function Panel({ children }) {
   );
 }
 
+function Modal({ title, onClose, children }) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      style={modalOverlayStyle}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div style={modalCardStyle}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            marginBottom: 10,
+          }}
+        >
+          <div style={{ fontWeight: 800, fontSize: 16 }}>{title}</div>
+          <button type="button" style={secondaryButton} onClick={onClose}>
+            Close
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function Field({ label, children }) {
   return (
     <label style={{ display: "block" }}>
-      <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
+        {label}
+      </div>
       {children}
     </label>
   );
@@ -372,6 +505,29 @@ const codePill = {
   background: "#f3f4f6",
   padding: "2px 8px",
   borderRadius: 999,
+};
+
+const modalOverlayStyle = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 80,
+  background: "rgba(17, 24, 39, 0.55)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 16,
+};
+
+const modalCardStyle = {
+  width: "min(980px, 100%)",
+  maxHeight: "min(86vh, 900px)",
+  overflow: "auto",
+  background: "white",
+  border: "1px solid #e5e7eb",
+  borderRadius: 12,
+  padding: 16,
+  boxShadow:
+    "0 20px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.12)",
 };
 
 const primaryButton = {

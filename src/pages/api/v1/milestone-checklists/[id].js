@@ -37,7 +37,12 @@ export default async function handler(req, res) {
           orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
           include: {
             policyDocument: true,
-            lesson: { include: { remediationsFrom: { include: { toLesson: true } } } },
+            lesson: {
+              include: {
+                category: true,
+                remediationsFrom: { include: { toLesson: true } },
+              },
+            },
             lessonGoal: true,
           },
         },
@@ -199,7 +204,11 @@ export default async function handler(req, res) {
       include: {
         items: {
           orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-          include: { policyDocument: true, lesson: true, lessonGoal: true },
+          include: {
+            policyDocument: true,
+            lesson: { include: { category: true } },
+            lessonGoal: true,
+          },
         },
       },
     });

@@ -168,7 +168,7 @@ export default function AdminDashboard() {
                 <QuickLink href="/admin/centers" label="Centers" />
                 <QuickLink href={`/admin/classes?centerId=${encodeURIComponent(centerId)}`} label="Classrooms list" />
                 <QuickLink href={`/admin/children?centerId=${encodeURIComponent(centerId)}`} label="Children list" />
-                <QuickLink href={`/admin/lessons?centerId=${encodeURIComponent(centerId)}`} label="Curriculum list" />
+                <QuickLink href="/admin/lessons" label="Curriculum list" />
                 <QuickLink href={`/admin/reports?centerId=${encodeURIComponent(centerId)}`} label="Reports" />
               </div>
             </div>

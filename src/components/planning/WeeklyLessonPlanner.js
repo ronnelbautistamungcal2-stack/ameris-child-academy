@@ -5,6 +5,7 @@ const DEFAULT_PLAN_TITLE = "Lesson Planner";
 const DISPLAY_WEEK_DAYS = 5; // Mon–Fri
 const FETCH_WEEK_DAYS = 7; // fetch full week range
 const VIEWS = ["DAY", "WEEK", "MONTH"];
+const MONTH_VISIBLE_ITEMS = 4;
 
 function normalizeSpaces(value) {
   return String(value || "")
@@ -397,7 +398,8 @@ function MonthGrid({
               const key = toDateKey(d);
               const inMonth = d >= monthStart && d < monthEndExclusive;
               const plan = selectedPlanByDayKey[key] || null;
-              const count = Array.isArray(plan?.items) ? plan.items.length : 0;
+              const items = Array.isArray(plan?.items) ? plan.items : [];
+              const count = items.length;
               return (
                 <button
                   key={key}
@@ -405,7 +407,7 @@ function MonthGrid({
                   disabled={!inMonth}
                   onClick={() => onOpenDay(key)}
                   className={[
-                    "flex min-h-[70px] flex-col rounded-xl border p-2 text-left transition",
+                    "flex min-h-[112px] flex-col rounded-xl border p-2 text-left transition",
                     !inMonth
                       ? "border-gray-100 bg-gray-50 text-gray-400"
                       : key === selectedDayKey
@@ -421,8 +423,30 @@ function MonthGrid({
                       </div>
                     ) : null}
                   </div>
-                  <div className="mt-2 text-[11px] text-gray-500">
-                    {count ? "Planned" : "\u2014"}
+
+                  <div className="mt-2 flex-1 space-y-1 overflow-hidden">
+                    {count ? (
+                      <>
+                        {items.slice(0, MONTH_VISIBLE_ITEMS).map((it) => (
+                          <div
+                            key={it.id}
+                            className="truncate rounded-md border border-gray-200 bg-white px-1.5 py-1 text-[11px] font-semibold text-gray-800"
+                            title={it.title || "Lesson"}
+                          >
+                            {it.title || "Lesson"}
+                          </div>
+                        ))}
+                        {count > MONTH_VISIBLE_ITEMS ? (
+                          <div className="text-[11px] font-semibold text-gray-500">
+                            +{count - MONTH_VISIBLE_ITEMS} more
+                          </div>
+                        ) : null}
+                      </>
+                    ) : (
+                      <div className="rounded-md border border-dashed border-gray-200 bg-white/50 px-1.5 py-2 text-[11px] text-gray-500">
+                        No planned lessons
+                      </div>
+                    )}
                   </div>
                 </button>
               );

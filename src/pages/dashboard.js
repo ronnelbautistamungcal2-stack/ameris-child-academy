@@ -165,7 +165,6 @@ export default function Dashboard() {
       {role === "PARENT" ? (
         <ParentDashboard
           name={name}
-          session={session}
           children={children}
           loading={loading}
           error={error}
@@ -484,7 +483,6 @@ export default function Dashboard() {
 
 function ParentDashboard({
   name,
-  session,
   children,
   loading,
   error,
@@ -511,18 +509,6 @@ function ParentDashboard({
           <p className="mt-1 text-sm text-gray-600">
             Your children are currently checked in and having a great day.
           </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-          <h3 className="text-base font-extrabold text-gray-900">Parent Profile</h3>
-          <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-              User Name
-            </div>
-            <div className="mt-1 text-sm font-semibold text-gray-900">
-              {session?.user?.name || session?.user?.email || "Parent"}
-            </div>
-          </div>
         </div>
 
         <div className="rounded-2xl border border-gray-200 bg-white p-5">

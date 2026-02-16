@@ -522,12 +522,6 @@ function ParentDashboard({
             <div className="mt-1 text-sm font-semibold text-gray-900">
               {session?.user?.name || session?.user?.email || "Parent"}
             </div>
-            <Link
-              href="/settings"
-              className="mt-3 inline-flex rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
-            >
-              Reset Password
-            </Link>
           </div>
         </div>
 

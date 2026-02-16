@@ -157,6 +157,20 @@ export default function SettingsPage() {
         </div>
 
         <div className="mt-6 border-t border-gray-200 pt-6">
+          <h3 className="text-sm font-extrabold text-gray-900">Password</h3>
+          <p className="mt-1 text-sm text-gray-600">
+            Manage your password from account settings.
+          </p>
+          <button
+            type="button"
+            className="mt-3 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+            onClick={() => alert("Password reset is not implemented yet")}
+          >
+            Reset Password
+          </button>
+        </div>
+
+        <div className="mt-6 border-t border-gray-200 pt-6">
           <h3 className="text-sm font-extrabold text-gray-900">Profile</h3>
           <p className="mt-1 text-sm text-gray-600">
             Name, DOB, DOH, about me, and picture.

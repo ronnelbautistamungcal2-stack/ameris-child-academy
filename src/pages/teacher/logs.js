@@ -1,7 +1,7 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
 import { apiJson } from "@/lib/api";
 import { useRouter } from "next/router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const TYPES = [
   "DIAPER_CHANGE",
@@ -14,6 +14,8 @@ const TYPES = [
   "BEHAVIOR",
   "OTHER",
 ];
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024; // keep in sync with /api/v1/uploads
+const JPEG_QUALITIES = [0.88, 0.8, 0.72, 0.64, 0.56, 0.48];
 
 export default function TeacherLogs() {
   const router = useRouter();
@@ -33,11 +35,19 @@ export default function TeacherLogs() {
   const [type, setType] = useState("MEAL");
   const [notes, setNotes] = useState("");
   const [dailyGrade, setDailyGrade] = useState("");
+  const [photoFiles, setPhotoFiles] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const uploadInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const [photoPreviewUrls, setPhotoPreviewUrls] = useState([]);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
 
   async function loadCenters() {
     setLoading(true);
@@ -80,9 +90,53 @@ export default function TeacherLogs() {
   }, []);
 
   useEffect(() => {
+    if (!router.isReady) return;
+    const qCenterId =
+      typeof router.query.centerId === "string" ? router.query.centerId : "";
+    const qChildId =
+      typeof router.query.childId === "string" ? router.query.childId : "";
+    if (qCenterId) setCenterId(qCenterId);
+    if (qChildId) {
+      setMode("single");
+      setChildId(qChildId);
+    }
+  }, [router.isReady, router.query.centerId, router.query.childId]);
+
+  useEffect(() => {
     setSuccess("");
     loadChildren(centerId);
   }, [centerId]);
+
+  useEffect(() => {
+    if (!childId) return;
+    const exists = children.some((c) => c.id === childId);
+    if (!exists) setChildId("");
+  }, [children, childId]);
+
+  useEffect(() => {
+    const urls = photoFiles.map((file) => URL.createObjectURL(file));
+    setPhotoPreviewUrls(urls);
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [photoFiles]);
+
+  useEffect(() => {
+    if (!cameraOpen || !videoRef.current || !streamRef.current) return;
+    videoRef.current.srcObject = streamRef.current;
+    videoRef.current.play().catch(() => {});
+  }, [cameraOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        for (const track of streamRef.current.getTracks()) {
+          track.stop();
+        }
+        streamRef.current = null;
+      }
+    };
+  }, []);
 
   const sortedChildren = useMemo(() => {
     return children
@@ -118,28 +172,275 @@ export default function TeacherLogs() {
     setBulkChildIds([]);
   }
 
-  function buildPayload() {
+  function fileToBase64(file, timeoutMs = 15000) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      const timer = setTimeout(() => {
+        try {
+          reader.abort();
+        } catch {}
+        reject(new Error(`File read timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+      reader.onerror = () => {
+        clearTimeout(timer);
+        reject(new Error("Failed to read file"));
+      };
+      reader.onload = () => {
+        clearTimeout(timer);
+        const result = String(reader.result || "");
+        const idx = result.indexOf(",");
+        if (idx === -1) return reject(new Error("Invalid file encoding"));
+        resolve(result.slice(idx + 1));
+      };
+      reader.onabort = () => {
+        clearTimeout(timer);
+        reject(new Error("File read aborted"));
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function canvasToBlob(canvas, type = "image/jpeg", quality = 0.82) {
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob || null), type, quality);
+    });
+  }
+
+  function loadImageFromFile(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(img);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("Invalid image file"));
+      };
+      img.src = url;
+    });
+  }
+
+  function toJpegName(name) {
+    const raw = String(name || "photo").replace(/\.[^.]+$/, "");
+    return `${raw}.jpg`;
+  }
+
+  async function optimizeImageForUpload(file) {
+    if (!file || !String(file.type || "").startsWith("image/")) return null;
+    if (Number(file.size || 0) <= MAX_PHOTO_BYTES) return file;
+
+    const image = await loadImageFromFile(file);
+    const sourceWidth = Number(image.naturalWidth || image.width || 0);
+    const sourceHeight = Number(image.naturalHeight || image.height || 0);
+    if (!sourceWidth || !sourceHeight) {
+      throw new Error("Could not read image dimensions");
+    }
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas is not available");
+
+    const maxSides = [2560, 2200, 1920, 1600, 1280];
+    for (const maxSide of maxSides) {
+      const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+      const width = Math.max(1, Math.round(sourceWidth * scale));
+      const height = Math.max(1, Math.round(sourceHeight * scale));
+      canvas.width = width;
+      canvas.height = height;
+      ctx.clearRect(0, 0, width, height);
+      ctx.drawImage(image, 0, 0, width, height);
+
+      for (const quality of JPEG_QUALITIES) {
+        const blob = await canvasToBlob(canvas, "image/jpeg", quality);
+        if (!blob) continue;
+        if (blob.size <= MAX_PHOTO_BYTES) {
+          return new File([blob], toJpegName(file.name), {
+            type: "image/jpeg",
+            lastModified: Date.now(),
+          });
+        }
+      }
+    }
+
+    return null;
+  }
+
+  function onSelectPhotos(list) {
+    const incoming = Array.from(list || []);
+    if (!incoming.length) return;
+    setPhotoFiles((prev) => {
+      const map = new Map();
+      for (const f of [...prev, ...incoming]) {
+        const key = `${f.name}:${f.size}:${f.lastModified}`;
+        if (!map.has(key)) map.set(key, f);
+      }
+      return [...map.values()].slice(0, 10);
+    });
+  }
+
+  function clearPhotos() {
+    setPhotoFiles([]);
+    if (uploadInputRef.current) uploadInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+    closeCamera();
+  }
+
+  function removePhotoAt(index) {
+    setPhotoFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  async function openCamera() {
+    if (cameraOpen || cameraStarting) return;
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices ||
+      !navigator.mediaDevices.getUserMedia
+    ) {
+      setError("Camera is not supported in this browser. Use Upload photos instead.");
+      return;
+    }
+    setCameraStarting(true);
+    setError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setCameraOpen(true);
+    } catch (e) {
+      setError(e?.message || "Could not open camera. Check camera permissions.");
+      setCameraOpen(false);
+    } finally {
+      setCameraStarting(false);
+    }
+  }
+
+  function closeCamera() {
+    if (streamRef.current) {
+      for (const track of streamRef.current.getTracks()) {
+        track.stop();
+      }
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraOpen(false);
+  }
+
+  function capturePhotoFromCamera() {
+    const video = videoRef.current;
+    if (!video) return;
+    const width = video.videoWidth || 0;
+    const height = video.videoHeight || 0;
+    if (!width || !height) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, width, height);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return;
+        const file = new File([blob], `camera-${Date.now()}.jpg`, {
+          type: "image/jpeg",
+        });
+        onSelectPhotos([file]);
+      },
+      "image/jpeg",
+      0.92,
+    );
+  }
+
+  async function uploadPhotoUrls() {
+    const files = Array.isArray(photoFiles) ? photoFiles : [];
+    if (!files.length) return { urls: [], warning: "" };
+    const uploaded = [];
+    const warnings = [];
+    const notices = [];
+    for (const file of files) {
+      try {
+        let uploadFile = file;
+        if (Number(file?.size || 0) > MAX_PHOTO_BYTES) {
+          const optimized = await optimizeImageForUpload(file);
+          if (!optimized) {
+            warnings.push(`${file.name}: exceeds 10MB limit`);
+            continue;
+          }
+          uploadFile = optimized;
+          notices.push(`${file.name} optimized for upload`);
+        }
+
+        const dataBase64 = await fileToBase64(uploadFile, 12000);
+        const res = await apiJson("/api/v1/uploads", {
+          method: "POST",
+          timeoutMs: 25000,
+          body: JSON.stringify({
+            filename: uploadFile.name,
+            mimeType: uploadFile.type,
+            dataBase64,
+          }),
+        });
+        if (res?.url) uploaded.push(res.url);
+        else warnings.push(`${uploadFile.name}: upload did not return URL`);
+      } catch (e) {
+        warnings.push(`${file.name}: ${e?.message || "upload failed"}`);
+      }
+    }
+    const parts = [];
+    if (notices.length) {
+      parts.push(`Optimized ${notices.length} large photo(s).`);
+    }
+    if (warnings.length) {
+      parts.push(`Some photos were skipped (${warnings.slice(0, 2).join("; ")}).`);
+    }
+    const warning = parts.join(" ");
+    return { urls: uploaded, warning };
+  }
+
+  function buildPayload(photoUrls = []) {
     const gradeNum = dailyGrade === "" ? null : Number(dailyGrade);
     const hasGrade = dailyGrade !== "" && Number.isFinite(gradeNum);
     const payloadType = hasGrade ? "OTHER" : type;
-    const details = hasGrade ? { kind: "DAILY_GRADE", grade: gradeNum } : null;
+    let details = hasGrade ? { kind: "DAILY_GRADE", grade: gradeNum } : null;
+    if (photoUrls.length) {
+      details = {
+        ...(details || {}),
+        media: photoUrls,
+      };
+    }
     return { payloadType, details };
   }
 
   async function submitSingle(e) {
     e.preventDefault();
+    if (!childId) {
+      setError("Please select a child.");
+      return;
+    }
     setSaving(true);
     setError("");
     setSuccess("");
     try {
-      const { payloadType, details } = buildPayload();
+      const { urls: photoUrls, warning } = await uploadPhotoUrls();
+      const { payloadType, details } = buildPayload(photoUrls);
       await apiJson("/api/v1/activities", {
         method: "POST",
         body: JSON.stringify({ childId, type: payloadType, notes, details }),
       });
       setNotes("");
       setDailyGrade("");
-      setSuccess(`Logged ${payloadType} for ${childLabel || "child"}.`);
+      clearPhotos();
+      setSuccess(
+        warning
+          ? `Logged ${payloadType} for ${childLabel || "child"}. ${warning}`
+          : `Logged ${payloadType} for ${childLabel || "child"}.`,
+      );
     } catch (e2) {
       setError(e2.message || "Failed to log activity");
     } finally {
@@ -156,7 +457,8 @@ export default function TeacherLogs() {
     setError("");
     setSuccess("");
     try {
-      const { payloadType, details } = buildPayload();
+      const { urls: photoUrls, warning } = await uploadPhotoUrls();
+      const { payloadType, details } = buildPayload(photoUrls);
 
       let ok = 0;
       const failures = [];
@@ -174,6 +476,7 @@ export default function TeacherLogs() {
 
       setNotes("");
       setDailyGrade("");
+      clearPhotos();
       setBulkChildIds([]);
       if (failures.length) {
         setError(
@@ -182,7 +485,11 @@ export default function TeacherLogs() {
             .join(" • ")}`,
         );
       } else {
-        setSuccess(`Bulk logged ${payloadType} for ${ok} children.`);
+        setSuccess(
+          warning
+            ? `Bulk logged ${payloadType} for ${ok} children. ${warning}`
+            : `Bulk logged ${payloadType} for ${ok} children.`,
+        );
       }
     } catch (e2) {
       setError(e2.message || "Failed to bulk log activity");
@@ -399,6 +706,139 @@ export default function TeacherLogs() {
             </select>
           </label>
 
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 md:col-span-2">
+            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Child photos (upload or take picture)
+            </div>
+            <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label className="block">
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Upload photos
+                </div>
+                <input
+                  ref={uploadInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => onSelectPhotos(e.target.files)}
+                  disabled={saving}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                />
+              </label>
+
+              <label className="block">
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Take picture
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={openCamera}
+                    disabled={saving || cameraStarting || cameraOpen}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {cameraStarting
+                      ? "Starting..."
+                      : cameraOpen
+                        ? "Camera open"
+                        : "Open camera"}
+                  </button>
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => onSelectPhotos(e.target.files)}
+                    disabled={saving}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    disabled={saving}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Fallback picker
+                  </button>
+                </div>
+              </label>
+            </div>
+
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="text-xs text-gray-600">
+                {photoFiles.length
+                  ? `${photoFiles.length} photo(s) selected`
+                  : "No photos selected"}
+              </div>
+              <button
+                type="button"
+                onClick={clearPhotos}
+                disabled={saving || photoFiles.length === 0}
+                className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-extrabold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Clear photos
+              </button>
+            </div>
+            {cameraOpen ? (
+              <div className="mt-3 rounded-lg border border-gray-200 bg-white p-2">
+                <video
+                  ref={videoRef}
+                  className="max-h-72 w-full rounded-lg bg-black object-contain"
+                  autoPlay
+                  playsInline
+                  muted
+                />
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={capturePhotoFromCamera}
+                    disabled={saving}
+                    className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-extrabold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Capture photo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeCamera}
+                    disabled={saving}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-extrabold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Stop camera
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            {photoPreviewUrls.length ? (
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+                {photoPreviewUrls.map((url, idx) => (
+                  <div
+                    key={`${url}-${idx}`}
+                    className="overflow-hidden rounded-lg border border-gray-200 bg-white"
+                  >
+                    <img
+                      src={url}
+                      alt={`Selected child photo ${idx + 1}`}
+                      className="h-28 w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removePhotoAt(idx)}
+                      disabled={saving}
+                      className="w-full border-t border-gray-200 px-2 py-1 text-xs font-extrabold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {mode === "bulk" && photoFiles.length ? (
+              <div className="mt-1 text-xs text-amber-700">
+                Selected photos will be attached to each selected child log.
+              </div>
+            ) : null}
+          </div>
+
           <div className="md:col-span-2">
             <button
               type="submit"
@@ -417,4 +857,3 @@ export default function TeacherLogs() {
     </TeacherLayout>
   );
 }
-

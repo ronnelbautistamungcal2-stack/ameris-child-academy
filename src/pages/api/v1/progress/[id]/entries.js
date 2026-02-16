@@ -1,6 +1,7 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { emitProgressUpdate } from "@/lib/socket";
+import { teacherCanAccessClass } from "@/lib/teacherScope";
 
 const ALLOWED_STATUSES = [
   "NOT_STARTED",
@@ -36,6 +37,13 @@ export default async function handler(req, res) {
   if (session.user.role !== "ADMIN") {
     const hasAccess = await hasAccessToCenter(session.user.id, progress.child.centerId);
     if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
+    if (session.user.role === "TEACHER") {
+      const hasClassAccess = await teacherCanAccessClass(
+        session.user.id,
+        progress.child.classRoomId,
+      );
+      if (!hasClassAccess) return res.status(403).json({ error: "Forbidden" });
+    }
   }
 
   if (req.method === "GET") {
@@ -135,4 +143,3 @@ export default async function handler(req, res) {
   res.setHeader("Allow", ["GET", "POST"]);
   res.status(405).end();
 }
-

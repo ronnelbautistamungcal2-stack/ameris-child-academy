@@ -5,7 +5,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 export default function AdminClasses() {
   const [classes, setClasses] = useState([]);
   const [centers, setCenters] = useState([]);
+  const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -14,17 +16,22 @@ export default function AdminClasses() {
   const [centerId, setCenterId] = useState("");
   const [capacity, setCapacity] = useState("");
   const [ageRange, setAgeRange] = useState("");
+  const [selectedTeacherIds, setSelectedTeacherIds] = useState([]);
+  const [teacherQuery, setTeacherQuery] = useState("");
+  const [teacherDropdownOpen, setTeacherDropdownOpen] = useState(false);
 
   async function refresh() {
     setError("");
     setLoading(true);
     try {
-      const [cls, c] = await Promise.all([
+      const [cls, c, t] = await Promise.all([
         apiJson("/api/v1/classes"),
         apiJson("/api/v1/centers"),
+        apiJson("/api/v1/teachers"),
       ]);
       setClasses(Array.isArray(cls) ? cls : []);
       setCenters(Array.isArray(c) ? c : []);
+      setTeachers(Array.isArray(t) ? t : []);
     } catch (e) {
       setError(e.message || "Failed to load classes");
     } finally {
@@ -41,11 +48,33 @@ export default function AdminClasses() {
     [centers],
   );
 
+  const teacherById = useMemo(
+    () => Object.fromEntries(teachers.map((t) => [t.id, t])),
+    [teachers],
+  );
+
   const sorted = useMemo(() => {
     return [...classes].sort((a, b) =>
       (a.name || "").localeCompare(b.name || ""),
     );
   }, [classes]);
+
+  const sortedTeachers = useMemo(() => {
+    return [...teachers].sort((a, b) =>
+      (a.email || "").localeCompare(b.email || ""),
+    );
+  }, [teachers]);
+
+  const effectiveCenterId = editing?.centerId || centerId || "";
+
+  const availableTeachers = useMemo(() => {
+    if (!effectiveCenterId) return sortedTeachers;
+    return sortedTeachers.filter((t) =>
+      (t.centers || []).some(
+        (cu) => cu.role === "TEACHER" && cu.centerId === effectiveCenterId,
+      ),
+    );
+  }, [effectiveCenterId, sortedTeachers]);
 
   const resetForm = useCallback(() => {
     setEditing(null);
@@ -53,6 +82,9 @@ export default function AdminClasses() {
     setCenterId("");
     setCapacity("");
     setAgeRange("");
+    setSelectedTeacherIds([]);
+    setTeacherQuery("");
+    setTeacherDropdownOpen(false);
   }, []);
 
   const startEdit = useCallback((cl) => {
@@ -65,6 +97,9 @@ export default function AdminClasses() {
         : String(cl.capacity),
     );
     setAgeRange(cl.ageRange || "");
+    setSelectedTeacherIds(
+      (cl.teachers || []).map((tc) => tc.teacherId).filter(Boolean),
+    );
   }, []);
 
   const openCreate = useCallback(() => {
@@ -83,10 +118,11 @@ export default function AdminClasses() {
   );
 
   const closeModal = useCallback(() => {
+    if (saving) return;
     setModalOpen(false);
     setError("");
     resetForm();
-  }, [resetForm]);
+  }, [resetForm, saving]);
 
   useEffect(() => {
     if (!modalOpen) return;
@@ -116,12 +152,99 @@ export default function AdminClasses() {
     return num;
   }
 
+  function toggleTeacher(teacherId) {
+    setSelectedTeacherIds((cur) =>
+      cur.includes(teacherId)
+        ? cur.filter((id) => id !== teacherId)
+        : [...cur, teacherId],
+    );
+    setTeacherQuery("");
+    setTeacherDropdownOpen(false);
+  }
+
+  function uniqueIds(arr) {
+    return [...new Set((arr || []).filter(Boolean))];
+  }
+
+  const teacherSearchResults = useMemo(() => {
+    const q = teacherQuery.trim().toLowerCase();
+    if (!q) return availableTeachers;
+    return availableTeachers.filter((t) => {
+      const hay = `${t.name || ""} ${t.email || ""}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [availableTeachers, teacherQuery]);
+
+  const selectedTeacherSummary = useMemo(() => {
+    if (!selectedTeacherIds.length) return "No teachers selected.";
+    const names = selectedTeacherIds
+      .map((id) => teacherById[id]?.name || teacherById[id]?.email)
+      .filter(Boolean);
+    if (!names.length) return "No teachers selected.";
+    if (names.length <= 3) return `Selected (${names.length}): ${names.join(", ")}`;
+    return `Selected (${names.length}): ${names.slice(0, 3).join(", ")} +${names.length - 3} more`;
+  }, [selectedTeacherIds, teacherById]);
+
+  async function saveTeacherAssignmentsForClass({
+    classId,
+    classCenterId,
+    previousTeacherIds,
+    nextTeacherIds,
+  }) {
+    const prevSet = new Set(previousTeacherIds || []);
+    const nextSet = new Set(nextTeacherIds || []);
+    const impactedTeacherIds = uniqueIds([
+      ...(previousTeacherIds || []),
+      ...(nextTeacherIds || []),
+    ]);
+
+    await Promise.all(
+      impactedTeacherIds.map(async (teacherId) => {
+        const teacher = teacherById[teacherId];
+        if (!teacher) return;
+
+        const currentCenterIds = uniqueIds(
+          (teacher.centers || [])
+            .filter((cu) => cu.role === "TEACHER")
+            .map((cu) => cu.centerId),
+        );
+        const currentClassIds = uniqueIds(
+          (teacher.teacherClasses || []).map((tc) => tc.classId),
+        );
+
+        const shouldHaveClass = nextSet.has(teacherId);
+        const hadClass = prevSet.has(teacherId);
+        if (!shouldHaveClass && !hadClass) return;
+
+        const nextClassIds = shouldHaveClass
+          ? uniqueIds([...currentClassIds, classId])
+          : currentClassIds.filter((id) => id !== classId);
+
+        const nextCenterIds =
+          shouldHaveClass &&
+          classCenterId &&
+          !currentCenterIds.includes(classCenterId)
+            ? uniqueIds([...currentCenterIds, classCenterId])
+            : currentCenterIds;
+
+        await apiJson(`/api/v1/teachers/${teacherId}/assignments`, {
+          method: "PUT",
+          body: JSON.stringify({
+            centerIds: nextCenterIds,
+            classIds: nextClassIds,
+          }),
+        });
+      }),
+    );
+  }
+
   async function createClass(e) {
     e.preventDefault();
     setError("");
+    setSaving(true);
     try {
       const parsedCapacity = parseCapacityInput(capacity);
-      await apiJson("/api/v1/classes", {
+      const created = await apiJson("/api/v1/classes", {
         method: "POST",
         body: JSON.stringify({
           name,
@@ -130,11 +253,23 @@ export default function AdminClasses() {
           ageRange: ageRange ? ageRange : null,
         }),
       });
+
+      if (created?.id && selectedTeacherIds.length) {
+        await saveTeacherAssignmentsForClass({
+          classId: created.id,
+          classCenterId: centerId,
+          previousTeacherIds: [],
+          nextTeacherIds: selectedTeacherIds,
+        });
+      }
+
       resetForm();
       setModalOpen(false);
       await refresh();
     } catch (e2) {
       setError(e2.message || "Failed to create class");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -142,6 +277,7 @@ export default function AdminClasses() {
     e.preventDefault();
     if (!editing) return;
     setError("");
+    setSaving(true);
     try {
       const parsedCapacity = parseCapacityInput(capacity);
       await apiJson(`/api/v1/classes/${editing.id}`, {
@@ -152,11 +288,25 @@ export default function AdminClasses() {
           ageRange: ageRange ? ageRange : null,
         }),
       });
+
+      const previousTeacherIds = (editing.teachers || [])
+        .map((tc) => tc.teacherId)
+        .filter(Boolean);
+
+      await saveTeacherAssignmentsForClass({
+        classId: editing.id,
+        classCenterId: editing.centerId,
+        previousTeacherIds,
+        nextTeacherIds: selectedTeacherIds,
+      });
+
       resetForm();
       setModalOpen(false);
       await refresh();
     } catch (e2) {
       setError(e2.message || "Failed to update class");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -216,6 +366,7 @@ export default function AdminClasses() {
                     onChange={(e) => setName(e.target.value)}
                     style={inputStyle}
                     required
+                    disabled={saving}
                   />
                 </Field>
                 <Field label={editing ? "Center (create only)" : "Center"}>
@@ -224,7 +375,7 @@ export default function AdminClasses() {
                     onChange={(e) => setCenterId(e.target.value)}
                     style={inputStyle}
                     required={!editing}
-                    disabled={!!editing}
+                    disabled={!!editing || saving}
                   >
                     <option value="">
                       {editing ? "(unchanged)" : "Select a center"}
@@ -243,6 +394,7 @@ export default function AdminClasses() {
                     style={inputStyle}
                     inputMode="numeric"
                     placeholder="e.g. 20"
+                    disabled={saving}
                   />
                 </Field>
                 <Field label="Age Range">
@@ -250,6 +402,7 @@ export default function AdminClasses() {
                     value={ageRange}
                     onChange={(e) => setAgeRange(e.target.value)}
                     style={inputStyle}
+                    disabled={saving}
                   >
                     <option value="">Select age range</option>
                     <option value="0-1 years">0-1 years</option>
@@ -257,6 +410,76 @@ export default function AdminClasses() {
                     <option value="4-5 years">4-5 years</option>
                     <option value="6-7 years">6-7 years</option>
                   </select>
+                </Field>
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                <Field label="Assigned Teachers">
+                  {!effectiveCenterId ? (
+                    <div style={{ color: "#6b7280", fontSize: 13 }}>
+                      Select a center first to assign teachers.
+                    </div>
+                  ) : availableTeachers.length === 0 ? (
+                    <div style={{ color: "#6b7280", fontSize: 13 }}>
+                      No teachers found for this center.
+                    </div>
+                  ) : (
+                    <div style={teacherPickerWrapStyle}>
+                      <div style={teacherInputRowStyle}>
+                        <input
+                          value={teacherQuery}
+                          onChange={(e) => setTeacherQuery(e.target.value)}
+                          onFocus={() => setTeacherDropdownOpen(true)}
+                          onClick={() => setTeacherDropdownOpen(true)}
+                          onBlur={() => setTeacherDropdownOpen(false)}
+                          style={compactInputStyle}
+                          placeholder="Search teacher..."
+                          disabled={saving}
+                        />
+                        {selectedTeacherIds.length ? (
+                          <button
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => setSelectedTeacherIds([])}
+                            disabled={saving}
+                            style={tinyClearButtonStyle}
+                          >
+                            Clear
+                          </button>
+                        ) : null}
+                      </div>
+                      {teacherDropdownOpen ? (
+                        <div style={teacherDropdownStyle}>
+                          {teacherSearchResults.map((t) => {
+                            const active = selectedTeacherIds.includes(t.id);
+                            return (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => toggleTeacher(t.id)}
+                                disabled={saving}
+                                style={teacherOptionStyle(active)}
+                              >
+                                <span style={{ fontWeight: active ? 700 : 500 }}>
+                                  {active ? "✓ " : ""}{t.name || t.email}
+                                </span>
+                              </button>
+                            );
+                          })}
+                          {teacherSearchResults.length === 0 ? (
+                            <div style={{ padding: 8, color: "#6b7280", fontSize: 12 }}>
+                              No results
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+
+                      <div style={teacherSummaryStyle}>
+                        {selectedTeacherSummary}
+                      </div>
+                    </div>
+                  )}
                 </Field>
               </div>
 
@@ -272,6 +495,7 @@ export default function AdminClasses() {
                   type="button"
                   style={secondaryButton}
                   onClick={resetForm}
+                  disabled={saving}
                 >
                   Clear
                 </button>
@@ -279,11 +503,12 @@ export default function AdminClasses() {
                   type="button"
                   style={secondaryButton}
                   onClick={closeModal}
+                  disabled={saving}
                 >
                   Cancel
                 </button>
-                <button type="submit" style={primaryButton}>
-                  {editing ? "Save" : "Create"}
+                <button type="submit" style={primaryButton} disabled={saving}>
+                  {saving ? "Saving..." : editing ? "Save" : "Create"}
                 </button>
               </div>
             </form>
@@ -292,7 +517,7 @@ export default function AdminClasses() {
 
         <div style={{ marginTop: 16 }}>
           {loading ? (
-            <p>Loading…</p>
+            <p>Loading...</p>
           ) : (
             <table style={tableStyle}>
               <thead>
@@ -301,6 +526,7 @@ export default function AdminClasses() {
                   <th style={thStyle}>Center</th>
                   <th style={thStyle}>Capacity</th>
                   <th style={thStyle}>Age Range</th>
+                  <th style={thStyle}>Teachers</th>
                   <th style={thStyle}>Actions</th>
                 </tr>
               </thead>
@@ -313,10 +539,18 @@ export default function AdminClasses() {
                     </td>
                     <td style={tdStyle}>
                       {cl.capacity === null || cl.capacity === undefined
-                        ? "â€”"
+                        ? "-"
                         : cl.capacity}
                     </td>
-                    <td style={tdStyle}>{cl.ageRange || "â€”"}</td>
+                    <td style={tdStyle}>{cl.ageRange || "-"}</td>
+                    <td style={tdStyle}>
+                      {(cl.teachers || [])
+                        .map(
+                          (tc) =>
+                            tc.teacher?.name || tc.teacher?.email || tc.teacherId,
+                        )
+                        .join(", ") || "-"}
+                    </td>
                     <td style={tdStyle}>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button
@@ -339,7 +573,7 @@ export default function AdminClasses() {
                 ))}
                 {sorted.length === 0 ? (
                   <tr>
-                    <td style={tdStyle} colSpan={5}>
+                    <td style={tdStyle} colSpan={6}>
                       No classes found.
                     </td>
                   </tr>
@@ -478,6 +712,67 @@ const modalCardStyle = {
   padding: 16,
   boxShadow:
     "0 20px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.12)",
+};
+
+const teacherDropdownStyle = {
+  marginTop: 4,
+  maxHeight: 120,
+  overflow: "auto",
+  border: "1px solid #e5e7eb",
+  borderRadius: 6,
+  background: "white",
+};
+
+function teacherOptionStyle(active) {
+  return {
+    width: "100%",
+    textAlign: "left",
+    padding: "6px 8px",
+    border: "none",
+    borderBottom: "1px solid #f3f4f6",
+    background: active ? "#eff6ff" : "white",
+    color: "#111827",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+  };
+}
+
+const teacherPickerWrapStyle = {
+  border: "1px solid #e5e7eb",
+  borderRadius: 8,
+  padding: 8,
+};
+
+const teacherInputRowStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+};
+
+const teacherSummaryStyle = {
+  marginTop: 6,
+  color: "#6b7280",
+  fontSize: 12,
+  lineHeight: 1.35,
+};
+
+const tinyClearButtonStyle = {
+  border: "1px solid #e5e7eb",
+  background: "white",
+  color: "#374151",
+  borderRadius: 6,
+  padding: "6px 8px",
+  fontSize: 12,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const compactInputStyle = {
+  ...inputStyle,
+  padding: "6px 8px",
+  borderRadius: 6,
+  fontSize: 12,
 };
 
 const primaryButton = {

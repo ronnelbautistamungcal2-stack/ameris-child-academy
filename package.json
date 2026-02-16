@@ -11,7 +11,8 @@
     "prisma:seed": "node prisma/seed.js",
     "prisma:studio": "prisma studio",
     "import:steps-library": "node scripts/import-steps-library.mjs",
-    "normalize:lesson-categories": "node scripts/normalize-lesson-categories.mjs"
+    "normalize:lesson-categories": "node scripts/normalize-lesson-categories.mjs",
+    "normalize:curriculum-subjects": "node scripts/normalize-curriculum-subjects.mjs"
   },
   "dependencies": {
     "@next-auth/prisma-adapter": "^1.0.7",

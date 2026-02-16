@@ -1,5 +1,6 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import { apiJson } from "@/lib/api";
+import { normalizeSubjectForRef } from "@/lib/subjectNormalization.mjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const naturalCollator = new Intl.Collator(undefined, {
@@ -486,7 +487,10 @@ export default function AdminLessons() {
           id: goal?.id,
           refId: String(pc.reference ?? ""),
           lessonTitle: String(pc.lesson ?? lesson?.title ?? ""),
-          subject: String(pc.subject ?? ""),
+          subject: normalizeSubjectForRef({
+            subject: String(pc.subject ?? ""),
+            refId: String(pc.reference ?? ""),
+          }),
           childAge: String(pc.age ?? ""),
           term: String(pc.term ?? ""),
           category: String(pc.category ?? lesson?.category?.name ?? ""),
@@ -524,6 +528,22 @@ export default function AdminLessons() {
       subjects: [...subjects].sort((a, b) => byString(a, b)),
     };
   }, [records]);
+
+  const subjectOptions = useMemo(() => {
+    const ageKey = normalizeSpaces(age);
+    const catKey = normalizeSpaces(category);
+    const termKey = normalizeSpaces(term);
+    const subjects = new Set();
+
+    for (const r of records) {
+      if (ageKey && normalizeSpaces(r.childAge) !== ageKey) continue;
+      if (catKey && normalizeSpaces(r.category) !== catKey) continue;
+      if (termKey && normalizeSpaces(r.term) !== termKey) continue;
+      if (r.subject) subjects.add(r.subject);
+    }
+
+    return [...subjects].sort((a, b) => byString(a, b));
+  }, [records, age, category, term]);
 
   const filtered = useMemo(() => {
     const q = normalizeKey(search);
@@ -565,6 +585,13 @@ export default function AdminLessons() {
   useEffect(() => {
     setPage(1);
   }, [search, age, category, term, subject, pageSize]);
+
+  useEffect(() => {
+    if (!subject) return;
+    const key = normalizeSpaces(subject);
+    const hasMatch = subjectOptions.some((s) => normalizeSpaces(s) === key);
+    if (!hasMatch) setSubject("");
+  }, [subject, subjectOptions]);
 
   const totalPages = useMemo(() => {
     return Math.max(1, Math.ceil(filtered.length / Math.max(1, pageSize)));
@@ -723,7 +750,10 @@ export default function AdminLessons() {
             childAge: normalizeSpaces(newChildAge),
             term: normalizeSpaces(newTerm),
             category: normalizeSpaces(newCategory),
-            subject: normalizeSpaces(newSubject),
+            subject: normalizeSubjectForRef({
+              subject: normalizeSpaces(newSubject),
+              refId: normalizeSpaces(newReference),
+            }),
             reference: normalizeSpaces(newReference),
             progressionStep: step,
             testingQuestion: String(newTestingQuestion || ""),
@@ -779,7 +809,10 @@ export default function AdminLessons() {
               childAge: normalizeSpaces(editChildAge),
               term: normalizeSpaces(editTerm),
               category: normalizeSpaces(editCategory),
-              subject: normalizeSpaces(editSubject),
+              subject: normalizeSubjectForRef({
+                subject: normalizeSpaces(editSubject),
+                refId: normalizeSpaces(editReference),
+              }),
               reference: normalizeSpaces(editReference),
               progressionStep: step,
               testingQuestion: String(editTestingQuestion || ""),
@@ -1045,7 +1078,7 @@ export default function AdminLessons() {
                 disabled={loading}
               >
                 <option value="">All</option>
-                {options.subjects.map((s) => (
+                {subjectOptions.map((s) => (
                   <option key={s} value={s}>
                     {s}
                   </option>

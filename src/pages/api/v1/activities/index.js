@@ -1,6 +1,7 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { emitActivityLog } from "@/lib/socket";
+import { getTeacherClassIds, teacherChildFilter } from "@/lib/teacherScope";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -30,6 +31,10 @@ export default async function handler(req, res) {
       where: {
         childId: childId || undefined,
         type: type || undefined,
+        child:
+          session.user.role === "TEACHER"
+            ? teacherChildFilter(session.user.id)
+            : undefined,
       },
       include: { child: true, recordedBy: true },
       orderBy: { createdAt: "desc" },
@@ -50,6 +55,28 @@ export default async function handler(req, res) {
 
     if (!cId || !actType) {
       return res.status(400).json({ error: "childId and type required" });
+    }
+
+    if (session.user.role === "TEACHER") {
+      const childRecord = await prisma.child.findUnique({
+        where: { id: cId },
+        select: { id: true, classRoomId: true, centerId: true },
+      });
+      if (!childRecord) return res.status(404).json({ error: "Child not found" });
+      const hasCenterAccess = await hasAccessToCenter(session.user.id, childRecord.centerId);
+      if (!hasCenterAccess) return res.status(403).json({ error: "Forbidden" });
+
+      // Fallback behavior:
+      // If class assignments exist, enforce class-level access.
+      // If no class assignments are configured yet, allow center-level access.
+      const classIds = await getTeacherClassIds(session.user.id, childRecord.centerId);
+      if (
+        classIds.length > 0 &&
+        childRecord.classRoomId &&
+        !classIds.includes(childRecord.classRoomId)
+      ) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
     }
 
     // Prevent backdating unless admin

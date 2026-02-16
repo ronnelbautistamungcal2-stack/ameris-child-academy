@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { canonicalizeLessonCategoryName } from "@/lib/lessonCategoryNormalization.mjs";
+import { normalizeSubjectForRef } from "@/lib/subjectNormalization.mjs";
 
 function normalizeSpaces(value) {
   return String(value || "")
@@ -124,7 +125,10 @@ export default async function handler(req, res) {
         notes: normalizeSpaces(notes),
         age: normalizeSpaces(childAge),
         category: normalizeSpaces(category),
-        subject: normalizeSpaces(subject),
+        subject: normalizeSubjectForRef({
+          subject: normalizeSpaces(subject),
+          refId: normalizeSpaces(reference),
+        }),
         sheet: "Manual",
       },
     },
@@ -141,4 +145,3 @@ export default async function handler(req, res) {
 
   return res.status(201).json({ lesson: updated, goal });
 }
-

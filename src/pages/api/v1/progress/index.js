@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { teacherCanAccessClass, teacherChildFilter } from "@/lib/teacherScope";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -24,8 +25,14 @@ export default async function handler(req, res) {
     }
 
     const progress = await prisma.progress.findMany({
-      where: { childId: childId || undefined },
-      include: { child: true, lesson: true },
+      where: {
+        childId: childId || undefined,
+        child:
+          session.user.role === "TEACHER"
+            ? teacherChildFilter(session.user.id)
+            : undefined,
+      },
+      include: { child: true, lesson: { include: { category: true } } },
       orderBy: { createdAt: "desc" },
     });
 
@@ -48,6 +55,16 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "childId and lessonId required" });
     }
 
+    if (session.user.role === "TEACHER") {
+      const child = await prisma.child.findUnique({
+        where: { id: cId },
+        select: { id: true, classRoomId: true },
+      });
+      if (!child) return res.status(404).json({ error: "Child not found" });
+      const hasClassAccess = await teacherCanAccessClass(session.user.id, child.classRoomId);
+      if (!hasClassAccess) return res.status(403).json({ error: "Forbidden" });
+    }
+
     const normalizedGoalIndex = Number(goalIndex || 1);
     const lessonGoal = await prisma.lessonGoal.findUnique({
       where: { lessonId_goalIndex: { lessonId, goalIndex: normalizedGoalIndex } },
@@ -61,7 +78,11 @@ export default async function handler(req, res) {
         goalIndex: normalizedGoalIndex,
         lessonGoalId: lessonGoal?.id || null,
       },
-      include: { child: true, lesson: true, entries: true },
+      include: {
+        child: true,
+        lesson: { include: { category: true } },
+        entries: true,
+      },
     });
 
     return res.status(201).json(progress);

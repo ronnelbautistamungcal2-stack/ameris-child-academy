@@ -1,5 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { getTeacherClassIds } from "@/lib/teacherScope";
 
 function startOfDay(d = new Date()) {
   const out = new Date(d);
@@ -32,10 +33,28 @@ export default async function handler(req, res) {
   }
 
   const day = startOfDay();
+  let teacherClassIds = null;
+
+  if (role === "TEACHER") {
+    teacherClassIds = await getTeacherClassIds(session.user.id, centerId);
+    if (!teacherClassIds.length) {
+      return res.status(200).json({
+        centerId,
+        day: day.toISOString(),
+        totalChildren: 0,
+        checkedInCount: 0,
+        checkedInChildren: [],
+        missingChildren: [],
+      });
+    }
+  }
 
   const [children, records] = await Promise.all([
     prisma.child.findMany({
-      where: { centerId },
+      where:
+        role === "TEACHER"
+          ? { centerId, classRoomId: { in: teacherClassIds } }
+          : { centerId },
       select: { id: true, firstName: true, lastName: true, classRoomId: true },
       orderBy: { createdAt: "desc" },
       take: 500,
@@ -82,4 +101,3 @@ export default async function handler(req, res) {
     missingChildren,
   });
 }
-

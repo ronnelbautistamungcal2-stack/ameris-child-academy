@@ -455,9 +455,12 @@ export default function TeacherClassroom() {
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-2">
                                   <div className="min-w-0">
-                                    <div className="truncate font-semibold text-gray-900">
+                                    <Link
+                                      href={`/teacher/children/${encodeURIComponent(ch.id)}`}
+                                      className="truncate font-semibold text-blue-700 hover:underline"
+                                    >
                                       {fullName(ch)}
-                                    </div>
+                                    </Link>
                                     <div className="mt-1 flex flex-wrap gap-2 text-xs">
                                       {ch.allergies ? (
                                         <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 font-semibold text-amber-900">
@@ -542,7 +545,12 @@ export default function TeacherClassroom() {
                           key={c.id}
                           className="rounded-xl border border-amber-200 bg-amber-50 p-3"
                         >
-                          <div className="font-semibold text-amber-900">{fullName(c)}</div>
+                          <Link
+                            href={`/teacher/children/${encodeURIComponent(c.id)}`}
+                            className="font-semibold text-amber-900 hover:underline"
+                          >
+                            {fullName(c)}
+                          </Link>
                           <div className="mt-1 text-xs text-amber-900/80">
                             {[c.allergies ? "Allergies" : null, !c.birthDate ? "Missing DOB" : null, !c.emergencyContact ? "Missing emergency contact" : null]
                               .filter(Boolean)
@@ -633,9 +641,18 @@ export default function TeacherClassroom() {
                           key={row.child?.id}
                           className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
                         >
-                          <span className="min-w-0 truncate font-semibold text-gray-900">
-                            {fullName(row.child)}
-                          </span>
+                          {row.child?.id ? (
+                            <Link
+                              href={`/teacher/children/${encodeURIComponent(row.child.id)}`}
+                              className="min-w-0 truncate font-semibold text-blue-700 hover:underline"
+                            >
+                              {fullName(row.child)}
+                            </Link>
+                          ) : (
+                            <span className="min-w-0 truncate font-semibold text-gray-900">
+                              {fullName(row.child)}
+                            </span>
+                          )}
                           <span className="shrink-0 text-xs text-gray-500">
                             {formatTime(row.checkedInAt)}
                           </span>

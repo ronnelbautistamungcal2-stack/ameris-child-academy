@@ -18,7 +18,8 @@ export default async function handler(req, res) {
           const ok = await hasAccessToCenter(user.id, centerId);
           if (!ok) return res.status(403).json({ error: "Forbidden" });
         }
-        where = { ...where, centerId };
+        // Include center-specific and global templates for scoped center views.
+        where = { ...where, OR: [{ centerId }, { centerId: null }] };
       }
     } else if (centerId) {
       where = { centerId };

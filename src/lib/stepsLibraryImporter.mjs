@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import xlsx from "xlsx";
 import { canonicalizeLessonCategoryName } from "./lessonCategoryNormalization.mjs";
+import { normalizeSubjectForRef } from "./subjectNormalization.mjs";
 
 function normalizeHeader(value) {
   return String(value || "")
@@ -295,6 +296,10 @@ export async function importStepsLibrary({
       const rawLesson = String(lessonTitle ?? "");
       const rawCategory = String(categoryName ?? "");
       const rawSubject = String(subject ?? "");
+      const normalizedSubject = normalizeSubjectForRef({
+        subject: rawSubject,
+        refId: rawRef,
+      });
       const rawRef = String(ref ?? "");
       const rawAge = String(age ?? "");
       const rawTerm = String(term ?? "");
@@ -356,7 +361,7 @@ export async function importStepsLibrary({
             notes: rawNotes,
             age: rawAge,
             category: rawCategory,
-            subject: rawSubject,
+            subject: normalizedSubject,
             sheet: sheetName,
           };
 
@@ -407,7 +412,7 @@ export async function importStepsLibrary({
             notes: rawNotes,
             age: rawAge,
             category: rawCategory,
-            subject: rawSubject,
+            subject: normalizedSubject,
             sheet: sheetName,
           },
         },

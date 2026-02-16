@@ -1,5 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { getTeacherClassIds } from "@/lib/teacherScope";
 
 function normalizeDocs(value) {
   const arr = Array.isArray(value) ? value : [];
@@ -76,8 +77,19 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "GET") {
+    let teacherClassIds = null;
+    if (session.user.role === "TEACHER") {
+      teacherClassIds = await getTeacherClassIds(session.user.id, centerId);
+      if (!teacherClassIds.length) return res.status(200).json([]);
+    }
+
+    const where = centerId ? { centerId } : {};
+    if (session.user.role === "TEACHER") {
+      where.classRoomId = { in: teacherClassIds };
+    }
+
     const children = await prisma.child.findMany({
-      where: centerId ? { centerId } : {},
+      where,
       include: { progress: true, activities: true },
     });
     return res.status(200).json(children);

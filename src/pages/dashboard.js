@@ -162,7 +162,18 @@ export default function Dashboard() {
       navItems={nav}
       showBack={false}
     >
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_340px]">
+      {role === "PARENT" ? (
+        <ParentDashboard
+          name={name}
+          session={session}
+          children={children}
+          loading={loading}
+          error={error}
+          activities={activities}
+          subscriptionSummary={subscriptionSummary}
+        />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_340px]">
         <section className="min-w-0 space-y-4">
               <div className="rounded-2xl border border-gray-200 bg-gradient-to-r from-blue-50 to-cyan-50 p-6">
                 <div className="flex items-center justify-between gap-4">
@@ -462,11 +473,250 @@ export default function Dashboard() {
               ) : null}
         </aside>
       </div>
+      )}
 
       <div className="mt-4 text-xs text-gray-500">
         User ID: <span className="font-mono">{session?.user?.id}</span>
       </div>
     </AppShell>
+  );
+}
+
+function ParentDashboard({
+  name,
+  session,
+  children,
+  loading,
+  error,
+  activities,
+  subscriptionSummary,
+}) {
+  const visibleChildren = (children || []).slice(0, 10);
+  const reminders = [
+    "Admission agreement renewal due this month.",
+    "Health assessment renewal due soon.",
+    "Income eligibility review coming up.",
+  ];
+
+  return (
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_340px]">
+      <section className="min-w-0 space-y-4">
+        <div className="rounded-2xl border border-gray-200 bg-gradient-to-r from-blue-50 to-cyan-50 p-6">
+          <div className="text-xs font-semibold uppercase tracking-wide text-blue-700/70">
+            Welcome back
+          </div>
+          <h2 className="mt-1 truncate text-2xl font-extrabold text-gray-900">
+            {name}!
+          </h2>
+          <p className="mt-1 text-sm text-gray-600">
+            Your children are currently checked in and having a great day.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <h3 className="text-base font-extrabold text-gray-900">Parent Profile</h3>
+          <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              User Name
+            </div>
+            <div className="mt-1 text-sm font-semibold text-gray-900">
+              {session?.user?.name || session?.user?.email || "Parent"}
+            </div>
+            <Link
+              href="/settings"
+              className="mt-3 inline-flex rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+            >
+              Reset Password
+            </Link>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <h3 className="text-base font-extrabold text-gray-900">
+            Policies and Procedures
+          </h3>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <QuickTile
+              title="Parent Handbook"
+              subtitle="Policies, procedures, and guidelines"
+              href="/parent/policies"
+            />
+            <QuickTile
+              title="Parent Enrollment Documents"
+              subtitle="Submit and review enrollment forms"
+              href="/parent/forms"
+            />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <h3 className="text-base font-extrabold text-gray-900">
+            Parent Enrollment Documents
+          </h3>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Link
+              href="/parent/forms"
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+            >
+              Admission Agreement
+            </Link>
+            <Link
+              href="/parent/forms"
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+            >
+              Health Assessment
+            </Link>
+            <Link
+              href="/parent/forms"
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+            >
+              Income Eligibility Form
+            </Link>
+            <Link
+              href="/parent/forms"
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+            >
+              Baby Forms
+            </Link>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-extrabold text-gray-900">My Children</h3>
+              <p className="mt-1 text-sm text-gray-600">
+                Click on each child to view their page.
+              </p>
+            </div>
+            <Link
+              href="/parent/children"
+              className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+            >
+              View All
+            </Link>
+          </div>
+
+          {error ? (
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {error}
+            </div>
+          ) : null}
+
+          {loading ? (
+            <div className="mt-4 text-sm text-gray-600">Loading...</div>
+          ) : visibleChildren.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+              No children found for this account.
+            </div>
+          ) : (
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              {visibleChildren.map((ch, index) => (
+                <Link
+                  key={ch.id}
+                  href={`/parent/children?childId=${encodeURIComponent(ch.id)}`}
+                  className="rounded-2xl border border-gray-200 bg-white p-4 text-left transition hover:bg-gray-50"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-sm font-extrabold text-gray-700">
+                    {initials(ch.firstName, ch.lastName)}
+                  </div>
+                  <div className="mt-2 truncate text-sm font-extrabold text-gray-900">
+                    {ch.firstName} {ch.lastName || ""}
+                  </div>
+                  <div className="text-xs text-gray-500">Child {index + 1}</div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <aside className="space-y-4">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <h3 className="text-base font-extrabold text-gray-900">
+            New Messages/Alerts
+          </h3>
+          <div className="mt-3 space-y-2">
+            {(activities || []).slice(0, 3).map((a) => (
+              <div key={a.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                <div className="text-sm font-semibold text-gray-900">{a.type}</div>
+                <div className="mt-1 text-xs text-gray-600">{a.notes || "-"}</div>
+              </div>
+            ))}
+            {(activities || []).length === 0 ? (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+                No new alerts right now.
+              </div>
+            ) : null}
+          </div>
+          <Link
+            href="/parent/messages"
+            className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+          >
+            Go to Messages
+          </Link>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <h3 className="text-base font-extrabold text-gray-900">
+            Forms Renewal Reminders
+          </h3>
+          <div className="mt-3 space-y-2">
+            {reminders.map((item) => (
+              <div
+                key={item}
+                className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
+              >
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-extrabold text-gray-900">Account Balance</h3>
+            {subscriptionSummary ? (
+              <span className="text-xs font-semibold text-gray-500">
+                {subscriptionSummary.tier}
+              </span>
+            ) : null}
+          </div>
+          {subscriptionSummary ? (
+            <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+              <div className="font-semibold text-gray-900">
+                {subscriptionSummary.centerName}
+              </div>
+              <div className="mt-1">
+                Status:{" "}
+                <span className="font-semibold">
+                  {subscriptionSummary.active ? "Active" : "Inactive"}
+                </span>
+              </div>
+              <div className="mt-1">
+                Expires:{" "}
+                <span className="font-semibold">
+                  {subscriptionSummary.expiresAt
+                    ? subscriptionSummary.expiresAt.toLocaleDateString()
+                    : "-"}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="mt-3 w-full rounded-xl bg-blue-600 px-3 py-2 text-sm font-extrabold text-white hover:bg-blue-700"
+                onClick={() => alert("Billing flow not implemented yet")}
+              >
+                Pay Now
+              </button>
+            </div>
+          ) : (
+            <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+              Billing details not available yet.
+            </div>
+          )}
+        </div>
+      </aside>
+    </div>
   );
 }
 

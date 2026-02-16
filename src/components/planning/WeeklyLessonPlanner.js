@@ -146,6 +146,7 @@ function flattenCurriculumRecords(lessons) {
       const category =
         normalizeSpaces(pc.category) || normalizeSpaces(lesson?.category?.name);
       const subject = normalizeSpaces(pc.subject);
+      const term = normalizeSpaces(pc.term);
       rows.push({
         id: goal.id,
         lessonId: lesson.id,
@@ -154,6 +155,7 @@ function flattenCurriculumRecords(lessons) {
         age,
         category,
         subject,
+        term,
       });
     });
   });
@@ -479,6 +481,7 @@ export default function WeeklyLessonPlanner({
 
   const [age, setAge] = useState("");
   const [category, setCategory] = useState("");
+  const [term, setTerm] = useState("");
   const [subject, setSubject] = useState("");
   const [search, setSearch] = useState("");
 
@@ -577,21 +580,41 @@ export default function WeeklyLessonPlanner({
   const options = useMemo(() => {
     return {
       ages: uniqSorted(records.map((r) => r.age)),
+      terms: uniqSorted(records.map((r) => r.term)),
       categories: uniqSorted(records.map((r) => r.category)),
       subjects: uniqSorted(records.map((r) => r.subject)),
     };
   }, [records]);
 
+  const subjectOptions = useMemo(() => {
+    const ageKey = normalizeSpaces(age);
+    const catKey = normalizeSpaces(category);
+    const termKey = normalizeSpaces(term);
+
+    return uniqSorted(
+      (records || [])
+        .filter((r) => {
+          if (ageKey && normalizeSpaces(r.age) !== ageKey) return false;
+          if (catKey && normalizeSpaces(r.category) !== catKey) return false;
+          if (termKey && normalizeSpaces(r.term) !== termKey) return false;
+          return true;
+        })
+        .map((r) => r.subject),
+    );
+  }, [records, age, category, term]);
+
   const filteredRecords = useMemo(() => {
     const q = normalizeSpaces(search).toLowerCase();
     const ageKey = normalizeSpaces(age);
     const catKey = normalizeSpaces(category);
+    const termKey = normalizeSpaces(term);
     const subKey = normalizeSpaces(subject);
 
     return (records || [])
       .filter((r) => {
         if (ageKey && normalizeSpaces(r.age) !== ageKey) return false;
         if (catKey && normalizeSpaces(r.category) !== catKey) return false;
+        if (termKey && normalizeSpaces(r.term) !== termKey) return false;
         if (subKey && normalizeSpaces(r.subject) !== subKey) return false;
         if (!q) return true;
         return (
@@ -600,7 +623,14 @@ export default function WeeklyLessonPlanner({
         );
       })
       .slice(0, 200);
-  }, [records, age, category, subject, search]);
+  }, [records, age, category, term, subject, search]);
+
+  useEffect(() => {
+    if (!subject) return;
+    const key = normalizeSpaces(subject);
+    const hasMatch = subjectOptions.some((s) => normalizeSpaces(s) === key);
+    if (!hasMatch) setSubject("");
+  }, [subject, subjectOptions]);
 
   const abortRef = useRef({ aborted: false });
   useEffect(() => {
@@ -1347,7 +1377,7 @@ export default function WeeklyLessonPlanner({
                     Add From Curriculum List
                   </div>
                   <div className="mt-1 text-xs text-gray-600">
-                    Filter by age, category, and subject.
+                    Filter by age, category, term, and subject.
                   </div>
 
                   <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1379,7 +1409,7 @@ export default function WeeklyLessonPlanner({
                         className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
                       >
                         <option value="">All</option>
-                        {options.subjects.map((s) => (
+                        {subjectOptions.map((s) => (
                           <option key={s} value={s}>
                             {s}
                           </option>
@@ -1387,7 +1417,25 @@ export default function WeeklyLessonPlanner({
                       </select>
                     </label>
 
-                    <label className="block md:col-span-2">
+                    <label className="block">
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Term
+                      </div>
+                      <select
+                        value={term}
+                        onChange={(e) => setTerm(e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                      >
+                        <option value="">All</option>
+                        {options.terms.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="block">
                       <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
                         Category
                       </div>

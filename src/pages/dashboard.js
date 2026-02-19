@@ -481,6 +481,201 @@ export default function Dashboard() {
   );
 }
 
+const GWA_DOMAIN_LABELS = {
+  cognitive: "Cognitive",
+  social: "Social-Emotional",
+  physical: "Physical",
+  language: "Language",
+  creative: "Creative",
+};
+
+const GWA_DOMAIN_COLORS = {
+  cognitive: "bg-sky-400",
+  social: "bg-emerald-400",
+  physical: "bg-amber-400",
+  language: "bg-pink-400",
+  creative: "bg-violet-400",
+};
+
+function inferProgressDomain(row) {
+  const categoryName = String(row?.lesson?.category?.name || "").toLowerCase();
+  const lessonTitle = String(row?.lesson?.title || "").toLowerCase();
+  const text = `${categoryName} ${lessonTitle}`;
+  if (text.includes("social") || text.includes("emotion") || text.includes("behavior"))
+    return "Social-Emotional";
+  if (text.includes("physical") || text.includes("motor") || text.includes("movement"))
+    return "Physical";
+  if (text.includes("language") || text.includes("literacy") || text.includes("reading") || text.includes("phonics"))
+    return "Language & Literacy";
+  if (text.includes("creative") || text.includes("art") || text.includes("music"))
+    return "Creative";
+  return "Cognitive";
+}
+
+const GWA_PROGRESS_DOMAIN_CONFIG = [
+  { name: "Cognitive", color: "bg-sky-400" },
+  { name: "Social-Emotional", color: "bg-emerald-400" },
+  { name: "Physical", color: "bg-amber-400" },
+  { name: "Language & Literacy", color: "bg-pink-400" },
+  { name: "Creative", color: "bg-violet-400" },
+];
+
+const AGE_GROUPS = [
+  { key: "0-1", label: "0-1 year", min: 0, max: 11 },
+  { key: "2", label: "2 years", min: 12, max: 23 },
+  { key: "3", label: "3 years", min: 24, max: 35 },
+  { key: "4-5", label: "4-5 years", min: 36, max: 59 },
+  { key: "6-7", label: "6-7 years", min: 60, max: 83 },
+  { key: "8-12", label: "8-12 years", min: 84, max: 143 },
+];
+
+function ageInMonths(birthDate) {
+  if (!birthDate) return null;
+  const dob = new Date(birthDate);
+  const now = new Date();
+  let months = (now.getFullYear() - dob.getFullYear()) * 12 + (now.getMonth() - dob.getMonth());
+  if (now.getDate() < dob.getDate()) months -= 1;
+  return months;
+}
+
+function getAgeGroup(birthDate) {
+  const months = ageInMonths(birthDate);
+  if (months === null) return null;
+  return AGE_GROUPS.find((g) => months >= g.min && months <= g.max) || null;
+}
+
+function formatAge(birthDate) {
+  const months = ageInMonths(birthDate);
+  if (months === null) return "";
+  const years = Math.floor(months / 12);
+  const rem = months % 12;
+  if (years === 0) return `${rem}mo`;
+  if (rem === 0) return `${years}y`;
+  return `${years}y ${rem}mo`;
+}
+
+function assessProgression(birthDate, progressStats) {
+  if (!progressStats || progressStats.total === 0) return null;
+  const { completionRate } = progressStats;
+  const months = ageInMonths(birthDate);
+
+  // Younger children (0-2) have more lenient expectations
+  // Older children should show higher completion rates
+  let expectedRate = 40; // default baseline
+  if (months !== null) {
+    if (months <= 23) expectedRate = 25;      // 0-1 year
+    else if (months <= 35) expectedRate = 35;  // 2 years
+    else if (months <= 59) expectedRate = 45;  // 4-5 years
+    else expectedRate = 55;                    // 6+ years
+  }
+
+  if (completionRate >= expectedRate + 20) {
+    return { status: "ahead", label: "Ahead", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200" };
+  }
+  if (completionRate >= expectedRate - 10) {
+    return { status: "on-track", label: "On Track", color: "text-blue-700", bg: "bg-blue-50", border: "border-blue-200" };
+  }
+  return { status: "behind", label: "Behind", color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200" };
+}
+
+function computeChildGWA(activities, progressRows) {
+  const overallGrades = [];
+  const domainSums = {};
+  const domainCounts = {};
+
+  for (const a of activities) {
+    const details =
+      a?.details && typeof a.details === "object" && !Array.isArray(a.details)
+        ? a.details
+        : {};
+    if (details.kind !== "DAILY_GRADE") continue;
+
+    if (details.domains && typeof details.domains === "object") {
+      for (const [key, val] of Object.entries(details.domains)) {
+        if (!Number.isFinite(val)) continue;
+        domainSums[key] = (domainSums[key] || 0) + val;
+        domainCounts[key] = (domainCounts[key] || 0) + 1;
+      }
+    }
+
+    if (details.domainAvg != null && Number.isFinite(Number(details.domainAvg))) {
+      overallGrades.push((Number(details.domainAvg) / 4) * 100);
+    } else if (Number.isFinite(Number(details.grade))) {
+      overallGrades.push((Number(details.grade) / 5) * 100);
+    }
+  }
+
+  // Compute progression stats from progress records (always, for the summary)
+  const rows = Array.isArray(progressRows) ? progressRows : [];
+  const totalSteps = rows.length;
+  const completedSteps = rows.filter((r) => {
+    const s = String(r?.status || "");
+    return s === "COMPLETED" || s === "PASSED";
+  }).length;
+  const inProgressSteps = rows.filter((r) => String(r?.status || "") === "IN_PROGRESS").length;
+  const progressStats = {
+    total: totalSteps,
+    completed: completedSteps,
+    inProgress: inProgressSteps,
+    completionRate: totalSteps ? Math.round((completedSteps / totalSteps) * 100) : 0,
+  };
+
+  // If we have daily grade data, use that
+  if (overallGrades.length) {
+    const domains = Object.keys(domainSums).map((key) => ({
+      key,
+      label: GWA_DOMAIN_LABELS[key] || key,
+      avg: Math.round((domainSums[key] / domainCounts[key]) * 10) / 10,
+      maxScale: 4,
+      color: GWA_DOMAIN_COLORS[key] || "bg-gray-400",
+    }));
+
+    return {
+      overall: Math.round(overallGrades.reduce((s, v) => s + v, 0) / overallGrades.length),
+      domains,
+      source: "grades",
+      progressStats,
+    };
+  }
+
+  // Fallback: compute from progress records
+  if (!rows.length) return null;
+
+  const byDomain = {};
+  for (const cfg of GWA_PROGRESS_DOMAIN_CONFIG) {
+    byDomain[cfg.name] = { total: 0, complete: 0, color: cfg.color };
+  }
+
+  for (const row of rows) {
+    const domain = inferProgressDomain(row);
+    if (!byDomain[domain]) continue;
+    byDomain[domain].total += 1;
+    const s = String(row?.status || "");
+    if (s === "COMPLETED" || s === "PASSED") byDomain[domain].complete += 1;
+  }
+
+  const domains = GWA_PROGRESS_DOMAIN_CONFIG
+    .filter((cfg) => byDomain[cfg.name].total > 0)
+    .map((cfg) => {
+      const stat = byDomain[cfg.name];
+      const pct = Math.round((stat.complete / stat.total) * 100);
+      return {
+        key: cfg.name,
+        label: cfg.name,
+        avg: pct,
+        maxScale: 100,
+        color: cfg.color,
+      };
+    });
+
+  return {
+    overall: progressStats.completionRate,
+    domains,
+    source: "progress",
+    progressStats,
+  };
+}
+
 function ParentDashboard({
   name,
   children,
@@ -490,6 +685,34 @@ function ParentDashboard({
   subscriptionSummary,
 }) {
   const visibleChildren = (children || []).slice(0, 10);
+  const [childGWAs, setChildGWAs] = useState({});
+  const childIds = visibleChildren.map((ch) => ch.id).join(",");
+
+  useEffect(() => {
+    if (!childIds) return;
+    let cancelled = false;
+    (async () => {
+      const results = {};
+      await Promise.all(
+        childIds.split(",").map(async (id) => {
+          try {
+            const [acts, progress] = await Promise.all([
+              apiJson(`/api/v1/activities?childId=${encodeURIComponent(id)}`),
+              apiJson(`/api/v1/progress?childId=${encodeURIComponent(id)}`),
+            ]);
+            const gwa = computeChildGWA(
+              Array.isArray(acts) ? acts : [],
+              Array.isArray(progress) ? progress : [],
+            );
+            if (gwa !== null) results[id] = gwa;
+          } catch {}
+        }),
+      );
+      if (!cancelled) setChildGWAs(results);
+    })();
+    return () => { cancelled = true; };
+  }, [childIds]);
+
   const reminders = [
     "Admission agreement renewal due this month.",
     "Health assessment renewal due soon.",
@@ -604,6 +827,9 @@ function ParentDashboard({
                     {ch.firstName} {ch.lastName || ""}
                   </div>
                   <div className="text-xs text-gray-500">Child {index + 1}</div>
+                  {childGWAs[ch.id] != null ? (
+                    <ChildGWACard gwa={childGWAs[ch.id]} birthDate={ch.birthDate} />
+                  ) : null}
                 </Link>
               ))}
             </div>
@@ -727,6 +953,57 @@ function QuickTile({ title, subtitle, href, disabled = false }) {
       <div className="font-extrabold text-gray-900">{title}</div>
       <div className="mt-1 text-sm text-gray-600">{subtitle}</div>
     </Link>
+  );
+}
+
+function ChildGWACard({ gwa, birthDate }) {
+  if (!gwa) return null;
+
+  const progression = assessProgression(birthDate, gwa.progressStats);
+  const ageLabel = formatAge(birthDate);
+
+  return (
+    <div className="mt-2 space-y-1">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-semibold text-gray-600">GWA</span>
+        <span
+          className={[
+            "text-xs font-extrabold",
+            gwa.overall >= 75
+              ? "text-emerald-600"
+              : gwa.overall >= 50
+                ? "text-amber-600"
+                : "text-rose-600",
+          ].join(" ")}
+        >
+          {gwa.overall}%
+        </span>
+      </div>
+      {ageLabel && (
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-gray-500">Age</span>
+          <span className="text-[10px] font-semibold text-gray-700">{ageLabel}</span>
+        </div>
+      )}
+      {gwa.progressStats && gwa.progressStats.total > 0 && (
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-gray-500">Steps</span>
+          <span className="text-[10px] font-semibold text-gray-700">
+            {gwa.progressStats.completed}/{gwa.progressStats.total} ({gwa.progressStats.completionRate}%)
+          </span>
+        </div>
+      )}
+      {progression && (
+        <div className={[
+          "mt-1 rounded-lg border px-2 py-1 text-center text-[10px] font-extrabold",
+          progression.bg,
+          progression.border,
+          progression.color,
+        ].join(" ")}>
+          {progression.label}
+        </div>
+      )}
+    </div>
   );
 }
 

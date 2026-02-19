@@ -14,6 +14,51 @@ const TYPES = [
   "BEHAVIOR",
   "OTHER",
 ];
+
+const ASSESSMENT_DOMAINS = [
+  {
+    key: "cognitive",
+    label: "Cognitive Development",
+    description: "Problem-solving, curiosity, focus & memory",
+    emoji: "\uD83E\uDDE0",
+    color: "bg-violet-100 text-violet-700",
+  },
+  {
+    key: "social",
+    label: "Social-Emotional",
+    description: "Sharing, empathy, self-regulation & cooperation",
+    emoji: "\uD83E\uDD1D",
+    color: "bg-sky-100 text-sky-700",
+  },
+  {
+    key: "physical",
+    label: "Physical Development",
+    description: "Motor skills, coordination & physical activity",
+    emoji: "\uD83C\uDFC3",
+    color: "bg-emerald-100 text-emerald-700",
+  },
+  {
+    key: "language",
+    label: "Language & Communication",
+    description: "Vocabulary, expression, listening & comprehension",
+    emoji: "\uD83D\uDCAC",
+    color: "bg-amber-100 text-amber-700",
+  },
+  {
+    key: "creative",
+    label: "Creative Expression",
+    description: "Art, music, imaginative play & self-expression",
+    emoji: "\uD83C\uDFA8",
+    color: "bg-rose-100 text-rose-700",
+  },
+];
+
+const RUBRIC_LEVELS = [
+  { value: 1, label: "Emerging", activeClass: "bg-amber-100 text-amber-800 border border-amber-300" },
+  { value: 2, label: "Developing", activeClass: "bg-sky-100 text-sky-800 border border-sky-300" },
+  { value: 3, label: "Proficient", activeClass: "bg-emerald-100 text-emerald-800 border border-emerald-300" },
+  { value: 4, label: "Advanced", activeClass: "bg-violet-100 text-violet-800 border border-violet-300" },
+];
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024; // keep in sync with /api/v1/uploads
 const JPEG_QUALITIES = [0.88, 0.8, 0.72, 0.64, 0.56, 0.48];
 
@@ -35,6 +80,8 @@ export default function TeacherLogs() {
   const [type, setType] = useState("MEAL");
   const [notes, setNotes] = useState("");
   const [dailyGrade, setDailyGrade] = useState("");
+  const [assessmentOpen, setAssessmentOpen] = useState(false);
+  const [domainScores, setDomainScores] = useState({});
   const [photoFiles, setPhotoFiles] = useState([]);
 
   const [loading, setLoading] = useState(true);
@@ -404,15 +451,31 @@ export default function TeacherLogs() {
   }
 
   function buildPayload(photoUrls = []) {
+    const hasDomainScores = Object.keys(domainScores).length > 0;
     const gradeNum = dailyGrade === "" ? null : Number(dailyGrade);
-    const hasGrade = dailyGrade !== "" && Number.isFinite(gradeNum);
+    const hasLegacyGrade = dailyGrade !== "" && Number.isFinite(gradeNum);
+    const hasGrade = hasDomainScores || hasLegacyGrade;
     const payloadType = hasGrade ? "OTHER" : type;
-    let details = hasGrade ? { kind: "DAILY_GRADE", grade: gradeNum } : null;
-    if (photoUrls.length) {
+
+    let details = null;
+    if (hasDomainScores) {
+      // Compute overall average from domain scores (1-4 scale)
+      const scores = Object.values(domainScores).filter((v) => v > 0);
+      const avg = scores.length ? Math.round((scores.reduce((s, v) => s + v, 0) / scores.length) * 10) / 10 : null;
+      // Map 1-4 domain scale to 1-5 legacy scale for backward compat
+      const legacyGrade = avg !== null ? Math.round((avg / 4) * 5) : null;
       details = {
-        ...(details || {}),
-        media: photoUrls,
+        kind: "DAILY_GRADE",
+        grade: legacyGrade,
+        domains: { ...domainScores },
+        domainAvg: avg,
       };
+    } else if (hasLegacyGrade) {
+      details = { kind: "DAILY_GRADE", grade: gradeNum };
+    }
+
+    if (photoUrls.length) {
+      details = { ...(details || {}), media: photoUrls };
     }
     return { payloadType, details };
   }
@@ -435,6 +498,8 @@ export default function TeacherLogs() {
       });
       setNotes("");
       setDailyGrade("");
+      setDomainScores({});
+      setAssessmentOpen(false);
       clearPhotos();
       setSuccess(
         warning
@@ -476,6 +541,8 @@ export default function TeacherLogs() {
 
       setNotes("");
       setDailyGrade("");
+      setDomainScores({});
+      setAssessmentOpen(false);
       clearPhotos();
       setBulkChildIds([]);
       if (failures.length) {
@@ -688,23 +755,106 @@ export default function TeacherLogs() {
             />
           </label>
 
-          <label className="block">
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Child daily grade (optional)
-            </div>
-            <select
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-              value={dailyGrade}
-              onChange={(e) => setDailyGrade(e.target.value)}
+          {/* Developmental Assessment Panel */}
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 md:col-span-2">
+            <button
+              type="button"
+              onClick={() => setAssessmentOpen((v) => !v)}
+              className="flex w-full items-center justify-between text-left"
             >
-              <option value="">(not logging a grade)</option>
-              {[1, 2, 3, 4, 5].map((g) => (
-                <option key={g} value={String(g)}>
-                  {g}
-                </option>
-              ))}
-            </select>
-          </label>
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Developmental Assessment (optional)
+                </div>
+                <div className="mt-0.5 text-xs text-gray-500">
+                  {Object.keys(domainScores).length > 0
+                    ? `${Object.keys(domainScores).length} domain(s) rated`
+                    : "Rate child across developmental domains"}
+                </div>
+              </div>
+              <svg
+                viewBox="0 0 24 24"
+                className={`h-5 w-5 text-gray-400 transition ${assessmentOpen ? "rotate-180" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {assessmentOpen && (
+              <div className="mt-3 space-y-3">
+                {ASSESSMENT_DOMAINS.map((domain) => {
+                  const current = domainScores[domain.key] || 0;
+                  return (
+                    <div key={domain.key} className="rounded-lg border border-gray-200 bg-white p-3">
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex h-7 w-7 items-center justify-center rounded-lg text-xs ${domain.color}`}>
+                          {domain.emoji}
+                        </span>
+                        <div>
+                          <div className="text-sm font-semibold text-gray-900">{domain.label}</div>
+                          <div className="text-xs text-gray-500">{domain.description}</div>
+                        </div>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                        {RUBRIC_LEVELS.map((level) => (
+                          <button
+                            key={level.value}
+                            type="button"
+                            onClick={() =>
+                              setDomainScores((prev) => {
+                                const next = { ...prev };
+                                if (next[domain.key] === level.value) {
+                                  delete next[domain.key];
+                                } else {
+                                  next[domain.key] = level.value;
+                                }
+                                return next;
+                              })
+                            }
+                            className={[
+                              "rounded-lg px-2 py-1.5 text-xs font-semibold transition",
+                              current === level.value
+                                ? level.activeClass
+                                : "border border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+                            ].join(" ")}
+                          >
+                            {level.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {Object.keys(domainScores).length > 0 && (
+                  <div className="flex items-center justify-between rounded-lg border border-sky-200 bg-sky-50 px-3 py-2">
+                    <div className="text-xs text-sky-800">
+                      <span className="font-semibold">Overall: </span>
+                      {(() => {
+                        const scores = Object.entries(domainScores);
+                        const avg = scores.reduce((s, [, v]) => s + v, 0) / scores.length;
+                        const level = RUBRIC_LEVELS.find((l) => l.value === Math.round(avg));
+                        return level ? level.label : `${avg.toFixed(1)}/4`;
+                      })()}
+                      <span className="ml-2 text-sky-600">
+                        ({Object.keys(domainScores).length}/{ASSESSMENT_DOMAINS.length} domains)
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDomainScores({})}
+                      className="text-xs font-semibold text-sky-700 hover:text-sky-800"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 md:col-span-2">
             <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">

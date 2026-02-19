@@ -32,6 +32,10 @@ export default function TeacherTraining() {
   const [loadingPlans, setLoadingPlans] = useState(false);
   const [error, setError] = useState("");
 
+  const [tab, setTab] = useState("training");
+  const [records, setRecords] = useState([]);
+  const [loadingRecords, setLoadingRecords] = useState(false);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -89,6 +93,21 @@ export default function TeacherTraining() {
     })();
   }, [centerId]);
 
+  useEffect(() => {
+    if (tab !== "career-ladder") return;
+    (async () => {
+      setLoadingRecords(true);
+      try {
+        const data = await apiJson("/api/v1/teacher-records");
+        setRecords(Array.isArray(data) ? data : []);
+      } catch (e) {
+        setError(e.message || "Failed to load career records");
+      } finally {
+        setLoadingRecords(false);
+      }
+    })();
+  }, [tab]);
+
   const sortedPlans = useMemo(() => {
     return (plans || [])
       .slice()
@@ -110,28 +129,57 @@ export default function TeacherTraining() {
                 My Performance & Training
               </h2>
               <p className="mt-1 text-sm text-gray-600">
-                Teacher metrics and a training pathway view.
+                Teacher metrics, training pathway, and career ladder.
               </p>
             </div>
 
-            <label className="block">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Center
-              </div>
-              <select
-                value={centerId}
-                onChange={(e) => setCenterId(e.target.value)}
-                className="mt-1 w-72 max-w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                disabled={loading}
-              >
-                <option value="">Select a center…</option>
-                {centers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {tab === "training" ? (
+              <label className="block">
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Center
+                </div>
+                <select
+                  value={centerId}
+                  onChange={(e) => setCenterId(e.target.value)}
+                  className="mt-1 w-72 max-w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  disabled={loading}
+                >
+                  <option value="">Select a center…</option>
+                  {centers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </div>
+
+          <div className="mt-4 flex gap-2 border-b border-gray-200 pb-0">
+            <button
+              type="button"
+              onClick={() => setTab("training")}
+              className={[
+                "px-4 py-2 text-sm font-semibold border-b-2 transition",
+                tab === "training"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700",
+              ].join(" ")}
+            >
+              Performance & Training
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("career-ladder")}
+              className={[
+                "px-4 py-2 text-sm font-semibold border-b-2 transition",
+                tab === "career-ladder"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700",
+              ].join(" ")}
+            >
+              Career Ladder
+            </button>
           </div>
 
           {error ? (
@@ -140,86 +188,200 @@ export default function TeacherTraining() {
             </div>
           ) : null}
 
-          {loading ? (
-            <div className="mt-4 text-sm text-gray-600">Loading…</div>
-          ) : (
-            <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Teacher metrics
-                </div>
-                <p className="mt-1 text-sm text-gray-600">
-                  Based on your activity logs (more metrics can be added).
-                </p>
+          {tab === "training" && (
+            <>
+              {loading ? (
+                <div className="mt-4 text-sm text-gray-600">Loading…</div>
+              ) : (
+                <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Teacher metrics
+                    </div>
+                    <p className="mt-1 text-sm text-gray-600">
+                      Based on your activity logs (more metrics can be added).
+                    </p>
 
-                {metrics ? (
-                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <Metric label="Activities (Today)" value={metrics.activities?.today ?? 0} />
-                    <Metric label="Activities (This Week)" value={metrics.activities?.week ?? 0} />
-                    <Metric label="Activities (Last 30 Days)" value={metrics.activities?.last30Days ?? 0} />
-                    <Metric label="Children Accessible" value={metrics.access?.children ?? 0} />
-                  </div>
-                ) : (
-                  <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                    Metrics not available.
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Training pathway
-                </div>
-                <p className="mt-1 text-sm text-gray-600">
-                  Daily/weekly pathway items linked to policies, procedures, videos, and lessons.
-                </p>
-
-                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <Link
-                    href="/teacher/lessons"
-                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
-                  >
-                    Lesson Plans & Media
-                  </Link>
-                  <Link
-                    href="/teacher/milestone-checklists"
-                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
-                  >
-                    Training Pathway View
-                  </Link>
-                </div>
-
-                {!centerId ? (
-                  <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                    Select a center to preview today’s training pathway.
-                  </div>
-                ) : loadingPlans ? (
-                  <div className="mt-3 text-sm text-gray-600">Loading…</div>
-                ) : sortedPlans.length ? (
-                  <div className="mt-3 space-y-2">
-                    {sortedPlans.map((p) => (
-                      <div key={p.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                        <div className="text-sm font-extrabold text-gray-900">
-                          {p.title}
-                        </div>
-                        <div className="mt-1 text-xs text-gray-600">
-                          {p.period} • {new Date(p.periodStart).toLocaleDateString()} •{" "}
-                          {(p.items || []).length} items
-                        </div>
+                    {metrics ? (
+                      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <Metric label="Activities (Today)" value={metrics.activities?.today ?? 0} />
+                        <Metric label="Activities (This Week)" value={metrics.activities?.week ?? 0} />
+                        <Metric label="Activities (Last 30 Days)" value={metrics.activities?.last30Days ?? 0} />
+                        <Metric label="Children Accessible" value={metrics.access?.children ?? 0} />
                       </div>
-                    ))}
+                    ) : (
+                      <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+                        Metrics not available.
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                    No pathway plans found for today/this week.
+
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Training pathway
+                    </div>
+                    <p className="mt-1 text-sm text-gray-600">
+                      Daily/weekly pathway items linked to policies, procedures, videos, and lessons.
+                    </p>
+
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <Link
+                        href="/teacher/lessons"
+                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+                      >
+                        Lesson Plans & Media
+                      </Link>
+                      <Link
+                        href="/teacher/milestone-checklists"
+                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+                      >
+                        Training Pathway View
+                      </Link>
+                    </div>
+
+                    {!centerId ? (
+                      <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+                        Select a center to preview today's training pathway.
+                      </div>
+                    ) : loadingPlans ? (
+                      <div className="mt-3 text-sm text-gray-600">Loading…</div>
+                    ) : sortedPlans.length ? (
+                      <div className="mt-3 space-y-2">
+                        {sortedPlans.map((p) => (
+                          <div key={p.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                            <div className="text-sm font-extrabold text-gray-900">
+                              {p.title}
+                            </div>
+                            <div className="mt-1 text-xs text-gray-600">
+                              {p.period} • {new Date(p.periodStart).toLocaleDateString()} •{" "}
+                              {(p.items || []).length} items
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+                        No pathway plans found for today/this week.
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {tab === "career-ladder" && (
+            <CareerLadderPanel records={records} loading={loadingRecords} />
           )}
         </div>
       </div>
     </TeacherLayout>
+  );
+}
+
+const TYPE_CONFIG = {
+  EMPLOYEE_OF_THE_MONTH: {
+    label: "Employee of the Month",
+    pillClass: "border-amber-200 bg-amber-50",
+    pillText: "text-amber-800",
+    iconBg: "bg-amber-100",
+    iconText: "text-amber-700",
+  },
+  CERTIFICATE: {
+    label: "Certificates & Training",
+    pillClass: "border-emerald-200 bg-emerald-50",
+    pillText: "text-emerald-800",
+    iconBg: "bg-emerald-100",
+    iconText: "text-emerald-700",
+  },
+  ACHIEVEMENT: {
+    label: "Achievements",
+    pillClass: "border-blue-200 bg-blue-50",
+    pillText: "text-blue-800",
+    iconBg: "bg-blue-100",
+    iconText: "text-blue-700",
+  },
+  CAREER_LADDER: {
+    label: "Career Milestones",
+    pillClass: "border-violet-200 bg-violet-50",
+    pillText: "text-violet-800",
+    iconBg: "bg-violet-100",
+    iconText: "text-violet-700",
+  },
+};
+
+function CareerLadderPanel({ records, loading }) {
+  if (loading) return <div className="mt-4 text-sm text-gray-600">Loading…</div>;
+
+  if (!records.length) {
+    return (
+      <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+        No career ladder records yet. These are managed by your administrator.
+      </div>
+    );
+  }
+
+  const grouped = {
+    EMPLOYEE_OF_THE_MONTH: records.filter((r) => r.type === "EMPLOYEE_OF_THE_MONTH"),
+    CERTIFICATE: records.filter((r) => r.type === "CERTIFICATE"),
+    ACHIEVEMENT: records.filter((r) => r.type === "ACHIEVEMENT"),
+    CAREER_LADDER: records.filter((r) => r.type === "CAREER_LADDER"),
+  };
+
+  return (
+    <div className="mt-5 space-y-4">
+      {Object.entries(grouped).map(([type, items]) => {
+        if (!items.length) return null;
+        const cfg = TYPE_CONFIG[type] || TYPE_CONFIG.ACHIEVEMENT;
+        return (
+          <div key={type} className="rounded-2xl border border-gray-200 bg-white p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              {cfg.label}
+            </div>
+            <div className="mt-3 space-y-2">
+              {items.map((record) => (
+                <div
+                  key={record.id}
+                  className={[
+                    "rounded-xl border p-3",
+                    cfg.pillClass,
+                  ].join(" ")}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className={["text-sm font-extrabold", cfg.pillText].join(" ")}>
+                        {record.title}
+                      </div>
+                      {record.description ? (
+                        <p className="mt-1 text-xs text-gray-600">{record.description}</p>
+                      ) : null}
+                    </div>
+                    <div className="shrink-0 text-xs text-gray-500">
+                      {new Date(record.date).toLocaleDateString()}
+                    </div>
+                  </div>
+                  {record.fileUrl ? (
+                    <a
+                      href={record.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-block rounded-lg bg-white px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50 border border-blue-200"
+                    >
+                      View Certificate{record.fileName ? ` (${record.fileName})` : ""}
+                    </a>
+                  ) : null}
+                  {record.createdBy ? (
+                    <div className="mt-1 text-[11px] text-gray-400">
+                      Added by {record.createdBy.name || record.createdBy.email}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -233,4 +395,3 @@ function Metric({ label, value }) {
     </div>
   );
 }
-

@@ -37,11 +37,25 @@ function extractActivityMediaUrls(activity) {
     .filter(Boolean);
   return [...new Set(urls)];
 }
+const DOMAIN_LABELS = {
+  cognitive: "Cognitive", social: "Social", physical: "Physical",
+  language: "Language", creative: "Creative",
+};
+const LEVEL_NAMES = { 1: "Emerging", 2: "Developing", 3: "Proficient", 4: "Advanced" };
+const LEVEL_BADGE = {
+  1: "bg-amber-100 text-amber-800", 2: "bg-sky-100 text-sky-800",
+  3: "bg-emerald-100 text-emerald-800", 4: "bg-violet-100 text-violet-800",
+};
+
 function extractDailyGrade(activity) {
   const details = asObject(activity?.details);
   if (details.kind !== "DAILY_GRADE") return "";
   const grade = Number(details.grade);
   return Number.isFinite(grade) ? String(grade) : "";
+}
+function extractDomains(activity) {
+  const details = asObject(activity?.details);
+  return details.kind === "DAILY_GRADE" && details.domains ? details.domains : null;
 }
 function fullName(child) {
   return `${child?.firstName || ""}${child?.lastName ? ` ${child.lastName}` : ""}`.trim();
@@ -123,6 +137,8 @@ export default function TeacherChildDetailPage() {
   const [activities, setActivities] = useState([]);
   const [plans, setPlans] = useState([]);
   const [completions, setCompletions] = useState([]);
+  const [attendanceHistory, setAttendanceHistory] = useState([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
 
   const [stepsDomain, setStepsDomain] = useState("");
   const [stepsAgeFilter, setStepsAgeFilter] = useState("");
@@ -210,6 +226,21 @@ export default function TeacherChildDetailPage() {
       }
     })();
   }, [child?.centerId, childId]);
+
+  useEffect(() => {
+    (async () => {
+      if (!childId) { setAttendanceHistory([]); return; }
+      setAttendanceLoading(true);
+      try {
+        const now = new Date();
+        const from = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+        const qs = new URLSearchParams({ childId, from: from.toISOString() });
+        const res = await apiJson(`/api/v1/attendance/history?${qs.toString()}`);
+        setAttendanceHistory(arr(res));
+      } catch { setAttendanceHistory([]); }
+      finally { setAttendanceLoading(false); }
+    })();
+  }, [childId]);
 
   async function saveProgressStatus(progressId) {
     const status = statusDraftById[progressId];
@@ -481,6 +512,58 @@ export default function TeacherChildDetailPage() {
     );
   }, [progressRows, stepRows, stepsAgeFilter, stepsDomain]);
 
+  // Catchup: merge overdue milestone items + FAILED/stale progress records
+  const catchupItems = useMemo(() => {
+    const items = [];
+    const seen = new Set();
+    // 1) Overdue milestone items
+    for (const s of overdueSteps) {
+      items.push({ type: "milestone", id: s.id, title: s.title, domain: s.domain, detail: `Overdue since ${formatDate(s.dueAt)}`, recommended: s.recommended, severity: "overdue" });
+      if (s.lessonId) seen.add(`${s.lessonId}:${s.goalIndex}`);
+    }
+    // 2) FAILED progress records
+    for (const p of arr(progressRows)) {
+      if (p.status !== "FAILED") continue;
+      const key = `${p.lessonId}:${p.goalIndex || 1}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push({ type: "progress", id: p.id, title: p.lesson?.title || "Lesson", domain: p.lesson?.category?.name || "General", detail: `Needs reteaching - marked as failed`, recommended: [], severity: "failed" });
+    }
+    // 3) IN_PROGRESS items that have been stale for over 14 days
+    const twoWeeksAgo = new Date();
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+    for (const p of arr(progressRows)) {
+      if (p.status !== "IN_PROGRESS") continue;
+      const key = `${p.lessonId}:${p.goalIndex || 1}`;
+      if (seen.has(key)) continue;
+      const updated = new Date(p.updatedAt || p.createdAt);
+      if (updated > twoWeeksAgo) continue;
+      seen.add(key);
+      items.push({ type: "progress", id: p.id, title: p.lesson?.title || "Lesson", domain: p.lesson?.category?.name || "General", detail: `In progress for ${Math.round((Date.now() - updated.getTime()) / 86400000)} days - may need extra support`, recommended: [], severity: "stale" });
+    }
+    return items;
+  }, [overdueSteps, progressRows]);
+
+  // Upcoming: merge future milestone items + NOT_STARTED progress records not already overdue
+  const upcomingItems = useMemo(() => {
+    const items = [];
+    const seen = new Set();
+    // 1) Upcoming milestone items
+    for (const s of upcomingSteps) {
+      items.push({ type: "milestone", id: s.id, title: s.title, domain: s.domain, detail: `${s.ageRange || "Any age"} | Due ${formatDate(s.dueAt)}` });
+      if (s.lessonId) seen.add(`${s.lessonId}:${s.goalIndex}`);
+    }
+    // 2) NOT_STARTED progress records that aren't already in catchup
+    for (const p of arr(progressRows)) {
+      if (p.status !== "NOT_STARTED") continue;
+      const key = `${p.lessonId}:${p.goalIndex || 1}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push({ type: "progress", id: p.id, title: p.lesson?.title || "Lesson", domain: p.lesson?.category?.name || "General", detail: `Step ${p.goalIndex || 1} - Not yet started` });
+    }
+    return items;
+  }, [upcomingSteps, progressRows]);
+
   const filteredActivities = useMemo(
     () => arr(activities).filter((a) => (logTypeFilter ? a.type === logTypeFilter : true)),
     [activities, logTypeFilter],
@@ -745,19 +828,118 @@ export default function TeacherChildDetailPage() {
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
+            {/* Current steps working on */}
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Current steps working on</div>
-              {currentProgressRows.length ? <div className="mt-2 space-y-2">{currentProgressRows.slice(0, 20).map((p) => { const busy = savingProgressId === p.id; return <div key={p.id} className="rounded-lg border border-gray-200 bg-white p-3"><div className="text-sm font-extrabold text-gray-900">{p.lesson?.title || "Lesson"}</div><div className="mt-1 text-xs text-gray-600">Step {p.goalIndex || 1}</div><div className="mt-2 flex items-center gap-2"><select value={statusDraftById[p.id] || "NOT_STARTED"} onChange={(e) => setStatusDraftById((cur) => ({ ...cur, [p.id]: e.target.value }))} className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs" disabled={busy}>{PROGRESS_STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}</select><button type="button" onClick={() => saveProgressStatus(p.id)} disabled={busy} className="rounded-lg bg-blue-600 px-2 py-1 text-xs font-extrabold text-white hover:bg-blue-700 disabled:opacity-60">{busy ? "Saving..." : "Save"}</button></div></div>; })}</div> : <div className="mt-2 text-sm text-gray-600">No active progress records for this filter.</div>}
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Current steps working on</div>
+                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">{currentProgressRows.length}</span>
+              </div>
+              {currentProgressRows.length ? (
+                <div className="mt-2 space-y-2">
+                  {currentProgressRows.slice(0, 20).map((p) => {
+                    const busy = savingProgressId === p.id;
+                    const statusClass = p.status === "FAILED" ? "border-rose-200 bg-rose-50" : p.status === "IN_PROGRESS" ? "border-sky-200 bg-sky-50/50" : "border-gray-200 bg-white";
+                    return (
+                      <div key={p.id} className={["rounded-lg border p-3", statusClass].join(" ")}>
+                        <div className="text-sm font-extrabold text-gray-900">{p.lesson?.title || "Lesson"}</div>
+                        <div className="mt-1 flex items-center gap-2 text-xs text-gray-600">
+                          <span>Step {p.goalIndex || 1}</span>
+                          <span className={["rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                            p.status === "FAILED" ? "bg-rose-100 text-rose-700" : p.status === "IN_PROGRESS" ? "bg-sky-100 text-sky-700" : "bg-gray-100 text-gray-600",
+                          ].join(" ")}>{p.status === "FAILED" ? "Needs Support" : p.status === "IN_PROGRESS" ? "In Progress" : "Not Started"}</span>
+                        </div>
+                        <div className="mt-2 flex items-center gap-2">
+                          <select
+                            value={statusDraftById[p.id] || "NOT_STARTED"}
+                            onChange={(e) => setStatusDraftById((cur) => ({ ...cur, [p.id]: e.target.value }))}
+                            className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs"
+                            disabled={busy}
+                          >
+                            {PROGRESS_STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status.replace(/_/g, " ")}</option>)}
+                          </select>
+                          {(statusDraftById[p.id] || p.status) !== p.status && (
+                            <button type="button" onClick={() => saveProgressStatus(p.id)} disabled={busy} className="rounded-lg bg-blue-600 px-2 py-1 text-xs font-extrabold text-white hover:bg-blue-700 disabled:opacity-60">
+                              {busy ? "..." : "Save"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="mt-2 text-sm text-gray-600">No active progress records for this filter.</div>
+              )}
             </div>
 
-            <div className="rounded-xl border border-red-200 bg-red-50 p-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-red-700">Catchup plan (auto generated)</div>
-              {overdueSteps.length ? <div className="mt-2 space-y-2">{overdueSteps.slice(0, 20).map((s) => <div key={s.id} className="rounded-lg border border-red-200 bg-white p-3"><div className="text-sm font-extrabold text-gray-900">{s.title}</div><div className="mt-1 text-xs text-red-700">Due by: {formatDate(s.dueAt)}</div><div className="mt-2 text-xs text-gray-700">{s.recommended.length ? `Suggested lessons: ${s.recommended.map((l) => l.title).join(", ")}` : "Suggested action: schedule remediation and additional practice sessions."}</div></div>)}</div> : <div className="mt-2 text-sm text-red-800">No catchup items needed.</div>}
+            {/* Catchup plan */}
+            <div className={["rounded-xl border p-3", catchupItems.length ? "border-red-200 bg-red-50" : "border-gray-200 bg-gray-50"].join(" ")}>
+              <div className="flex items-center justify-between">
+                <div className={["text-xs font-semibold uppercase tracking-wide", catchupItems.length ? "text-red-700" : "text-gray-500"].join(" ")}>
+                  Catchup plan (auto generated)
+                </div>
+                {catchupItems.length > 0 && (
+                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">{catchupItems.length}</span>
+                )}
+              </div>
+              {catchupItems.length ? (
+                <div className="mt-2 space-y-2">
+                  {catchupItems.slice(0, 20).map((item) => {
+                    const borderClass = item.severity === "failed" ? "border-rose-200 bg-white" : item.severity === "stale" ? "border-amber-200 bg-amber-50/50" : "border-red-200 bg-white";
+                    return (
+                      <div key={item.id} className={["rounded-lg border p-3", borderClass].join(" ")}>
+                        <div className="text-sm font-extrabold text-gray-900">{item.title}</div>
+                        <div className="mt-1 flex items-center gap-2 text-xs">
+                          <span className={["rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                            item.severity === "failed" ? "bg-rose-100 text-rose-700" : item.severity === "stale" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700",
+                          ].join(" ")}>
+                            {item.severity === "failed" ? "Failed" : item.severity === "stale" ? "Stale" : "Overdue"}
+                          </span>
+                          <span className="text-gray-500">{item.domain}</span>
+                        </div>
+                        <div className="mt-1 text-xs text-gray-600">{item.detail}</div>
+                        {item.recommended?.length ? (
+                          <div className="mt-2 text-xs text-gray-700">
+                            Suggested: {item.recommended.map((l) => l.title).join(", ")}
+                          </div>
+                        ) : (
+                          <div className="mt-2 text-xs text-gray-500">Schedule remediation and additional practice.</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-sm font-semibold text-emerald-700">
+                  All on track - no catchup needed.
+                </div>
+              )}
             </div>
 
+            {/* Upcoming steps */}
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Upcoming steps</div>
-              {upcomingSteps.length ? <div className="mt-2 space-y-2">{upcomingSteps.slice(0, 20).map((s) => <div key={s.id} className="rounded-lg border border-gray-200 bg-white p-3"><div className="text-sm font-extrabold text-gray-900">{s.title}</div><div className="mt-1 text-xs text-gray-600">{s.domain} | {s.ageRange || "Any age"} | Due {formatDate(s.dueAt)}</div></div>)}</div> : <div className="mt-2 text-sm text-gray-600">No upcoming steps for this filter.</div>}
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Upcoming &amp; not started</div>
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">{upcomingItems.length}</span>
+              </div>
+              {upcomingItems.length ? (
+                <div className="mt-2 space-y-2">
+                  {upcomingItems.slice(0, 20).map((item) => (
+                    <div key={item.id} className={["rounded-lg border p-3", item.type === "progress" ? "border-sky-200 bg-sky-50/30" : "border-gray-200 bg-white"].join(" ")}>
+                      <div className="text-sm font-extrabold text-gray-900">{item.title}</div>
+                      <div className="mt-1 flex items-center gap-2 text-xs text-gray-600">
+                        <span className="text-gray-500">{item.domain}</span>
+                        {item.type === "progress" && (
+                          <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">From progress</span>
+                        )}
+                      </div>
+                      <div className="mt-1 text-xs text-gray-500">{item.detail}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-2 text-sm text-gray-600">No upcoming steps for this filter.</div>
+              )}
             </div>
           </div>
         </div>
@@ -830,7 +1012,15 @@ export default function TeacherChildDetailPage() {
                         <td className="px-4 py-3">
                           <div className="space-y-1">
                             <span className="text-gray-700">{a.notes || "-"}</span>
-                            {extractDailyGrade(a) ? (
+                            {extractDomains(a) ? (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {Object.entries(extractDomains(a)).map(([k, v]) => (
+                                  <span key={k} className={`inline-block rounded px-1.5 py-0.5 text-xs font-semibold ${LEVEL_BADGE[v] || "bg-gray-100 text-gray-700"}`}>
+                                    {DOMAIN_LABELS[k] || k}: {LEVEL_NAMES[v] || v}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : extractDailyGrade(a) ? (
                               <div className="text-xs font-semibold text-emerald-700">
                                 Grade: {extractDailyGrade(a)}/5
                               </div>
@@ -1031,9 +1221,11 @@ export default function TeacherChildDetailPage() {
           <div className="mt-4 flex flex-wrap gap-2 border-b border-gray-200 pb-3">
             {[
               { key: "DAILY_REPORT", label: "Daily Report" },
+              { key: "GRADES", label: "Grades" },
               { key: "PROGRESS_REPORT", label: "Progress Report" },
               { key: "STEPS", label: "Steps of Progression" },
               { key: "CATCHUP", label: "Catch-up Plans" },
+              { key: "ATTENDANCE", label: "Attendance" },
               { key: "MILESTONE", label: "Milestone Calendar" },
             ].map((tab) => (
               <button
@@ -1057,15 +1249,34 @@ export default function TeacherChildDetailPage() {
               {reportTab === "DAILY_REPORT" ? (
                 <TeacherDailyReportPanel activities={reportActivities} loading={loading} />
               ) : null}
+              {reportTab === "GRADES" ? (
+                <TeacherGradesPanel activities={activities} loading={loading} />
+              ) : null}
               {reportTab === "PROGRESS_REPORT" ? (
                 <TeacherProgressReportPanel progressRows={reportProgress} loading={loading} childId={childId} />
               ) : null}
               {reportTab === "STEPS" ? (
-                <TeacherStepsProgressionPanel progressRows={reportProgress} loading={loading} childName={child.firstName} />
+                <TeacherStepsProgressionPanel
+                  progressRows={reportProgress}
+                  loading={loading}
+                  childName={child.firstName}
+                  statusDraftById={statusDraftById}
+                  setStatusDraftById={setStatusDraftById}
+                  saveProgressStatus={saveProgressStatus}
+                  savingProgressId={savingProgressId}
+                />
               ) : null}
               {reportTab === "CATCHUP" ? (
                 <CatchupPlansPanel
                   progressRows={reportProgress}
+                  childName={child.firstName}
+                  birthDate={child.birthDate}
+                />
+              ) : null}
+              {reportTab === "ATTENDANCE" ? (
+                <ChildAttendancePanel
+                  records={attendanceHistory}
+                  loading={attendanceLoading}
                   childName={child.firstName}
                 />
               ) : null}
@@ -1294,11 +1505,21 @@ function TeacherProgressReportPanel({ progressRows, loading, childId }) {
   );
 }
 
-function TeacherStepsProgressionPanel({ progressRows, loading, childName }) {
-  const sorted = [...arr(progressRows)].sort(
-    (a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt),
-  );
-  const counts = sorted.reduce(
+function TeacherStepsProgressionPanel({ progressRows, loading, childName, statusDraftById, setStatusDraftById, saveProgressStatus, savingProgressId }) {
+  const [filter, setFilter] = useState("ALL");
+
+  const sorted = useMemo(() => [...arr(progressRows)].sort(
+    (a, b) => {
+      // Sort: FAILED first, then IN_PROGRESS, NOT_STARTED, then COMPLETED/PASSED last
+      const order = { FAILED: 0, IN_PROGRESS: 1, NOT_STARTED: 2, COMPLETED: 3, PASSED: 3 };
+      const oa = order[a.status] ?? 2;
+      const ob = order[b.status] ?? 2;
+      if (oa !== ob) return oa - ob;
+      return new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt);
+    },
+  ), [progressRows]);
+
+  const counts = useMemo(() => sorted.reduce(
     (acc, row) => {
       const s = String(row?.status || "");
       if (s === "COMPLETED" || s === "PASSED") acc.done += 1;
@@ -1308,35 +1529,59 @@ function TeacherStepsProgressionPanel({ progressRows, loading, childName }) {
       return acc;
     },
     { done: 0, inProgress: 0, needsSupport: 0, notStarted: 0 },
-  );
+  ), [sorted]);
 
-  function statusTone(status) {
+  const filtered = useMemo(() => {
+    if (filter === "ALL") return sorted;
+    if (filter === "DONE") return sorted.filter((r) => r.status === "COMPLETED" || r.status === "PASSED");
+    if (filter === "IN_PROGRESS") return sorted.filter((r) => r.status === "IN_PROGRESS");
+    if (filter === "FAILED") return sorted.filter((r) => r.status === "FAILED");
+    if (filter === "NOT_STARTED") return sorted.filter((r) => r.status === "NOT_STARTED");
+    return sorted;
+  }, [sorted, filter]);
+
+  const totalSteps = sorted.length;
+  const completionPct = totalSteps ? Math.round((counts.done / totalSteps) * 100) : 0;
+
+  const isDone = (status) => status === "COMPLETED" || status === "PASSED";
+
+  const filterTabs = [
+    { key: "ALL", label: "All", count: totalSteps, border: "border-gray-200", bg: "bg-white", text: "text-gray-700", activeBg: "bg-gray-900", activeText: "text-white" },
+    { key: "FAILED", label: "Needs Support", count: counts.needsSupport, border: "border-rose-200", bg: "bg-rose-50", text: "text-rose-700", activeBg: "bg-rose-600", activeText: "text-white" },
+    { key: "IN_PROGRESS", label: "In Progress", count: counts.inProgress, border: "border-sky-200", bg: "bg-sky-50", text: "text-sky-700", activeBg: "bg-sky-600", activeText: "text-white" },
+    { key: "NOT_STARTED", label: "Not Started", count: counts.notStarted, border: "border-gray-200", bg: "bg-gray-50", text: "text-gray-600", activeBg: "bg-gray-600", activeText: "text-white" },
+    { key: "DONE", label: "Completed", count: counts.done, border: "border-emerald-200", bg: "bg-emerald-50", text: "text-emerald-700", activeBg: "bg-emerald-600", activeText: "text-white" },
+  ];
+
+  function statusLabel(status) {
+    if (status === "COMPLETED") return "Completed";
+    if (status === "PASSED") return "Passed";
+    if (status === "IN_PROGRESS") return "In Progress";
+    if (status === "FAILED") return "Needs Support";
+    return "Not Started";
+  }
+
+  function rowBorder(status) {
+    if (status === "COMPLETED" || status === "PASSED") return "border-emerald-200 bg-emerald-50/50";
+    if (status === "IN_PROGRESS") return "border-sky-200 bg-sky-50/50";
+    if (status === "FAILED") return "border-rose-200 bg-rose-50/50";
+    return "border-gray-200 bg-gray-50";
+  }
+
+  function pillStyle(status) {
     if (status === "COMPLETED" || status === "PASSED") return "bg-emerald-100 text-emerald-800";
     if (status === "IN_PROGRESS") return "bg-sky-100 text-sky-800";
     if (status === "FAILED") return "bg-rose-100 text-rose-800";
-    return "bg-gray-100 text-gray-800";
-  }
-
-  function statusPercent(status) {
-    if (status === "COMPLETED" || status === "PASSED") return 100;
-    if (status === "IN_PROGRESS") return 60;
-    if (status === "FAILED") return 35;
-    return 10;
-  }
-
-  function statusBar(status) {
-    if (status === "COMPLETED" || status === "PASSED") return "bg-emerald-500";
-    if (status === "IN_PROGRESS") return "bg-sky-500";
-    if (status === "FAILED") return "bg-rose-500";
-    return "bg-gray-400";
+    return "bg-gray-100 text-gray-700";
   }
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4">
       <h4 className="text-base font-extrabold text-gray-900">Steps of Progression</h4>
       <p className="mt-1 text-sm text-gray-600">
-        Live progress records for {childName || "this child"}.
+        Track and grade progress records for {childName || "this child"}. Use the dropdown to update status.
       </p>
+
       {loading ? (
         <div className="mt-3 text-sm text-gray-600">Loading progression steps...</div>
       ) : sorted.length === 0 ? (
@@ -1345,6 +1590,18 @@ function TeacherStepsProgressionPanel({ progressRows, loading, childName }) {
         </div>
       ) : (
         <div className="mt-3 space-y-3">
+          {/* Overall progress bar */}
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div className="flex items-center justify-between text-xs font-semibold text-gray-700">
+              <span>Overall Progress</span>
+              <span>{counts.done}/{totalSteps} completed ({completionPct}%)</span>
+            </div>
+            <div className="mt-2 h-3 overflow-hidden rounded-full bg-gray-200">
+              <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${completionPct}%` }} />
+            </div>
+          </div>
+
+          {/* Summary cards */}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Done</div>
@@ -1364,33 +1621,107 @@ function TeacherStepsProgressionPanel({ progressRows, loading, childName }) {
             </div>
           </div>
 
+          {/* Filter tabs */}
+          <div className="flex flex-wrap gap-1.5">
+            {filterTabs.map((tab) => {
+              const active = filter === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setFilter(tab.key)}
+                  className={[
+                    "rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition",
+                    active
+                      ? `${tab.activeBg} ${tab.activeText} border-transparent`
+                      : `${tab.bg} ${tab.text} ${tab.border} hover:opacity-80`,
+                  ].join(" ")}
+                >
+                  {tab.label} ({tab.count})
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Steps list */}
           <div className="space-y-2">
-            {sorted.slice(0, 25).map((row) => (
-              <div key={row.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-extrabold text-gray-900">
-                      {row.lesson?.title || row.lessonId}
+            {filtered.length === 0 ? (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+                No steps match this filter.
+              </div>
+            ) : filtered.slice(0, 30).map((row) => {
+              const done = isDone(row.status);
+              const busy = savingProgressId === row.id;
+              const draftStatus = statusDraftById?.[row.id] || row.status || "NOT_STARTED";
+              return (
+                <div key={row.id} className={["rounded-xl border p-3 transition", rowBorder(row.status)].join(" ")}>
+                  <div className="flex items-start gap-3">
+                    {/* Checkbox indicator */}
+                    <div className={[
+                      "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs font-bold",
+                      done
+                        ? "border-emerald-400 bg-emerald-500 text-white"
+                        : row.status === "IN_PROGRESS"
+                          ? "border-sky-300 bg-sky-100 text-sky-600"
+                          : row.status === "FAILED"
+                            ? "border-rose-300 bg-rose-100 text-rose-600"
+                            : "border-gray-300 bg-white text-gray-400",
+                    ].join(" ")}>
+                      {done ? "\u2713" : row.status === "FAILED" ? "!" : ""}
                     </div>
-                    <div className="mt-0.5 text-xs text-gray-600">
-                      {row.lesson?.category?.name || teacherInferDomain(row)} | Goal {row.goalIndex || 1}
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className={["text-sm font-extrabold", done ? "text-gray-500 line-through" : "text-gray-900"].join(" ")}>
+                            {row.lesson?.title || row.lessonId}
+                          </div>
+                          <div className="mt-0.5 text-xs text-gray-500">
+                            {row.lesson?.category?.name || teacherInferDomain(row)} &middot; Step {row.goalIndex || 1}
+                            {row.achievedAt ? ` \u00b7 Done ${formatDate(row.achievedAt)}` : ""}
+                          </div>
+                        </div>
+                        <span className={["shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", pillStyle(row.status)].join(" ")}>
+                          {statusLabel(row.status)}
+                        </span>
+                      </div>
+
+                      {/* Inline status update */}
+                      <div className="mt-2 flex items-center gap-2">
+                        <select
+                          value={draftStatus}
+                          onChange={(e) => setStatusDraftById?.((cur) => ({ ...cur, [row.id]: e.target.value }))}
+                          className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs"
+                          disabled={busy}
+                        >
+                          {PROGRESS_STATUS_OPTIONS.map((s) => (
+                            <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
+                          ))}
+                        </select>
+                        {draftStatus !== row.status && (
+                          <button
+                            type="button"
+                            onClick={() => saveProgressStatus?.(row.id)}
+                            disabled={busy}
+                            className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-extrabold text-white hover:bg-blue-700 disabled:opacity-60"
+                          >
+                            {busy ? "Saving..." : "Save"}
+                          </button>
+                        )}
+                        <span className="text-[10px] text-gray-400">
+                          Updated {formatDateTime(row.updatedAt || row.createdAt)}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <span className={["rounded-full px-2 py-1 text-[11px] font-semibold", statusTone(row.status)].join(" ")}>
-                    {row.status}
-                  </span>
                 </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-200">
-                  <div
-                    className={["h-full rounded-full", statusBar(row.status)].join(" ")}
-                    style={{ width: `${statusPercent(row.status)}%` }}
-                  />
-                </div>
-                <div className="mt-2 text-[11px] text-gray-500">
-                  Updated {formatDateTime(row.updatedAt || row.createdAt)}
-                </div>
+              );
+            })}
+            {filtered.length > 30 && (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-2 text-center text-xs text-gray-500">
+                Showing 30 of {filtered.length} steps
               </div>
-            ))}
+            )}
           </div>
         </div>
       )}
@@ -1398,9 +1729,188 @@ function TeacherStepsProgressionPanel({ progressRows, loading, childName }) {
   );
 }
 
+function TeacherGradesPanel({ activities, loading }) {
+  const assessments = useMemo(() => {
+    const result = [];
+    for (const a of arr(activities)) {
+      const details = asObject(a?.details);
+      if (details.kind !== "DAILY_GRADE") continue;
+      const domains = details.domains || null;
+      const grade = Number.isFinite(Number(details.grade)) ? Number(details.grade) : null;
+      const domainAvg = details.domainAvg != null ? Number(details.domainAvg) : null;
+      result.push({
+        id: a.id,
+        createdAt: a.createdAt,
+        notes: a.notes || "",
+        grade,
+        domains,
+        domainAvg,
+      });
+    }
+    result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return result;
+  }, [activities]);
+
+  const domainAverages = useMemo(() => {
+    const sums = {};
+    const counts = {};
+    for (const a of assessments) {
+      if (!a.domains) continue;
+      for (const [key, val] of Object.entries(a.domains)) {
+        if (!Number.isFinite(val)) continue;
+        sums[key] = (sums[key] || 0) + val;
+        counts[key] = (counts[key] || 0) + 1;
+      }
+    }
+    const keys = ["cognitive", "social", "physical", "language", "creative"];
+    return keys.map((key) => ({
+      key,
+      label: DOMAIN_LABELS[key] || key,
+      avg: counts[key] ? sums[key] / counts[key] : null,
+      count: counts[key] || 0,
+    }));
+  }, [assessments]);
+
+  const overallAvg = useMemo(() => {
+    const withDomains = assessments.filter((a) => a.domainAvg != null);
+    if (!withDomains.length) return null;
+    const sum = withDomains.reduce((s, a) => s + a.domainAvg, 0);
+    return sum / withDomains.length;
+  }, [assessments]);
+
+  const domainAssessmentCount = assessments.filter((a) => a.domains).length;
+  const legacyCount = assessments.filter((a) => !a.domains && a.grade !== null).length;
+
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
+        Loading grades...
+      </div>
+    );
+  }
+
+  if (!assessments.length) {
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+        No developmental assessments logged yet. Use the Activity Logger to record grades.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">Total Assessments</div>
+          <div className="mt-1 text-xl font-extrabold text-sky-900">{assessments.length}</div>
+        </div>
+        <div className="rounded-xl border border-violet-200 bg-violet-50 p-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-violet-700">Overall Level</div>
+          <div className="mt-1 text-xl font-extrabold text-violet-900">
+            {overallAvg !== null ? LEVEL_NAMES[Math.round(overallAvg)] || `${overallAvg.toFixed(1)}/4` : "—"}
+          </div>
+        </div>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Domain Grades</div>
+          <div className="mt-1 text-xl font-extrabold text-emerald-900">{domainAssessmentCount}</div>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">Legacy Grades</div>
+          <div className="mt-1 text-xl font-extrabold text-gray-900">{legacyCount}</div>
+        </div>
+      </div>
+
+      {/* Domain Averages */}
+      {domainAssessmentCount > 0 && (
+        <div className="rounded-2xl border border-gray-200 bg-white p-4">
+          <h4 className="text-base font-extrabold text-gray-900">Domain Averages</h4>
+          <p className="mt-1 text-xs text-gray-500">
+            Averaged across {domainAssessmentCount} assessment{domainAssessmentCount !== 1 ? "s" : ""}.
+          </p>
+          <div className="mt-3 space-y-3">
+            {domainAverages.map((d) => {
+              const avg = d.avg;
+              const levelLabel = avg !== null ? LEVEL_NAMES[Math.round(avg)] || `${avg.toFixed(1)}/4` : "No data";
+              const barPct = avg !== null ? Math.round((avg / 4) * 100) : 0;
+              const barColor =
+                avg !== null
+                  ? avg >= 3.5
+                    ? "bg-violet-500"
+                    : avg >= 2.5
+                      ? "bg-emerald-500"
+                      : avg >= 1.5
+                        ? "bg-sky-500"
+                        : "bg-amber-500"
+                  : "bg-gray-300";
+              return (
+                <div key={d.key}>
+                  <div className="mb-1 flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-gray-700">{d.label}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${avg !== null ? (LEVEL_BADGE[Math.round(avg)] || "bg-gray-100 text-gray-700") : "bg-gray-100 text-gray-500"}`}>
+                      {levelLabel}
+                    </span>
+                  </div>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-gray-200">
+                    <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${barPct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Assessment History */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-4">
+        <h4 className="text-base font-extrabold text-gray-900">Assessment History</h4>
+        <p className="mt-1 text-xs text-gray-500">All recorded grades, most recent first.</p>
+        <div className="mt-3 space-y-2">
+          {assessments.map((a) => (
+            <div key={a.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-extrabold text-gray-900">
+                  {a.domains ? "Developmental Assessment" : "Daily Grade"}
+                </div>
+                <div className="text-xs text-gray-500">{formatDateTime(a.createdAt)}</div>
+              </div>
+              {a.domains ? (
+                <div className="mt-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(a.domains).map(([k, v]) => (
+                      <span
+                        key={k}
+                        className={`inline-block rounded-lg px-2 py-0.5 text-xs font-semibold ${LEVEL_BADGE[v] || "bg-gray-100 text-gray-700"}`}
+                      >
+                        {DOMAIN_LABELS[k] || k}: {LEVEL_NAMES[v] || v}
+                      </span>
+                    ))}
+                  </div>
+                  {a.domainAvg != null && (
+                    <div className="mt-1.5 text-xs font-semibold text-gray-600">
+                      Overall: {LEVEL_NAMES[Math.round(a.domainAvg)] || `${a.domainAvg.toFixed(1)}/4`}
+                    </div>
+                  )}
+                </div>
+              ) : a.grade !== null ? (
+                <div className="mt-2 text-xs font-semibold text-emerald-700">Grade: {a.grade}/5</div>
+              ) : null}
+              {a.notes ? (
+                <div className="mt-2 line-clamp-2 text-xs text-gray-600">{a.notes}</div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function teacherActivityTitle(activity, index) {
   if (activity?.type === "ACTIVITY") return "Teacher's Summary";
-  if (activity?.type === "OTHER" && activity?.details?.kind === "DAILY_GRADE") return "Daily Grade";
+  if (activity?.type === "OTHER" && activity?.details?.kind === "DAILY_GRADE") {
+    return activity?.details?.domains ? "Developmental Assessment" : "Daily Grade";
+  }
   if (activity?.type === "MEAL" || activity?.type === "SNACK" || activity?.type === "BOTTLE") return "Meals & Nutrition";
   if (activity?.type === "DIAPER_CHANGE") return "Diaper / Potty";
   if (activity?.type === "NAP") return "Rest Time";
@@ -1421,10 +1931,26 @@ function teacherRenderActivityDetails(activity) {
     details.kind === "DAILY_GRADE" && Number.isFinite(Number(details.grade))
       ? Number(details.grade)
       : null;
+  const domains = details.kind === "DAILY_GRADE" && details.domains ? details.domains : null;
   const media = extractActivityMediaUrls(activity);
   return (
     <>
-      {grade !== null ? (
+      {domains ? (
+        <div className="mt-2">
+          <div className="flex flex-wrap gap-1">
+            {Object.entries(domains).map(([k, v]) => (
+              <span key={k} className={`inline-block rounded-lg px-2 py-0.5 text-xs font-semibold ${LEVEL_BADGE[v] || "bg-gray-100 text-gray-700"}`}>
+                {DOMAIN_LABELS[k] || k}: {LEVEL_NAMES[v] || v}
+              </span>
+            ))}
+          </div>
+          {details.domainAvg != null && (
+            <div className="mt-1 text-xs text-gray-600">
+              Overall: {LEVEL_NAMES[Math.round(details.domainAvg)] || details.domainAvg + "/4"}
+            </div>
+          )}
+        </div>
+      ) : grade !== null ? (
         <div className="mt-2 text-xs font-semibold text-emerald-700">Daily grade: {grade}/5</div>
       ) : null}
       {media.length ? (
@@ -1503,6 +2029,212 @@ function teacherFormatTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function ChildAttendancePanel({ records, loading, childName }) {
+  const sorted = useMemo(
+    () => [...arr(records)].sort((a, b) => new Date(b.day) - new Date(a.day)),
+    [records],
+  );
+
+  const stats = useMemo(() => {
+    const total = sorted.length;
+    let present = 0;
+    let late = 0;
+    let totalHours = 0;
+    let countWithHours = 0;
+    for (const r of sorted) {
+      if (r.checkedInAt) {
+        present += 1;
+        const inTime = new Date(r.checkedInAt);
+        if (inTime.getHours() >= 9) late += 1;
+        if (r.checkedOutAt) {
+          const outTime = new Date(r.checkedOutAt);
+          const diff = (outTime - inTime) / (1000 * 60 * 60);
+          if (diff > 0 && diff < 24) {
+            totalHours += diff;
+            countWithHours += 1;
+          }
+        }
+      }
+    }
+    const avgHours = countWithHours ? totalHours / countWithHours : 0;
+    return { total, present, absent: total - present, late, avgHours, onTime: present - late };
+  }, [sorted]);
+
+  const byWeek = useMemo(() => {
+    const weeks = new Map();
+    for (const r of sorted) {
+      const d = new Date(r.day);
+      const monday = new Date(d);
+      monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+      const key = monday.toISOString().slice(0, 10);
+      if (!weeks.has(key)) weeks.set(key, { week: key, records: [] });
+      weeks.get(key).records.push(r);
+    }
+    return [...weeks.values()];
+  }, [sorted]);
+
+  const attendanceRate = stats.total ? Math.round((stats.present / stats.total) * 100) : 0;
+
+  function fmtDay(v) {
+    if (!v) return "-";
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? "-" : d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  }
+  function fmtTime(v) {
+    if (!v) return "-";
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? "-" : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+  function duration(inAt, outAt) {
+    if (!inAt || !outAt) return "-";
+    const diff = (new Date(outAt) - new Date(inAt)) / (1000 * 60);
+    if (diff <= 0 || diff > 1440) return "-";
+    const h = Math.floor(diff / 60);
+    const m = Math.round(diff % 60);
+    if (h === 0) return `${m}m`;
+    return m === 0 ? `${h}h` : `${h}h ${m}m`;
+  }
+
+  if (loading) {
+    return <div className="rounded-2xl border border-gray-200 bg-white p-4 text-sm text-gray-600">Loading attendance records...</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-gray-200 bg-white p-4">
+        <h4 className="text-base font-extrabold text-gray-900">Attendance History</h4>
+        <p className="mt-1 text-sm text-gray-600">
+          {childName ? `Attendance records for ${childName}` : "Attendance records"} (last 3 months).
+        </p>
+
+        {sorted.length === 0 ? (
+          <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+            No attendance records found.
+          </div>
+        ) : (
+          <>
+            {/* Summary stats */}
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Present</div>
+                <div className="mt-1 text-xl font-extrabold text-emerald-900">{stats.present}</div>
+                <div className="text-[10px] text-emerald-600">{attendanceRate}% rate</div>
+              </div>
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-rose-700">Absent</div>
+                <div className="mt-1 text-xl font-extrabold text-rose-900">{stats.absent}</div>
+                <div className="text-[10px] text-rose-600">{stats.total} total days</div>
+              </div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">On Time</div>
+                <div className="mt-1 text-xl font-extrabold text-amber-900">{stats.onTime}</div>
+                <div className="text-[10px] text-amber-600">{stats.late} late (after 9am)</div>
+              </div>
+              <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">Avg Hours</div>
+                <div className="mt-1 text-xl font-extrabold text-sky-900">{stats.avgHours ? stats.avgHours.toFixed(1) : "-"}</div>
+                <div className="text-[10px] text-sky-600">per day present</div>
+              </div>
+            </div>
+
+            {/* Attendance rate bar */}
+            <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <div className="flex items-center justify-between text-xs font-semibold text-gray-700">
+                <span>Attendance Rate</span>
+                <span>{attendanceRate}%</span>
+              </div>
+              <div className="mt-2 h-3 overflow-hidden rounded-full bg-gray-200">
+                <div
+                  className={["h-full rounded-full transition-all", attendanceRate >= 90 ? "bg-emerald-500" : attendanceRate >= 75 ? "bg-amber-500" : "bg-rose-500"].join(" ")}
+                  style={{ width: `${attendanceRate}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Weekly breakdown */}
+            {byWeek.length > 1 && (
+              <div className="mt-4 rounded-xl border border-gray-200 bg-white p-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Weekly Breakdown</div>
+                <div className="mt-2 space-y-1.5">
+                  {byWeek.slice(0, 12).map((w) => {
+                    const wPresent = w.records.filter((r) => !!r.checkedInAt).length;
+                    const wTotal = w.records.length;
+                    const wPct = wTotal ? Math.round((wPresent / wTotal) * 100) : 0;
+                    return (
+                      <div key={w.week} className="flex items-center gap-3">
+                        <span className="w-24 shrink-0 text-xs font-semibold text-gray-600">
+                          {new Date(w.week + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                        </span>
+                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
+                          <div
+                            className={["h-full rounded-full", wPct >= 80 ? "bg-emerald-400" : wPct >= 50 ? "bg-amber-400" : "bg-rose-400"].join(" ")}
+                            style={{ width: `${wPct}%` }}
+                          />
+                        </div>
+                        <span className="w-16 shrink-0 text-right text-[11px] font-semibold text-gray-500">
+                          {wPresent}/{wTotal} ({wPct}%)
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Records table */}
+            <div className="mt-4 overflow-hidden rounded-xl border border-gray-200">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Check In</th>
+                    <th className="px-4 py-3">Check Out</th>
+                    <th className="px-4 py-3">Duration</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {sorted.slice(0, 60).map((r) => {
+                    const present = !!r.checkedInAt;
+                    const inTime = r.checkedInAt ? new Date(r.checkedInAt) : null;
+                    const isLate = inTime && inTime.getHours() >= 9;
+                    return (
+                      <tr key={r.id} className={present ? "" : "bg-rose-50/40"}>
+                        <td className="px-4 py-3 font-semibold text-gray-900">{fmtDay(r.day)}</td>
+                        <td className="px-4 py-3">
+                          {present ? (
+                            <span className={["inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold", isLate ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"].join(" ")}>
+                              <span className={["h-1.5 w-1.5 rounded-full", isLate ? "bg-amber-500" : "bg-emerald-500"].join(" ")} />
+                              {isLate ? "Late" : "Present"}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-800">
+                              <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                              Absent
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">{fmtTime(r.checkedInAt)}</td>
+                        <td className="px-4 py-3 text-gray-600">{fmtTime(r.checkedOutAt)}</td>
+                        <td className="px-4 py-3 text-gray-600">{duration(r.checkedInAt, r.checkedOutAt)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {sorted.length > 60 && (
+                <div className="border-t border-gray-200 bg-gray-50 p-2 text-center text-xs text-gray-500">
+                  Showing 60 of {sorted.length} records
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function VisualMetricCard({ title, value, helper, accent }) {

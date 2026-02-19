@@ -21,44 +21,49 @@ export default async function handler(req, res) {
     const { childId, planId, from, to, period } = req.query || {};
     if (!childId) return res.status(400).json({ error: "childId is required" });
 
-    const child = await prisma.child.findUnique({ where: { id: childId } });
-    if (!child) return res.status(404).json({ error: "Child not found" });
+    try {
+      const child = await prisma.child.findUnique({ where: { id: childId } });
+      if (!child) return res.status(404).json({ error: "Child not found" });
 
-    if (role !== "ADMIN") {
-      const ok = await hasAccessToCenter(session.user.id, child.centerId);
-      if (!ok) return res.status(403).json({ error: "Forbidden" });
+      if (role !== "ADMIN") {
+        const ok = await hasAccessToCenter(session.user.id, child.centerId);
+        if (!ok) return res.status(403).json({ error: "Forbidden" });
+      }
+
+      const where = { childId };
+      if (planId) where.item = { planId };
+      if (from || to || period) {
+        const fromDate = from ? parseDateOnly(from) : null;
+        const toDate = to ? parseDateOnly(to) : null;
+        if (from && !fromDate) return res.status(400).json({ error: "Invalid from date" });
+        if (to && !toDate) return res.status(400).json({ error: "Invalid to date" });
+
+        where.item = {
+          ...(where.item || {}),
+          plan: {
+            ...(period ? { period } : {}),
+            ...(fromDate || toDate
+              ? {
+                  periodStart: {
+                    ...(fromDate ? { gte: fromDate } : {}),
+                    ...(toDate ? { lt: toDate } : {}),
+                  },
+                }
+              : {}),
+          },
+        };
+      }
+
+      const completions = await prisma.milestoneChecklistItemCompletion.findMany({
+        where,
+        select: { itemId: true, completedAt: true, item: { select: { planId: true } } },
+        take: 5000,
+      });
+      return res.status(200).json(completions);
+    } catch (err) {
+      console.error("[completions GET]", err);
+      return res.status(500).json({ error: err.message || "Internal server error" });
     }
-
-    const where = { childId };
-    if (planId) where.item = { planId };
-    if (from || to || period) {
-      const fromDate = from ? parseDateOnly(from) : null;
-      const toDate = to ? parseDateOnly(to) : null;
-      if (from && !fromDate) return res.status(400).json({ error: "Invalid from date" });
-      if (to && !toDate) return res.status(400).json({ error: "Invalid to date" });
-
-      where.item = {
-        ...(where.item || {}),
-        plan: {
-          ...(period ? { period } : {}),
-          ...(fromDate || toDate
-            ? {
-                periodStart: {
-                  ...(fromDate ? { gte: fromDate } : {}),
-                  ...(toDate ? { lt: toDate } : {}),
-                },
-              }
-            : {}),
-        },
-      };
-    }
-
-    const completions = await prisma.milestoneChecklistItemCompletion.findMany({
-      where,
-      select: { itemId: true, completedAt: true, item: { select: { planId: true } } },
-      take: 5000,
-    });
-    return res.status(200).json(completions);
   }
 
   if (req.method === "POST") {

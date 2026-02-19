@@ -266,6 +266,7 @@ export default function ParentChildren() {
                         <CatchupPlansPanel
                           progressRows={progressRows}
                           childName={selectedChild.firstName}
+                          birthDate={selectedChild.birthDate}
                         />
                       ) : null}
 
@@ -523,10 +524,19 @@ function ProgressReportPanel({ selectedChildId, progressRows, loading }) {
 }
 
 function StepsProgressionPanel({ progressRows, loading, childName }) {
-  const sorted = [...(progressRows || [])].sort(
-    (a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt),
-  );
-  const counts = sorted.reduce(
+  const [filter, setFilter] = useState("ALL");
+
+  const sorted = useMemo(() => [...(progressRows || [])].sort(
+    (a, b) => {
+      const order = { FAILED: 0, IN_PROGRESS: 1, NOT_STARTED: 2, COMPLETED: 3, PASSED: 3 };
+      const oa = order[a.status] ?? 2;
+      const ob = order[b.status] ?? 2;
+      if (oa !== ob) return oa - ob;
+      return new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt);
+    },
+  ), [progressRows]);
+
+  const counts = useMemo(() => sorted.reduce(
     (acc, row) => {
       const s = String(row?.status || "");
       if (s === "COMPLETED" || s === "PASSED") acc.done += 1;
@@ -536,34 +546,56 @@ function StepsProgressionPanel({ progressRows, loading, childName }) {
       return acc;
     },
     { done: 0, inProgress: 0, needsSupport: 0, notStarted: 0 },
-  );
+  ), [sorted]);
 
-  function statusTone(status) {
-    if (status === "COMPLETED" || status === "PASSED") return "bg-emerald-100 text-emerald-800";
+  const filtered = useMemo(() => {
+    if (filter === "ALL") return sorted;
+    if (filter === "DONE") return sorted.filter((r) => r.status === "COMPLETED" || r.status === "PASSED");
+    if (filter === "IN_PROGRESS") return sorted.filter((r) => r.status === "IN_PROGRESS");
+    if (filter === "FAILED") return sorted.filter((r) => r.status === "FAILED");
+    if (filter === "NOT_STARTED") return sorted.filter((r) => r.status === "NOT_STARTED");
+    return sorted;
+  }, [sorted, filter]);
+
+  const totalSteps = sorted.length;
+  const completionPct = totalSteps ? Math.round((counts.done / totalSteps) * 100) : 0;
+  const isDone = (status) => status === "COMPLETED" || status === "PASSED";
+
+  function statusLabel(status) {
+    if (status === "COMPLETED") return "Completed";
+    if (status === "PASSED") return "Passed";
+    if (status === "IN_PROGRESS") return "In Progress";
+    if (status === "FAILED") return "Needs Support";
+    return "Not Started";
+  }
+
+  function rowBorder(status) {
+    if (isDone(status)) return "border-emerald-200 bg-emerald-50/50";
+    if (status === "IN_PROGRESS") return "border-sky-200 bg-sky-50/50";
+    if (status === "FAILED") return "border-rose-200 bg-rose-50/50";
+    return "border-gray-200 bg-gray-50";
+  }
+
+  function pillStyle(status) {
+    if (isDone(status)) return "bg-emerald-100 text-emerald-800";
     if (status === "IN_PROGRESS") return "bg-sky-100 text-sky-800";
     if (status === "FAILED") return "bg-rose-100 text-rose-800";
-    return "bg-gray-100 text-gray-800";
+    return "bg-gray-100 text-gray-700";
   }
 
-  function statusPercent(status) {
-    if (status === "COMPLETED" || status === "PASSED") return 100;
-    if (status === "IN_PROGRESS") return 60;
-    if (status === "FAILED") return 35;
-    return 10;
-  }
-
-  function statusBar(status) {
-    if (status === "COMPLETED" || status === "PASSED") return "bg-emerald-500";
-    if (status === "IN_PROGRESS") return "bg-sky-500";
-    if (status === "FAILED") return "bg-rose-500";
-    return "bg-gray-400";
-  }
+  const filterTabs = [
+    { key: "ALL", label: "All", count: totalSteps, activeBg: "bg-gray-900", activeText: "text-white", bg: "bg-white", text: "text-gray-700", border: "border-gray-200" },
+    { key: "FAILED", label: "Needs Support", count: counts.needsSupport, activeBg: "bg-rose-600", activeText: "text-white", bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-200" },
+    { key: "IN_PROGRESS", label: "In Progress", count: counts.inProgress, activeBg: "bg-sky-600", activeText: "text-white", bg: "bg-sky-50", text: "text-sky-700", border: "border-sky-200" },
+    { key: "NOT_STARTED", label: "Not Started", count: counts.notStarted, activeBg: "bg-gray-600", activeText: "text-white", bg: "bg-gray-50", text: "text-gray-600", border: "border-gray-200" },
+    { key: "DONE", label: "Completed", count: counts.done, activeBg: "bg-emerald-600", activeText: "text-white", bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
+  ];
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4">
       <h4 className="text-base font-extrabold text-gray-900">Steps of Progression</h4>
       <p className="mt-1 text-sm text-gray-600">
-        Live progress records for {childName || "this child"}.
+        Progress records for {childName || "this child"}.
       </p>
 
       {loading ? (
@@ -574,6 +606,18 @@ function StepsProgressionPanel({ progressRows, loading, childName }) {
         </div>
       ) : (
         <div className="mt-3 space-y-3">
+          {/* Overall progress bar */}
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div className="flex items-center justify-between text-xs font-semibold text-gray-700">
+              <span>Overall Progress</span>
+              <span>{counts.done}/{totalSteps} completed ({completionPct}%)</span>
+            </div>
+            <div className="mt-2 h-3 overflow-hidden rounded-full bg-gray-200">
+              <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${completionPct}%` }} />
+            </div>
+          </div>
+
+          {/* Summary cards */}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Done</div>
@@ -593,33 +637,75 @@ function StepsProgressionPanel({ progressRows, loading, childName }) {
             </div>
           </div>
 
+          {/* Filter tabs */}
+          <div className="flex flex-wrap gap-1.5">
+            {filterTabs.map((tab) => {
+              const active = filter === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setFilter(tab.key)}
+                  className={[
+                    "rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition",
+                    active
+                      ? `${tab.activeBg} ${tab.activeText} border-transparent`
+                      : `${tab.bg} ${tab.text} ${tab.border} hover:opacity-80`,
+                  ].join(" ")}
+                >
+                  {tab.label} ({tab.count})
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Steps list */}
           <div className="space-y-2">
-            {sorted.slice(0, 25).map((row) => (
-              <div key={row.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-extrabold text-gray-900">
-                      {row.lesson?.title || row.lessonId}
+            {filtered.length === 0 ? (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+                No steps match this filter.
+              </div>
+            ) : filtered.slice(0, 25).map((row) => {
+              const done = isDone(row.status);
+              return (
+                <div key={row.id} className={["rounded-xl border p-3 transition", rowBorder(row.status)].join(" ")}>
+                  <div className="flex items-start gap-3">
+                    <div className={[
+                      "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs font-bold",
+                      done
+                        ? "border-emerald-400 bg-emerald-500 text-white"
+                        : row.status === "IN_PROGRESS"
+                          ? "border-sky-300 bg-sky-100 text-sky-600"
+                          : row.status === "FAILED"
+                            ? "border-rose-300 bg-rose-100 text-rose-600"
+                            : "border-gray-300 bg-white text-gray-400",
+                    ].join(" ")}>
+                      {done ? "\u2713" : row.status === "FAILED" ? "!" : ""}
                     </div>
-                    <div className="mt-0.5 text-xs text-gray-600">
-                      {row.lesson?.category?.name || inferDomain(row)} | Goal {row.goalIndex || 1}
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className={["text-sm font-extrabold", done ? "text-gray-500 line-through" : "text-gray-900"].join(" ")}>
+                            {row.lesson?.title || row.lessonId}
+                          </div>
+                          <div className="mt-0.5 text-xs text-gray-500">
+                            {row.lesson?.category?.name || inferDomain(row)} &middot; Step {row.goalIndex || 1}
+                            {row.achievedAt ? ` \u00b7 Done ${formatDate(row.achievedAt)}` : ""}
+                          </div>
+                        </div>
+                        <span className={["shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", pillStyle(row.status)].join(" ")}>
+                          {statusLabel(row.status)}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 text-[10px] text-gray-400">
+                        Updated {formatDateTime(row.updatedAt || row.createdAt)}
+                      </div>
                     </div>
                   </div>
-                  <span className={["rounded-full px-2 py-1 text-[11px] font-semibold", statusTone(row.status)].join(" ")}>
-                    {row.status}
-                  </span>
                 </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-200">
-                  <div
-                    className={["h-full rounded-full", statusBar(row.status)].join(" ")}
-                    style={{ width: `${statusPercent(row.status)}%` }}
-                  />
-                </div>
-                <div className="mt-2 text-[11px] text-gray-500">
-                  Updated {formatDateTime(row.updatedAt || row.createdAt)}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -700,10 +786,20 @@ function inferDomain(row) {
   return "Cognitive";
 }
 
+const PARENT_DOMAIN_LABELS = {
+  cognitive: "Cognitive", social: "Social-Emotional", physical: "Physical",
+  language: "Language", creative: "Creative",
+};
+const PARENT_LEVEL_NAMES = { 1: "Emerging", 2: "Developing", 3: "Proficient", 4: "Advanced" };
+const PARENT_LEVEL_COLORS = {
+  1: "bg-amber-100 text-amber-800", 2: "bg-sky-100 text-sky-800",
+  3: "bg-emerald-100 text-emerald-800", 4: "bg-violet-100 text-violet-800",
+};
+
 function activityTitle(activity, index) {
   if (activity?.type === "ACTIVITY") return "Teacher's Summary";
   if (activity?.type === "OTHER" && activity?.details?.kind === "DAILY_GRADE") {
-    return "Daily Grade";
+    return activity?.details?.domains ? "Developmental Assessment" : "Daily Grade";
   }
   if (activity?.type === "MEAL" || activity?.type === "SNACK" || activity?.type === "BOTTLE") {
     return "Meals & Nutrition";
@@ -730,11 +826,27 @@ function renderActivityDetails(activity) {
     details.kind === "DAILY_GRADE" && Number.isFinite(Number(details.grade))
       ? Number(details.grade)
       : null;
+  const domains = details.kind === "DAILY_GRADE" && details.domains ? details.domains : null;
   const media = extractMediaUrls(activity);
 
   return (
     <>
-      {grade !== null ? (
+      {domains ? (
+        <div className="mt-2">
+          <div className="flex flex-wrap gap-1">
+            {Object.entries(domains).map(([k, v]) => (
+              <span key={k} className={`inline-block rounded-lg px-2 py-0.5 text-xs font-semibold ${PARENT_LEVEL_COLORS[v] || "bg-gray-100 text-gray-700"}`}>
+                {PARENT_DOMAIN_LABELS[k] || k}: {PARENT_LEVEL_NAMES[v] || v}
+              </span>
+            ))}
+          </div>
+          {details.domainAvg != null && (
+            <div className="mt-1 text-xs text-gray-600">
+              Overall: {PARENT_LEVEL_NAMES[Math.round(details.domainAvg)] || details.domainAvg + "/4"}
+            </div>
+          )}
+        </div>
+      ) : grade !== null ? (
         <div className="mt-2 text-xs font-semibold text-emerald-700">Daily grade: {grade}/5</div>
       ) : null}
       {media.length ? (

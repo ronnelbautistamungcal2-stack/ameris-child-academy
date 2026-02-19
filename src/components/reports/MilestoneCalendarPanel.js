@@ -44,7 +44,9 @@ function categoryFromActivity(activity) {
 }
 
 function titleFromActivity(activity) {
-  if (activity?.type === "OTHER" && activity?.details?.kind === "DAILY_GRADE") return "Daily Grade";
+  if (activity?.type === "OTHER" && activity?.details?.kind === "DAILY_GRADE") {
+    return activity?.details?.domains ? "Developmental Assessment" : "Daily Grade";
+  }
   if (activity?.type === "DIAPER_CHANGE") return "Diaper / Potty";
   if (activity?.type === "NAP") return "Rest Time";
   if (["MEAL", "SNACK", "BOTTLE"].includes(activity?.type)) return "Meals & Nutrition";

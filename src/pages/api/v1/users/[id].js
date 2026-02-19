@@ -94,6 +94,11 @@ export default async function handler(req, res) {
 
     try {
       await prisma.$transaction(async (tx) => {
+        await tx.teacherRecord.deleteMany({ where: { teacherId: id } });
+        await tx.teacherRecord.updateMany({
+          where: { createdById: id },
+          data: { createdById: null },
+        });
         await tx.teacherClass.deleteMany({ where: { teacherId: id } });
         await tx.centerUser.deleteMany({ where: { userId: id } });
         await tx.activityLog.updateMany({

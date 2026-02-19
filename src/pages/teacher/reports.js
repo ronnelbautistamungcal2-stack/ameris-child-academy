@@ -25,6 +25,21 @@ function formatTime(value) {
   return d.toLocaleString();
 }
 
+const DOMAIN_META = {
+  cognitive: { label: "Cognitive", emoji: "\uD83E\uDDE0", color: "text-violet-700 bg-violet-50" },
+  social: { label: "Social-Emotional", emoji: "\uD83E\uDD1D", color: "text-sky-700 bg-sky-50" },
+  physical: { label: "Physical", emoji: "\uD83C\uDFC3", color: "text-emerald-700 bg-emerald-50" },
+  language: { label: "Language", emoji: "\uD83D\uDCAC", color: "text-amber-700 bg-amber-50" },
+  creative: { label: "Creative", emoji: "\uD83C\uDFA8", color: "text-rose-700 bg-rose-50" },
+};
+const LEVEL_LABELS = { 1: "Emerging", 2: "Developing", 3: "Proficient", 4: "Advanced" };
+const LEVEL_COLORS = {
+  1: "bg-amber-100 text-amber-800",
+  2: "bg-sky-100 text-sky-800",
+  3: "bg-emerald-100 text-emerald-800",
+  4: "bg-violet-100 text-violet-800",
+};
+
 function extractDailyGrade(activity) {
   const details = activity?.details && typeof activity.details === "object" ? activity.details : null;
   if (!details || details.kind !== "DAILY_GRADE") return null;
@@ -35,6 +50,12 @@ function extractDailyGrade(activity) {
     return Number.isFinite(n) ? n : null;
   }
   return null;
+}
+
+function extractDomainScores(activity) {
+  const details = activity?.details && typeof activity.details === "object" ? activity.details : null;
+  if (!details || details.kind !== "DAILY_GRADE" || !details.domains) return null;
+  return details.domains;
 }
 
 export default function TeacherReports() {
@@ -143,7 +164,9 @@ export default function TeacherReports() {
     for (const a of activities || []) {
       const g = extractDailyGrade(a);
       if (g === null) continue;
-      grades.push({ id: a.id, grade: g, createdAt: a.createdAt, notes: a.notes || null });
+      const domains = extractDomainScores(a);
+      const avg = a?.details?.domainAvg ?? null;
+      grades.push({ id: a.id, grade: g, domains, domainAvg: avg, createdAt: a.createdAt, notes: a.notes || null });
       if (grades.length >= 8) break;
     }
     return grades;
@@ -276,30 +299,52 @@ export default function TeacherReports() {
 
                 <div className="rounded-2xl border border-gray-200 bg-white p-5">
                   <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Child daily grade
+                    Developmental Assessment
                   </div>
                   <p className="mt-1 text-sm text-gray-600">
-                    Recent grades logged from the Activity Logger.
+                    Recent developmental grades from the Activity Logger.
                   </p>
                   {recentGrades.length ? (
-                    <div className="mt-3 space-y-2">
+                    <div className="mt-3 space-y-3">
                       {recentGrades.map((g) => (
                         <div key={g.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
                           <div className="flex items-center justify-between gap-3">
-                            <div className="text-sm font-extrabold text-gray-900">
-                              Grade: {g.grade}
-                            </div>
+                            {g.domains ? (
+                              <div className="text-sm font-extrabold text-gray-900">
+                                Overall: {LEVEL_LABELS[Math.round(g.domainAvg)] || `${g.domainAvg}/4`}
+                              </div>
+                            ) : (
+                              <div className="text-sm font-extrabold text-gray-900">
+                                Grade: {g.grade}/5
+                              </div>
+                            )}
                             <div className="text-xs text-gray-500">{formatTime(g.createdAt)}</div>
                           </div>
+                          {g.domains && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {Object.entries(g.domains).map(([key, val]) => {
+                                const meta = DOMAIN_META[key];
+                                const levelColor = LEVEL_COLORS[val] || "bg-gray-100 text-gray-700";
+                                return (
+                                  <span
+                                    key={key}
+                                    className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-semibold ${levelColor}`}
+                                  >
+                                    {meta?.emoji || ""} {meta?.label || key}: {LEVEL_LABELS[val] || val}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
                           {g.notes ? (
-                            <div className="mt-1 text-xs text-gray-600">{g.notes}</div>
+                            <div className="mt-1 line-clamp-2 text-xs text-gray-600">{g.notes}</div>
                           ) : null}
                         </div>
                       ))}
                     </div>
                   ) : (
                     <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                      No grades logged yet.
+                      No assessments logged yet.
                     </div>
                   )}
                 </div>

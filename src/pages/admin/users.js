@@ -1,5 +1,6 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import { apiJson } from "@/lib/api";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const ROLES = ["ADMIN", "TEACHER", "PARENT", "COACH", "SUBSCRIBER"];
@@ -43,10 +44,21 @@ export default function AdminUsers() {
     refresh();
   }, []);
 
+  const [roleTab, setRoleTab] = useState("ALL");
+
   const sorted = useMemo(() => {
-    return [...users].sort((a, b) =>
+    const filtered = roleTab === "ALL" ? users : users.filter((u) => u.role === roleTab);
+    return [...filtered].sort((a, b) =>
       (a.email || "").localeCompare(b.email || ""),
     );
+  }, [users, roleTab]);
+
+  const roleCounts = useMemo(() => {
+    const counts = { ALL: users.length };
+    for (const u of users) {
+      counts[u.role] = (counts[u.role] || 0) + 1;
+    }
+    return counts;
   }, [users]);
 
   const resetForm = useCallback(() => {
@@ -340,6 +352,29 @@ export default function AdminUsers() {
         ) : null}
 
         <div style={{ marginTop: 16 }}>
+          <div style={tabBarStyle}>
+            {[
+              { key: "ALL", label: "All" },
+              { key: "TEACHER", label: "Teachers" },
+              { key: "PARENT", label: "Parents" },
+              { key: "ADMIN", label: "Admins" },
+              { key: "COACH", label: "Coaches" },
+              { key: "SUBSCRIBER", label: "Subscribers" },
+            ].map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setRoleTab(t.key)}
+                style={roleTab === t.key ? activeTabStyle : inactiveTabStyle}
+              >
+                {t.label}
+                {roleCounts[t.key] ? (
+                  <span style={tabCountStyle}>{roleCounts[t.key]}</span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+
           {loading ? (
             <p>Loading…</p>
           ) : (
@@ -356,7 +391,15 @@ export default function AdminUsers() {
                 {sorted.map((u) => (
                   <tr key={u.id}>
                     <td style={tdStyle}>{u.email}</td>
-                    <td style={tdStyle}>{u.name || "—"}</td>
+                    <td style={tdStyle}>
+                      {u.role === "TEACHER" ? (
+                        <Link href={`/admin/teachers/${encodeURIComponent(u.id)}`} style={teacherLink}>
+                          {u.name || "—"}
+                        </Link>
+                      ) : (
+                        u.name || "—"
+                      )}
+                    </td>
                     <td style={tdStyle}>
                       <code style={codePill}>{u.role}</code>
                     </td>
@@ -558,4 +601,59 @@ const dangerButton = {
   borderRadius: 8,
   cursor: "pointer",
   fontWeight: 600,
+};
+
+const teacherLink = {
+  color: "#2563eb",
+  fontWeight: 600,
+  textDecoration: "none",
+};
+
+const tabBarStyle = {
+  display: "flex",
+  gap: 0,
+  borderBottom: "2px solid #e5e7eb",
+  marginBottom: 16,
+  overflowX: "auto",
+};
+
+const activeTabStyle = {
+  padding: "10px 16px",
+  fontSize: 13,
+  fontWeight: 700,
+  color: "#2563eb",
+  background: "none",
+  border: "none",
+  borderBottom: "2px solid #2563eb",
+  marginBottom: -2,
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  whiteSpace: "nowrap",
+};
+
+const inactiveTabStyle = {
+  padding: "10px 16px",
+  fontSize: 13,
+  fontWeight: 600,
+  color: "#6b7280",
+  background: "none",
+  border: "none",
+  borderBottom: "2px solid transparent",
+  marginBottom: -2,
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  whiteSpace: "nowrap",
+};
+
+const tabCountStyle = {
+  background: "#f3f4f6",
+  color: "#374151",
+  padding: "1px 7px",
+  borderRadius: 999,
+  fontSize: 11,
+  fontWeight: 700,
 };

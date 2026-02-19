@@ -68,6 +68,13 @@ enum MilestoneItemKind {
   OTHER
 }
 
+enum TeacherRecordType {
+  CERTIFICATE
+  ACHIEVEMENT
+  EMPLOYEE_OF_THE_MONTH
+  CAREER_LADDER
+}
+
 model User {
   id                 String              @id @default(uuid())
   email              String              @unique
@@ -93,6 +100,8 @@ model User {
   AuditLog           AuditLog[]
   OutboundEmail      OutboundEmail[]
   milestoneChecklistCompletions MilestoneChecklistItemCompletion[]
+  teacherRecords               TeacherRecord[] @relation("TeacherRecords")
+  createdTeacherRecords        TeacherRecord[] @relation("TeacherRecordsCreated")
 }
 
 model Center {
@@ -563,4 +572,24 @@ model OutboundEmail {
   @@index([status, scheduledAt])
   @@index([centerId, createdAt])
   @@index([childId, createdAt])
+}
+
+model TeacherRecord {
+  id          String            @id @default(uuid())
+  teacher     User              @relation("TeacherRecords", fields: [teacherId], references: [id], onDelete: Cascade)
+  teacherId   String
+  type        TeacherRecordType
+  title       String
+  description String?
+  date        DateTime          @default(now())
+  fileUrl     String?
+  fileName    String?
+  createdBy   User?             @relation("TeacherRecordsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([teacherId, type])
+  @@index([teacherId, date])
+  @@index([createdById])
 }

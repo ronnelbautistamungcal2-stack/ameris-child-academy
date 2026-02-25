@@ -25,6 +25,22 @@ function formatTime(value) {
   return d.toLocaleString();
 }
 
+const TYPE_LABELS = {
+  DIAPER_CHANGE: "Diaper Change",
+  NAP: "Nap",
+  BOTTLE: "Bottle",
+  MEAL: "Meal",
+  SNACK: "Snack",
+  ACTIVITY: "Activity",
+  TASK_CHECKLIST: "Task Checklist",
+  BEHAVIOR: "Behavior",
+  OTHER: "Other",
+};
+
+function typeLabel(type) {
+  return TYPE_LABELS[type] || type;
+}
+
 const DOMAIN_META = {
   cognitive: { label: "Cognitive", emoji: "\uD83E\uDDE0", color: "text-violet-700 bg-violet-50" },
   social: { label: "Social-Emotional", emoji: "\uD83E\uDD1D", color: "text-sky-700 bg-sky-50" },
@@ -172,9 +188,24 @@ export default function TeacherReports() {
     return grades;
   }, [activities]);
 
+  const classroomName = useMemo(() => {
+    if (!child) return "—";
+    if (child.classRoom?.name) return child.classRoom.name;
+    if (!child.classRoomId) return "—";
+    return child.classRoomId;
+  }, [child]);
+
   return (
     <TeacherLayout title="Reports">
       <div className="space-y-4">
+        {/* Print-only header */}
+        <div className="hidden print:block print:text-center print:mb-4">
+          <h1 className="text-xl font-extrabold">Parent-Teacher Conference Report</h1>
+          {child && (
+            <p className="text-sm text-gray-600">{fullName(child)} — {new Date().toLocaleDateString()}</p>
+          )}
+        </div>
+
         <div className="rounded-2xl border border-gray-200 bg-white p-5 print:border-0 print:p-0">
           <div className="flex flex-wrap items-end justify-between gap-3 print:hidden">
             <div>
@@ -252,7 +283,7 @@ export default function TeacherReports() {
             </div>
           ) : (
             <div className="mt-5 space-y-4">
-              <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="rounded-2xl border border-gray-200 bg-white p-5 print:break-inside-avoid">
                 <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Child
                 </div>
@@ -260,7 +291,7 @@ export default function TeacherReports() {
                   {fullName(child)}
                 </div>
                 <div className="mt-1 text-sm text-gray-700">
-                  DOB: {formatDate(child.birthDate)} • Classroom: {child.classRoomId || "—"}
+                  DOB: {formatDate(child.birthDate)} — Classroom: {classroomName}
                 </div>
                 {child.allergies ? (
                   <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
@@ -270,7 +301,7 @@ export default function TeacherReports() {
               </div>
 
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                <div className="rounded-2xl border border-gray-200 bg-white p-5 print:break-inside-avoid">
                   <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                     Active goals
                   </div>
@@ -285,7 +316,7 @@ export default function TeacherReports() {
                             {p.lesson?.title || "Lesson"}
                           </div>
                           <div className="mt-1 text-xs text-gray-600">
-                            Step {p.goalIndex || 1} • {p.status}
+                            Step {p.goalIndex || 1} — {p.status}
                           </div>
                         </div>
                       ))}
@@ -297,7 +328,7 @@ export default function TeacherReports() {
                   )}
                 </div>
 
-                <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                <div className="rounded-2xl border border-gray-200 bg-white p-5 print:break-inside-avoid">
                   <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                     Developmental Assessment
                   </div>
@@ -350,7 +381,7 @@ export default function TeacherReports() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="rounded-2xl border border-gray-200 bg-white p-5 print:break-inside-avoid">
                 <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Recent activity notes
                 </div>
@@ -361,7 +392,7 @@ export default function TeacherReports() {
                       <div key={a.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
                         <div className="flex items-center justify-between gap-3">
                           <div className="text-sm font-extrabold text-gray-900">
-                            {a.type}
+                            {typeLabel(a.type)}
                           </div>
                           <div className="text-xs text-gray-500">{formatTime(a.createdAt)}</div>
                         </div>
@@ -369,6 +400,18 @@ export default function TeacherReports() {
                           <div className="mt-1 text-sm text-gray-800">{a.notes}</div>
                         ) : (
                           <div className="mt-1 text-sm text-gray-600">—</div>
+                        )}
+                        {a.details?.media?.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-2 print:hidden">
+                            {a.details.media.map((url, i) => (
+                              <img
+                                key={`${a.id}-media-${i}`}
+                                src={url}
+                                alt={`Activity photo ${i + 1}`}
+                                className="h-16 w-16 rounded-lg border border-gray-200 object-cover"
+                              />
+                            ))}
+                          </div>
                         )}
                       </div>
                     ))}
@@ -379,10 +422,6 @@ export default function TeacherReports() {
                   </div>
                 )}
               </div>
-
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700 print:hidden">
-                Next: add “Parent teacher conference report” export to PDF and include behavior/IEP flags once those fields are modeled.
-              </div>
             </div>
           )}
         </div>
@@ -390,4 +429,3 @@ export default function TeacherReports() {
     </TeacherLayout>
   );
 }
-

@@ -15,6 +15,18 @@ const TYPES = [
   "OTHER",
 ];
 
+const TYPE_LABELS = {
+  DIAPER_CHANGE: "Diaper Change",
+  NAP: "Nap",
+  BOTTLE: "Bottle",
+  MEAL: "Meal",
+  SNACK: "Snack",
+  ACTIVITY: "Activity",
+  TASK_CHECKLIST: "Task Checklist",
+  BEHAVIOR: "Behavior",
+  OTHER: "Other",
+};
+
 const ASSESSMENT_DOMAINS = [
   {
     key: "cognitive",
@@ -71,6 +83,10 @@ export default function TeacherLogs() {
 
   const [centers, setCenters] = useState([]);
   const [children, setChildren] = useState([]);
+  const [classes, setClasses] = useState([]);
+  const [classId, setClassId] = useState("");
+  const [attendance, setAttendance] = useState(null);
+  const [showClockedInOnly, setShowClockedInOnly] = useState(false);
   const [centerId, setCenterId] = useState(initialCenterId);
   const [childId, setChildId] = useState(initialChildId);
 
@@ -115,15 +131,21 @@ export default function TeacherLogs() {
   async function loadChildren(id) {
     if (!id) {
       setChildren([]);
+      setClasses([]);
+      setAttendance(null);
       return;
     }
     setLoading(true);
     setError("");
     try {
-      const kids = await apiJson(
-        `/api/v1/children?centerId=${encodeURIComponent(id)}`,
-      );
+      const [kids, cls, att] = await Promise.all([
+        apiJson(`/api/v1/children?centerId=${encodeURIComponent(id)}`),
+        apiJson(`/api/v1/classes?centerId=${encodeURIComponent(id)}`),
+        apiJson(`/api/v1/attendance/today?centerId=${encodeURIComponent(id)}`).catch(() => null),
+      ]);
       setChildren(Array.isArray(kids) ? kids : []);
+      setClasses(Array.isArray(cls) ? cls : []);
+      setAttendance(att);
     } catch (e) {
       setError(e.message || "Failed to load children");
     } finally {
@@ -151,6 +173,8 @@ export default function TeacherLogs() {
 
   useEffect(() => {
     setSuccess("");
+    setClassId("");
+    setShowClockedInOnly(false);
     loadChildren(centerId);
   }, [centerId]);
 
@@ -185,11 +209,36 @@ export default function TeacherLogs() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!success) return;
+    const timer = setTimeout(() => setSuccess(""), 5000);
+    return () => clearTimeout(timer);
+  }, [success]);
+
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => setError(""), 8000);
+    return () => clearTimeout(timer);
+  }, [error]);
+
+  const clockedInChildIds = useMemo(() => {
+    const set = new Set();
+    for (const row of attendance?.checkedInChildren || []) {
+      if (row?.child?.id) set.add(row.child.id);
+    }
+    return set;
+  }, [attendance]);
+
   const sortedChildren = useMemo(() => {
-    return children
-      .slice()
-      .sort((a, b) => (a.firstName || "").localeCompare(b.firstName || ""));
-  }, [children]);
+    let list = children.slice();
+    if (classId) {
+      list = list.filter((c) => c.classRoomId === classId);
+    }
+    if (showClockedInOnly) {
+      list = list.filter((c) => clockedInChildIds.has(c.id));
+    }
+    return list.sort((a, b) => (a.firstName || "").localeCompare(b.firstName || ""));
+  }, [children, classId, showClockedInOnly, clockedInChildIds]);
 
   const childLabel = useMemo(() => {
     const ch = children.find((c) => c.id === childId);
@@ -574,13 +623,15 @@ export default function TeacherLogs() {
         </p>
 
         {error ? (
-          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            {error}
+          <div className="mt-3 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            <span>{error}</span>
+            <button type="button" onClick={() => setError("")} className="ml-2 text-lg font-bold text-red-600 hover:text-red-800">&times;</button>
           </div>
         ) : null}
         {success ? (
-          <div className="mt-3 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-            {success}
+          <div className="mt-3 flex items-center justify-between rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+            <span>{success}</span>
+            <button type="button" onClick={() => setSuccess("")} className="ml-2 text-lg font-bold text-green-600 hover:text-green-800">&times;</button>
           </div>
         ) : null}
 
@@ -643,6 +694,43 @@ export default function TeacherLogs() {
             </select>
           </label>
 
+          <div className="flex items-end gap-3">
+            <label className="block flex-1">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Classroom
+              </div>
+              <select
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                value={classId}
+                onChange={(e) => {
+                  setClassId(e.target.value);
+                  setChildId("");
+                  setBulkChildIds([]);
+                }}
+                disabled={!centerId || loading}
+              >
+                <option value="">All classrooms</option>
+                {classes.slice().sort((a, b) => (a.name || "").localeCompare(b.name || "")).map((cls) => (
+                  <option key={cls.id} value={cls.id}>
+                    {cls.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex shrink-0 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                checked={showClockedInOnly}
+                onChange={(e) => {
+                  setShowClockedInOnly(e.target.checked);
+                  setChildId("");
+                  setBulkChildIds([]);
+                }}
+              />
+              <span className="text-xs font-semibold text-gray-700">Clocked in only</span>
+            </label>
+          </div>
+
           {mode === "single" ? (
             <label className="block">
               <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -656,11 +744,14 @@ export default function TeacherLogs() {
                 required
               >
                 <option value="">Select a child…</option>
-                {sortedChildren.map((ch) => (
-                  <option key={ch.id} value={ch.id}>
-                    {ch.firstName} {ch.lastName || ""}
-                  </option>
-                ))}
+                {sortedChildren.map((ch) => {
+                  const isIn = clockedInChildIds.has(ch.id);
+                  return (
+                    <option key={ch.id} value={ch.id}>
+                      {isIn ? "\u2705 " : ""}{ch.firstName} {ch.lastName || ""}
+                    </option>
+                  );
+                })}
               </select>
             </label>
           ) : (
@@ -697,13 +788,20 @@ export default function TeacherLogs() {
                 <div className="mt-2 max-h-56 space-y-1 overflow-auto pr-1">
                   {sortedChildren.map((ch) => {
                     const checked = bulkSelectedSet.has(ch.id);
+                    const isIn = clockedInChildIds.has(ch.id);
                     return (
                       <label
                         key={ch.id}
-                        className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                        className={[
+                          "flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm",
+                          isIn ? "border-emerald-200 bg-emerald-50/40" : "border-gray-200 bg-white",
+                        ].join(" ")}
                       >
-                        <span className="min-w-0 truncate font-semibold text-gray-900">
-                          {ch.firstName} {ch.lastName || ""}
+                        <span className="flex min-w-0 items-center gap-2">
+                          {isIn && <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />}
+                          <span className="truncate font-semibold text-gray-900">
+                            {ch.firstName} {ch.lastName || ""}
+                          </span>
                         </span>
                         <input
                           type="checkbox"
@@ -734,7 +832,7 @@ export default function TeacherLogs() {
             >
               {TYPES.map((t) => (
                 <option key={t} value={t}>
-                  {t}
+                  {TYPE_LABELS[t] || t}
                 </option>
               ))}
             </select>

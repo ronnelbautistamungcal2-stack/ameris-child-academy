@@ -33,6 +33,7 @@ export default function TeacherChildren() {
   const [children, setChildren] = useState([]);
   const [centerId, setCenterId] = useState("");
   const [classId, setClassId] = useState("");
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedChild, setSelectedChild] = useState(null);
@@ -95,10 +96,19 @@ export default function TeacherChildren() {
     const byClass = classId
       ? base.filter((c) => c.classRoomId === classId)
       : base;
-    return [...byClass].sort((a, b) =>
+    const q = (search || "").trim().toLowerCase();
+    const searched = q
+      ? byClass.filter((c) => {
+          const childName = `${c.firstName || ""} ${c.lastName || ""}`.trim().toLowerCase();
+          const parentName = (c.parent?.name || "").toLowerCase();
+          const parentEmail = (c.parent?.email || "").toLowerCase();
+          return childName.includes(q) || parentName.includes(q) || parentEmail.includes(q);
+        })
+      : byClass;
+    return [...searched].sort((a, b) =>
       (a.firstName || "").localeCompare(b.firstName || ""),
     );
-  }, [children, classId]);
+  }, [children, classId, search]);
 
   async function loadLogs(child) {
     if (!child?.id) {
@@ -251,6 +261,17 @@ export default function TeacherChildren() {
           </label>
         </div>
 
+        <div className="mt-3">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by child name or parent name/email..."
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-blue-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-300 sm:max-w-md"
+            disabled={!centerId}
+          />
+        </div>
+
         <div className="mt-4">
           {loading ? (
             <div className="text-sm text-gray-600">Loading…</div>
@@ -271,10 +292,12 @@ export default function TeacherChildren() {
                         <div className="font-semibold text-gray-900">
                           {ch.firstName} {ch.lastName || ""}
                         </div>
-                        <div className="text-xs text-gray-500">{ch.id}</div>
+                        {ch.parent?.name ? (
+                          <div className="text-xs text-gray-400">Parent: {ch.parent.name}</div>
+                        ) : null}
                       </td>
                       <td className="px-4 py-3 text-gray-700">
-                        {ch.classRoomId || "—"}
+                        {classes.find((c) => c.id === ch.classRoomId)?.name || ch.classRoomId || "—"}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">

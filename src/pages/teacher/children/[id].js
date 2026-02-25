@@ -2,6 +2,8 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
 import CatchupPlansPanel from "@/components/reports/CatchupPlansPanel";
 import MilestoneCalendarPanel from "@/components/reports/MilestoneCalendarPanel";
+import ActiveGoalsPanel from "@/components/progression/ActiveGoalsPanel";
+import { AGE_GROUPS, ageInMonths, ageGroupKeyFromBirthDate, mapAgeRangeToGroup } from "@/lib/ageUtils";
 import { apiJson } from "@/lib/api";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -10,14 +12,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 const PROGRESS_STATUS_OPTIONS = ["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "PASSED", "FAILED"];
 const ACTIVITY_TYPES = ["DIAPER_CHANGE", "NAP", "BOTTLE", "MEAL", "SNACK", "ACTIVITY", "TASK_CHECKLIST", "BEHAVIOR", "OTHER"];
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
-const AGE_GROUPS = [
-  { key: "0-1", label: "0-1 year", min: 0, max: 11, tags: ["0-1", "infant"] },
-  { key: "2", label: "2 years", min: 12, max: 23, tags: ["2"] },
-  { key: "3", label: "3 years", min: 24, max: 35, tags: ["3"] },
-  { key: "4-5", label: "4-5 years", min: 36, max: 59, tags: ["4-5", "4", "5"] },
-  { key: "6-7", label: "6-7 years", min: 60, max: 83, tags: ["6-7", "6", "7"] },
-  { key: "8-12", label: "8-12 years", min: 84, max: 143, tags: ["8-12", "8", "9", "10", "11", "12"] },
-];
 
 function arr(v) {
   return Array.isArray(v) ? v : [];
@@ -69,27 +63,6 @@ function formatDateTime(v) {
   if (!v) return "-";
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? "-" : d.toLocaleString();
-}
-function ageInMonths(v) {
-  if (!v) return null;
-  const dob = new Date(v);
-  if (Number.isNaN(dob.getTime())) return null;
-  const now = new Date();
-  let months = (now.getFullYear() - dob.getFullYear()) * 12 + (now.getMonth() - dob.getMonth());
-  if (now.getDate() < dob.getDate()) months -= 1;
-  return months;
-}
-function ageGroupKeyFromBirthDate(v) {
-  const months = ageInMonths(v);
-  if (months === null) return "";
-  return AGE_GROUPS.find((g) => months >= g.min && months <= g.max)?.key || "";
-}
-function mapAgeRangeToGroup(v) {
-  const text = String(v || "").trim().toLowerCase();
-  if (!text) return "";
-  const exact = AGE_GROUPS.find((g) => g.tags.includes(text));
-  if (exact) return exact.key;
-  return AGE_GROUPS.find((g) => g.tags.some((tag) => text.includes(tag)))?.key || "";
 }
 function planEndDate(plan) {
   const start = plan?.periodStart ? new Date(plan.periodStart) : null;
@@ -143,6 +116,8 @@ export default function TeacherChildDetailPage() {
   const [stepsDomain, setStepsDomain] = useState("");
   const [stepsAgeFilter, setStepsAgeFilter] = useState("");
   const [stepsSearch, setStepsSearch] = useState("");
+  const [stepsView, setStepsView] = useState("active");
+  const [lessonsForGoals, setLessonsForGoals] = useState([]);
   const [logTypeFilter, setLogTypeFilter] = useState("");
 
   const [reportTab, setReportTab] = useState("DAILY_REPORT");
@@ -241,6 +216,27 @@ export default function TeacherChildDetailPage() {
       finally { setAttendanceLoading(false); }
     })();
   }, [childId]);
+
+  useEffect(() => {
+    if (!child?.centerId) { setLessonsForGoals([]); return; }
+    (async () => {
+      try {
+        const l = await apiJson(`/api/v1/lessons?centerId=${encodeURIComponent(child.centerId)}`);
+        setLessonsForGoals(Array.isArray(l) ? l : []);
+      } catch { setLessonsForGoals([]); }
+    })();
+  }, [child?.centerId]);
+
+  const remediationMap = useMemo(() => {
+    const map = new Map();
+    for (const lesson of lessonsForGoals) {
+      const toLessons = (lesson?.remediationsFrom || [])
+        .map((r) => r?.toLesson)
+        .filter(Boolean);
+      map.set(lesson.id, toLessons);
+    }
+    return map;
+  }, [lessonsForGoals]);
 
   async function saveProgressStatus(progressId) {
     const status = statusDraftById[progressId];
@@ -1256,15 +1252,44 @@ export default function TeacherChildDetailPage() {
                 <TeacherProgressReportPanel progressRows={reportProgress} loading={loading} childId={childId} />
               ) : null}
               {reportTab === "STEPS" ? (
-                <TeacherStepsProgressionPanel
-                  progressRows={reportProgress}
-                  loading={loading}
-                  childName={child.firstName}
-                  statusDraftById={statusDraftById}
-                  setStatusDraftById={setStatusDraftById}
-                  saveProgressStatus={saveProgressStatus}
-                  savingProgressId={savingProgressId}
-                />
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${stepsView === "active" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                      onClick={() => setStepsView("active")}
+                    >
+                      Active Goals
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${stepsView === "all" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                      onClick={() => setStepsView("all")}
+                    >
+                      All Goals
+                    </button>
+                  </div>
+                  {stepsView === "active" ? (
+                    <ActiveGoalsPanel
+                      childId={childId}
+                      childName={child.firstName}
+                      progressRows={reportProgress}
+                      lessons={lessonsForGoals}
+                      remediationMap={remediationMap}
+                      onRefresh={loadProgress}
+                    />
+                  ) : (
+                    <TeacherStepsProgressionPanel
+                      progressRows={reportProgress}
+                      loading={loading}
+                      childName={child.firstName}
+                      statusDraftById={statusDraftById}
+                      setStatusDraftById={setStatusDraftById}
+                      saveProgressStatus={saveProgressStatus}
+                      savingProgressId={savingProgressId}
+                    />
+                  )}
+                </div>
               ) : null}
               {reportTab === "CATCHUP" ? (
                 <CatchupPlansPanel

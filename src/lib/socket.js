@@ -18,6 +18,12 @@ function initializeSocket(server) {
     io.on("connection", (socket) => {
       console.log(`[Socket] User connected: ${socket.id}`);
 
+      // Join user-specific room for notifications/messages
+      socket.on("join-user", (userId) => {
+        socket.join(`user:${userId}`);
+        console.log(`[Socket] ${socket.id} joined user:${userId}`);
+      });
+
       // Join center room
       socket.on("join-center", (centerId) => {
         socket.join(`center:${centerId}`);
@@ -91,6 +97,34 @@ function emitComplianceAlert(centerId, alert) {
   }
 }
 
+/**
+ * Emit new message to all participants in a thread
+ */
+function emitNewMessage(participantUserIds, message) {
+  if (io) {
+    for (const uid of participantUserIds) {
+      io.to(`user:${uid}`).emit("message:new", {
+        type: "MESSAGE_NEW",
+        data: message,
+        timestamp: new Date(),
+      });
+    }
+  }
+}
+
+/**
+ * Emit notification to a specific user
+ */
+function emitNotification(userId, notification) {
+  if (io) {
+    io.to(`user:${userId}`).emit("notification:new", {
+      type: "NOTIFICATION_NEW",
+      data: notification,
+      timestamp: new Date(),
+    });
+  }
+}
+
 module.exports = {
   getIoInstance,
   initializeSocket,
@@ -98,4 +132,6 @@ module.exports = {
   emitProgressUpdate,
   emitParentNotification,
   emitComplianceAlert,
+  emitNewMessage,
+  emitNotification,
 };

@@ -29,18 +29,32 @@ export default async function handler(req, res) {
       where: { id },
       include: {
         center: true,
-        participants: { include: { user: true } },
+        participants: {
+          include: {
+            user: { select: { id: true, name: true, email: true, role: true, pictureUrl: true } },
+          },
+        },
         messages: {
           orderBy: { createdAt: "asc" },
           take: 200,
-          include: { sender: true },
+          include: {
+            sender: { select: { id: true, name: true, email: true, role: true, pictureUrl: true } },
+          },
         },
       },
     });
+
+    // Mark as read for the requesting user
+    if (isParticipant) {
+      await prisma.threadParticipant.updateMany({
+        where: { threadId: id, userId: user.id },
+        data: { lastReadAt: new Date() },
+      });
+    }
+
     return res.status(200).json(full);
   }
 
   res.setHeader("Allow", ["GET"]);
   res.status(405).end();
 }
-

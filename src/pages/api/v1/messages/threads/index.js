@@ -37,18 +37,46 @@ export default async function handler(req, res) {
           : { participants: { some: { userId: user.id } } }),
       },
       include: {
-        participants: { include: { user: true } },
+        participants: {
+          include: {
+            user: { select: { id: true, name: true, email: true, role: true, pictureUrl: true } },
+          },
+        },
         center: true,
         messages: {
           take: 1,
           orderBy: { createdAt: "desc" },
-          include: { sender: true },
+          include: {
+            sender: { select: { id: true, name: true, email: true, role: true, pictureUrl: true } },
+          },
         },
+        _count: { select: { messages: true } },
       },
       orderBy: { updatedAt: "desc" },
       take: 50,
     });
-    return res.status(200).json(threads);
+
+    // Compute unread counts per thread for the current user
+    const enriched = threads.map((t) => {
+      const myParticipant = t.participants.find((p) => p.userId === user.id);
+      const lastReadAt = myParticipant?.lastReadAt;
+      // Count messages after lastReadAt that weren't sent by the current user
+      let unreadCount = 0;
+      if (!lastReadAt) {
+        // Never read: all messages from others are unread
+        unreadCount = t._count.messages;
+      } else {
+        // We'll fetch this with a separate approach: use the total count and last message timestamp
+        // For efficiency, just mark as unread if last message is after lastReadAt
+        const lastMsg = t.messages[0];
+        if (lastMsg && new Date(lastMsg.createdAt) > new Date(lastReadAt) && lastMsg.senderId !== user.id) {
+          unreadCount = 1; // At least 1 unread
+        }
+      }
+      return { ...t, unreadCount };
+    });
+
+    return res.status(200).json(enriched);
   }
 
   if (req.method === "POST") {
@@ -89,7 +117,10 @@ export default async function handler(req, res) {
         centerId: centerId || null,
         title: title || null,
         participants: {
-          create: unique.map((uid) => ({ userId: uid })),
+          create: unique.map((uid) => ({
+            userId: uid,
+            lastReadAt: uid === user.id ? new Date() : null,
+          })),
         },
         messages: firstMessage
           ? {
@@ -101,12 +132,18 @@ export default async function handler(req, res) {
           : undefined,
       },
       include: {
-        participants: { include: { user: true } },
+        participants: {
+          include: {
+            user: { select: { id: true, name: true, email: true, role: true, pictureUrl: true } },
+          },
+        },
         center: true,
         messages: {
           take: 1,
           orderBy: { createdAt: "desc" },
-          include: { sender: true },
+          include: {
+            sender: { select: { id: true, name: true, email: true, role: true, pictureUrl: true } },
+          },
         },
       },
     });

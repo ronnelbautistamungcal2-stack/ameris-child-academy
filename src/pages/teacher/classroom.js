@@ -1,4 +1,5 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
+import { formatAge } from "@/lib/ageUtils";
 import { apiJson } from "@/lib/api";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -25,19 +26,6 @@ function formatTime(value) {
   return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-function formatAge(birthDate) {
-  if (!birthDate) return "";
-  const dob = new Date(birthDate);
-  const now = new Date();
-  let months = (now.getFullYear() - dob.getFullYear()) * 12 + (now.getMonth() - dob.getMonth());
-  if (now.getDate() < dob.getDate()) months -= 1;
-  if (months < 0) return "";
-  const years = Math.floor(months / 12);
-  const rem = months % 12;
-  if (years === 0) return `${rem}mo`;
-  if (rem === 0) return `${years}y`;
-  return `${years}y ${rem}mo`;
-}
 
 function flagsForChild(ch) {
   const flags = [];

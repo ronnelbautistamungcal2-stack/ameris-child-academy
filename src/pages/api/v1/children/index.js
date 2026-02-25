@@ -90,7 +90,11 @@ export default async function handler(req, res) {
 
     const children = await prisma.child.findMany({
       where,
-      include: { progress: true, activities: true },
+      include: {
+        progress: true,
+        activities: true,
+        parent: { select: { id: true, name: true, email: true } },
+      },
     });
     return res.status(200).json(children);
   }

@@ -1,7 +1,7 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
 import { apiJson } from "@/lib/api";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 
 function byString(a, b) {
   return String(a || "").localeCompare(String(b || ""));
@@ -180,6 +180,18 @@ export default function TeacherTraining() {
             >
               Career Ladder
             </button>
+            <button
+              type="button"
+              onClick={() => setTab("training-hours")}
+              className={[
+                "px-4 py-2 text-sm font-semibold border-b-2 transition",
+                tab === "training-hours"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700",
+              ].join(" ")}
+            >
+              Training Hours
+            </button>
           </div>
 
           {error ? (
@@ -272,6 +284,10 @@ export default function TeacherTraining() {
 
           {tab === "career-ladder" && (
             <CareerLadderPanel records={records} loading={loadingRecords} />
+          )}
+
+          {tab === "training-hours" && (
+            <TrainingHoursPanel centerId={centerId} />
           )}
         </div>
       </div>
@@ -381,6 +397,139 @@ function CareerLadderPanel({ records, loading }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+const TRAINING_CATEGORIES = ["Orientation", "Safety", "Curriculum", "Professional Development", "Other"];
+
+function TrainingHoursPanel({ centerId }) {
+  const [logs, setLogs] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ topic: "", description: "", hours: "", date: new Date().toISOString().split("T")[0], category: "Other" });
+  const [saving, setSaving] = useState(false);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const qs = centerId ? `centerId=${encodeURIComponent(centerId)}` : "";
+      const [logsData, summaryData] = await Promise.all([
+        apiJson(`/api/v1/training-logs?${qs}`),
+        apiJson(`/api/v1/training-logs/summary?${qs}`),
+      ]);
+      setLogs(Array.isArray(logsData) ? logsData : []);
+      setSummary(summaryData);
+    } catch {} finally { setLoading(false); }
+  }, [centerId]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!form.topic || !form.hours) return;
+    setSaving(true);
+    try {
+      await apiJson("/api/v1/training-logs", {
+        method: "POST",
+        body: JSON.stringify({
+          centerId: centerId || undefined,
+          topic: form.topic,
+          description: form.description || null,
+          hours: parseFloat(form.hours),
+          date: form.date,
+          category: form.category,
+        }),
+      });
+      setShowForm(false);
+      setForm({ topic: "", description: "", hours: "", date: new Date().toISOString().split("T")[0], category: "Other" });
+      loadData();
+    } catch {} finally { setSaving(false); }
+  };
+
+  return (
+    <div className="mt-5 space-y-4">
+      {/* Summary */}
+      {summary && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Metric label="Total Hours" value={summary.totalHours || 0} />
+          {Object.entries(summary.byCategory || {}).map(([cat, hrs]) => (
+            <Metric key={cat} label={cat} value={hrs} />
+          ))}
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-gray-200 bg-white p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">My Training Log</div>
+          <button onClick={() => setShowForm(!showForm)}
+            className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
+            {showForm ? "Cancel" : "Log Training"}
+          </button>
+        </div>
+
+        {showForm && (
+          <form onSubmit={handleSave} className="mt-3 grid grid-cols-1 gap-3 rounded-xl border border-gray-100 bg-gray-50 p-4 sm:grid-cols-2">
+            <label className="block">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Topic</div>
+              <input type="text" value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })}
+                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" required />
+            </label>
+            <label className="block">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Hours</div>
+              <input type="number" step="0.5" value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })}
+                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" required />
+            </label>
+            <label className="block">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Date</div>
+              <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}
+                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
+            </label>
+            <label className="block">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Category</div>
+              <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}
+                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm">
+                {TRAINING_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </label>
+            <label className="block sm:col-span-2">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Description (optional)</div>
+              <input type="text" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
+                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
+            </label>
+            <div className="flex items-end">
+              <button type="submit" disabled={saving}
+                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+                {saving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {loading ? (
+          <div className="mt-3 text-sm text-gray-600">Loading…</div>
+        ) : logs.length === 0 ? (
+          <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+            No training hours logged yet.
+          </div>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {logs.map((l) => (
+              <div key={l.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-extrabold text-gray-900">{l.topic}</div>
+                  <div className="text-xs text-gray-500">{l.hours}h &middot; {new Date(l.date).toLocaleDateString()}</div>
+                </div>
+                <div className="mt-1 text-xs text-gray-600">
+                  {l.category}
+                  {l.description && <span className="ml-2">&middot; {l.description}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

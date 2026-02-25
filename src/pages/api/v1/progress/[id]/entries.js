@@ -24,7 +24,7 @@ export default async function handler(req, res) {
 
   const { id } = req.query;
 
-  if (!["ADMIN", "TEACHER", "COACH"].includes(session.user.role)) {
+  if (!["ADMIN", "TEACHER", "COACH", "PARENT"].includes(session.user.role)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -34,7 +34,11 @@ export default async function handler(req, res) {
   });
   if (!progress) return res.status(404).json({ error: "Progress not found" });
 
-  if (session.user.role !== "ADMIN") {
+  if (session.user.role === "PARENT") {
+    if (progress.child.parentId !== session.user.id) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+  } else if (session.user.role !== "ADMIN") {
     const hasAccess = await hasAccessToCenter(session.user.id, progress.child.centerId);
     if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
     if (session.user.role === "TEACHER") {
@@ -56,11 +60,16 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    if (!["ADMIN", "TEACHER"].includes(session.user.role)) {
-      return res.status(403).json({ error: "Only teachers/admins can record progress" });
+    if (!["ADMIN", "TEACHER", "PARENT"].includes(session.user.role)) {
+      return res.status(403).json({ error: "Only teachers/admins/parents can record progress" });
     }
 
-    const { status, notes, details, media, occurredAt } = req.body || {};
+    let { status, notes, details, media, occurredAt } = req.body || {};
+
+    // Parents can only add notes — they cannot change the progress status
+    if (session.user.role === "PARENT") {
+      status = progress.status;
+    }
     if (!status || !ALLOWED_STATUSES.includes(status)) {
       return res.status(400).json({ error: `Invalid status. Allowed: ${ALLOWED_STATUSES.join(", ")}` });
     }

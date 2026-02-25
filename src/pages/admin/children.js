@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import { childAgeGroup, ageInMonths } from "@/lib/ageUtils";
 import { apiJson } from "@/lib/api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -79,18 +80,6 @@ export default function AdminChildren() {
   const centerById = useMemo(() => Object.fromEntries(centers.map((c) => [c.id, c])), [centers]);
   const classById = useMemo(() => Object.fromEntries(classes.map((c) => [c.id, c])), [classes]);
 
-  function childAgeGroup(ch) {
-    if (!ch?.birthDate) return "Unknown";
-    const months = ageInMonthsFromDateString(ch.birthDate);
-    if (months === null) return "Unknown";
-    if (months < 12) return "0-1";
-    if (months < 24) return "2";
-    if (months < 36) return "3";
-    if (months < 60) return "4-5";
-    if (months < 84) return "6-7";
-    if (months < 144) return "8-12";
-    return "12+";
-  }
 
   const filteredSorted = useMemo(() => {
     const query = (q || "").trim().toLowerCase();
@@ -260,18 +249,8 @@ export default function AdminChildren() {
     };
   }, [modalOpen, closeModal]);
 
-  function ageInMonthsFromDateString(value) {
-    if (!value) return null;
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return null;
-    const now = new Date();
-    let months = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
-    if (now.getDate() < d.getDate()) months -= 1;
-    return months;
-  }
-
   const isInfant = useMemo(() => {
-    const months = ageInMonthsFromDateString(birthDate);
+    const months = ageInMonths(birthDate);
     return months !== null ? months < 12 : false;
   }, [birthDate]);
 

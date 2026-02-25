@@ -96,85 +96,96 @@ export default function AdminTeachers() {
 
   return (
     <AdminLayout title="Teachers">
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 420px", gap: 16 }}>
-        <Panel>
-          <h2 style={{ marginTop: 0 }}>Teachers</h2>
-          <p style={{ color: "#6b7280", marginTop: 6 }}>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_420px]">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <h2 className="text-lg font-extrabold text-gray-900">Teachers</h2>
+          <p className="mt-1 text-sm text-gray-500">
             Assign teachers to centers and classrooms to enforce access limits.
           </p>
 
-          {error ? <ErrorBanner message={error} /> : null}
+          {error ? (
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {error}
+            </div>
+          ) : null}
 
           {loading ? (
-            <p>Loading…</p>
+            <p className="mt-4 text-sm text-gray-500">Loading…</p>
           ) : (
-            <table style={tableStyle}>
-              <thead>
-                <tr>
-                  <th style={thStyle}>Email</th>
-                  <th style={thStyle}>Name</th>
-                  <th style={thStyle}>Assigned Centers</th>
-                  <th style={thStyle}>Assigned Classes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedTeachers.map((t) => (
-                  <tr
-                    key={t.id}
-                    style={{
-                      background: selectedTeacherId === t.id ? "#eff6ff" : "transparent",
-                      cursor: "pointer",
-                    }}
-                    onClick={() => setSelectedTeacherId(t.id)}
-                  >
-                    <td style={tdStyle}>{t.email}</td>
-                    <td style={tdStyle}>{t.name || "—"}</td>
-                    <td style={tdStyle}>
-                      {(t.centers || [])
-                        .filter((cu) => cu.role === "TEACHER")
-                        .map((cu) => cu.center?.name || cu.centerId)
-                        .join(", ") || "—"}
-                    </td>
-                    <td style={tdStyle}>
-                      {(t.teacherClasses || [])
-                        .map((tc) => tc.classRoom?.name || tc.classId)
-                        .join(", ") || "—"}
-                    </td>
+            <div className="mt-4 overflow-hidden rounded-xl border border-gray-200">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">Email</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">Name</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">Assigned Centers</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">Assigned Classes</th>
                   </tr>
-                ))}
-                {sortedTeachers.length === 0 ? (
-                  <tr>
-                    <td style={tdStyle} colSpan={4}>
-                      No teachers found.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {sortedTeachers.map((t) => (
+                    <tr
+                      key={t.id}
+                      className={[
+                        "cursor-pointer border-b border-gray-100 transition",
+                        selectedTeacherId === t.id ? "bg-blue-50" : "hover:bg-gray-50",
+                      ].join(" ")}
+                      onClick={() => setSelectedTeacherId(t.id)}
+                    >
+                      <td className="px-3 py-2.5 align-top">{t.email}</td>
+                      <td className="px-3 py-2.5 align-top">{t.name || "—"}</td>
+                      <td className="px-3 py-2.5 align-top">
+                        {(t.centers || [])
+                          .filter((cu) => cu.role === "TEACHER")
+                          .map((cu) => cu.center?.name || cu.centerId)
+                          .join(", ") || "—"}
+                      </td>
+                      <td className="px-3 py-2.5 align-top">
+                        {(t.teacherClasses || [])
+                          .map((tc) => tc.classRoom?.name || tc.classId)
+                          .join(", ") || "—"}
+                      </td>
+                    </tr>
+                  ))}
+                  {sortedTeachers.length === 0 ? (
+                    <tr>
+                      <td className="px-3 py-2.5 text-gray-500" colSpan={4}>
+                        No teachers found.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
           )}
-        </Panel>
+        </div>
 
-        <Panel>
-          <h3 style={{ marginTop: 0 }}>Assignments</h3>
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <h3 className="text-base font-extrabold text-gray-900">Assignments</h3>
           {!selectedTeacher ? (
-            <p style={{ color: "#6b7280" }}>Select a teacher to edit assignments.</p>
+            <p className="mt-2 text-sm text-gray-500">Select a teacher to edit assignments.</p>
           ) : (
             <>
-              <div style={{ marginTop: 6, color: "#111827", fontWeight: 700 }}>
+              <div className="mt-2 text-sm font-bold text-gray-900">
                 {selectedTeacher.email}
               </div>
-              <div style={{ marginTop: 4, color: "#6b7280", fontSize: 13 }}>
+              <div className="mt-1 text-xs text-gray-500">
                 These assignments control which centers/classrooms a teacher can access.
               </div>
 
-              <div style={{ marginTop: 16 }}>
-                <div style={sectionLabel}>Centers</div>
-                <div style={chipWrap}>
+              <div className="mt-4">
+                <div className="text-xs font-bold uppercase tracking-wide text-gray-500">Centers</div>
+                <div className="mt-2 flex flex-wrap gap-2">
                   {centers.map((c) => (
                     <button
                       key={c.id}
                       type="button"
-                      style={chip(selectedCenterIds.includes(c.id))}
+                      className={[
+                        "rounded-full border px-3 py-2 text-sm font-bold text-gray-900 transition",
+                        selectedCenterIds.includes(c.id)
+                          ? "border-blue-200 bg-blue-50"
+                          : "border-gray-200 bg-white hover:bg-gray-50",
+                      ].join(" ")}
                       onClick={() => setSelectedCenterIds((cur) => toggleInList(cur, c.id))}
                     >
                       {c.name}
@@ -183,17 +194,22 @@ export default function AdminTeachers() {
                 </div>
               </div>
 
-              <div style={{ marginTop: 16 }}>
-                <div style={sectionLabel}>Classrooms</div>
-                <div style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>
+              <div className="mt-4">
+                <div className="text-xs font-bold uppercase tracking-wide text-gray-500">Classrooms</div>
+                <div className="mt-1 text-xs text-gray-500">
                   Filtered to selected centers when centers are selected.
                 </div>
-                <div style={chipWrap}>
+                <div className="mt-2 flex flex-wrap gap-2">
                   {availableClasses.map((cl) => (
                     <button
                       key={cl.id}
                       type="button"
-                      style={chip(selectedClassIds.includes(cl.id))}
+                      className={[
+                        "rounded-full border px-3 py-2 text-sm font-bold text-gray-900 transition",
+                        selectedClassIds.includes(cl.id)
+                          ? "border-blue-200 bg-blue-50"
+                          : "border-gray-200 bg-white hover:bg-gray-50",
+                      ].join(" ")}
                       onClick={() => setSelectedClassIds((cur) => toggleInList(cur, cl.id))}
                     >
                       {cl.name}
@@ -202,13 +218,18 @@ export default function AdminTeachers() {
                 </div>
               </div>
 
-              <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-                <button type="button" style={primaryButton} disabled={saving} onClick={saveAssignments}>
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
+                  disabled={saving}
+                  onClick={saveAssignments}
+                >
                   {saving ? "Saving…" : "Save Assignments"}
                 </button>
                 <button
                   type="button"
-                  style={secondaryButton}
+                  className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
                   disabled={saving}
                   onClick={() => setSelectedTeacherId("")}
                 >
@@ -217,111 +238,8 @@ export default function AdminTeachers() {
               </div>
             </>
           )}
-        </Panel>
+        </div>
       </div>
     </AdminLayout>
   );
 }
-
-function Panel({ children }) {
-  return (
-    <div
-      style={{
-        background: "white",
-        border: "1px solid #e5e7eb",
-        borderRadius: 10,
-        padding: 16,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-function ErrorBanner({ message }) {
-  return (
-    <div
-      style={{
-        padding: 12,
-        background: "#fee2e2",
-        color: "#991b1b",
-        borderRadius: 8,
-        marginTop: 12,
-        border: "1px solid #fecaca",
-      }}
-    >
-      {message}
-    </div>
-  );
-}
-
-const tableStyle = {
-  width: "100%",
-  borderCollapse: "collapse",
-  border: "1px solid #e5e7eb",
-  borderRadius: 10,
-  overflow: "hidden",
-};
-
-const thStyle = {
-  textAlign: "left",
-  fontSize: 12,
-  color: "#6b7280",
-  padding: 10,
-  borderBottom: "1px solid #e5e7eb",
-  background: "#f9fafb",
-};
-
-const tdStyle = {
-  padding: 10,
-  borderBottom: "1px solid #f3f4f6",
-  verticalAlign: "top",
-};
-
-const sectionLabel = {
-  fontSize: 12,
-  color: "#6b7280",
-  fontWeight: 700,
-  textTransform: "uppercase",
-  letterSpacing: "0.04em",
-};
-
-const chipWrap = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 8,
-  marginTop: 8,
-};
-
-function chip(active) {
-  return {
-    padding: "8px 10px",
-    borderRadius: 999,
-    border: active ? "1px solid #bfdbfe" : "1px solid #e5e7eb",
-    background: active ? "#eff6ff" : "white",
-    cursor: "pointer",
-    fontWeight: 700,
-    color: "#111827",
-  };
-}
-
-const primaryButton = {
-  padding: "10px 12px",
-  background: "#2563eb",
-  color: "white",
-  border: "none",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontWeight: 700,
-};
-
-const secondaryButton = {
-  padding: "10px 12px",
-  background: "white",
-  color: "#111827",
-  border: "1px solid #e5e7eb",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontWeight: 700,
-};
-

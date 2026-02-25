@@ -15,6 +15,21 @@ function formatDateTime(v) {
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString();
 }
 
+function formatType(type) {
+  return String(type || "OTHER")
+    .toLowerCase()
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+const RECORD_TYPE_CLASSES = {
+  CERTIFICATE: "bg-emerald-50 text-emerald-800",
+  ACHIEVEMENT: "bg-blue-50 text-blue-800",
+  EMPLOYEE_OF_THE_MONTH: "bg-amber-50 text-amber-800",
+  CAREER_LADDER: "bg-purple-50 text-purple-800",
+};
+
 export default function AdminTeacherDetail() {
   const router = useRouter();
   const teacherId = typeof router.query.id === "string" ? router.query.id : "";
@@ -195,8 +210,8 @@ export default function AdminTeacherDetail() {
   if (loading) {
     return (
       <AdminLayout title="Teacher Profile">
-        <div style={panelStyle}>
-          <p style={{ color: "#6b7280" }}>Loading...</p>
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <p className="text-sm text-gray-500">Loading...</p>
         </div>
       </AdminLayout>
     );
@@ -205,11 +220,13 @@ export default function AdminTeacherDetail() {
   if (!teacher) {
     return (
       <AdminLayout title="Teacher Profile">
-        <div style={panelStyle}>
-          <Link href="/admin/users" style={backLink}>
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <Link href="/admin/users" className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 no-underline hover:text-blue-700">
             &larr; Back to Users
           </Link>
-          <div style={errorBannerStyle}>{error || "Teacher not found."}</div>
+          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            {error || "Teacher not found."}
+          </div>
         </div>
       </AdminLayout>
     );
@@ -217,53 +234,52 @@ export default function AdminTeacherDetail() {
 
   return (
     <AdminLayout title={`Teacher: ${teacher.name || teacher.email}`}>
-      <style>{`
-        .teacher-child-row:hover { background: #f0f9ff; }
-        .teacher-activity-row:hover { background: #f0f4f8; border-color: #e0e7ef; }
-        .record-row:hover { background: #f8fafc; }
-      `}</style>
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className="flex flex-col gap-4">
         {/* Header */}
-        <div style={panelStyle}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-            <Link href="/admin/users" style={backLink}>
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Link href="/admin/users" className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 no-underline hover:text-blue-700">
               &larr; Back to Users
             </Link>
-            <Link href="/admin/teachers" style={secondaryBtn}>
+            <Link href="/admin/teachers" className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-800 no-underline hover:bg-gray-50">
               Teacher Assignments
             </Link>
           </div>
-          {error ? <div style={errorBannerStyle}>{error}</div> : null}
+          {error ? (
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>
+          ) : null}
         </div>
 
         {/* Profile */}
-        <div style={panelStyle}>
-          <div style={{ display: "flex", alignItems: "start", gap: 16, flexWrap: "wrap" }}>
-            <div style={avatarStyle}>
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <div className="flex flex-wrap items-start gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-sky-100">
               {teacher.pictureUrl ? (
                 <img
                   src={teacher.pictureUrl}
                   alt={teacher.name || "Teacher"}
-                  style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
+                  className="h-full w-full rounded-full object-cover"
                 />
               ) : (
-                <span style={{ fontSize: 28, fontWeight: 800, color: "#0369a1" }}>
+                <span className="text-[28px] font-extrabold text-sky-700">
                   {(teacher.name || teacher.email || "?").slice(0, 1).toUpperCase()}
                 </span>
               )}
             </div>
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#111827" }}>
+            <div className="min-w-[200px] flex-1">
+              <h2 className="text-xl font-extrabold text-gray-900">
                 {teacher.name || "Unnamed Teacher"}
               </h2>
-              <div style={{ marginTop: 4, color: "#6b7280", fontSize: 14 }}>{teacher.email}</div>
-              <div style={{ marginTop: 4 }}>
-                <span style={rolePill}>{teacher.role}</span>
+              <div className="mt-1 text-sm text-gray-500">{teacher.email}</div>
+              <div className="mt-1">
+                <span className="inline-block rounded-full bg-emerald-50 px-3 py-0.5 text-xs font-bold text-emerald-800">
+                  {teacher.role}
+                </span>
               </div>
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginTop: 16 }}>
+          <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
             <InfoCard label="Date of Birth" value={formatDate(teacher.dob)} />
             <InfoCard label="Hire Date" value={formatDate(teacher.hireDate)} />
             <InfoCard label="Member Since" value={formatDate(teacher.createdAt)} />
@@ -271,41 +287,40 @@ export default function AdminTeacherDetail() {
           </div>
 
           {teacher.aboutMe ? (
-            <div style={{ marginTop: 16 }}>
-              <div style={sectionLabel}>About</div>
-              <p style={{ marginTop: 6, color: "#374151", fontSize: 14, lineHeight: 1.6 }}>
+            <div className="mt-4">
+              <div className="text-xs font-bold uppercase tracking-wide text-gray-500">About</div>
+              <p className="mt-1.5 text-sm leading-relaxed text-gray-700">
                 {teacher.aboutMe}
               </p>
             </div>
           ) : null}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16 }}>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(340px,1fr))] gap-4">
           {/* Children */}
-          <div style={panelStyle}>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#111827" }}>
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <h3 className="text-base font-extrabold text-gray-900">
               Children ({children.length})
             </h3>
-            <p style={{ color: "#6b7280", fontSize: 13, marginTop: 4 }}>
+            <p className="mt-1 text-xs text-gray-500">
               Children at assigned centers.
             </p>
             {children.length ? (
-              <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+              <div className="mt-3 flex flex-col gap-1.5">
                 {children.slice(0, 30).map((c) => (
                   <Link
                     key={c.id}
                     href={`/teacher/children/${encodeURIComponent(c.id)}`}
-                    className="teacher-child-row"
-                    style={childRow}
+                    className="flex items-center gap-3 rounded-lg border border-gray-100 p-2 no-underline transition hover:bg-sky-50"
                   >
-                    <div style={childAvatar}>
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-extrabold text-blue-800">
                       {(c.firstName || "?").slice(0, 1).toUpperCase()}
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold text-gray-900">
                         {c.firstName || ""} {c.lastName || ""}
                       </div>
-                      <div style={{ fontSize: 12, color: "#6b7280" }}>
+                      <div className="text-xs text-gray-500">
                         DOB: {formatDate(c.birthDate)}
                       </div>
                     </div>
@@ -313,7 +328,7 @@ export default function AdminTeacherDetail() {
                 ))}
               </div>
             ) : (
-              <p style={{ color: "#9ca3af", marginTop: 12, fontSize: 13 }}>
+              <p className="mt-3 text-xs text-gray-400">
                 {centers.length
                   ? "No children found at assigned centers."
                   : "Assign this teacher to a center first to see children."}
@@ -322,31 +337,33 @@ export default function AdminTeacherDetail() {
           </div>
 
           {/* Recent Activity Logs */}
-          <div style={panelStyle}>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#111827" }}>
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <h3 className="text-base font-extrabold text-gray-900">
               Recent Activity Logs
             </h3>
-            <p style={{ color: "#6b7280", fontSize: 13, marginTop: 4 }}>
+            <p className="mt-1 text-xs text-gray-500">
               Logs recorded by this teacher.
             </p>
             {activities.length ? (
-              <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+              <div className="mt-3 flex flex-col gap-1.5">
                 {activities.map((a) => (
-                  <div key={a.id} className="teacher-activity-row" style={activityRow}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                      <span style={typePill}>{formatType(a.type)}</span>
-                      <span style={{ fontSize: 11, color: "#9ca3af" }}>{formatDateTime(a.createdAt)}</span>
+                  <div key={a.id} className="rounded-lg border border-gray-100 bg-gray-50 p-2 transition hover:bg-sky-50">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="inline-block rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-800">
+                        {formatType(a.type)}
+                      </span>
+                      <span className="text-[11px] text-gray-400">{formatDateTime(a.createdAt)}</span>
                     </div>
-                    <div style={{ fontSize: 13, color: "#374151", marginTop: 4 }}>
-                      {a.childName ? <span style={{ fontWeight: 600 }}>{a.childName}</span> : null}
+                    <div className="mt-1 text-xs text-gray-700">
+                      {a.childName ? <span className="font-semibold">{a.childName}</span> : null}
                       {a.notes ? <span> — {a.notes.length > 80 ? a.notes.slice(0, 80) + "…" : a.notes}</span> : null}
-                      {!a.childName && !a.notes ? <span style={{ color: "#9ca3af" }}>No notes</span> : null}
+                      {!a.childName && !a.notes ? <span className="text-gray-400">No notes</span> : null}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p style={{ color: "#9ca3af", marginTop: 12, fontSize: 13 }}>
+              <p className="mt-3 text-xs text-gray-400">
                 No activity logs found.
               </p>
             )}
@@ -354,19 +371,19 @@ export default function AdminTeacherDetail() {
         </div>
 
         {/* Career Ladder Records */}
-        <div style={panelStyle}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#111827" }}>
+              <h3 className="text-base font-extrabold text-gray-900">
                 Career Ladder Records ({records.length})
               </h3>
-              <p style={{ color: "#6b7280", fontSize: 13, marginTop: 4 }}>
+              <p className="mt-1 text-xs text-gray-500">
                 Certificates, achievements, employee of the month, and career milestones.
               </p>
             </div>
             <button
               type="button"
-              style={primaryBtn}
+              className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700"
               onClick={() => {
                 setShowRecordForm(true);
                 setEditingRecord(null);
@@ -378,18 +395,18 @@ export default function AdminTeacherDetail() {
           </div>
 
           {showRecordForm ? (
-            <div style={{ marginTop: 16, padding: 16, background: "#f9fafb", borderRadius: 10, border: "1px solid #e5e7eb" }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 12 }}>
+            <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <div className="text-sm font-bold text-gray-900">
                 {editingRecord ? "Edit Record" : "New Record"}
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <label style={formLabel}>
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="block text-xs font-bold text-gray-500">
                   Type
                   <select
                     value={recordForm.type}
                     onChange={(e) => setRecordForm((prev) => ({ ...prev, type: e.target.value }))}
-                    style={formInput}
+                    className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
                   >
                     <option value="CERTIFICATE">Certificate</option>
                     <option value="ACHIEVEMENT">Achievement</option>
@@ -398,54 +415,54 @@ export default function AdminTeacherDetail() {
                   </select>
                 </label>
 
-                <label style={formLabel}>
+                <label className="block text-xs font-bold text-gray-500">
                   Date
                   <input
                     type="date"
                     value={recordForm.date}
                     onChange={(e) => setRecordForm((prev) => ({ ...prev, date: e.target.value }))}
-                    style={formInput}
+                    className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
                   />
                 </label>
               </div>
 
-              <label style={{ ...formLabel, marginTop: 12, display: "block" }}>
+              <label className="mt-3 block text-xs font-bold text-gray-500">
                 Title
                 <input
                   type="text"
                   value={recordForm.title}
                   onChange={(e) => setRecordForm((prev) => ({ ...prev, title: e.target.value }))}
-                  style={formInput}
+                  className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
                   placeholder="e.g., CPR Certification, Employee of the Month - January"
                 />
               </label>
 
-              <label style={{ ...formLabel, marginTop: 12, display: "block" }}>
+              <label className="mt-3 block text-xs font-bold text-gray-500">
                 Description
                 <textarea
                   value={recordForm.description}
                   onChange={(e) => setRecordForm((prev) => ({ ...prev, description: e.target.value }))}
-                  style={{ ...formInput, minHeight: 60 }}
+                  className="mt-1 block min-h-[60px] w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
                   placeholder="Optional details..."
                 />
               </label>
 
               {recordForm.type === "CERTIFICATE" ? (
-                <div style={{ marginTop: 12 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7280" }}>Certificate File</div>
+                <div className="mt-3">
+                  <div className="text-xs font-bold text-gray-500">Certificate File</div>
                   {recordForm.fileUrl ? (
-                    <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 8 }}>
+                    <div className="mt-1 flex items-center gap-2">
                       <a
                         href={recordForm.fileUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        style={{ fontSize: 13, color: "#2563eb" }}
+                        className="text-sm text-blue-600 hover:text-blue-700"
                       >
                         {recordForm.fileName || "Uploaded file"}
                       </a>
                       <button
                         type="button"
-                        style={{ fontSize: 12, color: "#ef4444", cursor: "pointer", background: "none", border: "none" }}
+                        className="border-none bg-transparent p-0 text-xs text-red-500 hover:text-red-700"
                         onClick={() => setRecordForm((prev) => ({ ...prev, fileUrl: "", fileName: "" }))}
                       >
                         Remove
@@ -457,23 +474,19 @@ export default function AdminTeacherDetail() {
                       accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                       onChange={handleFileUpload}
                       disabled={uploadingFile}
-                      style={{ marginTop: 4, fontSize: 13 }}
+                      className="mt-1 text-sm"
                     />
                   )}
                   {uploadingFile ? (
-                    <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Uploading...</div>
+                    <div className="mt-1 text-xs text-gray-500">Uploading...</div>
                   ) : null}
                 </div>
               ) : null}
 
-              <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              <div className="mt-4 flex gap-2">
                 <button
                   type="button"
-                  style={{
-                    ...primaryBtn,
-                    opacity: savingRecord || !recordForm.title ? 0.6 : 1,
-                    cursor: savingRecord || !recordForm.title ? "not-allowed" : "pointer",
-                  }}
+                  className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={savingRecord || !recordForm.title}
                   onClick={saveRecord}
                 >
@@ -481,7 +494,7 @@ export default function AdminTeacherDetail() {
                 </button>
                 <button
                   type="button"
-                  style={secondaryBtn}
+                  className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
                   onClick={() => {
                     setShowRecordForm(false);
                     setEditingRecord(null);
@@ -494,22 +507,28 @@ export default function AdminTeacherDetail() {
           ) : null}
 
           {records.length > 0 ? (
-            <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="mt-4 flex flex-col gap-2">
               {records.map((r) => (
-                <div key={r.id} className="record-row" style={activityRow}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                      <span style={recordTypePillStyle(r.type)}>{formatType(r.type)}</span>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>{r.title}</span>
+                <div key={r.id} className="rounded-lg border border-gray-100 bg-gray-50 p-2 transition hover:bg-sky-50/30">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold ${RECORD_TYPE_CLASSES[r.type] || RECORD_TYPE_CLASSES.CERTIFICATE}`}>
+                        {formatType(r.type)}
+                      </span>
+                      <span className="text-sm font-bold text-gray-900">{r.title}</span>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                      <span style={{ fontSize: 11, color: "#9ca3af" }}>{formatDate(r.date)}</span>
-                      <button type="button" style={smallBtn} onClick={() => startEdit(r)}>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="text-[11px] text-gray-400">{formatDate(r.date)}</span>
+                      <button
+                        type="button"
+                        className="border-none bg-transparent p-0 text-xs font-bold text-blue-600 hover:text-blue-700"
+                        onClick={() => startEdit(r)}
+                      >
                         Edit
                       </button>
                       <button
                         type="button"
-                        style={{ ...smallBtn, color: "#ef4444" }}
+                        className="border-none bg-transparent p-0 text-xs font-bold text-red-500 hover:text-red-700"
                         onClick={() => deleteRecord(r.id)}
                       >
                         Delete
@@ -517,20 +536,20 @@ export default function AdminTeacherDetail() {
                     </div>
                   </div>
                   {r.description ? (
-                    <div style={{ fontSize: 13, color: "#374151", marginTop: 4 }}>{r.description}</div>
+                    <div className="mt-1 text-xs text-gray-700">{r.description}</div>
                   ) : null}
                   {r.fileUrl ? (
                     <a
                       href={r.fileUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      style={{ display: "inline-block", marginTop: 4, fontSize: 12, color: "#2563eb" }}
+                      className="mt-1 inline-block text-xs text-blue-600 hover:text-blue-700"
                     >
                       View file: {r.fileName || "Download"}
                     </a>
                   ) : null}
                   {r.createdBy ? (
-                    <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>
+                    <div className="mt-1 text-[11px] text-gray-400">
                       Added by {r.createdBy.name || r.createdBy.email}
                     </div>
                   ) : null}
@@ -538,7 +557,7 @@ export default function AdminTeacherDetail() {
               ))}
             </div>
           ) : (
-            <p style={{ color: "#9ca3af", marginTop: 12, fontSize: 13 }}>
+            <p className="mt-3 text-xs text-gray-400">
               No career ladder records yet. Click &quot;+ Add Record&quot; to add one.
             </p>
           )}
@@ -550,198 +569,11 @@ export default function AdminTeacherDetail() {
 
 function InfoCard({ label, value }) {
   return (
-    <div style={infoCardStyle}>
-      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "#6b7280" }}>
+    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+      <div className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
         {label}
       </div>
-      <div style={{ marginTop: 4, fontSize: 14, color: "#111827" }}>{value}</div>
+      <div className="mt-1 text-sm text-gray-900">{value}</div>
     </div>
   );
 }
-
-function formatType(type) {
-  return String(type || "OTHER")
-    .toLowerCase()
-    .split("_")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-}
-
-const RECORD_TYPE_COLORS = {
-  CERTIFICATE: { bg: "#ecfdf5", color: "#065f46" },
-  ACHIEVEMENT: { bg: "#eff6ff", color: "#1e40af" },
-  EMPLOYEE_OF_THE_MONTH: { bg: "#fef3c7", color: "#92400e" },
-  CAREER_LADDER: { bg: "#f3e8ff", color: "#6b21a8" },
-};
-
-function recordTypePillStyle(type) {
-  const c = RECORD_TYPE_COLORS[type] || RECORD_TYPE_COLORS.CERTIFICATE;
-  return {
-    display: "inline-block",
-    padding: "1px 8px",
-    borderRadius: 999,
-    background: c.bg,
-    color: c.color,
-    fontSize: 11,
-    fontWeight: 700,
-    whiteSpace: "nowrap",
-  };
-}
-
-const panelStyle = {
-  background: "white",
-  border: "1px solid #e5e7eb",
-  borderRadius: 12,
-  padding: 16,
-};
-
-const backLink = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  fontSize: 14,
-  fontWeight: 600,
-  color: "#2563eb",
-  textDecoration: "none",
-};
-
-const secondaryBtn = {
-  display: "inline-block",
-  padding: "8px 14px",
-  background: "white",
-  color: "#111827",
-  border: "1px solid #e5e7eb",
-  borderRadius: 8,
-  fontSize: 13,
-  fontWeight: 700,
-  textDecoration: "none",
-  cursor: "pointer",
-};
-
-const primaryBtn = {
-  display: "inline-block",
-  padding: "8px 14px",
-  background: "#2563eb",
-  color: "white",
-  border: "none",
-  borderRadius: 8,
-  fontSize: 13,
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const avatarStyle = {
-  width: 56,
-  height: 56,
-  borderRadius: "50%",
-  background: "#e0f2fe",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  flexShrink: 0,
-  overflow: "hidden",
-};
-
-const rolePill = {
-  display: "inline-block",
-  padding: "2px 10px",
-  borderRadius: 999,
-  background: "#ecfdf5",
-  color: "#065f46",
-  fontSize: 12,
-  fontWeight: 700,
-};
-
-const sectionLabel = {
-  fontSize: 11,
-  fontWeight: 700,
-  textTransform: "uppercase",
-  letterSpacing: "0.04em",
-  color: "#6b7280",
-};
-
-const infoCardStyle = {
-  background: "#f9fafb",
-  border: "1px solid #e5e7eb",
-  borderRadius: 8,
-  padding: 12,
-};
-
-const errorBannerStyle = {
-  padding: 12,
-  background: "#fee2e2",
-  color: "#991b1b",
-  borderRadius: 8,
-  marginTop: 12,
-  border: "1px solid #fecaca",
-};
-
-const childRow = {
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  padding: 8,
-  borderRadius: 8,
-  border: "1px solid #f3f4f6",
-  textDecoration: "none",
-  transition: "background 0.1s",
-};
-
-const childAvatar = {
-  width: 32,
-  height: 32,
-  borderRadius: "50%",
-  background: "#dbeafe",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: 13,
-  fontWeight: 800,
-  color: "#1e40af",
-  flexShrink: 0,
-};
-
-const activityRow = {
-  padding: 8,
-  borderRadius: 8,
-  border: "1px solid #f3f4f6",
-  background: "#f9fafb",
-};
-
-const typePill = {
-  display: "inline-block",
-  padding: "1px 8px",
-  borderRadius: 999,
-  background: "#eff6ff",
-  color: "#1e40af",
-  fontSize: 11,
-  fontWeight: 700,
-};
-
-const formLabel = {
-  display: "block",
-  fontSize: 12,
-  fontWeight: 700,
-  color: "#6b7280",
-};
-
-const formInput = {
-  display: "block",
-  width: "100%",
-  marginTop: 4,
-  padding: "8px 10px",
-  border: "1px solid #e5e7eb",
-  borderRadius: 8,
-  fontSize: 13,
-  boxSizing: "border-box",
-};
-
-const smallBtn = {
-  background: "none",
-  border: "none",
-  fontSize: 12,
-  fontWeight: 700,
-  color: "#2563eb",
-  cursor: "pointer",
-  padding: 0,
-};

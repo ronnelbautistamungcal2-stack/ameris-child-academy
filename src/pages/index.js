@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -57,6 +57,21 @@ export default function Home() {
 /* ── Hero ─────────────────────────────────────────────── */
 
 function HeroSection() {
+  const videoRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const handlePlay = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      video.play();
+      setIsPlaying(true);
+    } else {
+      video.pause();
+      setIsPlaying(false);
+    }
+  };
+
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-sky-50 to-white">
       <div className="mx-auto max-w-7xl px-6 py-20 lg:py-28">
@@ -75,17 +90,37 @@ function HeroSection() {
         </div>
 
         <div className="relative mx-auto mt-12 max-w-3xl">
-          <div className="relative aspect-video overflow-hidden rounded-2xl bg-gradient-to-br from-sky-200 to-sky-400">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="h-32 w-32 rounded-full bg-sky-300/40" />
-            </div>
-            <button
-              type="button"
-              className="absolute inset-0 grid place-items-center text-sky-700 transition hover:text-sky-900"
-              aria-label="Play video"
-            >
-              <PlayIcon className="h-16 w-16" />
-            </button>
+          <div className="relative aspect-video overflow-hidden rounded-2xl bg-gradient-to-br from-sky-200 to-sky-400 shadow-lg">
+            <video
+              ref={videoRef}
+              className="absolute inset-0 h-full w-full object-cover"
+              src="/home-video.mp4"
+              playsInline
+              preload="metadata"
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onEnded={() => setIsPlaying(false)}
+            />
+            {!isPlaying && (
+              <button
+                type="button"
+                onClick={handlePlay}
+                className="absolute inset-0 z-10 grid place-items-center bg-black/20 text-white transition hover:bg-black/30"
+                aria-label="Play video"
+              >
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white/90 text-sky-600 shadow-lg transition hover:scale-105">
+                  <PlayIcon className="h-10 w-10 ml-1" />
+                </div>
+              </button>
+            )}
+            {isPlaying && (
+              <button
+                type="button"
+                onClick={handlePlay}
+                className="absolute inset-0 z-10"
+                aria-label="Pause video"
+              />
+            )}
           </div>
         </div>
       </div>

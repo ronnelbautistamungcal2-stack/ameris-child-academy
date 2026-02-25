@@ -15,6 +15,7 @@ export default function AdminLayout({ title, children }) {
       userName={session?.user?.name || session?.user?.email}
       userLabel={session?.user?.email}
       userImageUrl={session?.user?.pictureUrl}
+      userId={session?.user?.id}
       navItems={ADMIN_NAV_ITEMS}
       showBack={false}
     >

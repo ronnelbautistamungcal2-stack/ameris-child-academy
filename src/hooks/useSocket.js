@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import io from "socket.io-client";
 
 export function useSocket(centerId) {
@@ -39,6 +39,38 @@ export function useSocket(centerId) {
 }
 
 /**
+ * Hook to join user-specific room for notifications and messages.
+ * Uses useState so consumers re-render when the socket is ready.
+ */
+export function useUserSocket(userId) {
+  const [socket, setSocket] = useState(null);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const s = io("/", {
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5,
+    });
+
+    s.on("connect", () => {
+      s.emit("join-user", userId);
+    });
+
+    setSocket(s);
+
+    return () => {
+      s.disconnect();
+      setSocket(null);
+    };
+  }, [userId]);
+
+  return socket;
+}
+
+/**
  * Hook to listen for activity logs
  */
 export function useActivityLogs(callback) {
@@ -74,4 +106,32 @@ export function useProgressUpdates(callback) {
       if (socketRef.current) socketRef.current.disconnect();
     };
   }, [callback]);
+}
+
+/**
+ * Hook to listen for new notifications (real-time)
+ */
+export function useNotifications(socket, callback) {
+  useEffect(() => {
+    if (!socket) return;
+    const handler = (message) => {
+      if (callback) callback(message.data);
+    };
+    socket.on("notification:new", handler);
+    return () => socket.off("notification:new", handler);
+  }, [socket, callback]);
+}
+
+/**
+ * Hook to listen for new messages (real-time)
+ */
+export function useNewMessages(socket, callback) {
+  useEffect(() => {
+    if (!socket) return;
+    const handler = (message) => {
+      if (callback) callback(message.data);
+    };
+    socket.on("message:new", handler);
+    return () => socket.off("message:new", handler);
+  }, [socket, callback]);
 }

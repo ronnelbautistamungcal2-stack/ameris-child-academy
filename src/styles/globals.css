@@ -2,6 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide scrollbar but keep scrollable */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 @layer base {
   html,
   body,
@@ -12,4 +32,175 @@
   body {
     @apply bg-gray-50 text-gray-900;
   }
+
+  .dark body {
+    @apply bg-gray-900 text-gray-100;
+    color-scheme: dark;
+  }
+
+  .dark input,
+  .dark textarea,
+  .dark select {
+    @apply border-gray-600 bg-gray-800 text-gray-100 placeholder-gray-400;
+  }
+
+  .dark table {
+    @apply text-gray-200;
+  }
+
+  .dark th {
+    @apply border-gray-700 bg-gray-800 text-gray-300;
+  }
+
+  .dark td {
+    @apply border-gray-700;
+  }
 }
+
+/*
+ * Dark mode automatic overrides for Tailwind utility classes.
+ * Placed outside @layer so they beat single-class Tailwind utilities.
+ * This covers ALL page content without needing dark: on every component.
+ */
+
+/* ── Backgrounds ── */
+.dark .bg-white { background-color: rgb(31 41 55) !important; }
+.dark .bg-white\/70 { background-color: rgb(31 41 55 / 0.7) !important; }
+.dark .bg-white\/90 { background-color: rgb(31 41 55 / 0.9) !important; }
+.dark .bg-gray-50 { background-color: rgb(17 24 39) !important; }
+.dark .bg-gray-50\/50 { background-color: rgb(17 24 39 / 0.5) !important; }
+.dark .bg-gray-100 { background-color: rgb(31 41 55) !important; }
+.dark .bg-gray-200 { background-color: rgb(55 65 81) !important; }
+.dark .bg-gray-300 { background-color: rgb(75 85 99) !important; }
+
+.dark .bg-sky-50 { background-color: rgb(17 24 39) !important; }
+.dark .bg-sky-50\/50 { background-color: rgb(12 74 110 / 0.2) !important; }
+.dark .bg-sky-100 { background-color: rgb(12 74 110 / 0.4) !important; }
+
+.dark .bg-red-50 { background-color: rgb(127 29 29 / 0.3) !important; }
+.dark .bg-red-100 { background-color: rgb(127 29 29 / 0.4) !important; }
+.dark .bg-amber-50 { background-color: rgb(120 53 15 / 0.3) !important; }
+.dark .bg-amber-100 { background-color: rgb(120 53 15 / 0.4) !important; }
+.dark .bg-green-50 { background-color: rgb(20 83 45 / 0.3) !important; }
+.dark .bg-green-100 { background-color: rgb(20 83 45 / 0.4) !important; }
+.dark .bg-emerald-50 { background-color: rgb(6 78 59 / 0.3) !important; }
+.dark .bg-emerald-100 { background-color: rgb(6 78 59 / 0.4) !important; }
+.dark .bg-purple-50 { background-color: rgb(88 28 135 / 0.3) !important; }
+.dark .bg-purple-100 { background-color: rgb(88 28 135 / 0.4) !important; }
+.dark .bg-blue-50 { background-color: rgb(30 58 138 / 0.3) !important; }
+.dark .bg-blue-100 { background-color: rgb(30 58 138 / 0.4) !important; }
+.dark .bg-orange-50 { background-color: rgb(124 45 18 / 0.3) !important; }
+.dark .bg-orange-100 { background-color: rgb(124 45 18 / 0.4) !important; }
+.dark .bg-yellow-50 { background-color: rgb(113 63 18 / 0.3) !important; }
+.dark .bg-yellow-100 { background-color: rgb(113 63 18 / 0.4) !important; }
+.dark .bg-indigo-50 { background-color: rgb(49 46 129 / 0.3) !important; }
+.dark .bg-indigo-100 { background-color: rgb(49 46 129 / 0.4) !important; }
+.dark .bg-pink-50 { background-color: rgb(131 24 67 / 0.3) !important; }
+.dark .bg-pink-100 { background-color: rgb(131 24 67 / 0.4) !important; }
+.dark .bg-pink-200 { background-color: rgb(131 24 67 / 0.5) !important; }
+.dark .bg-cyan-50 { background-color: rgb(22 78 99 / 0.3) !important; }
+.dark .bg-cyan-100 { background-color: rgb(22 78 99 / 0.4) !important; }
+.dark .bg-slate-50 { background-color: rgb(17 24 39) !important; }
+.dark .bg-slate-100 { background-color: rgb(31 41 55) !important; }
+.dark .bg-sky-200 { background-color: rgb(12 74 110 / 0.5) !important; }
+.dark .bg-sky-300 { background-color: rgb(12 74 110 / 0.6) !important; }
+.dark .bg-emerald-200 { background-color: rgb(6 78 59 / 0.5) !important; }
+.dark .bg-orange-200 { background-color: rgb(124 45 18 / 0.5) !important; }
+.dark .bg-orange-300 { background-color: rgb(124 45 18 / 0.6) !important; }
+.dark .bg-yellow-200 { background-color: rgb(113 63 18 / 0.5) !important; }
+.dark .bg-white\/60 { background-color: rgb(31 41 55 / 0.6) !important; }
+.dark .bg-gray-50\/40 { background-color: rgb(17 24 39 / 0.4) !important; }
+.dark .bg-emerald-200\/40 { background-color: rgb(6 78 59 / 0.4) !important; }
+.dark .bg-yellow-200\/30 { background-color: rgb(113 63 18 / 0.3) !important; }
+.dark .bg-sky-200\/50 { background-color: rgb(12 74 110 / 0.5) !important; }
+
+/* ── Gradients ── */
+.dark .from-sky-50 { --tw-gradient-from: rgb(17 24 39) !important; }
+.dark .from-blue-50 { --tw-gradient-from: rgb(30 58 138 / 0.3) !important; }
+.dark .from-emerald-100 { --tw-gradient-from: rgb(6 78 59 / 0.4) !important; }
+.dark .from-sky-600 { --tw-gradient-from: rgb(3 105 161) !important; }
+.dark .from-sky-700 { --tw-gradient-from: rgb(3 105 161) !important; }
+.dark .to-gray-50 { --tw-gradient-to: rgb(3 7 18) !important; }
+.dark .to-white { --tw-gradient-to: rgb(31 41 55) !important; }
+.dark .to-cyan-50 { --tw-gradient-to: rgb(22 78 99 / 0.3) !important; }
+.dark .to-emerald-50 { --tw-gradient-to: rgb(6 78 59 / 0.3) !important; }
+.dark .to-emerald-200 { --tw-gradient-to: rgb(6 78 59 / 0.5) !important; }
+.dark .to-sky-200 { --tw-gradient-to: rgb(12 74 110 / 0.5) !important; }
+.dark .to-sky-300 { --tw-gradient-to: rgb(12 74 110 / 0.6) !important; }
+.dark .to-sky-400 { --tw-gradient-to: rgb(12 74 110 / 0.7) !important; }
+
+/* ── Borders ── */
+.dark .border-gray-100 { border-color: rgb(55 65 81) !important; }
+.dark .border-gray-200 { border-color: rgb(55 65 81) !important; }
+.dark .border-gray-300 { border-color: rgb(75 85 99) !important; }
+.dark .border-red-200 { border-color: rgb(153 27 27) !important; }
+.dark .border-sky-200 { border-color: rgb(7 89 133) !important; }
+.dark .border-amber-200 { border-color: rgb(146 64 14) !important; }
+.dark .border-green-200 { border-color: rgb(22 101 52) !important; }
+.dark .border-emerald-200 { border-color: rgb(6 95 70) !important; }
+.dark .border-purple-200 { border-color: rgb(107 33 168) !important; }
+.dark .border-blue-200 { border-color: rgb(30 64 175) !important; }
+
+/* ── Divide ── */
+.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgb(55 65 81) !important; }
+.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgb(55 65 81) !important; }
+
+/* ── Text ── */
+.dark .text-gray-900 { color: rgb(243 244 246) !important; }
+.dark .text-gray-800 { color: rgb(229 231 235) !important; }
+.dark .text-gray-700 { color: rgb(209 213 219) !important; }
+.dark .text-gray-600 { color: rgb(156 163 175) !important; }
+.dark .text-gray-500 { color: rgb(156 163 175) !important; }
+
+.dark .text-red-800 { color: rgb(252 165 165) !important; }
+.dark .text-red-700 { color: rgb(252 165 165) !important; }
+.dark .text-red-600 { color: rgb(248 113 113) !important; }
+.dark .text-amber-800 { color: rgb(252 211 77) !important; }
+.dark .text-amber-700 { color: rgb(252 211 77) !important; }
+.dark .text-green-800 { color: rgb(134 239 172) !important; }
+.dark .text-green-700 { color: rgb(134 239 172) !important; }
+.dark .text-emerald-800 { color: rgb(110 231 183) !important; }
+.dark .text-emerald-700 { color: rgb(110 231 183) !important; }
+.dark .text-purple-800 { color: rgb(216 180 254) !important; }
+.dark .text-purple-700 { color: rgb(216 180 254) !important; }
+.dark .text-blue-800 { color: rgb(147 197 253) !important; }
+.dark .text-blue-700 { color: rgb(147 197 253) !important; }
+.dark .text-sky-800 { color: rgb(125 211 252) !important; }
+.dark .text-sky-700 { color: rgb(125 211 252) !important; }
+.dark .text-sky-900 { color: rgb(186 230 253) !important; }
+.dark .text-orange-800 { color: rgb(253 186 116) !important; }
+.dark .text-orange-700 { color: rgb(253 186 116) !important; }
+.dark .text-indigo-800 { color: rgb(165 180 252) !important; }
+.dark .text-indigo-700 { color: rgb(165 180 252) !important; }
+.dark .text-pink-800 { color: rgb(249 168 212) !important; }
+.dark .text-pink-700 { color: rgb(249 168 212) !important; }
+.dark .text-cyan-800 { color: rgb(103 232 249) !important; }
+.dark .text-cyan-700 { color: rgb(103 232 249) !important; }
+.dark .text-slate-800 { color: rgb(203 213 225) !important; }
+.dark .text-slate-700 { color: rgb(203 213 225) !important; }
+
+/* ── Hover states ── */
+.dark .hover\:bg-gray-50:hover { background-color: rgb(55 65 81) !important; }
+.dark .hover\:bg-gray-100:hover { background-color: rgb(55 65 81) !important; }
+.dark .hover\:bg-gray-200:hover { background-color: rgb(75 85 99) !important; }
+.dark .hover\:text-sky-700:hover { color: rgb(125 211 252) !important; }
+
+/* ── Shadows ── */
+.dark .shadow-xl { --tw-shadow-color: rgb(0 0 0 / 0.3) !important; }
+.dark .shadow-lg { --tw-shadow-color: rgb(0 0 0 / 0.3) !important; }
+.dark .shadow-md { --tw-shadow-color: rgb(0 0 0 / 0.3) !important; }
+.dark .shadow-sm { --tw-shadow-color: rgb(0 0 0 / 0.2) !important; }
+
+/* ── Ring / Focus ── */
+.dark .ring-gray-200 { --tw-ring-color: rgb(55 65 81) !important; }
+.dark .ring-gray-300 { --tw-ring-color: rgb(75 85 99) !important; }
+.dark .ring-sky-200 { --tw-ring-color: rgb(7 89 133) !important; }
+.dark .ring-sky-300 { --tw-ring-color: rgb(3 105 161) !important; }
+.dark .ring-sky-400 { --tw-ring-color: rgb(2 132 199) !important; }
+.dark .ring-blue-200 { --tw-ring-color: rgb(30 64 175) !important; }
+.dark .ring-blue-300 { --tw-ring-color: rgb(37 99 235) !important; }
+.dark .ring-cyan-200 { --tw-ring-color: rgb(22 78 99) !important; }
+.dark .ring-emerald-200 { --tw-ring-color: rgb(6 95 70) !important; }
+.dark .ring-indigo-200 { --tw-ring-color: rgb(49 46 129) !important; }
+.dark .ring-purple-200 { --tw-ring-color: rgb(107 33 168) !important; }
+.dark .ring-slate-200 { --tw-ring-color: rgb(51 65 85) !important; }

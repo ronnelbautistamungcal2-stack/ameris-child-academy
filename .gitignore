@@ -21,4 +21,8 @@ coverage/
 .turbo/
 public/uploads/*
 !public/uploads/.gitkeep
+public/home-video.mp4
 .prisma/
+test-results/
+playwright-report/
+playwright/.cache/

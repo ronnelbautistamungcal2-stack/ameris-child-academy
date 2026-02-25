@@ -75,6 +75,47 @@ enum TeacherRecordType {
   CAREER_LADDER
 }
 
+enum NotificationType {
+  MESSAGE
+  COMPLIANCE_ALERT
+  ACTIVITY_UPDATE
+  PROGRESS_UPDATE
+  SYSTEM
+}
+
+enum BehaviorPlanStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum BehaviorGoalStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  MET
+  NOT_MET
+}
+
+enum StaffAttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  HALF_DAY
+}
+
+enum TimeOffStatus {
+  PENDING
+  APPROVED
+  DENIED
+  CANCELLED
+}
+
+enum EvaluationStatus {
+  DRAFT
+  SUBMITTED
+  ACKNOWLEDGED
+}
+
 model User {
   id                 String              @id @default(uuid())
   email              String              @unique
@@ -102,6 +143,19 @@ model User {
   milestoneChecklistCompletions MilestoneChecklistItemCompletion[]
   teacherRecords               TeacherRecord[] @relation("TeacherRecords")
   createdTeacherRecords        TeacherRecord[] @relation("TeacherRecordsCreated")
+  notifications                Notification[]            @relation("NotificationsReceived")
+  notificationPreferences      NotificationPreference[]  @relation("NotificationPreferences")
+  behaviorPlansCreated         BehaviorPlan[]            @relation("BehaviorPlansCreated")
+  performanceSnapshots         TeacherPerformanceSnapshot[] @relation("TeacherPerformanceSnapshots")
+  staffAttendances             StaffAttendance[]         @relation("StaffAttendances")
+  staffAttendancesRecorded     StaffAttendance[]         @relation("StaffAttendancesRecorded")
+  timeOffRequests              TimeOffRequest[]          @relation("TimeOffRequests")
+  timeOffReviewed              TimeOffRequest[]          @relation("TimeOffReviewed")
+  trainingLogs                 TrainingLog[]             @relation("TrainingLogs")
+  trainingLogsRecorded         TrainingLog[]             @relation("TrainingLogsRecorded")
+  evaluationsReceived          TeacherEvaluation[]       @relation("EvaluationsReceived")
+  evaluationsGiven             TeacherEvaluation[]       @relation("EvaluationsGiven")
+  budgetExpensesRecorded       BudgetExpense[]           @relation("BudgetExpensesRecorded")
 }
 
 model Center {
@@ -123,6 +177,13 @@ model Center {
   auditLogs        AuditLog[]
   outboundEmails   OutboundEmail[]
   milestoneChecklistPlans MilestoneChecklistPlan[]
+  behaviorPlans    BehaviorPlan[]
+  teacherPerformanceSnapshots TeacherPerformanceSnapshot[]
+  staffAttendances StaffAttendance[]
+  timeOffRequests  TimeOffRequest[]
+  trainingLogs     TrainingLog[]
+  classroomBudgets ClassroomBudget[]
+  teacherEvaluations TeacherEvaluation[]
   createdAt        DateTime         @default(now())
 }
 
@@ -146,6 +207,7 @@ model ClassRoom {
   centerId String
   children Child[]
   teachers TeacherClass[]
+  budgets  ClassroomBudget[]
 }
 
 model TeacherClass {
@@ -183,6 +245,7 @@ model Child {
   createdAt       DateTime         @default(now())
   OutboundEmail   OutboundEmail[]
   milestoneChecklistCompletions MilestoneChecklistItemCompletion[]
+  behaviorPlans   BehaviorPlan[]
 }
 
 model ChildGuardian {
@@ -235,6 +298,7 @@ model Lesson {
   remediationsFrom LessonRemediation[] @relation("LessonRemediationsFrom")
   remediationsTo   LessonRemediation[] @relation("LessonRemediationsTo")
   milestoneChecklistItems MilestoneChecklistItem[]
+  behaviorPlanGoals BehaviorPlanGoal[]
 }
 
 model LessonGoal {
@@ -471,9 +535,10 @@ model ThreadParticipant {
   id        String        @id @default(uuid())
   thread    MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
   threadId  String
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId    String
-  createdAt DateTime      @default(now())
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  lastReadAt DateTime?
+  createdAt  DateTime      @default(now())
 
   @@unique([threadId, userId])
 }
@@ -592,4 +657,239 @@ model TeacherRecord {
   @@index([teacherId, type])
   @@index([teacherId, date])
   @@index([createdById])
+}
+
+model ProgressArchive {
+  id           String   @id @default(uuid())
+  centerId     String
+  childId      String
+  childName    String
+  schoolYear   String
+  archivedAt   DateTime @default(now())
+  archivedById String?
+  data         Json
+
+  @@index([centerId, schoolYear])
+  @@index([childId, schoolYear])
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  recipient   User             @relation("NotificationsReceived", fields: [recipientId], references: [id], onDelete: Cascade)
+  recipientId String
+  type        NotificationType
+  title       String
+  body        String
+  link        String?
+  metadata    Json?
+  read        Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+
+  @@index([recipientId, read, createdAt])
+}
+
+model NotificationPreference {
+  id      String           @id @default(uuid())
+  user    User             @relation("NotificationPreferences", fields: [userId], references: [id], onDelete: Cascade)
+  userId  String
+  type    NotificationType
+  enabled Boolean          @default(true)
+
+  @@unique([userId, type])
+}
+
+model BehaviorPlan {
+  id          String             @id @default(uuid())
+  child       Child              @relation(fields: [childId], references: [id], onDelete: Cascade)
+  childId     String
+  center      Center             @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  title       String
+  description String?
+  status      BehaviorPlanStatus @default(ACTIVE)
+  targetDomains String[]         @default([])
+  goals       BehaviorPlanGoal[]
+  createdBy   User?              @relation("BehaviorPlansCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  startDate   DateTime           @default(now())
+  endDate     DateTime?
+  reviewDate  DateTime?
+  notes       String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([childId, status])
+  @@index([centerId, status])
+  @@index([createdById])
+}
+
+model BehaviorPlanGoal {
+  id             String             @id @default(uuid())
+  plan           BehaviorPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planId         String
+  sortOrder      Int                @default(0)
+  domain         String
+  title          String
+  description    String?
+  targetScore    Int?
+  currentScore   Int?
+  status         BehaviorGoalStatus @default(NOT_STARTED)
+  strategies     String[]           @default([])
+  lesson         Lesson?            @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  lessonId       String?
+  achievedAt     DateTime?
+  notes          String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([planId, sortOrder])
+  @@index([planId, status])
+}
+
+model TeacherPerformanceSnapshot {
+  id               String   @id @default(uuid())
+  teacher          User     @relation("TeacherPerformanceSnapshots", fields: [teacherId], references: [id], onDelete: Cascade)
+  teacherId        String
+  center           Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId         String
+  period           String
+  periodType       String
+  childrenCount    Int      @default(0)
+  avgCompletionRate Float   @default(0)
+  avgDomainScore   Float?
+  goalsCompleted   Int      @default(0)
+  goalsFailed      Int      @default(0)
+  activityLogCount Int      @default(0)
+  behaviorLogCount Int      @default(0)
+  attendanceDays   Int      @default(0)
+  compositeScore   Float    @default(0)
+  breakdown        Json?
+  computedAt       DateTime @default(now())
+
+  @@unique([teacherId, centerId, period, periodType])
+  @@index([centerId, period])
+  @@index([teacherId, period])
+}
+
+model StaffAttendance {
+  id           String               @id @default(uuid())
+  user         User                 @relation("StaffAttendances", fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  center       Center               @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId     String
+  date         DateTime
+  clockIn      DateTime?
+  clockOut     DateTime?
+  status       StaffAttendanceStatus @default(PRESENT)
+  lateMinutes  Int                  @default(0)
+  notes        String?
+  recordedBy   User?                @relation("StaffAttendancesRecorded", fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedById String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@unique([userId, date])
+  @@index([centerId, date])
+}
+
+model TimeOffRequest {
+  id           String        @id @default(uuid())
+  user         User          @relation("TimeOffRequests", fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  center       Center        @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId     String
+  type         String        @default("PTO")
+  startDate    DateTime
+  endDate      DateTime
+  reason       String?
+  status       TimeOffStatus @default(PENDING)
+  reviewedBy   User?         @relation("TimeOffReviewed", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedById String?
+  reviewedAt   DateTime?
+  reviewNotes  String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([userId, status])
+  @@index([centerId, startDate])
+}
+
+model TrainingLog {
+  id                 String   @id @default(uuid())
+  user               User     @relation("TrainingLogs", fields: [userId], references: [id], onDelete: Cascade)
+  userId             String
+  center             Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId           String
+  topic              String
+  description        String?
+  hours              Float
+  date               DateTime
+  category           String   @default("Other")
+  certificateUrl     String?
+  certificateFileName String?
+  recordedBy         User?    @relation("TrainingLogsRecorded", fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedById       String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([userId, date])
+  @@index([centerId, date])
+}
+
+model ClassroomBudget {
+  id              String         @id @default(uuid())
+  classRoom       ClassRoom      @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+  classRoomId     String
+  center          Center         @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId        String
+  month           String
+  allocatedAmount Float          @default(0)
+  notes           String?
+  expenses        BudgetExpense[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([classRoomId, month])
+  @@index([centerId, month])
+}
+
+model BudgetExpense {
+  id              String          @id @default(uuid())
+  budget          ClassroomBudget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  budgetId        String
+  description     String
+  amount          Float
+  date            DateTime        @default(now())
+  category        String          @default("Other")
+  receipt         String?
+  receiptFileName String?
+  recordedBy      User?           @relation("BudgetExpensesRecorded", fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedById    String?
+  createdAt       DateTime        @default(now())
+
+  @@index([budgetId, date])
+}
+
+model TeacherEvaluation {
+  id                    String           @id @default(uuid())
+  teacher               User             @relation("EvaluationsReceived", fields: [teacherId], references: [id], onDelete: Cascade)
+  teacherId             String
+  center                Center           @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId              String
+  evaluator             User             @relation("EvaluationsGiven", fields: [evaluatorId], references: [id], onDelete: Cascade)
+  evaluatorId           String
+  period                String
+  status                EvaluationStatus @default(DRAFT)
+  overallScore          Float?
+  categories            Json?
+  strengths             String?
+  areasForImprovement   String?
+  goals                 String?
+  notes                 String?
+  teacherAcknowledgedAt DateTime?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  @@index([teacherId, period])
+  @@index([centerId, period])
 }

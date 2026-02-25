@@ -1,10 +1,7 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
+import MonthlyCalendar from "@/components/calendar/MonthlyCalendar";
 import { apiJson } from "@/lib/api";
-import { useEffect, useMemo, useState } from "react";
-
-function byString(a, b) {
-  return String(a || "").localeCompare(String(b || ""));
-}
+import { useEffect, useState, useCallback } from "react";
 
 function toDateInputValue(date) {
   if (!date) return "";
@@ -16,23 +13,35 @@ function toDateInputValue(date) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function fmtDate(d) {
+  return d ? new Date(d).toLocaleDateString() : "—";
+}
+
+const STATUS_BADGE = {
+  PENDING: "border-amber-200 bg-amber-50 text-amber-800",
+  APPROVED: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  DENIED: "border-red-200 bg-red-50 text-red-800",
+  CANCELLED: "border-gray-200 bg-gray-50 text-gray-600",
+};
+
 export default function TeacherTimeOff() {
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
 
-  const [templates, setTemplates] = useState([]);
-  const [submissions, setSubmissions] = useState([]);
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const [startDate, setStartDate] = useState(toDateInputValue(new Date()));
   const [endDate, setEndDate] = useState(toDateInputValue(new Date()));
   const [requestType, setRequestType] = useState("PTO");
   const [reason, setReason] = useState("");
 
-  const [loading, setLoading] = useState(true);
-  const [loadingTemplates, setLoadingTemplates] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [calYear, setCalYear] = useState(new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(new Date().getMonth());
+  const [calEvents, setCalEvents] = useState([]);
 
   useEffect(() => {
     (async () => {
@@ -51,67 +60,38 @@ export default function TeacherTimeOff() {
     })();
   }, []);
 
-  async function refreshTemplatesAndSubmissions(id = centerId) {
-    setLoadingTemplates(true);
-    setError("");
+  const loadRequests = useCallback(async () => {
+    if (!centerId) { setRequests([]); return; }
     try {
-      const [t, s] = await Promise.all([
-        apiJson(
-          `/api/v1/forms/templates${id ? `?centerId=${encodeURIComponent(id)}` : ""}`,
-        ),
-        apiJson("/api/v1/forms/submissions"),
-      ]);
-      setTemplates(Array.isArray(t) ? t : []);
-      setSubmissions(Array.isArray(s) ? s : []);
+      const data = await apiJson(`/api/v1/time-off?centerId=${encodeURIComponent(centerId)}`);
+      setRequests(Array.isArray(data) ? data : []);
     } catch (e) {
-      setError(e.message || "Failed to load time off data");
-    } finally {
-      setLoadingTemplates(false);
+      setError(e.message || "Failed to load requests");
     }
-  }
-
-  useEffect(() => {
-    refreshTemplatesAndSubmissions(centerId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [centerId]);
 
-  const ptoTemplate = useMemo(() => {
-    const list = templates || [];
-    const match = list.find((t) => {
-      const title = String(t?.title || "").toLowerCase();
-      return title.includes("pto") || title.includes("time off") || title.includes("time-off");
-    });
-    return match || null;
-  }, [templates]);
+  useEffect(() => { loadRequests(); }, [loadRequests]);
 
-  const myPtoSubmissions = useMemo(() => {
-    if (!ptoTemplate) return [];
-    return (submissions || [])
-      .filter((s) => s?.templateId === ptoTemplate.id)
-      .slice()
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [submissions, ptoTemplate]);
+  const loadCalendarEvents = useCallback(async () => {
+    if (!centerId) { setCalEvents([]); return; }
+    try {
+      const from = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-01`;
+      const lastDay = new Date(calYear, calMonth + 1, 0).getDate();
+      const to = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      const data = await apiJson(
+        `/api/v1/time-off/calendar?centerId=${encodeURIComponent(centerId)}&from=${from}&to=${to}`,
+      );
+      setCalEvents(Array.isArray(data) ? data : []);
+    } catch {
+      setCalEvents([]);
+    }
+  }, [centerId, calYear, calMonth]);
 
-  const calendarRows = useMemo(() => {
-    return myPtoSubmissions
-      .map((s) => {
-        const data = s?.data && typeof s.data === "object" ? s.data : {};
-        return {
-          id: s.id,
-          status: s.status || "SUBMITTED",
-          createdAt: s.createdAt,
-          startDate: data.startDate || null,
-          endDate: data.endDate || null,
-          requestType: data.requestType || null,
-          reason: data.reason || null,
-        };
-      })
-      .sort((a, b) => byString(a.startDate, b.startDate));
-  }, [myPtoSubmissions]);
+  useEffect(() => { loadCalendarEvents(); }, [loadCalendarEvents]);
 
   async function submit(e) {
     e.preventDefault();
-    if (!ptoTemplate) return;
+    if (!centerId) { setError("Select a center first."); return; }
     setSaving(true);
     setError("");
     setSuccess("");
@@ -119,26 +99,23 @@ export default function TeacherTimeOff() {
       if (!startDate || !endDate) throw new Error("Start and end date are required.");
       const start = new Date(startDate);
       const end = new Date(endDate);
-      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-        throw new Error("Invalid date.");
-      }
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) throw new Error("Invalid date.");
       if (end < start) throw new Error("End date cannot be before start date.");
 
-      await apiJson("/api/v1/forms/submissions", {
+      await apiJson("/api/v1/time-off", {
         method: "POST",
         body: JSON.stringify({
-          templateId: ptoTemplate.id,
-          data: {
-            startDate,
-            endDate,
-            requestType,
-            reason: reason || null,
-          },
+          centerId,
+          type: requestType,
+          startDate,
+          endDate,
+          reason: reason || null,
         }),
       });
       setReason("");
       setSuccess("Time off request submitted.");
-      await refreshTemplatesAndSubmissions();
+      loadRequests();
+      loadCalendarEvents();
     } catch (e2) {
       setError(e2.message || "Failed to submit request");
     } finally {
@@ -146,20 +123,23 @@ export default function TeacherTimeOff() {
     }
   }
 
-  const suggestedTemplateJson = useMemo(() => {
-    return JSON.stringify(
-      {
-        fields: [
-          { name: "startDate", type: "date", label: "Start Date" },
-          { name: "endDate", type: "date", label: "End Date" },
-          { name: "requestType", type: "select", label: "Type", options: ["PTO", "Sick", "Unpaid", "Other"] },
-          { name: "reason", type: "text", label: "Reason" },
-        ],
-      },
-      null,
-      2,
-    );
-  }, []);
+  async function cancelRequest(id) {
+    if (!confirm("Cancel this request?")) return;
+    try {
+      await apiJson(`/api/v1/time-off/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ status: "CANCELLED" }),
+      });
+      loadRequests();
+      loadCalendarEvents();
+    } catch (e) {
+      setError(e.message || "Failed to cancel request");
+    }
+  }
+
+  const pending = requests.filter((r) => r.status === "PENDING");
+  const approved = requests.filter((r) => r.status === "APPROVED");
+  const other = requests.filter((r) => r.status !== "PENDING" && r.status !== "APPROVED");
 
   return (
     <TeacherLayout title="Time Off Request">
@@ -174,161 +154,147 @@ export default function TeacherTimeOff() {
             </div>
 
             <label className="block">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Center
-              </div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Center</div>
               <select
                 value={centerId}
                 onChange={(e) => setCenterId(e.target.value)}
                 className="mt-1 w-72 max-w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
                 disabled={loading}
               >
-                <option value="">(all accessible centers)</option>
+                <option value="">Select a center…</option>
                 {centers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
+                  <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
             </label>
           </div>
 
-          {error ? (
-            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {error}
-            </div>
-          ) : null}
-          {success ? (
-            <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-              {success}
-            </div>
-          ) : null}
+          {error && (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>
+          )}
+          {success && (
+            <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">{success}</div>
+          )}
 
-          {loadingTemplates ? (
+          {loading ? (
             <div className="mt-4 text-sm text-gray-600">Loading…</div>
-          ) : !ptoTemplate ? (
-            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-              <div className="text-sm font-extrabold text-amber-900">
-                PTO form template not found
-              </div>
-              <div className="mt-1 text-sm text-amber-900/90">
-                An admin must create a form template targeted to the <span className="font-semibold">TEACHER</span>{" "}
-                role with a title containing “PTO” or “Time Off”.
-              </div>
-              <div className="mt-3 text-xs font-semibold uppercase tracking-wide text-amber-900/70">
-                Suggested schema (paste into Admin → Forms)
-              </div>
-              <pre className="mt-2 overflow-auto rounded-xl border border-amber-200 bg-white p-3 text-xs text-gray-800">
-                {suggestedTemplateJson}
-              </pre>
+          ) : !centerId ? (
+            <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+              Select a center to submit requests and view your calendar.
             </div>
           ) : (
-            <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Submit request
+            <div className="mt-4 space-y-4">
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                {/* Submit Form */}
+                <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Submit request</div>
+                  <form onSubmit={submit} className="mt-3 space-y-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <label className="block">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Start date</div>
+                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
+                          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm" required />
+                      </label>
+                      <label className="block">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">End date</div>
+                        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
+                          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm" required />
+                      </label>
+                    </div>
+
+                    <label className="block">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Type</div>
+                      <select value={requestType} onChange={(e) => setRequestType(e.target.value)}
+                        className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
+                        {["PTO", "Sick", "Unpaid", "Other"].map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </label>
+
+                    <label className="block">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Reason (optional)</div>
+                      <input value={reason} onChange={(e) => setReason(e.target.value)}
+                        className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm" placeholder="Short note" />
+                    </label>
+
+                    <button type="submit" disabled={saving}
+                      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
+                      {saving ? "Submitting…" : "Submit request"}
+                    </button>
+                  </form>
                 </div>
-                <form onSubmit={submit} className="mt-3 space-y-3">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <label className="block">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        Start date
-                      </div>
-                      <input
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                        required
-                      />
-                    </label>
-                    <label className="block">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        End date
-                      </div>
-                      <input
-                        type="date"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                        required
-                      />
-                    </label>
-                  </div>
 
-                  <label className="block">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      Type
+                {/* Requests List */}
+                <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">My requests</div>
+                  <p className="mt-1 text-sm text-gray-600">Your requests and their current status.</p>
+
+                  {requests.length === 0 ? (
+                    <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+                      No time off requests submitted yet.
                     </div>
-                    <select
-                      value={requestType}
-                      onChange={(e) => setRequestType(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                    >
-                      {["PTO", "Sick", "Unpaid", "Other"].map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
+                  ) : (
+                    <div className="mt-3 space-y-2">
+                      {approved.length > 0 && (
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                          <div className="text-xs font-semibold text-emerald-700 mb-1">Approved Time Off</div>
+                          {approved.map((r) => (
+                            <div key={r.id} className="text-sm text-emerald-800">
+                              {r.type} &middot; {fmtDate(r.startDate)} — {fmtDate(r.endDate)}
+                              {r.reason && <span className="text-emerald-600 ml-1">({r.reason})</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {pending.map((r) => (
+                        <div key={r.id} className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-extrabold text-gray-900">{r.type || "Time off"}</div>
+                              <div className="mt-1 text-sm text-gray-700">{fmtDate(r.startDate)} — {fmtDate(r.endDate)}</div>
+                              {r.reason && <div className="mt-1 text-xs text-gray-600">{r.reason}</div>}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-full border border-amber-200 bg-white px-2 py-1 text-[11px] font-extrabold text-amber-700">PENDING</span>
+                              <button onClick={() => cancelRequest(r.id)}
+                                className="rounded-lg border border-red-200 px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50">Cancel</button>
+                            </div>
+                          </div>
+                        </div>
                       ))}
-                    </select>
-                  </label>
 
-                  <label className="block">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      Reason (optional)
+                      {other.map((r) => (
+                        <div key={r.id} className={`rounded-xl border p-3 ${STATUS_BADGE[r.status] || STATUS_BADGE.CANCELLED}`}>
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm font-extrabold text-gray-900">{r.type || "Time off"}</div>
+                            <span className="rounded-full border border-gray-200 bg-white px-2 py-1 text-[11px] font-extrabold text-gray-700">
+                              {r.status}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-sm text-gray-700">{fmtDate(r.startDate)} — {fmtDate(r.endDate)}</div>
+                          {r.reason && <div className="mt-1 text-xs text-gray-600">{r.reason}</div>}
+                          {r.reviewNotes && <div className="mt-1 text-xs text-gray-500 italic">Review: {r.reviewNotes}</div>}
+                        </div>
+                      ))}
                     </div>
-                    <input
-                      value={reason}
-                      onChange={(e) => setReason(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                      placeholder="Short note"
-                    />
-                  </label>
-
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {saving ? "Submitting…" : "Submit request"}
-                  </button>
-                </form>
+                  )}
+                </div>
               </div>
 
-              <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  My time off calendar
-                </div>
+              {/* Calendar View */}
+              <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Calendar view</div>
                 <p className="mt-1 text-sm text-gray-600">
-                  Your submitted requests (admin can view all submissions).
+                  Visual overview of approved and pending time off across the center.
                 </p>
-
-                {calendarRows.length ? (
-                  <div className="mt-3 space-y-2">
-                    {calendarRows.map((r) => (
-                      <div key={r.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="text-sm font-extrabold text-gray-900">
-                            {r.requestType || "Time off"}
-                          </div>
-                          <span className="rounded-full border border-gray-200 bg-white px-2 py-1 text-[11px] font-extrabold text-gray-700">
-                            {r.status}
-                          </span>
-                        </div>
-                        <div className="mt-1 text-sm text-gray-700">
-                          {r.startDate || "—"} → {r.endDate || "—"}
-                        </div>
-                        {r.reason ? (
-                          <div className="mt-1 text-xs text-gray-600">{r.reason}</div>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                    No time off requests submitted yet.
-                  </div>
-                )}
+                <div className="mt-3">
+                  <MonthlyCalendar
+                    year={calYear}
+                    month={calMonth}
+                    events={calEvents}
+                    onMonthChange={(y, m) => { setCalYear(y); setCalMonth(m); }}
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -337,4 +303,3 @@ export default function TeacherTimeOff() {
     </TeacherLayout>
   );
 }
-

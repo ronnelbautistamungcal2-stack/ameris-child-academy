@@ -891,6 +891,23 @@ export default function AdminChildren() {
                 </div>
               ) : null}
 
+              {editing && (
+                <div style={{ marginTop: 16, padding: 12, border: "1px solid #e5e7eb", borderRadius: 10, background: "#f9fafb" }}>
+                  <div style={{ fontWeight: 800, fontSize: 14 }}>Transfer Record</div>
+                  <p style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>
+                    Download a comprehensive record package for child transfer.
+                  </p>
+                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    <button type="button" style={secondaryButton} onClick={() => window.open(`/api/v1/children/${editing.id}/transfer-record?format=json`, "_blank")}>
+                      Export JSON
+                    </button>
+                    <button type="button" style={secondaryButton} onClick={() => window.open(`/api/v1/children/${editing.id}/transfer-record?format=csv`, "_blank")}>
+                      Export CSV
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div
                 style={{
                   display: "flex",

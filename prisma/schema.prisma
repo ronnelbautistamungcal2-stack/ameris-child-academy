@@ -81,6 +81,12 @@ enum NotificationType {
   ACTIVITY_UPDATE
   PROGRESS_UPDATE
   SYSTEM
+  FORM_RENEWAL
+}
+
+enum ArchiveType {
+  PROGRESS
+  FULL_RECORD
 }
 
 enum BehaviorPlanStatus {
@@ -554,16 +560,18 @@ model Message {
 }
 
 model FormTemplate {
-  id          String   @id @default(uuid())
-  center      Center?  @relation(fields: [centerId], references: [id])
-  centerId    String?
-  title       String
-  description String?
-  targetRole  Role
-  schema      Json?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String   @id @default(uuid())
+  center            Center?  @relation(fields: [centerId], references: [id])
+  centerId          String?
+  title             String
+  description       String?
+  targetRole        Role
+  schema            Json?
+  active            Boolean  @default(true)
+  requiresRenewal   Boolean  @default(false)
+  renewalPeriodDays Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   submissions FormSubmission[]
 }
@@ -578,6 +586,8 @@ model FormSubmission {
   childId       String?
   data          Json?
   status        String       @default("SUBMITTED")
+  expiresAt     DateTime?
+  renewedById   String?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 }
@@ -671,6 +681,22 @@ model ProgressArchive {
 
   @@index([centerId, schoolYear])
   @@index([childId, schoolYear])
+}
+
+model DataArchive {
+  id           String      @id @default(uuid())
+  centerId     String
+  childId      String
+  childName    String
+  schoolYear   String
+  archiveType  ArchiveType @default(FULL_RECORD)
+  archivedAt   DateTime    @default(now())
+  archivedById String?
+  data         Json
+
+  @@index([centerId, schoolYear])
+  @@index([childId, schoolYear])
+  @@index([archiveType, centerId])
 }
 
 model Notification {

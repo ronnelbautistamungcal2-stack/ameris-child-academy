@@ -110,19 +110,37 @@ export default function ParentForms() {
               <div className="mt-3 text-sm text-gray-600">No submissions yet.</div>
             ) : (
               <div className="mt-3 space-y-2">
-                {submissions.slice(0, 20).map((s) => (
-                  <div key={s.id} className="rounded-xl border border-gray-200 bg-white p-3">
-                    <div className="text-sm font-extrabold text-gray-900">
-                      {s.template?.title || "Form"}
+                {submissions.slice(0, 20).map((s) => {
+                  const isExpired = s.expiresAt && new Date(s.expiresAt) < new Date();
+                  const isExpiringSoon = s.expiresAt && !isExpired && new Date(s.expiresAt) <= new Date(Date.now() + 30 * 86400000);
+                  return (
+                    <div key={s.id} className="rounded-xl border border-gray-200 bg-white p-3">
+                      <div className="text-sm font-extrabold text-gray-900">
+                        {s.template?.title || "Form"}
+                      </div>
+                      <div className="mt-1 text-xs text-gray-500">
+                        {new Date(s.createdAt).toLocaleString()} · {s.status}
+                      </div>
+                      <div className="mt-1 text-xs text-gray-600">
+                        Child: {s.child ? `${s.child.firstName} ${s.child.lastName || ""}` : "—"}
+                      </div>
+                      {s.expiresAt && (
+                        <div className={`mt-1 text-xs font-bold ${isExpired ? "text-red-600" : isExpiringSoon ? "text-amber-600" : "text-gray-500"}`}>
+                          {isExpired ? "EXPIRED" : `Expires: ${new Date(s.expiresAt).toLocaleDateString()}`}
+                          {(isExpired || isExpiringSoon) && (
+                            <button
+                              type="button"
+                              onClick={() => { setTemplateId(s.templateId); setChildId(s.childId || ""); }}
+                              className="ml-2 text-blue-600 underline font-bold"
+                            >
+                              Renew
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <div className="mt-1 text-xs text-gray-500">
-                      {new Date(s.createdAt).toLocaleString()} · {s.status}
-                    </div>
-                    <div className="mt-1 text-xs text-gray-600">
-                      Child: {s.child ? `${s.child.firstName} ${s.child.lastName || ""}` : "—"}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

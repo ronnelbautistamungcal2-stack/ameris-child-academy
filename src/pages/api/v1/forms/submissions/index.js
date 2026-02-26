@@ -56,12 +56,19 @@ export default async function handler(req, res) {
       }
     }
 
+    let expiresAt = null;
+    if (template.requiresRenewal && template.renewalPeriodDays) {
+      expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + template.renewalPeriodDays);
+    }
+
     const created = await prisma.formSubmission.create({
       data: {
         templateId,
         submittedById: user.id,
         childId: childId || null,
         data: data ?? null,
+        expiresAt,
       },
       include: { template: true, child: true },
     });

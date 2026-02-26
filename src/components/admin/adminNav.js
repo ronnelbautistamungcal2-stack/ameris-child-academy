@@ -7,6 +7,7 @@ export const ADMIN_NAV_ITEMS = [
       { href: "/admin/teachers", label: "Teachers" },
       { href: "/admin/children", label: "Children List" },
       { href: "/admin/staff-management", label: "Staff Management" },
+      { href: "/admin/data-import", label: "Data Import" },
     ],
   },
   {
@@ -25,12 +26,14 @@ export const ADMIN_NAV_ITEMS = [
       { href: "/admin/checklists", label: "Checklists" },
       { href: "/admin/activity-overrides", label: "Activity Overrides" },
       { href: "/admin/progress-archive", label: "Progress Archive" },
+      { href: "/admin/data-archive", label: "Data Archive" },
     ],
   },
   {
     label: "Compliance & Reports",
     children: [
       { href: "/admin/teacher-logging-alerts", label: "Compliance Alerts" },
+      { href: "/admin/form-renewals", label: "Form Renewals" },
       { href: "/admin/reports", label: "Reports" },
     ],
   },

@@ -18,6 +18,8 @@ export default function AdminForms() {
   const [centerId, setCenterId] = useState("");
   const [active, setActive] = useState(true);
   const [schemaText, setSchemaText] = useState("");
+  const [requiresRenewal, setRequiresRenewal] = useState(false);
+  const [renewalPeriodDays, setRenewalPeriodDays] = useState("");
 
   async function refresh() {
     setLoading(true);
@@ -69,6 +71,8 @@ export default function AdminForms() {
           centerId: centerId || null,
           active,
           schema,
+          requiresRenewal,
+          renewalPeriodDays: requiresRenewal && renewalPeriodDays ? parseInt(renewalPeriodDays) : null,
         }),
       });
       setTitle("");
@@ -77,6 +81,8 @@ export default function AdminForms() {
       setCenterId("");
       setActive(true);
       setSchemaText("");
+      setRequiresRenewal(false);
+      setRenewalPeriodDays("");
       setSuccess("Form template created.");
       await refresh();
     } catch (e2) {
@@ -153,6 +159,20 @@ export default function AdminForms() {
             </Field>
           </div>
 
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+            <Field label="Requires Renewal">
+              <select value={requiresRenewal ? "true" : "false"} onChange={(e) => setRequiresRenewal(e.target.value === "true")} style={inputStyle}>
+                <option value="false">No</option>
+                <option value="true">Yes</option>
+              </select>
+            </Field>
+            {requiresRenewal && (
+              <Field label="Renewal Period (days)">
+                <input type="number" min="1" value={renewalPeriodDays} onChange={(e) => setRenewalPeriodDays(e.target.value)} style={inputStyle} placeholder="365" />
+              </Field>
+            )}
+          </div>
+
           <div style={{ marginTop: 10 }}>
             <Field label="Schema (JSON, optional)">
               <textarea
@@ -190,6 +210,7 @@ export default function AdminForms() {
                 <div style={{ color: "#6b7280", marginTop: 6, fontSize: 13 }}>{t.description || "—"}</div>
                 <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
                   Role: {t.targetRole} · Center: {t.centerId || "all"}
+                  {t.requiresRenewal && ` · Renewal: every ${t.renewalPeriodDays} days`}
                 </div>
                 <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
                   <button type="button" onClick={() => toggleActive(t)} style={secondaryButton}>

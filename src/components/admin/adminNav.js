@@ -25,6 +25,7 @@ export const ADMIN_NAV_ITEMS = [
       { href: "/admin/progress", label: "Progression Tracking" },
       { href: "/admin/checklists", label: "Checklists" },
       { href: "/admin/activity-overrides", label: "Activity Overrides" },
+      { href: "/admin/supply-lists", label: "Supply Lists" },
       { href: "/admin/progress-archive", label: "Progress Archive" },
       { href: "/admin/data-archive", label: "Data Archive" },
     ],
@@ -34,7 +35,16 @@ export const ADMIN_NAV_ITEMS = [
     children: [
       { href: "/admin/teacher-logging-alerts", label: "Compliance Alerts" },
       { href: "/admin/form-renewals", label: "Form Renewals" },
+      { href: "/admin/policies", label: "Policies & Procedures" },
       { href: "/admin/reports", label: "Reports" },
+    ],
+  },
+  {
+    label: "Calendar & Affiliates",
+    children: [
+      { href: "/admin/calendar", label: "Calendar" },
+      { href: "/admin/shifts", label: "Shift Schedules" },
+      { href: "/admin/affiliates", label: "Affiliates & Partners" },
     ],
   },
   { href: "/admin/messages", label: "Messages" },

@@ -1,6 +1,8 @@
 import ParentLayout from "@/components/parent/ParentLayout";
 import CatchupPlansPanel from "@/components/reports/CatchupPlansPanel";
 import MilestoneCalendarPanel from "@/components/reports/MilestoneCalendarPanel";
+import Skeleton, { SkeletonCard } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
 import { apiJson } from "@/lib/api";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -131,17 +133,30 @@ export default function ParentChildren() {
           </p>
 
           {error ? (
-            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {error}
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              <span>{error}</span>
+              <button
+                type="button"
+                onClick={() => { setError(""); loadChildRecords(selectedChildId); }}
+                className="shrink-0 rounded-lg bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-200 transition"
+              >
+                Retry
+              </button>
             </div>
           ) : null}
 
           {childrenLoading ? (
-            <div className="mt-4 text-sm text-gray-600">Loading...</div>
-          ) : children.length === 0 ? (
-            <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-              No children found for this account.
+            <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-6">
+              {Array.from({ length: 4 }, (_, i) => (
+                <Skeleton key={i} variant="card" className="h-16 rounded-xl" />
+              ))}
             </div>
+          ) : children.length === 0 ? (
+            <EmptyState
+              title="No children found"
+              description="No children are linked to your account yet. Please contact your center administrator."
+              className="mt-4"
+            />
           ) : (
             <div className="mt-4 space-y-4">
               <div className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-6">
@@ -185,6 +200,14 @@ export default function ParentChildren() {
                           <div className="mt-1 text-xs text-gray-600">
                             DOB: {formatDate(selectedChild.birthDate)}
                           </div>
+                          {selectedChild.enrollmentStartDate && (
+                            <div className="mt-1 text-xs text-gray-600">
+                              Enrolled: {formatDate(selectedChild.enrollmentStartDate)}
+                              {selectedChild.enrollmentEndDate
+                                ? ` — ${formatDate(selectedChild.enrollmentEndDate)}`
+                                : " — Present"}
+                            </div>
+                          )}
                           <div className="mt-1 text-xs text-gray-600">
                             Parent: Family Account
                           </div>
@@ -208,14 +231,16 @@ export default function ParentChildren() {
                     </div>
                   </div>
 
-                  <div className="mt-4 flex flex-wrap gap-2 border-b border-gray-200 pb-3">
+                  <div className="mt-4 flex flex-wrap gap-2 border-b border-gray-200 pb-3" role="tablist">
                     {tabList.map((tab) => (
                       <button
                         key={tab.key}
                         type="button"
+                        role="tab"
+                        aria-selected={activeTab === tab.key}
                         onClick={() => setActiveTab(tab.key)}
                         className={[
-                          "rounded-xl px-3 py-2 text-xs font-semibold",
+                          "rounded-xl px-3 py-2 text-xs font-semibold transition",
                           activeTab === tab.key
                             ? "bg-sky-100 text-sky-900"
                             : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
@@ -304,17 +329,25 @@ export default function ParentChildren() {
 function DailyReportPanel({ activities, loading }) {
   if (loading) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
-        Loading report...
+      <div className="space-y-3">
+        <SkeletonCard />
+        <SkeletonCard />
+        <SkeletonCard />
       </div>
     );
   }
 
   if (!activities.length) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-        No daily activities yet for this child.
-      </div>
+      <EmptyState
+        title="No daily activities"
+        description="No activities have been logged for this child today."
+        icon={
+          <svg viewBox="0 0 24 24" className="h-12 w-12" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        }
+      />
     );
   }
 
@@ -463,7 +496,7 @@ function ProgressReportPanel({ selectedChildId, progressRows, loading }) {
         </div>
 
         {loading ? (
-          <div className="mt-3 text-sm text-gray-600">Loading progress records...</div>
+          <div className="mt-3"><Skeleton variant="line" count={4} /></div>
         ) : null}
 
         <div className="mt-3 space-y-3">
@@ -497,7 +530,10 @@ function ProgressReportPanel({ selectedChildId, progressRows, loading }) {
         </div>
 
         {loading ? (
-          <div className="mt-3 text-sm text-gray-600">Loading milestones...</div>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
         ) : milestoneCards.length ? (
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {milestoneCards.map((item, index) => (
@@ -599,11 +635,21 @@ function StepsProgressionPanel({ progressRows, loading, childName }) {
       </p>
 
       {loading ? (
-        <div className="mt-3 text-sm text-gray-600">Loading progression steps...</div>
-      ) : sorted.length === 0 ? (
-        <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-          No progression records yet.
+        <div className="mt-3 space-y-3">
+          <Skeleton variant="card" className="h-16 rounded-xl" />
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {Array.from({ length: 4 }, (_, i) => (
+              <Skeleton key={i} variant="card" className="h-20 rounded-xl" />
+            ))}
+          </div>
+          <Skeleton variant="line" count={3} />
         </div>
+      ) : sorted.length === 0 ? (
+        <EmptyState
+          title="No progression records"
+          description="Steps of progression will appear here once progress is tracked."
+          className="mt-3"
+        />
       ) : (
         <div className="mt-3 space-y-3">
           {/* Overall progress bar */}
@@ -647,7 +693,7 @@ function StepsProgressionPanel({ progressRows, loading, childName }) {
                   type="button"
                   onClick={() => setFilter(tab.key)}
                   className={[
-                    "rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition",
+                    "rounded-lg border px-3 py-2 text-xs font-semibold transition",
                     active
                       ? `${tab.activeBg} ${tab.activeText} border-transparent`
                       : `${tab.bg} ${tab.text} ${tab.border} hover:opacity-80`,

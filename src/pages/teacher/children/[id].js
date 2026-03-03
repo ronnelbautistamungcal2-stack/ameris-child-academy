@@ -139,6 +139,7 @@ export default function TeacherChildDetailPage() {
   const [loading, setLoading] = useState(true);
   const [stepsLoading, setStepsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [childPermissions, setChildPermissions] = useState([]);
 
   const loadProgress = useCallback(async () => {
     if (!childId) return;
@@ -161,6 +162,7 @@ export default function TeacherChildDetailPage() {
         setChild(childRes || null);
         setActivities(arr(activityRes));
         await loadProgress();
+        apiJson(`/api/v1/children/${encodeURIComponent(childId)}/permissions`).then((p) => setChildPermissions(arr(p))).catch(() => {});
       } catch (e) {
         setError(e.message || "Failed to load child");
         setChild(null);
@@ -663,6 +665,7 @@ export default function TeacherChildDetailPage() {
               <InfoCard label="Parents" value={child.parent?.name || child.parent?.email || "No parent linked"} />
               <InfoCard label="Emergency contact" value={child.emergencyContact || "Not provided"} />
               <InfoCard label="Allergies" value={child.allergies || "None listed"} />
+              <InfoCard label="Enrollment" value={child.enrollmentStartDate ? `${formatDate(child.enrollmentStartDate)} — ${child.enrollmentEndDate ? formatDate(child.enrollmentEndDate) : "Present"}` : "Not set"} />
             </div>
 
             <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
@@ -695,6 +698,27 @@ export default function TeacherChildDetailPage() {
               <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">No enrollment documents uploaded.</div>
             )}
           </div>
+
+          {childPermissions.length > 0 && (
+            <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Permissions</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {childPermissions.map((p) => (
+                  <span
+                    key={p.id}
+                    className={[
+                      "rounded-full px-2 py-0.5 text-xs font-semibold",
+                      p.status === "GRANTED" ? "bg-green-100 text-green-800"
+                        : p.status === "DENIED" ? "bg-red-100 text-red-800"
+                        : "bg-gray-200 text-gray-600",
+                    ].join(" ")}
+                  >
+                    {p.permissionType.replace(/_/g, " ")} — {p.status}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="rounded-2xl border border-gray-200 bg-white p-5">

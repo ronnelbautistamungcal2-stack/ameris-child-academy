@@ -201,7 +201,7 @@ export default function AdminUsers() {
         >
           <div>
             <h2 style={{ marginTop: 0 }}>Users & Role-Based Access</h2>
-            <p style={{ color: "#6b7280", marginTop: 6 }}>
+            <p style={{ color: "var(--admin-text-muted)", marginTop: 6 }}>
               Create/modify/delete users and set roles (ADMIN/TEACHER/PARENT/etc).
             </p>
           </div>
@@ -443,8 +443,8 @@ function Panel({ children }) {
   return (
     <div
       style={{
-        background: "white",
-        border: "1px solid #e5e7eb",
+        background: "var(--admin-bg)",
+        border: "1px solid var(--admin-border)",
         borderRadius: 10,
         padding: 16,
       }}
@@ -488,7 +488,7 @@ function Modal({ title, onClose, children }) {
 function Field({ label, children }) {
   return (
     <label style={{ display: "block" }}>
-      <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
+      <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginBottom: 6 }}>
         {label}
       </div>
       {children}
@@ -501,11 +501,11 @@ function ErrorBanner({ message }) {
     <div
       style={{
         padding: 12,
-        background: "#fee2e2",
-        color: "#991b1b",
+        background: "var(--admin-error-bg)",
+        color: "var(--admin-error-text)",
         borderRadius: 8,
         marginTop: 12,
-        border: "1px solid #fecaca",
+        border: "1px solid var(--admin-error-border)",
       }}
     >
       {message}
@@ -516,7 +516,7 @@ function ErrorBanner({ message }) {
 const inputStyle = {
   width: "100%",
   padding: 10,
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--admin-border)",
   borderRadius: 8,
   boxSizing: "border-box",
 };
@@ -524,7 +524,7 @@ const inputStyle = {
 const tableStyle = {
   width: "100%",
   borderCollapse: "collapse",
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--admin-border)",
   borderRadius: 10,
   overflow: "hidden",
 };
@@ -532,20 +532,20 @@ const tableStyle = {
 const thStyle = {
   textAlign: "left",
   fontSize: 12,
-  color: "#6b7280",
+  color: "var(--admin-text-muted)",
   padding: 10,
-  borderBottom: "1px solid #e5e7eb",
-  background: "#f9fafb",
+  borderBottom: "1px solid var(--admin-border)",
+  background: "var(--admin-bg-secondary)",
 };
 
 const tdStyle = {
   padding: 10,
-  borderBottom: "1px solid #f3f4f6",
+  borderBottom: "1px solid var(--admin-border-light)",
   verticalAlign: "top",
 };
 
 const codePill = {
-  background: "#f3f4f6",
+  background: "var(--admin-bg-tertiary)",
   padding: "2px 8px",
   borderRadius: 999,
 };
@@ -554,7 +554,7 @@ const modalOverlayStyle = {
   position: "fixed",
   inset: 0,
   zIndex: 80,
-  background: "rgba(17, 24, 39, 0.55)",
+  background: "var(--admin-modal-overlay)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -565,8 +565,8 @@ const modalCardStyle = {
   width: "min(980px, 100%)",
   maxHeight: "min(86vh, 900px)",
   overflow: "auto",
-  background: "white",
-  border: "1px solid #e5e7eb",
+  background: "var(--admin-bg)",
+  border: "1px solid var(--admin-border)",
   borderRadius: 12,
   padding: 16,
   boxShadow:
@@ -585,9 +585,9 @@ const primaryButton = {
 
 const secondaryButton = {
   padding: "10px 12px",
-  background: "white",
-  color: "#111827",
-  border: "1px solid #e5e7eb",
+  background: "var(--admin-bg)",
+  color: "var(--admin-text)",
+  border: "1px solid var(--admin-border)",
   borderRadius: 8,
   cursor: "pointer",
   fontWeight: 600,
@@ -604,7 +604,7 @@ const dangerButton = {
 };
 
 const teacherLink = {
-  color: "#2563eb",
+  color: "var(--admin-accent-text)",
   fontWeight: 600,
   textDecoration: "none",
 };
@@ -612,7 +612,7 @@ const teacherLink = {
 const tabBarStyle = {
   display: "flex",
   gap: 0,
-  borderBottom: "2px solid #e5e7eb",
+  borderBottom: "2px solid var(--admin-border)",
   marginBottom: 16,
   overflowX: "auto",
 };
@@ -637,7 +637,7 @@ const inactiveTabStyle = {
   padding: "10px 16px",
   fontSize: 13,
   fontWeight: 600,
-  color: "#6b7280",
+  color: "var(--admin-text-muted)",
   background: "none",
   border: "none",
   borderBottom: "2px solid transparent",
@@ -650,8 +650,8 @@ const inactiveTabStyle = {
 };
 
 const tabCountStyle = {
-  background: "#f3f4f6",
-  color: "#374151",
+  background: "var(--admin-bg-tertiary)",
+  color: "var(--admin-text-secondary)",
   padding: "1px 7px",
   borderRadius: 999,
   fontSize: 11,

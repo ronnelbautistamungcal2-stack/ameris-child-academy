@@ -63,7 +63,7 @@ export default function FormRenewals() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
           <div>
             <h2 style={{ marginTop: 0, marginBottom: 4 }}>Form Renewals</h2>
-            <p style={{ color: "#6b7280", margin: 0 }}>Track form expirations and send renewal reminders.</p>
+            <p style={{ color: "var(--admin-text-muted)", margin: 0 }}>Track form expirations and send renewal reminders.</p>
           </div>
           <button type="button" onClick={runCheck} disabled={checking} style={primaryButton}>
             {checking ? "Checking..." : "Run Renewal Check"}
@@ -74,10 +74,10 @@ export default function FormRenewals() {
         {success && <Banner kind="success" message={success} />}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginTop: 16 }}>
-          <StatCard label="Expiring Soon" value={counts.expiring} color="#92400e" bg="#fef3c7" />
-          <StatCard label="Expired" value={counts.expired} color="#991b1b" bg="#fee2e2" />
-          <StatCard label="Active" value={counts.active} color="#166534" bg="#dcfce7" />
-          <StatCard label="Total" value={counts.total} color="#374151" bg="#f3f4f6" />
+          <StatCard label="Expiring Soon" value={counts.expiring} color="var(--admin-warning-text)" bg="var(--admin-warning-bg)" />
+          <StatCard label="Expired" value={counts.expired} color="var(--admin-error-text)" bg="var(--admin-error-bg)" />
+          <StatCard label="Active" value={counts.active} color="var(--admin-success-text)" bg="var(--admin-success-bg)" />
+          <StatCard label="Total" value={counts.total} color="var(--admin-text-secondary)" bg="var(--admin-bg-tertiary)" />
         </div>
       </Panel>
 
@@ -98,7 +98,7 @@ export default function FormRenewals() {
         {loading ? (
           <p>Loading...</p>
         ) : submissions.length === 0 ? (
-          <p style={{ color: "#6b7280" }}>No forms with renewal tracking found.</p>
+          <p style={{ color: "var(--admin-text-muted)" }}>No forms with renewal tracking found.</p>
         ) : (
           <div style={{ overflow: "auto" }}>
             <table style={tableStyle}>
@@ -141,7 +141,7 @@ export default function FormRenewals() {
 
 function StatCard({ label, value, color, bg }) {
   return (
-    <div style={{ padding: 14, borderRadius: 10, background: bg, border: `1px solid ${color}22` }}>
+    <div style={{ padding: 14, borderRadius: 10, background: bg, border: "1px solid var(--admin-border)" }}>
       <div style={{ fontSize: 24, fontWeight: 800, color }}>{value}</div>
       <div style={{ fontSize: 12, color }}>{label}</div>
     </div>
@@ -150,24 +150,24 @@ function StatCard({ label, value, color, bg }) {
 
 function statusPill(status) {
   const colors = {
-    expired: { bg: "#fee2e2", color: "#991b1b", border: "#fecaca" },
-    expiring: { bg: "#fef3c7", color: "#92400e", border: "#fde68a" },
-    active: { bg: "#dcfce7", color: "#166534", border: "#bbf7d0" },
+    expired: { bg: "var(--admin-error-bg)", color: "var(--admin-error-text)", border: "var(--admin-error-border)" },
+    expiring: { bg: "var(--admin-warning-bg)", color: "var(--admin-warning-text)", border: "var(--admin-warning-bg)" },
+    active: { bg: "var(--admin-success-bg)", color: "var(--admin-success-text)", border: "var(--admin-success-border)" },
   };
   const c = colors[status] || colors.active;
   return { fontSize: 11, padding: "3px 8px", borderRadius: 999, background: c.bg, color: c.color, border: `1px solid ${c.border}`, fontWeight: 800 };
 }
 
 function Panel({ children, style }) {
-  return <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: 10, padding: 16, ...style }}>{children}</div>;
+  return <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: 16, ...style }}>{children}</div>;
 }
 function Banner({ message, kind }) {
-  const s = kind === "success" ? { background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0" } : { background: "#fee2e2", color: "#991b1b", border: "1px solid #fecaca" };
+  const s = kind === "success" ? { background: "var(--admin-success-bg)", color: "var(--admin-success-text)", border: "1px solid var(--admin-success-border)" } : { background: "var(--admin-error-bg)", color: "var(--admin-error-text)", border: "1px solid var(--admin-error-border)" };
   return <div style={{ padding: 12, borderRadius: 8, marginTop: 12, ...s }}>{message}</div>;
 }
 
 const primaryButton = { padding: "10px 12px", background: "#2563eb", color: "white", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 800 };
-const filterBtn = { padding: "7px 14px", background: "white", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 13 };
+const filterBtn = { padding: "7px 14px", background: "var(--admin-bg)", color: "var(--admin-text-secondary)", border: "1px solid var(--admin-border)", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 13 };
 const tableStyle = { width: "100%", borderCollapse: "collapse", fontSize: 13 };
-const thStyle = { padding: "8px 10px", background: "#f9fafb", borderBottom: "2px solid #e5e7eb", textAlign: "left", fontWeight: 800, fontSize: 12 };
-const tdStyle = { padding: "8px 10px", borderBottom: "1px solid #f3f4f6" };
+const thStyle = { padding: "8px 10px", background: "var(--admin-bg-secondary)", borderBottom: "2px solid var(--admin-border)", textAlign: "left", fontWeight: 800, fontSize: 12, color: "var(--admin-text-muted)" };
+const tdStyle = { padding: "8px 10px", borderBottom: "1px solid var(--admin-border-light)" };

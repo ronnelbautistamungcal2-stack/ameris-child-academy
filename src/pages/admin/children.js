@@ -1,4 +1,7 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { SkeletonTable } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
 import { childAgeGroup, ageInMonths } from "@/lib/ageUtils";
 import { apiJson } from "@/lib/api";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -25,6 +28,8 @@ export default function AdminChildren() {
 
   const [emergencyContact, setEmergencyContact] = useState("");
   const [allergies, setAllergies] = useState("");
+  const [enrollmentStartDate, setEnrollmentStartDate] = useState("");
+  const [enrollmentEndDate, setEnrollmentEndDate] = useState("");
 
   const [feedingFoods, setFeedingFoods] = useState("");
   const [feedingFormula, setFeedingFormula] = useState("");
@@ -43,6 +48,10 @@ export default function AdminChildren() {
   const [stepsPlans, setStepsPlans] = useState([]);
   const [stepsCompletions, setStepsCompletions] = useState([]);
   const [stepsDomain, setStepsDomain] = useState("");
+
+  const [childPermissions, setChildPermissions] = useState([]);
+  const [permissionsLoading, setPermissionsLoading] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
   async function refresh() {
     setError("");
@@ -165,6 +174,8 @@ export default function AdminChildren() {
 
     setEmergencyContact("");
     setAllergies("");
+    setEnrollmentStartDate("");
+    setEnrollmentEndDate("");
 
     setFeedingFoods("");
     setFeedingFormula("");
@@ -188,6 +199,8 @@ export default function AdminChildren() {
 
     setEmergencyContact(child.emergencyContact || "");
     setAllergies(child.allergies || "");
+    setEnrollmentStartDate(child.enrollmentStartDate ? child.enrollmentStartDate.slice(0, 10) : "");
+    setEnrollmentEndDate(child.enrollmentEndDate ? child.enrollmentEndDate.slice(0, 10) : "");
 
     const feeding = child.feedingPlan && typeof child.feedingPlan === "object" ? child.feedingPlan : null;
     setFeedingFoods(feeding?.foods || "");
@@ -308,6 +321,24 @@ export default function AdminChildren() {
   }
 
   useEffect(() => {
+    if (!modalOpen || !editing?.id) {
+      setChildPermissions([]);
+      return;
+    }
+    (async () => {
+      setPermissionsLoading(true);
+      try {
+        const perms = await apiJson(`/api/v1/children/${editing.id}/permissions`);
+        setChildPermissions(Array.isArray(perms) ? perms : []);
+      } catch {
+        setChildPermissions([]);
+      } finally {
+        setPermissionsLoading(false);
+      }
+    })();
+  }, [modalOpen, editing?.id]);
+
+  useEffect(() => {
     if (!modalOpen || !editing?.id || !editing?.centerId) {
       setStepsPlans([]);
       setStepsCompletions([]);
@@ -376,6 +407,8 @@ export default function AdminChildren() {
           parentId: parentId || null,
           emergencyContact: emergencyContact || null,
           allergies: allergies || null,
+          enrollmentStartDate: enrollmentStartDate || null,
+          enrollmentEndDate: enrollmentEndDate || null,
           healthAssessmentDocuments: [
             ...(Array.isArray(healthAssessmentDocuments)
               ? healthAssessmentDocuments
@@ -421,6 +454,8 @@ export default function AdminChildren() {
           classRoomId: classRoomId || null,
           emergencyContact: emergencyContact || null,
           allergies: allergies || null,
+          enrollmentStartDate: enrollmentStartDate || null,
+          enrollmentEndDate: enrollmentEndDate || null,
           healthAssessmentDocuments: [
             ...(Array.isArray(healthAssessmentDocuments)
               ? healthAssessmentDocuments
@@ -450,7 +485,7 @@ export default function AdminChildren() {
   }
 
   async function deleteChild(id) {
-    if (!confirm("Delete this child? This cannot be undone.")) return;
+    setDeleteConfirmId(null);
     setError("");
     try {
       await apiJson(`/api/v1/children/${id}`, { method: "DELETE" });
@@ -499,7 +534,7 @@ export default function AdminChildren() {
         >
           <div>
             <h2 style={{ marginTop: 0 }}>Children</h2>
-            <p style={{ color: "#6b7280", marginTop: 6 }}>
+            <p style={{ color: "var(--admin-text-muted)", marginTop: 6 }}>
               Student setup: create/modify/delete child records and assign to
               center/class/parent.
             </p>
@@ -581,6 +616,22 @@ export default function AdminChildren() {
                   <input
                     value={birthDate}
                     onChange={(e) => setBirthDate(e.target.value)}
+                    style={inputStyle}
+                    type="date"
+                  />
+                </Field>
+                <Field label="Enrollment Start">
+                  <input
+                    value={enrollmentStartDate}
+                    onChange={(e) => setEnrollmentStartDate(e.target.value)}
+                    style={inputStyle}
+                    type="date"
+                  />
+                </Field>
+                <Field label="Enrollment End">
+                  <input
+                    value={enrollmentEndDate}
+                    onChange={(e) => setEnrollmentEndDate(e.target.value)}
                     style={inputStyle}
                     type="date"
                   />
@@ -840,7 +891,7 @@ export default function AdminChildren() {
                       <div
                         style={{
                           fontSize: 12,
-                          color: "#6b7280",
+                          color: "var(--admin-text-muted)",
                           marginBottom: 6,
                         }}
                       >
@@ -866,7 +917,7 @@ export default function AdminChildren() {
                   ) : null}
 
                   {stepsLoading ? (
-                    <div style={{ color: "#6b7280", fontSize: 13 }}>
+                    <div style={{ color: "var(--admin-text-muted)", fontSize: 13 }}>
                       Loading stepsâ€¦
                     </div>
                   ) : (
@@ -892,9 +943,9 @@ export default function AdminChildren() {
               ) : null}
 
               {editing && (
-                <div style={{ marginTop: 16, padding: 12, border: "1px solid #e5e7eb", borderRadius: 10, background: "#f9fafb" }}>
+                <div style={{ marginTop: 16, padding: 12, border: "1px solid var(--admin-border)", borderRadius: 10, background: "var(--admin-bg-secondary)" }}>
                   <div style={{ fontWeight: 800, fontSize: 14 }}>Transfer Record</div>
-                  <p style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>
+                  <p style={{ color: "var(--admin-text-muted)", fontSize: 12, marginTop: 4 }}>
                     Download a comprehensive record package for child transfer.
                   </p>
                   <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -905,6 +956,63 @@ export default function AdminChildren() {
                       Export CSV
                     </button>
                   </div>
+                </div>
+              )}
+
+              {editing && (
+                <div style={{ marginTop: 16, padding: 12, border: "1px solid var(--admin-border)", borderRadius: 10, background: "var(--admin-bg-secondary)" }}>
+                  <div style={{ fontWeight: 800, fontSize: 14 }}>Permissions</div>
+                  <p style={{ color: "var(--admin-text-muted)", fontSize: 12, marginTop: 4 }}>
+                    Manage photo release, field trip, medical treatment, and other permissions.
+                  </p>
+                  {permissionsLoading ? (
+                    <div style={{ color: "var(--admin-text-muted)", fontSize: 13, marginTop: 8 }}>Loading permissions…</div>
+                  ) : (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8, marginTop: 8 }}>
+                      {[
+                        { value: "PHOTO_RELEASE", label: "Photo Release" },
+                        { value: "FIELD_TRIP", label: "Field Trip" },
+                        { value: "MEDICAL_TREATMENT", label: "Medical Treatment" },
+                        { value: "TRANSPORTATION", label: "Transportation" },
+                        { value: "SUNSCREEN_APPLICATION", label: "Sunscreen" },
+                        { value: "WATER_ACTIVITIES", label: "Water Activities" },
+                      ].map((pt) => {
+                        const perm = childPermissions.find((p) => p.permissionType === pt.value);
+                        const status = perm?.status || "PENDING";
+                        return (
+                          <div key={pt.value} style={{ padding: 8, border: "1px solid var(--admin-border)", borderRadius: 8, background: status === "GRANTED" ? "var(--admin-success-bg)" : status === "DENIED" ? "var(--admin-error-bg)" : "var(--admin-bg)" }}>
+                            <div style={{ fontSize: 12, fontWeight: 700 }}>{pt.label}</div>
+                            <div style={{ fontSize: 11, color: "var(--admin-text-muted)", marginTop: 2 }}>{status}</div>
+                            <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
+                              <button type="button" disabled={status === "GRANTED"} style={{ ...secondaryButton, fontSize: 10, padding: "2px 8px", background: status === "GRANTED" ? "var(--admin-success-border)" : undefined }} onClick={async () => {
+                                try {
+                                  await apiJson(`/api/v1/children/${editing.id}/permissions`, { method: "POST", body: JSON.stringify({ permissionType: pt.value, status: "GRANTED" }) });
+                                  const perms = await apiJson(`/api/v1/children/${editing.id}/permissions`);
+                                  setChildPermissions(Array.isArray(perms) ? perms : []);
+                                } catch (e3) { setError(e3.message); }
+                              }}>Grant</button>
+                              <button type="button" disabled={status === "DENIED"} style={{ ...secondaryButton, fontSize: 10, padding: "2px 8px", background: status === "DENIED" ? "var(--admin-error-border)" : undefined }} onClick={async () => {
+                                try {
+                                  await apiJson(`/api/v1/children/${editing.id}/permissions`, { method: "POST", body: JSON.stringify({ permissionType: pt.value, status: "DENIED" }) });
+                                  const perms = await apiJson(`/api/v1/children/${editing.id}/permissions`);
+                                  setChildPermissions(Array.isArray(perms) ? perms : []);
+                                } catch (e3) { setError(e3.message); }
+                              }}>Deny</button>
+                              {status !== "PENDING" && (
+                                <button type="button" style={{ ...secondaryButton, fontSize: 10, padding: "2px 8px" }} onClick={async () => {
+                                  try {
+                                    await apiJson(`/api/v1/children/${editing.id}/permissions`, { method: "POST", body: JSON.stringify({ permissionType: pt.value, status: "REVOKED" }) });
+                                    const perms = await apiJson(`/api/v1/children/${editing.id}/permissions`);
+                                    setChildPermissions(Array.isArray(perms) ? perms : []);
+                                  } catch (e3) { setError(e3.message); }
+                                }}>Revoke</button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -938,9 +1046,19 @@ export default function AdminChildren() {
           </Modal>
         ) : null}
 
+        <ConfirmDialog
+          open={!!deleteConfirmId}
+          title="Delete Child"
+          message="Are you sure you want to delete this child record? This action cannot be undone."
+          confirmLabel="Delete"
+          variant="danger"
+          onConfirm={() => deleteChild(deleteConfirmId)}
+          onCancel={() => setDeleteConfirmId(null)}
+        />
+
         <div style={{ marginTop: 16 }}>
           {loading ? (
-            <p>Loading…</p>
+            <SkeletonTable rows={5} cols={7} />
           ) : (
             <table style={tableStyle}>
               <thead>
@@ -950,6 +1068,7 @@ export default function AdminChildren() {
                   <th style={thStyle}>Center</th>
                   <th style={thStyle}>Class</th>
                   <th style={thStyle}>Parent</th>
+                  <th style={thStyle}>Enrollment</th>
                   <th style={thStyle}>Actions</th>
                 </tr>
               </thead>
@@ -960,10 +1079,10 @@ export default function AdminChildren() {
                       <div style={{ fontWeight: 700 }}>
                         {ch.firstName} {ch.lastName || ""}
                       </div>
-                      <div style={{ color: "#6b7280", fontSize: 12 }}>
+                      <div style={{ color: "var(--admin-text-muted)", fontSize: 12 }}>
                         {ch.birthDate ? `Born ${new Date(ch.birthDate).toLocaleDateString()}` : "—"}
                       </div>
-                      <div style={{ color: "#6b7280", fontSize: 12 }}>
+                      <div style={{ color: "var(--admin-text-muted)", fontSize: 12 }}>
                         <code style={codePill}>{ch.id}</code>
                       </div>
                     </td>
@@ -980,11 +1099,22 @@ export default function AdminChildren() {
                         : "—"}
                     </td>
                     <td style={tdStyle}>
+                      <div style={{ fontSize: 12 }}>
+                        {ch.enrollmentStartDate
+                          ? new Date(ch.enrollmentStartDate).toLocaleDateString()
+                          : "—"}
+                        {" — "}
+                        {ch.enrollmentEndDate
+                          ? new Date(ch.enrollmentEndDate).toLocaleDateString()
+                          : "Present"}
+                      </div>
+                    </td>
+                    <td style={tdStyle}>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button type="button" style={secondaryButton} onClick={() => openEdit(ch)}>
                           Edit
                         </button>
-                        <button type="button" style={dangerButton} onClick={() => deleteChild(ch.id)}>
+                        <button type="button" style={dangerButton} onClick={() => setDeleteConfirmId(ch.id)}>
                           Delete
                         </button>
                       </div>
@@ -993,8 +1123,14 @@ export default function AdminChildren() {
                 ))}
                 {filteredSorted.length === 0 ? (
                   <tr>
-                    <td style={tdStyle} colSpan={6}>
-                      No children found.
+                    <td style={tdStyle} colSpan={7}>
+                      <EmptyState
+                        title="No children found"
+                        description={q ? "Try adjusting your search or filters." : "Get started by adding your first child record."}
+                        actionLabel={!q ? "+ Add Child" : undefined}
+                        onAction={!q ? openCreate : undefined}
+                        className="py-8"
+                      />
                     </td>
                   </tr>
                 ) : null}
@@ -1009,7 +1145,7 @@ export default function AdminChildren() {
 
 function Panel({ children }) {
   return (
-    <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: 10, padding: 16 }}>
+    <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: 16 }}>
       {children}
     </div>
   );
@@ -1052,7 +1188,7 @@ function StepsGroup({ title, rows, onToggle }) {
     <div style={stepsPanelStyle}>
       <div style={{ fontWeight: 800, marginBottom: 8 }}>{title}</div>
       {list.length === 0 ? (
-        <div style={{ color: "#6b7280", fontSize: 13 }}>No items.</div>
+        <div style={{ color: "var(--admin-text-muted)", fontSize: 13 }}>No items.</div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8 }}>
           {list.slice(0, 30).map((r) => {
@@ -1097,10 +1233,10 @@ function StepsGroup({ title, rows, onToggle }) {
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, children, htmlFor }) {
   return (
-    <label style={{ display: "block" }}>
-      <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>{label}</div>
+    <label style={{ display: "block" }} htmlFor={htmlFor}>
+      <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginBottom: 6 }}>{label}</div>
       {children}
     </label>
   );
@@ -1111,11 +1247,11 @@ function ErrorBanner({ message }) {
     <div
       style={{
         padding: 12,
-        background: "#fee2e2",
-        color: "#991b1b",
+        background: "var(--admin-error-bg)",
+        color: "var(--admin-error-text)",
         borderRadius: 8,
         marginTop: 12,
-        border: "1px solid #fecaca",
+        border: "1px solid var(--admin-error-border)",
       }}
     >
       {message}
@@ -1126,15 +1262,17 @@ function ErrorBanner({ message }) {
 const inputStyle = {
   width: "100%",
   padding: 10,
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--admin-border)",
   borderRadius: 8,
   boxSizing: "border-box",
+  background: "var(--admin-bg)",
+  color: "var(--admin-text)",
 };
 
 const tableStyle = {
   width: "100%",
   borderCollapse: "collapse",
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--admin-border)",
   borderRadius: 10,
   overflow: "hidden",
 };
@@ -1142,20 +1280,20 @@ const tableStyle = {
 const thStyle = {
   textAlign: "left",
   fontSize: 12,
-  color: "#6b7280",
+  color: "var(--admin-text-muted)",
   padding: 10,
-  borderBottom: "1px solid #e5e7eb",
-  background: "#f9fafb",
+  borderBottom: "1px solid var(--admin-border)",
+  background: "var(--admin-bg-secondary)",
 };
 
 const tdStyle = {
   padding: 10,
-  borderBottom: "1px solid #f3f4f6",
+  borderBottom: "1px solid var(--admin-border-light)",
   verticalAlign: "top",
 };
 
 const codePill = {
-  background: "#f3f4f6",
+  background: "var(--admin-bg-tertiary)",
   padding: "2px 8px",
   borderRadius: 999,
 };
@@ -1164,7 +1302,7 @@ const modalOverlayStyle = {
   position: "fixed",
   inset: 0,
   zIndex: 80,
-  background: "rgba(17, 24, 39, 0.55)",
+  background: "var(--admin-modal-overlay)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -1175,8 +1313,8 @@ const modalCardStyle = {
   width: "min(1100px, 100%)",
   maxHeight: "min(86vh, 900px)",
   overflow: "auto",
-  background: "white",
-  border: "1px solid #e5e7eb",
+  background: "var(--admin-bg)",
+  border: "1px solid var(--admin-border)",
   borderRadius: 12,
   padding: 16,
   boxShadow:
@@ -1189,9 +1327,9 @@ const docRowStyle = {
   justifyContent: "space-between",
   gap: 10,
   padding: "8px 10px",
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--admin-border)",
   borderRadius: 10,
-  background: "#f9fafb",
+  background: "var(--admin-bg-secondary)",
 };
 
 const docLinkStyle = {
@@ -1207,18 +1345,18 @@ const docLinkStyle = {
 const stepsErrorStyle = {
   padding: 10,
   borderRadius: 10,
-  background: "#fee2e2",
-  color: "#991b1b",
-  border: "1px solid #fecaca",
+  background: "var(--admin-error-bg)",
+  color: "var(--admin-error-text)",
+  border: "1px solid var(--admin-error-border)",
   marginBottom: 10,
   fontSize: 13,
 };
 
 const stepsPanelStyle = {
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--admin-border)",
   borderRadius: 12,
   padding: 12,
-  background: "white",
+  background: "var(--admin-bg)",
 };
 
 const stepRowStyle = {
@@ -1227,9 +1365,9 @@ const stepRowStyle = {
   alignItems: "start",
   gap: 10,
   padding: "10px 12px",
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--admin-border)",
   borderRadius: 12,
-  background: "#f9fafb",
+  background: "var(--admin-bg-secondary)",
   cursor: "pointer",
 };
 
@@ -1238,17 +1376,17 @@ function stepTag(kind) {
     fontSize: 12,
     padding: "2px 8px",
     borderRadius: 999,
-    border: "1px solid #e5e7eb",
-    background: "#f3f4f6",
-    color: "#374151",
+    border: "1px solid var(--admin-border)",
+    background: "var(--admin-bg-tertiary)",
+    color: "var(--admin-text-secondary)",
     fontWeight: 800,
     whiteSpace: "nowrap",
   };
   if (kind === "danger") {
-    return { ...base, border: "1px solid #fecaca", background: "#fee2e2", color: "#991b1b" };
+    return { ...base, border: "1px solid var(--admin-error-border)", background: "var(--admin-error-bg)", color: "var(--admin-error-text)" };
   }
   if (kind === "info") {
-    return { ...base, border: "1px solid #bfdbfe", background: "#dbeafe", color: "#1d4ed8" };
+    return { ...base, border: "1px solid var(--admin-info-border)", background: "var(--admin-info-bg)", color: "var(--admin-info-text)" };
   }
   return base;
 }
@@ -1265,9 +1403,9 @@ const primaryButton = {
 
 const secondaryButton = {
   padding: "10px 12px",
-  background: "white",
-  color: "#111827",
-  border: "1px solid #e5e7eb",
+  background: "var(--admin-bg)",
+  color: "var(--admin-text)",
+  border: "1px solid var(--admin-border)",
   borderRadius: 8,
   cursor: "pointer",
   fontWeight: 600,

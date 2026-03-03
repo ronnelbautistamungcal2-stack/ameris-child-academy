@@ -254,10 +254,11 @@ function CategoriesTab({ centerId }) {
 function LessonsTab({ centerId }) {
   const [lessons, setLessons] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [policies, setPolicies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ title: "", description: "", categoryId: "", media: [] });
+  const [form, setForm] = useState({ title: "", description: "", categoryId: "", policyDocumentId: "", media: [] });
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState({});
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -266,12 +267,14 @@ function LessonsTab({ centerId }) {
   async function load() {
     setLoading(true);
     try {
-      const [l, cats] = await Promise.all([
+      const [l, cats, pols] = await Promise.all([
         apiJson(`/api/v1/lessons?centerId=${encodeURIComponent(centerId)}`),
         apiJson(`/api/v1/lesson-categories?centerId=${encodeURIComponent(centerId)}`),
+        apiJson(`/api/v1/policies?centerId=${encodeURIComponent(centerId)}`).catch(() => []),
       ]);
       setLessons(Array.isArray(l) ? l : []);
       setCategories(Array.isArray(cats) ? cats : []);
+      setPolicies(Array.isArray(pols) ? pols : []);
     } catch (e) {
       setError(e.message || "Failed to load");
     } finally {
@@ -292,7 +295,7 @@ function LessonsTab({ centerId }) {
 
   function openCreate() {
     setEditing("new");
-    setForm({ title: "", description: "", categoryId: "", media: [] });
+    setForm({ title: "", description: "", categoryId: "", policyDocumentId: "", media: [] });
   }
 
   function openEdit(lesson) {
@@ -301,6 +304,7 @@ function LessonsTab({ centerId }) {
       title: lesson.title || "",
       description: lesson.description || "",
       categoryId: lesson.categoryId || "",
+      policyDocumentId: lesson.policyDocumentId || "",
       media: lesson.media || [],
     });
   }
@@ -312,12 +316,12 @@ function LessonsTab({ centerId }) {
       if (editing === "new") {
         await apiJson("/api/v1/lessons", {
           method: "POST",
-          body: JSON.stringify({ centerId, ...form, categoryId: form.categoryId || null }),
+          body: JSON.stringify({ centerId, ...form, categoryId: form.categoryId || null, policyDocumentId: form.policyDocumentId || null }),
         });
       } else {
         await apiJson(`/api/v1/lessons/${encodeURIComponent(editing)}`, {
           method: "PUT",
-          body: JSON.stringify({ ...form, categoryId: form.categoryId || null }),
+          body: JSON.stringify({ ...form, categoryId: form.categoryId || null, policyDocumentId: form.policyDocumentId || null }),
         });
       }
       setEditing(null);
@@ -380,6 +384,13 @@ function LessonsTab({ centerId }) {
                 {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </label>
+            <label className="block">
+              <div className="mb-1 text-xs font-semibold text-gray-500">Linked Policy</div>
+              <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" value={form.policyDocumentId} onChange={(e) => setForm({ ...form, policyDocumentId: e.target.value })}>
+                <option value="">None</option>
+                {policies.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+              </select>
+            </label>
             <label className="block md:col-span-2">
               <div className="mb-1 text-xs font-semibold text-gray-500">Description</div>
               <textarea className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
@@ -440,6 +451,11 @@ function LessonsTab({ centerId }) {
                   <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
                     {lesson.category?.name && (
                       <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-700">{lesson.category.name}</span>
+                    )}
+                    {lesson.policyDocument && (
+                      <a href={lesson.policyDocument.url} target="_blank" rel="noreferrer" className="rounded-full bg-indigo-100 px-2 py-0.5 text-indigo-700 hover:bg-indigo-200 no-underline">
+                        Policy: {lesson.policyDocument.title}
+                      </a>
                     )}
                     <span>{lesson.goals?.length || 0} goals</span>
                     {lesson.media?.length > 0 && <span>{lesson.media.length} attachment(s)</span>}

@@ -42,7 +42,7 @@ export default function TeacherProgress() {
 
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
-  const [stage, setStage] = useState("active");
+  const [stage, setStage] = useState("all");
   const [ageGroup, setAgeGroup] = useState("");
   const [visibleCount, setVisibleCount] = useState(100);
 
@@ -80,7 +80,7 @@ export default function TeacherProgress() {
         setProgressRows([]);
         setQuery("");
         setCategory("");
-        setStage("active");
+        setStage("all");
         setAgeGroup("");
         setVisibleCount(100);
         return;
@@ -346,26 +346,16 @@ export default function TeacherProgress() {
       filtered = filtered.filter((p) => ageGroupKeyFromBirthDate(p.child?.birthDate) === ageGroup);
     }
 
-    // Get latest progress per (child, lesson)
-    const latestByChildLesson = new Map();
-    for (const p of filtered) {
-      const key = `${p.childId}::${p.lessonId}`;
-      const existing = latestByChildLesson.get(key);
-      if (!existing || Number(p.goalIndex || 0) > Number(existing.goalIndex || 0)) {
-        latestByChildLesson.set(key, p);
-      }
-    }
-    const latestRows = [...latestByChildLesson.values()];
-
+    // Count ALL progress records (every goal step counts)
     const statusCounts = { NOT_STARTED: 0, IN_PROGRESS: 0, COMPLETED: 0, PASSED: 0, FAILED: 0 };
-    for (const p of latestRows) {
+    for (const p of filtered) {
       const s = p.status || "NOT_STARTED";
       if (s in statusCounts) statusCounts[s] += 1;
     }
 
     // Group by classroom
     const byClass = new Map();
-    for (const p of latestRows) {
+    for (const p of filtered) {
       const cId = p.child?.classRoomId || "unassigned";
       if (!byClass.has(cId)) byClass.set(cId, { IN_PROGRESS: 0, done: 0, FAILED: 0, NOT_STARTED: 0 });
       const counts = byClass.get(cId);
@@ -378,7 +368,7 @@ export default function TeacherProgress() {
 
     // Group by age
     const byAge = new Map();
-    for (const p of latestRows) {
+    for (const p of filtered) {
       const ageKey = ageGroupKeyFromBirthDate(p.child?.birthDate) || "Unknown";
       if (!byAge.has(ageKey)) byAge.set(ageKey, { IN_PROGRESS: 0, done: 0, FAILED: 0, NOT_STARTED: 0 });
       const counts = byAge.get(ageKey);
@@ -389,10 +379,10 @@ export default function TeacherProgress() {
       else counts.NOT_STARTED += 1;
     }
 
-    const uniqueChildren = new Set(latestRows.map((p) => p.childId));
+    const uniqueChildren = new Set(filtered.map((p) => p.childId));
 
     return {
-      totalGoals: latestRows.length,
+      totalGoals: filtered.length,
       totalChildren: uniqueChildren.size,
       statusCounts,
       byClass: [...byClass.entries()].sort(([a], [b]) => {
@@ -530,6 +520,15 @@ export default function TeacherProgress() {
           </div>
         </div>
 
+        {/* Overview: shown under "All Goals" when no child is selected */}
+        {stage !== "active" && !childId && centerId && (
+          <ProgressOverview
+            stats={overviewStats}
+            loading={overviewLoading}
+            classById={classById}
+          />
+        )}
+
         {/* Active Goals View */}
         {stage === "active" && childId && (
           <ActiveGoalsPanel
@@ -541,17 +540,14 @@ export default function TeacherProgress() {
             onRefresh={refreshProgress}
           />
         )}
-
         {stage === "active" && !childId && centerId && (
-          <ProgressOverview
-            stats={overviewStats}
-            loading={overviewLoading}
-            classById={classById}
-          />
+          <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
+            Select a child to view their active goals.
+          </div>
         )}
 
-        {/* All Goals / Completed / Failed Table View */}
-        {stage !== "active" && (
+        {/* All Goals / Completed / Failed Table View (child selected) */}
+        {stage !== "active" && childId && (
           <div className="rounded-xl border border-gray-200 bg-white p-5">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-sm font-extrabold text-gray-900">
@@ -562,8 +558,6 @@ export default function TeacherProgress() {
 
             {!centerId ? (
               <div className="mt-3 text-sm text-gray-600">Select a center.</div>
-            ) : !childId ? (
-              <div className="mt-3 text-sm text-gray-600">Select a child.</div>
             ) : lessonRows.length === 0 ? (
               <div className="mt-3 text-sm text-gray-600">No lessons found.</div>
             ) : (

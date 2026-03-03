@@ -95,6 +95,23 @@ enum BehaviorPlanStatus {
   ARCHIVED
 }
 
+enum PermissionType {
+  PHOTO_RELEASE
+  FIELD_TRIP
+  MEDICAL_TREATMENT
+  TRANSPORTATION
+  SUNSCREEN_APPLICATION
+  WATER_ACTIVITIES
+  OTHER
+}
+
+enum PermissionStatus {
+  PENDING
+  GRANTED
+  DENIED
+  REVOKED
+}
+
 enum BehaviorGoalStatus {
   NOT_STARTED
   IN_PROGRESS
@@ -162,6 +179,9 @@ model User {
   evaluationsReceived          TeacherEvaluation[]       @relation("EvaluationsReceived")
   evaluationsGiven             TeacherEvaluation[]       @relation("EvaluationsGiven")
   budgetExpensesRecorded       BudgetExpense[]           @relation("BudgetExpensesRecorded")
+  permissionsGranted           ChildPermission[]         @relation("PermissionsGranted")
+  eventsCreated                Event[]                   @relation("EventsCreated")
+  shiftSchedules               ShiftSchedule[]           @relation("ShiftSchedules")
 }
 
 model Center {
@@ -190,6 +210,9 @@ model Center {
   trainingLogs     TrainingLog[]
   classroomBudgets ClassroomBudget[]
   teacherEvaluations TeacherEvaluation[]
+  events           Event[]
+  shiftSchedules   ShiftSchedule[]
+  affiliates       Affiliate[]
   createdAt        DateTime         @default(now())
 }
 
@@ -248,6 +271,9 @@ model Child {
   parentId        String?
   guardians       ChildGuardian[]
   formSubmissions FormSubmission[]
+  enrollmentStartDate DateTime?
+  enrollmentEndDate   DateTime?
+  permissions     ChildPermission[]
   createdAt       DateTime         @default(now())
   OutboundEmail   OutboundEmail[]
   milestoneChecklistCompletions MilestoneChecklistItemCompletion[]
@@ -298,6 +324,8 @@ model Lesson {
   centerId         String
   category         LessonCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   categoryId       String?
+  policyDocument   PolicyDocument?     @relation(fields: [policyDocumentId], references: [id], onDelete: SetNull)
+  policyDocumentId String?
   media            String[]            @default([])
   goals            LessonGoal[]
   progress         Progress[]
@@ -305,6 +333,9 @@ model Lesson {
   remediationsTo   LessonRemediation[] @relation("LessonRemediationsTo")
   milestoneChecklistItems MilestoneChecklistItem[]
   behaviorPlanGoals BehaviorPlanGoal[]
+  supplies         LessonSupply[]
+
+  @@index([policyDocumentId])
 }
 
 model LessonGoal {
@@ -570,6 +601,7 @@ model FormTemplate {
   active            Boolean  @default(true)
   requiresRenewal   Boolean  @default(false)
   renewalPeriodDays Int?
+  autoFillMapping   Json?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -588,8 +620,12 @@ model FormSubmission {
   status        String       @default("SUBMITTED")
   expiresAt     DateTime?
   renewedById   String?
+  appliedToChild Boolean     @default(false)
+  appliedAt     DateTime?
+  appliedById   String?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+  childPermissions ChildPermission[]
 }
 
 model PolicyDocument {
@@ -601,7 +637,9 @@ model PolicyDocument {
   url         String
   roles       Role[]
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
   milestoneChecklistItems MilestoneChecklistItem[]
+  lessons     Lesson[]
 }
 
 model AuditLog {
@@ -918,4 +956,107 @@ model TeacherEvaluation {
 
   @@index([teacherId, period])
   @@index([centerId, period])
+}
+
+model ChildPermission {
+  id               String           @id @default(uuid())
+  child            Child            @relation(fields: [childId], references: [id], onDelete: Cascade)
+  childId          String
+  permissionType   PermissionType
+  status           PermissionStatus @default(PENDING)
+  grantedBy        User?            @relation("PermissionsGranted", fields: [grantedById], references: [id], onDelete: SetNull)
+  grantedById      String?
+  notes            String?
+  effectiveDate    DateTime         @default(now())
+  expirationDate   DateTime?
+  formSubmission   FormSubmission?  @relation(fields: [formSubmissionId], references: [id], onDelete: SetNull)
+  formSubmissionId String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@unique([childId, permissionType])
+  @@index([childId, status])
+}
+
+model LessonSupply {
+  id            String   @id @default(uuid())
+  lesson        Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lessonId      String
+  name          String
+  quantity      Int      @default(1)
+  unit          String?
+  estimatedCost Float?
+  category      String   @default("General")
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  @@index([lessonId])
+  @@index([category])
+}
+
+enum EventType {
+  HOLIDAY
+  FIELD_TRIP
+  PARENT_MEETING
+  STAFF_MEETING
+  PROFESSIONAL_DEVELOPMENT
+  SPECIAL_EVENT
+  OTHER
+}
+
+model Event {
+  id          String    @id @default(uuid())
+  center      Center    @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  title       String
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+  allDay      Boolean   @default(true)
+  type        EventType @default(OTHER)
+  color       String?
+  createdBy   User?     @relation("EventsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([centerId, startDate])
+  @@index([createdById])
+}
+
+model ShiftSchedule {
+  id        String   @id @default(uuid())
+  user      User     @relation("ShiftSchedules", fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  center    Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId  String
+  date      DateTime
+  startTime String
+  endTime   String
+  position  String   @default("Teacher")
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date, startTime])
+  @@index([centerId, date])
+  @@index([userId, date])
+}
+
+model Affiliate {
+  id              String   @id @default(uuid())
+  center          Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId        String
+  name            String
+  description     String?
+  websiteUrl      String?
+  contactEmail    String?
+  contactPhone    String?
+  logoUrl         String?
+  partnershipType String   @default("General")
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([centerId, isActive])
 }

@@ -204,3 +204,78 @@
 .dark .ring-indigo-200 { --tw-ring-color: rgb(49 46 129) !important; }
 .dark .ring-purple-200 { --tw-ring-color: rgb(107 33 168) !important; }
 .dark .ring-slate-200 { --tw-ring-color: rgb(51 65 85) !important; }
+
+/* ── Focus-visible ── */
+*:focus-visible {
+  outline: 2px solid rgb(14 165 233);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Smooth transitions for page content ── */
+main {
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Admin inline-style dark mode variables ── */
+:root {
+  --admin-bg: #ffffff;
+  --admin-bg-secondary: #f9fafb;
+  --admin-bg-tertiary: #f3f4f6;
+  --admin-border: #e5e7eb;
+  --admin-border-light: #f3f4f6;
+  --admin-text: #111827;
+  --admin-text-muted: #6b7280;
+  --admin-text-secondary: #374151;
+  --admin-text-faint: #9ca3af;
+  --admin-error-bg: #fee2e2;
+  --admin-error-text: #991b1b;
+  --admin-error-border: #fecaca;
+  --admin-success-bg: #dcfce7;
+  --admin-success-text: #166534;
+  --admin-success-border: #bbf7d0;
+  --admin-warning-bg: #fef3c7;
+  --admin-warning-text: #92400e;
+  --admin-info-bg: #dbeafe;
+  --admin-info-text: #1d4ed8;
+  --admin-info-border: #bfdbfe;
+  --admin-accent-bg: #eff6ff;
+  --admin-accent-text: #2563eb;
+  --admin-danger-accent-bg: #fef2f2;
+  --admin-danger-accent-text: #dc2626;
+  --admin-card-bg: #fafafa;
+  --admin-modal-overlay: rgba(17, 24, 39, 0.55);
+}
+.dark {
+  --admin-bg: rgb(31 41 55);
+  --admin-bg-secondary: rgb(17 24 39);
+  --admin-bg-tertiary: rgb(55 65 81);
+  --admin-border: rgb(55 65 81);
+  --admin-border-light: rgb(55 65 81);
+  --admin-text: rgb(243 244 246);
+  --admin-text-muted: rgb(156 163 175);
+  --admin-text-secondary: rgb(209 213 219);
+  --admin-text-faint: rgb(156 163 175);
+  --admin-error-bg: rgb(127 29 29 / 0.3);
+  --admin-error-text: rgb(252 165 165);
+  --admin-error-border: rgb(153 27 27);
+  --admin-success-bg: rgb(20 83 45 / 0.3);
+  --admin-success-text: rgb(134 239 172);
+  --admin-success-border: rgb(22 101 52);
+  --admin-warning-bg: rgb(120 53 15 / 0.3);
+  --admin-warning-text: rgb(252 211 77);
+  --admin-info-bg: rgb(30 58 138 / 0.3);
+  --admin-info-text: rgb(147 197 253);
+  --admin-info-border: rgb(30 64 175);
+  --admin-accent-bg: rgb(30 58 138 / 0.2);
+  --admin-accent-text: rgb(96 165 250);
+  --admin-danger-accent-bg: rgb(127 29 29 / 0.2);
+  --admin-danger-accent-text: rgb(248 113 113);
+  --admin-card-bg: rgb(17 24 39);
+  --admin-modal-overlay: rgba(0, 0, 0, 0.7);
+}

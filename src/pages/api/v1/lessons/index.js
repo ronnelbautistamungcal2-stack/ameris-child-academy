@@ -28,6 +28,8 @@ export default async function handler(req, res) {
         category: true,
         goals: { orderBy: { goalIndex: "asc" } },
         remediationsFrom: { include: { toLesson: true } },
+        supplies: { orderBy: { name: "asc" } },
+        policyDocument: true,
       },
     });
     return res.status(200).json(lessons);
@@ -38,7 +40,7 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    const { title, description, centerId: cId, media, categoryId } = req.body;
+    const { title, description, centerId: cId, media, categoryId, policyDocumentId, supplies } = req.body;
     if (!title || !cId)
       return res.status(400).json({ error: "Title and centerId required" });
 
@@ -49,11 +51,26 @@ export default async function handler(req, res) {
         centerId: cId,
         media: media || [],
         categoryId: categoryId || null,
+        policyDocumentId: policyDocumentId || null,
+        supplies: supplies && Array.isArray(supplies) && supplies.length
+          ? {
+              create: supplies.map((s) => ({
+                name: s.name,
+                quantity: s.quantity || 1,
+                unit: s.unit || null,
+                estimatedCost: s.estimatedCost ? parseFloat(s.estimatedCost) : null,
+                category: s.category || "General",
+                notes: s.notes || null,
+              })),
+            }
+          : undefined,
       },
       include: {
         category: true,
         goals: { orderBy: { goalIndex: "asc" } },
         remediationsFrom: { include: { toLesson: true } },
+        supplies: { orderBy: { name: "asc" } },
+        policyDocument: true,
       },
     });
 

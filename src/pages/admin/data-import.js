@@ -175,7 +175,7 @@ export default function DataImport() {
     <AdminLayout title="Data Import">
       <Panel>
         <h2 style={{ marginTop: 0 }}>Data Import</h2>
-        <p style={{ color: "#6b7280", marginTop: 6 }}>
+        <p style={{ color: "var(--admin-text-muted)", marginTop: 6 }}>
           Upload Excel files (.xlsx, .xls) to import children records, or upload PDF files for storage.
         </p>
 
@@ -194,12 +194,12 @@ export default function DataImport() {
                 disabled={loading}
               />
             </Field>
-            {loading && <p style={{ marginTop: 8, color: "#6b7280" }}>Processing file...</p>}
+            {loading && <p style={{ marginTop: 8, color: "var(--admin-text-muted)" }}>Processing file...</p>}
 
             {fileType === "pdf" && pdfUrl && (
-              <div style={{ marginTop: 16, padding: 12, background: "#f9fafb", borderRadius: 8, border: "1px solid #e5e7eb" }}>
+              <div style={{ marginTop: 16, padding: 12, background: "var(--admin-bg-secondary)", borderRadius: 8, border: "1px solid var(--admin-border)" }}>
                 <div style={{ fontWeight: 800 }}>PDF Uploaded Successfully</div>
-                <a href={pdfUrl} target="_blank" rel="noreferrer" style={{ color: "#2563eb", marginTop: 4, display: "inline-block" }}>
+                <a href={pdfUrl} target="_blank" rel="noreferrer" style={{ color: "var(--admin-accent-text)", marginTop: 4, display: "inline-block" }}>
                   View / Download PDF
                 </a>
               </div>
@@ -224,7 +224,7 @@ export default function DataImport() {
             </div>
 
             <h3 style={{ marginTop: 0 }}>Column Mapping</h3>
-            <p style={{ color: "#6b7280", fontSize: 13 }}>Map Excel columns to child record fields.</p>
+            <p style={{ color: "var(--admin-text-muted)", fontSize: 13 }}>Map Excel columns to child record fields.</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, marginTop: 8 }}>
               {CHILD_FIELDS.map((field) => (
                 <Field key={field.key} label={field.label + (field.required ? " *" : "")}>
@@ -276,15 +276,15 @@ export default function DataImport() {
           <div style={{ marginTop: 16 }}>
             <h3 style={{ marginTop: 0 }}>Import Results</h3>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginTop: 8 }}>
-              <StatCard label="Created" value={importResult.created} color="#166534" bg="#dcfce7" />
-              <StatCard label="Errors" value={importResult.errors?.length || 0} color="#991b1b" bg="#fee2e2" />
+              <StatCard label="Created" value={importResult.created} color="var(--admin-success-text)" bg="var(--admin-success-bg)" />
+              <StatCard label="Errors" value={importResult.errors?.length || 0} color="var(--admin-error-text)" bg="var(--admin-error-bg)" />
             </div>
 
             {importResult.errors?.length > 0 && (
               <div style={{ marginTop: 12 }}>
                 <h4>Errors:</h4>
                 {importResult.errors.map((e, i) => (
-                  <div key={i} style={{ padding: 6, fontSize: 13, color: "#991b1b" }}>
+                  <div key={i} style={{ padding: 6, fontSize: 13, color: "var(--admin-error-text)" }}>
                     Row {e.index + 1}: {e.error}
                   </div>
                 ))}
@@ -303,7 +303,7 @@ export default function DataImport() {
 
 function StatCard({ label, value, color, bg }) {
   return (
-    <div style={{ padding: 14, borderRadius: 10, background: bg, border: `1px solid ${color}22` }}>
+    <div style={{ padding: 14, borderRadius: 10, background: bg, border: "1px solid var(--admin-border)" }}>
       <div style={{ fontSize: 24, fontWeight: 800, color }}>{value}</div>
       <div style={{ fontSize: 12, color }}>{label}</div>
     </div>
@@ -311,19 +311,19 @@ function StatCard({ label, value, color, bg }) {
 }
 
 function Panel({ children, style }) {
-  return <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: 10, padding: 16, ...style }}>{children}</div>;
+  return <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: 16, ...style }}>{children}</div>;
 }
 function Field({ label, children }) {
-  return <label style={{ display: "block" }}><div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>{label}</div>{children}</label>;
+  return <label style={{ display: "block" }}><div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginBottom: 6 }}>{label}</div>{children}</label>;
 }
 function Banner({ message, kind }) {
-  const s = kind === "success" ? { background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0" } : { background: "#fee2e2", color: "#991b1b", border: "1px solid #fecaca" };
+  const s = kind === "success" ? { background: "var(--admin-success-bg)", color: "var(--admin-success-text)", border: "1px solid var(--admin-success-border)" } : { background: "var(--admin-error-bg)", color: "var(--admin-error-text)", border: "1px solid var(--admin-error-border)" };
   return <div style={{ padding: 12, borderRadius: 8, marginTop: 12, ...s }}>{message}</div>;
 }
 
-const inputStyle = { width: "100%", padding: 10, border: "1px solid #e5e7eb", borderRadius: 8, boxSizing: "border-box" };
+const inputStyle = { width: "100%", padding: 10, border: "1px solid var(--admin-border)", borderRadius: 8, boxSizing: "border-box", background: "var(--admin-bg)", color: "var(--admin-text)" };
 const primaryButton = { padding: "10px 12px", background: "#2563eb", color: "white", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 800 };
-const secondaryButton = { padding: "9px 12px", background: "white", color: "#111827", border: "1px solid #e5e7eb", borderRadius: 8, cursor: "pointer", fontWeight: 800 };
+const secondaryButton = { padding: "9px 12px", background: "var(--admin-bg)", color: "var(--admin-text)", border: "1px solid var(--admin-border)", borderRadius: 8, cursor: "pointer", fontWeight: 800 };
 const tableStyle = { width: "100%", borderCollapse: "collapse", fontSize: 13 };
-const thStyle = { padding: "8px 10px", background: "#f9fafb", borderBottom: "2px solid #e5e7eb", textAlign: "left", fontWeight: 800, fontSize: 12, whiteSpace: "nowrap" };
-const tdStyle = { padding: "6px 10px", borderBottom: "1px solid #f3f4f6", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+const thStyle = { padding: "8px 10px", background: "var(--admin-bg-secondary)", borderBottom: "2px solid var(--admin-border)", textAlign: "left", fontWeight: 800, fontSize: 12, whiteSpace: "nowrap", color: "var(--admin-text-muted)" };
+const tdStyle = { padding: "6px 10px", borderBottom: "1px solid var(--admin-border-light)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };

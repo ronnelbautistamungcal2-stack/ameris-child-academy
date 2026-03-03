@@ -7,10 +7,12 @@ const ROLES = ["ADMIN", "TEACHER", "PARENT", "COACH", "SUBSCRIBER"];
 export default function AdminForms() {
   const [templates, setTemplates] = useState([]);
   const [centers, setCenters] = useState([]);
+  const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
+  const [applying, setApplying] = useState("");
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -20,17 +22,20 @@ export default function AdminForms() {
   const [schemaText, setSchemaText] = useState("");
   const [requiresRenewal, setRequiresRenewal] = useState(false);
   const [renewalPeriodDays, setRenewalPeriodDays] = useState("");
+  const [autoFillMappingText, setAutoFillMappingText] = useState("");
 
   async function refresh() {
     setLoading(true);
     setError("");
     try {
-      const [t, c] = await Promise.all([
+      const [t, c, s] = await Promise.all([
         apiJson("/api/v1/forms/templates"),
         apiJson("/api/v1/centers"),
+        apiJson("/api/v1/forms/submissions"),
       ]);
       setTemplates(Array.isArray(t) ? t : []);
       setCenters(Array.isArray(c) ? c : []);
+      setSubmissions(Array.isArray(s) ? s : []);
     } catch (e) {
       setError(e.message || "Failed to load form templates");
     } finally {
@@ -62,6 +67,16 @@ export default function AdminForms() {
         }
       }
 
+      let autoFillMapping = null;
+      const mappingTrimmed = autoFillMappingText.trim();
+      if (mappingTrimmed) {
+        try {
+          autoFillMapping = JSON.parse(mappingTrimmed);
+        } catch {
+          throw new Error("Auto-fill mapping must be valid JSON (or empty).");
+        }
+      }
+
       await apiJson("/api/v1/forms/templates", {
         method: "POST",
         body: JSON.stringify({
@@ -73,6 +88,7 @@ export default function AdminForms() {
           schema,
           requiresRenewal,
           renewalPeriodDays: requiresRenewal && renewalPeriodDays ? parseInt(renewalPeriodDays) : null,
+          autoFillMapping,
         }),
       });
       setTitle("");
@@ -83,12 +99,28 @@ export default function AdminForms() {
       setSchemaText("");
       setRequiresRenewal(false);
       setRenewalPeriodDays("");
+      setAutoFillMappingText("");
       setSuccess("Form template created.");
       await refresh();
     } catch (e2) {
       setError(e2.message || "Failed to create form template");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function applyToChild(submissionId) {
+    setApplying(submissionId);
+    setError("");
+    setSuccess("");
+    try {
+      const result = await apiJson(`/api/v1/forms/submissions/${submissionId}/apply`, { method: "POST" });
+      setSuccess(`Applied to child record. Fields updated: ${(result.fieldsUpdated || []).join(", ")}`);
+      await refresh();
+    } catch (e2) {
+      setError(e2.message || "Failed to apply form data");
+    } finally {
+      setApplying("");
     }
   }
 
@@ -185,6 +217,29 @@ export default function AdminForms() {
             </Field>
           </div>
 
+          <div style={{ marginTop: 10 }}>
+            <Field label="Auto-fill Mapping (JSON, optional)">
+              <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>
+                Maps form data keys to child record fields. When a parent submits this form, an admin can apply the data directly to the child record.
+              </div>
+              <textarea
+                value={autoFillMappingText}
+                onChange={(e) => setAutoFillMappingText(e.target.value)}
+                style={{ ...inputStyle, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+                rows={3}
+                placeholder='{"emergencyContact": "emergencyContact", "allergies": "allergies"}'
+              />
+              <div style={{ marginTop: 4, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <button type="button" style={{ ...secondaryButton, fontSize: 10, padding: "2px 8px" }} onClick={() => setAutoFillMappingText(JSON.stringify({ emergencyContact: "emergencyContact", allergies: "allergies" }, null, 2))}>
+                  Emergency Preset
+                </button>
+                <button type="button" style={{ ...secondaryButton, fontSize: 10, padding: "2px 8px" }} onClick={() => setAutoFillMappingText(JSON.stringify({ allergies: "allergies", healthDocuments: "healthAssessmentDocuments" }, null, 2))}>
+                  Health Preset
+                </button>
+              </div>
+            </Field>
+          </div>
+
           <div style={{ marginTop: 12 }}>
             <button type="submit" disabled={saving} style={primaryButton}>
               {saving ? "Creating..." : "Create Template"}
@@ -219,6 +274,65 @@ export default function AdminForms() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </Panel>
+
+      <Panel style={{ marginTop: 16 }}>
+        <h3 style={{ marginTop: 0 }}>Form Submissions</h3>
+        <p style={{ color: "#6b7280", fontSize: 13, marginTop: 4 }}>
+          Review parent submissions and apply form data to child records when auto-fill mapping is configured.
+        </p>
+        {loading ? (
+          <p>Loading...</p>
+        ) : submissions.length === 0 ? (
+          <p style={{ color: "#6b7280" }}>No submissions yet.</p>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10, marginTop: 10 }}>
+            {submissions.map((s) => {
+              const hasMapping = s.template?.autoFillMapping && typeof s.template.autoFillMapping === "object" && Object.keys(s.template.autoFillMapping).length > 0;
+              const canApply = hasMapping && s.childId && !s.appliedToChild;
+              return (
+                <div key={s.id} style={cardStyle}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+                    <div>
+                      <div style={{ fontWeight: 800 }}>{s.template?.title || "Unknown Template"}</div>
+                      <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+                        Submitted by: {s.submittedBy?.name || s.submittedBy?.email || "—"} · Status: {s.status}
+                        {s.child ? ` · Child: ${s.child.firstName} ${s.child.lastName || ""}` : ""}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>
+                        {new Date(s.createdAt).toLocaleString()}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      {s.appliedToChild ? (
+                        <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, background: "#dcfce7", color: "#166534", fontWeight: 800, border: "1px solid #bbf7d0" }}>
+                          Applied
+                        </span>
+                      ) : canApply ? (
+                        <button
+                          type="button"
+                          disabled={applying === s.id}
+                          onClick={() => applyToChild(s.id)}
+                          style={{ ...primaryButton, fontSize: 11, padding: "4px 10px" }}
+                        >
+                          {applying === s.id ? "Applying..." : "Apply to Child"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                  {s.data && typeof s.data === "object" ? (
+                    <details style={{ marginTop: 8 }}>
+                      <summary style={{ fontSize: 12, color: "#6b7280", cursor: "pointer" }}>View submitted data</summary>
+                      <pre style={{ fontSize: 11, marginTop: 6, background: "#f9fafb", padding: 8, borderRadius: 6, overflow: "auto", maxHeight: 200 }}>
+                        {JSON.stringify(s.data, null, 2)}
+                      </pre>
+                    </details>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         )}
       </Panel>

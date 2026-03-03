@@ -5,6 +5,7 @@ export const PARENT_NAV_ITEMS = [
     children: [
       { href: "/parent/children", label: "My Children" },
       { href: "/parent/progress", label: "Progress & Goals" },
+      { href: "/parent/permissions", label: "Permissions" },
     ],
   },
   {

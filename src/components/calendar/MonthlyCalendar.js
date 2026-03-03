@@ -18,7 +18,13 @@ const TYPE_COLORS = {
   Other: "bg-sky-100 text-sky-700",
 };
 
+const SOURCE_COLORS = {
+  event: "bg-indigo-100 text-indigo-700",
+  shift: "bg-violet-100 text-violet-700",
+};
+
 function getEventColor(event) {
+  if (event._source && SOURCE_COLORS[event._source]) return SOURCE_COLORS[event._source];
   return TYPE_COLORS[event.type] || STATUS_COLORS[event.status] || "bg-gray-100 text-gray-600";
 }
 
@@ -33,7 +39,7 @@ function normalizeDate(d) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-export default function MonthlyCalendar({ year, month, events = [], onMonthChange }) {
+export default function MonthlyCalendar({ year, month, events = [], onMonthChange, onDayClick, legendItems }) {
   const today = new Date();
   const firstDay = new Date(year, month, 1);
   const startDow = firstDay.getDay();
@@ -75,6 +81,11 @@ export default function MonthlyCalendar({ year, month, events = [], onMonthChang
     if (month === 11) onMonthChange?.(year + 1, 0);
     else onMonthChange?.(year, month + 1);
   }
+
+  const legendEntries = legendItems || Object.entries(TYPE_COLORS).map(([type, cls]) => ({
+    label: type,
+    cls: cls.split(" ")[0],
+  }));
 
   return (
     <div>
@@ -121,7 +132,9 @@ export default function MonthlyCalendar({ year, month, events = [], onMonthChang
               className={[
                 "min-h-[72px] border border-gray-100 p-1",
                 isToday ? "ring-2 ring-inset ring-sky-400 bg-sky-50/30" : "",
+                onDayClick ? "cursor-pointer hover:bg-gray-50" : "",
               ].join(" ")}
+              onClick={onDayClick ? () => onDayClick(cell.day) : undefined}
             >
               <div className={[
                 "text-right text-xs",
@@ -135,9 +148,13 @@ export default function MonthlyCalendar({ year, month, events = [], onMonthChang
                     <div
                       key={evt.id}
                       className={`truncate rounded-sm px-1 text-[10px] font-semibold leading-tight ${getEventColor(evt)}`}
-                      title={`${evt.type || "Time Off"} - ${evt.user?.name || "Unknown"} (${evt.status})`}
+                      title={evt._source === "event"
+                        ? `${evt.type || "Event"} - ${evt.label}`
+                        : evt._source === "shift"
+                          ? `Shift - ${evt.label}`
+                          : `${evt.type || "Time Off"} - ${evt.user?.name || "Unknown"} (${evt.status})`}
                     >
-                      {evt.user?.name || "—"}
+                      {evt.label || evt.user?.name || "—"}
                     </div>
                   ))}
                   {dayEvents.length > 3 && (
@@ -153,10 +170,10 @@ export default function MonthlyCalendar({ year, month, events = [], onMonthChang
       </div>
 
       <div className="mt-3 flex flex-wrap gap-3">
-        {Object.entries(TYPE_COLORS).map(([type, cls]) => (
-          <div key={type} className="flex items-center gap-1.5">
-            <span className={`inline-block h-3 w-3 rounded-sm ${cls.split(" ")[0]}`} />
-            <span className="text-xs text-gray-500">{type}</span>
+        {legendEntries.map((item) => (
+          <div key={item.label} className="flex items-center gap-1.5">
+            <span className={`inline-block h-3 w-3 rounded-sm ${item.cls}`} />
+            <span className="text-xs text-gray-500">{item.label}</span>
           </div>
         ))}
       </div>

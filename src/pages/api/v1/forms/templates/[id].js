@@ -10,7 +10,7 @@ export default async function handler(req, res) {
   if (!id || typeof id !== "string") return res.status(400).json({ error: "Invalid id" });
 
   if (req.method === "PATCH") {
-    const { title, description, targetRole, schema, centerId, active, requiresRenewal, renewalPeriodDays } = req.body || {};
+    const { title, description, targetRole, schema, centerId, active, requiresRenewal, renewalPeriodDays, autoFillMapping } = req.body || {};
     const data = {};
 
     if (typeof title === "string") data.title = title;
@@ -21,6 +21,7 @@ export default async function handler(req, res) {
     if (typeof active === "boolean") data.active = active;
     if (typeof requiresRenewal === "boolean") data.requiresRenewal = requiresRenewal;
     if (renewalPeriodDays !== undefined) data.renewalPeriodDays = renewalPeriodDays ? parseInt(renewalPeriodDays) : null;
+    if (autoFillMapping !== undefined) data.autoFillMapping = autoFillMapping;
 
     const updated = await prisma.formTemplate.update({
       where: { id },

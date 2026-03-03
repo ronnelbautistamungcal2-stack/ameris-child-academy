@@ -87,7 +87,7 @@ export default function AdminCenters() {
     <AdminLayout title="Centers">
       <Panel>
         <h2 style={{ marginTop: 0 }}>Centers</h2>
-        <p style={{ color: "#6b7280", marginTop: 6 }}>
+        <p style={{ color: "var(--admin-text-muted)", marginTop: 6 }}>
           Create/update/delete centers and view subscription status.
         </p>
 
@@ -194,8 +194,8 @@ function Panel({ children }) {
   return (
     <div
       style={{
-        background: "white",
-        border: "1px solid #e5e7eb",
+        background: "var(--admin-bg)",
+        border: "1px solid var(--admin-border)",
         borderRadius: 10,
         padding: 16,
       }}
@@ -208,7 +208,7 @@ function Panel({ children }) {
 function Field({ label, children }) {
   return (
     <label style={{ display: "block" }}>
-      <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginBottom: 6 }}>{label}</div>
       {children}
     </label>
   );
@@ -219,11 +219,11 @@ function ErrorBanner({ message }) {
     <div
       style={{
         padding: 12,
-        background: "#fee2e2",
-        color: "#991b1b",
+        background: "var(--admin-error-bg)",
+        color: "var(--admin-error-text)",
         borderRadius: 8,
         marginTop: 12,
-        border: "1px solid #fecaca",
+        border: "1px solid var(--admin-error-border)",
       }}
     >
       {message}
@@ -234,7 +234,7 @@ function ErrorBanner({ message }) {
 const inputStyle = {
   width: "100%",
   padding: 10,
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--admin-border)",
   borderRadius: 8,
   boxSizing: "border-box",
 };
@@ -242,7 +242,7 @@ const inputStyle = {
 const tableStyle = {
   width: "100%",
   borderCollapse: "collapse",
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--admin-border)",
   borderRadius: 10,
   overflow: "hidden",
 };
@@ -250,15 +250,15 @@ const tableStyle = {
 const thStyle = {
   textAlign: "left",
   fontSize: 12,
-  color: "#6b7280",
+  color: "var(--admin-text-muted)",
   padding: 10,
-  borderBottom: "1px solid #e5e7eb",
-  background: "#f9fafb",
+  borderBottom: "1px solid var(--admin-border)",
+  background: "var(--admin-bg-secondary)",
 };
 
 const tdStyle = {
   padding: 10,
-  borderBottom: "1px solid #f3f4f6",
+  borderBottom: "1px solid var(--admin-border-light)",
   verticalAlign: "top",
 };
 
@@ -274,9 +274,9 @@ const primaryButton = {
 
 const secondaryButton = {
   padding: "10px 12px",
-  background: "white",
-  color: "#111827",
-  border: "1px solid #e5e7eb",
+  background: "var(--admin-bg)",
+  color: "var(--admin-text)",
+  border: "1px solid var(--admin-border)",
   borderRadius: 8,
   cursor: "pointer",
   fontWeight: 600,

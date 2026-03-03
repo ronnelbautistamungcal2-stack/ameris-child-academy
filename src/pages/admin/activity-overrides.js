@@ -143,7 +143,7 @@ export default function AdminActivityOverrides() {
     <AdminLayout title="Activity Overrides">
       <Panel>
         <h2 style={{ marginTop: 0 }}>Override Teacher Activity Entries</h2>
-        <p style={{ color: "#6b7280", marginTop: 6 }}>
+        <p style={{ color: "var(--admin-text-muted)", marginTop: 6 }}>
           Admins can create and backdate activity logs and delete logs when needed.
         </p>
 
@@ -217,7 +217,7 @@ export default function AdminActivityOverrides() {
           {loading ? (
             <p>Loading…</p>
           ) : !childId ? (
-            <p style={{ color: "#6b7280" }}>Select a child to view logs.</p>
+            <p style={{ color: "var(--admin-text-muted)" }}>Select a child to view logs.</p>
           ) : (
             <table style={tableStyle}>
               <thead>
@@ -265,8 +265,8 @@ function Panel({ children }) {
   return (
     <div
       style={{
-        background: "white",
-        border: "1px solid #e5e7eb",
+        background: "var(--admin-bg)",
+        border: "1px solid var(--admin-border)",
         borderRadius: 10,
         padding: 16,
       }}
@@ -279,7 +279,7 @@ function Panel({ children }) {
 function Field({ label, children }) {
   return (
     <label style={{ display: "block" }}>
-      <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginBottom: 6 }}>{label}</div>
       {children}
     </label>
   );
@@ -288,8 +288,8 @@ function Field({ label, children }) {
 function ErrorBanner({ message, kind }) {
   const style =
     kind === "success"
-      ? { background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0" }
-      : { background: "#fee2e2", color: "#991b1b", border: "1px solid #fecaca" };
+      ? { background: "var(--admin-success-bg)", color: "var(--admin-success-text)", border: "1px solid var(--admin-success-border)" }
+      : { background: "var(--admin-error-bg)", color: "var(--admin-error-text)", border: "1px solid var(--admin-error-border)" };
 
   return (
     <div style={{ padding: 12, borderRadius: 8, marginTop: 12, ...style }}>
@@ -301,7 +301,7 @@ function ErrorBanner({ message, kind }) {
 const inputStyle = {
   width: "100%",
   padding: 10,
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--admin-border)",
   borderRadius: 8,
   boxSizing: "border-box",
 };
@@ -309,7 +309,7 @@ const inputStyle = {
 const tableStyle = {
   width: "100%",
   borderCollapse: "collapse",
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--admin-border)",
   borderRadius: 10,
   overflow: "hidden",
 };
@@ -317,20 +317,20 @@ const tableStyle = {
 const thStyle = {
   textAlign: "left",
   fontSize: 12,
-  color: "#6b7280",
+  color: "var(--admin-text-muted)",
   padding: 10,
-  borderBottom: "1px solid #e5e7eb",
-  background: "#f9fafb",
+  borderBottom: "1px solid var(--admin-border)",
+  background: "var(--admin-bg-secondary)",
 };
 
 const tdStyle = {
   padding: 10,
-  borderBottom: "1px solid #f3f4f6",
+  borderBottom: "1px solid var(--admin-border-light)",
   verticalAlign: "top",
 };
 
 const codePill = {
-  background: "#f3f4f6",
+  background: "var(--admin-bg-tertiary)",
   padding: "2px 8px",
   borderRadius: 999,
 };

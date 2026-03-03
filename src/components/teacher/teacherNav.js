@@ -20,6 +20,7 @@ export const TEACHER_NAV_ITEMS = [
     label: "Planning",
     children: [
       { href: "/teacher/checklists", label: "Checklists" },
+      { href: "/teacher/calendar", label: "Calendar" },
     ],
   },
   {

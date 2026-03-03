@@ -335,7 +335,7 @@ export default function AdminClasses() {
         >
           <div>
             <h2 style={{ marginTop: 0 }}>Classes</h2>
-            <p style={{ color: "#6b7280", marginTop: 6 }}>
+            <p style={{ color: "var(--admin-text-muted)", marginTop: 6 }}>
               Classroom setup: create/modify/delete class rooms.
             </p>
           </div>
@@ -416,11 +416,11 @@ export default function AdminClasses() {
               <div style={{ marginTop: 12 }}>
                 <Field label="Assigned Teachers">
                   {!effectiveCenterId ? (
-                    <div style={{ color: "#6b7280", fontSize: 13 }}>
+                    <div style={{ color: "var(--admin-text-muted)", fontSize: 13 }}>
                       Select a center first to assign teachers.
                     </div>
                   ) : availableTeachers.length === 0 ? (
-                    <div style={{ color: "#6b7280", fontSize: 13 }}>
+                    <div style={{ color: "var(--admin-text-muted)", fontSize: 13 }}>
                       No teachers found for this center.
                     </div>
                   ) : (
@@ -468,7 +468,7 @@ export default function AdminClasses() {
                             );
                           })}
                           {teacherSearchResults.length === 0 ? (
-                            <div style={{ padding: 8, color: "#6b7280", fontSize: 12 }}>
+                            <div style={{ padding: 8, color: "var(--admin-text-muted)", fontSize: 12 }}>
                               No results
                             </div>
                           ) : null}
@@ -591,8 +591,8 @@ function Panel({ children }) {
   return (
     <div
       style={{
-        background: "white",
-        border: "1px solid #e5e7eb",
+        background: "var(--admin-bg)",
+        border: "1px solid var(--admin-border)",
         borderRadius: 10,
         padding: 16,
       }}
@@ -636,7 +636,7 @@ function Modal({ title, onClose, children }) {
 function Field({ label, children }) {
   return (
     <label style={{ display: "block" }}>
-      <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
+      <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginBottom: 6 }}>
         {label}
       </div>
       {children}
@@ -649,11 +649,11 @@ function ErrorBanner({ message }) {
     <div
       style={{
         padding: 12,
-        background: "#fee2e2",
-        color: "#991b1b",
+        background: "var(--admin-error-bg)",
+        color: "var(--admin-error-text)",
         borderRadius: 8,
         marginTop: 12,
-        border: "1px solid #fecaca",
+        border: "1px solid var(--admin-error-border)",
       }}
     >
       {message}
@@ -664,7 +664,7 @@ function ErrorBanner({ message }) {
 const inputStyle = {
   width: "100%",
   padding: 10,
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--admin-border)",
   borderRadius: 8,
   boxSizing: "border-box",
 };
@@ -672,7 +672,7 @@ const inputStyle = {
 const tableStyle = {
   width: "100%",
   borderCollapse: "collapse",
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--admin-border)",
   borderRadius: 10,
   overflow: "hidden",
 };
@@ -680,22 +680,22 @@ const tableStyle = {
 const thStyle = {
   textAlign: "left",
   fontSize: 12,
-  color: "#6b7280",
+  color: "var(--admin-text-muted)",
   padding: 10,
-  borderBottom: "1px solid #e5e7eb",
-  background: "#f9fafb",
+  borderBottom: "1px solid var(--admin-border)",
+  background: "var(--admin-bg-secondary)",
 };
 
 const tdStyle = {
   padding: 10,
-  borderBottom: "1px solid #f3f4f6",
+  borderBottom: "1px solid var(--admin-border-light)",
 };
 
 const modalOverlayStyle = {
   position: "fixed",
   inset: 0,
   zIndex: 80,
-  background: "rgba(17, 24, 39, 0.55)",
+  background: "var(--admin-modal-overlay)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -706,8 +706,8 @@ const modalCardStyle = {
   width: "min(980px, 100%)",
   maxHeight: "min(86vh, 900px)",
   overflow: "auto",
-  background: "white",
-  border: "1px solid #e5e7eb",
+  background: "var(--admin-bg)",
+  border: "1px solid var(--admin-border)",
   borderRadius: 12,
   padding: 16,
   boxShadow:
@@ -718,9 +718,9 @@ const teacherDropdownStyle = {
   marginTop: 4,
   maxHeight: 120,
   overflow: "auto",
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--admin-border)",
   borderRadius: 6,
-  background: "white",
+  background: "var(--admin-bg)",
 };
 
 function teacherOptionStyle(active) {
@@ -729,9 +729,9 @@ function teacherOptionStyle(active) {
     textAlign: "left",
     padding: "6px 8px",
     border: "none",
-    borderBottom: "1px solid #f3f4f6",
-    background: active ? "#eff6ff" : "white",
-    color: "#111827",
+    borderBottom: "1px solid var(--admin-border-light)",
+    background: active ? "var(--admin-accent-bg)" : "var(--admin-bg)",
+    color: "var(--admin-text)",
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
@@ -739,7 +739,7 @@ function teacherOptionStyle(active) {
 }
 
 const teacherPickerWrapStyle = {
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--admin-border)",
   borderRadius: 8,
   padding: 8,
 };
@@ -752,15 +752,15 @@ const teacherInputRowStyle = {
 
 const teacherSummaryStyle = {
   marginTop: 6,
-  color: "#6b7280",
+  color: "var(--admin-text-muted)",
   fontSize: 12,
   lineHeight: 1.35,
 };
 
 const tinyClearButtonStyle = {
-  border: "1px solid #e5e7eb",
-  background: "white",
-  color: "#374151",
+  border: "1px solid var(--admin-border)",
+  background: "var(--admin-bg)",
+  color: "var(--admin-text-secondary)",
   borderRadius: 6,
   padding: "6px 8px",
   fontSize: 12,
@@ -787,9 +787,9 @@ const primaryButton = {
 
 const secondaryButton = {
   padding: "10px 12px",
-  background: "white",
-  color: "#111827",
-  border: "1px solid #e5e7eb",
+  background: "var(--admin-bg)",
+  color: "var(--admin-text)",
+  border: "1px solid var(--admin-border)",
   borderRadius: 8,
   cursor: "pointer",
   fontWeight: 600,

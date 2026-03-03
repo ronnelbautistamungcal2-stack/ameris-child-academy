@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
 import NotificationBell from "@/components/notifications/NotificationBell";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -146,15 +146,9 @@ export default function AppShell({
         <div className="hidden md:block">{Sidebar}</div>
 
         {mobileOpen ? (
-          <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true">
-            <div
-              className="absolute inset-0 bg-gray-900/40 dark:bg-black/60"
-              onClick={() => setMobileOpen(false)}
-            />
-            <div className="absolute inset-y-0 left-0 w-80 max-w-[85vw] shadow-xl">
-              {Sidebar}
-            </div>
-          </div>
+          <MobileSidebar onClose={() => setMobileOpen(false)}>
+            {Sidebar}
+          </MobileSidebar>
         ) : null}
 
         <div className="min-w-0 flex-1">
@@ -207,7 +201,7 @@ export default function AppShell({
                   {avatarUrl ? (
                     <img
                       src={avatarUrl}
-                      alt="Profile"
+                      alt={userDisplay}
                       className="h-10 w-10 rounded-full border border-gray-200 object-cover dark:border-gray-600"
                       onError={(e) => {
                         e.currentTarget.style.display = "none";
@@ -278,20 +272,12 @@ export default function AppShell({
 
                   <FooterCol
                     title="Support"
-                    items={[
-                      { label: "Help Center", href: "#" },
-                      { label: "Contact Support", href: "#" },
-                      { label: "Technical Issues", href: "#" },
-                    ]}
+                    items={["Help Center", "Contact Support", "Technical Issues"]}
                   />
 
                   <FooterCol
                     title="Legal"
-                    items={[
-                      { label: "Privacy Policy", href: "#" },
-                      { label: "Terms of Service", href: "#" },
-                      { label: "Cookie Policy", href: "#" },
-                    ]}
+                    items={["Privacy Policy", "Terms of Service", "Cookie Policy"]}
                   />
 
                   <div>
@@ -301,29 +287,13 @@ export default function AppShell({
                     <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                       Get the latest news and activity updates.
                     </div>
-                    <form
-                      className="mt-4 flex items-center gap-2"
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        alert("Newsletter signup not implemented yet");
-                      }}
-                    >
-                      <input
-                        type="email"
-                        placeholder="Your email"
-                        className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-                      />
-                      <button
-                        type="submit"
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-600 text-white hover:bg-sky-700"
-                        aria-label="Subscribe"
-                      >
-                        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 6l6 6-6 6" />
-                        </svg>
-                      </button>
-                    </form>
+                    <p className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-gray-100 px-4 py-2 text-xs font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 6l6 6-6 6" />
+                      </svg>
+                      Coming soon
+                    </p>
                   </div>
                 </div>
 
@@ -415,14 +385,45 @@ function FooterCol({ title, items }) {
         {title}
       </div>
       <ul className="mt-3 space-y-2 text-sm">
-        {items.map((item) => (
-          <li key={item.label}>
-            <a href={item.href} className="text-gray-700 hover:text-sky-700 dark:text-gray-300 dark:hover:text-sky-400">
-              {item.label}
-            </a>
+        {items.map((label) => (
+          <li key={label} className="text-gray-500 dark:text-gray-400">
+            {label}
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function MobileSidebar({ onClose, children }) {
+  const sidebarRef = useRef(null);
+
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  useEffect(() => {
+    if (sidebarRef.current) {
+      const focusable = sidebarRef.current.querySelectorAll(
+        'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length) focusable[0].focus();
+    }
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
+      <div
+        className="absolute inset-0 bg-gray-900/40 dark:bg-black/60"
+        onClick={onClose}
+      />
+      <div ref={sidebarRef} className="absolute inset-y-0 left-0 w-80 max-w-[85vw] shadow-xl">
+        {children}
+      </div>
     </div>
   );
 }

@@ -38,7 +38,7 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Only admins can create form templates" });
     }
 
-    const { title, description, targetRole, schema, centerId: cId, active, requiresRenewal, renewalPeriodDays } = req.body || {};
+    const { title, description, targetRole, schema, centerId: cId, active, requiresRenewal, renewalPeriodDays, autoFillMapping } = req.body || {};
     if (!title || !targetRole) {
       return res.status(400).json({ error: "title and targetRole are required" });
     }
@@ -53,6 +53,7 @@ export default async function handler(req, res) {
         active: active ?? true,
         requiresRenewal: requiresRenewal ?? false,
         renewalPeriodDays: requiresRenewal && renewalPeriodDays ? parseInt(renewalPeriodDays) : null,
+        autoFillMapping: autoFillMapping ?? null,
       },
     });
     return res.status(201).json(created);

@@ -129,15 +129,24 @@ export default function NotificationBell({ userId }) {
     ),
   );
 
-  // Close dropdown on outside click
+  // Close dropdown on outside click or Escape key
   useEffect(() => {
     function handleClick(e) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setOpen(false);
       }
     }
-    if (open) document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    function handleKeyDown(e) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClick);
+      document.addEventListener("keydown", handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [open]);
 
   async function markAllRead() {
@@ -185,7 +194,7 @@ export default function NotificationBell({ userId }) {
   return (
     <>
       {/* Toast popup container — fixed top-right */}
-      <div className="pointer-events-none fixed right-4 top-16 z-[100] flex flex-col gap-2">
+      <div className="pointer-events-none fixed right-4 top-16 z-[100] flex flex-col gap-2" aria-live="polite" role="status">
         {toasts.map((t) => (
           <NotificationToast
             key={t._toastId}
@@ -222,7 +231,7 @@ export default function NotificationBell({ userId }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-12 z-50 w-80 rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-800 sm:w-96">
+        <div className="absolute right-0 top-12 z-50 w-80 rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-800 sm:w-96" role="menu" aria-label="Notifications">
           <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 dark:border-gray-700">
             <h3 className="text-sm font-extrabold text-gray-900 dark:text-gray-100">Notifications</h3>
             {unreadCount > 0 && (
@@ -238,10 +247,24 @@ export default function NotificationBell({ userId }) {
 
           <div className="max-h-[400px] overflow-y-auto">
             {loading && notifications.length === 0 ? (
-              <div className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">Loading...</div>
+              <div className="space-y-3 px-4 py-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-3 w-3/4 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                      <div className="h-2 w-full animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : notifications.length === 0 ? (
-              <div className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                No notifications yet
+              <div className="flex flex-col items-center px-4 py-10 text-center">
+                <svg viewBox="0 0 24 24" className="h-10 w-10 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                </svg>
+                <p className="mt-2 text-sm font-semibold text-gray-500 dark:text-gray-400">No notifications yet</p>
+                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">You're all caught up!</p>
               </div>
             ) : (
               notifications.map((n) => (

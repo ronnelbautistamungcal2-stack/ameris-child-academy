@@ -118,6 +118,8 @@ export default async function handler(req, res) {
       healthAssessmentDocuments,
       enrollmentDocuments,
       feedingPlan,
+      enrollmentStartDate,
+      enrollmentEndDate,
     } = req.body;
     if (!firstName || !cId) {
       return res.status(400).json({ error: "firstName and centerId required" });
@@ -142,6 +144,8 @@ export default async function handler(req, res) {
         healthAssessmentDocuments: normalizeDocs(healthAssessmentDocuments),
         enrollmentDocuments: normalizeDocs(enrollmentDocuments),
         feedingPlan: normalizeFeedingPlan(feedingPlan),
+        enrollmentStartDate: enrollmentStartDate ? new Date(enrollmentStartDate) : null,
+        enrollmentEndDate: enrollmentEndDate ? new Date(enrollmentEndDate) : null,
       },
       include: { progress: true, activities: true },
     });

@@ -1,4 +1,6 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
+import { SkeletonCard } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -23,6 +25,7 @@ export default function TeacherLessons() {
   const [category, setCategory] = useState("");
   const [visibleCount, setVisibleCount] = useState(50);
   const [expandedLessonId, setExpandedLessonId] = useState("");
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -168,11 +171,21 @@ export default function TeacherLessons() {
 
         <div className="mt-4">
           {loading ? (
-            <div className="text-sm text-gray-600">Loading…</div>
-          ) : filteredLessons.length === 0 ? (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-              No lessons found.
+            <div className="space-y-3">
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
             </div>
+          ) : filteredLessons.length === 0 ? (
+            <EmptyState
+              title="No lessons found"
+              description={query || category ? "Try adjusting your search or category filter." : "No lessons are available for this center yet."}
+              icon={
+                <svg viewBox="0 0 24 24" className="h-12 w-12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                </svg>
+              }
+            />
           ) : (
             <div className="space-y-3">
               <div className="text-xs text-gray-600">
@@ -196,6 +209,12 @@ export default function TeacherLessons() {
                           {(l?.category?.name || "Uncategorized") +
                             (guideCount ? ` • ${guideCount} steps` : "")}
                         </div>
+                        {l.policyDocument && (
+                          <a href={l.policyDocument.url} target="_blank" rel="noreferrer"
+                            className="mt-1 inline-block rounded-full bg-indigo-100 px-2 py-0.5 text-xs text-indigo-700 hover:bg-indigo-200 no-underline">
+                            Policy: {l.policyDocument.title}
+                          </a>
+                        )}
                         <div className="text-sm text-gray-600">
                           {l.description || "—"}
                         </div>
@@ -329,6 +348,35 @@ export default function TeacherLessons() {
                             No steps added yet.
                           </div>
                         )}
+
+                        {l.supplies && l.supplies.length > 0 ? (
+                          <div className="mt-4">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                              Supplies Needed
+                            </div>
+                            <div className="mt-2 space-y-1">
+                              {l.supplies.map((s, sIdx) => (
+                                <div
+                                  key={s.id || sIdx}
+                                  className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                                >
+                                  <div>
+                                    <span className="font-semibold text-gray-900">{s.name}</span>
+                                    <span className="ml-2 text-gray-500">
+                                      x{s.quantity}{s.unit ? ` ${s.unit}` : ""}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">{s.category}</span>
+                                    {s.estimatedCost ? (
+                                      <span className="text-xs text-gray-500">${Number(s.estimatedCost).toFixed(2)}</span>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
@@ -338,10 +386,23 @@ export default function TeacherLessons() {
               {filteredLessons.length > visibleCount ? (
                 <button
                   type="button"
-                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
-                  onClick={() => setVisibleCount((n) => n + 50)}
+                  disabled={loadingMore}
+                  className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-60 transition"
+                  onClick={() => {
+                    setLoadingMore(true);
+                    setTimeout(() => {
+                      setVisibleCount((n) => n + 50);
+                      setLoadingMore(false);
+                    }, 100);
+                  }}
                 >
-                  Load 50 more
+                  {loadingMore ? (
+                    <svg className="h-4 w-4 animate-spin text-gray-500" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : null}
+                  Load 50 more ({filteredLessons.length - visibleCount} remaining)
                 </button>
               ) : null}
             </div>

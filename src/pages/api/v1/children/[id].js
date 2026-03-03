@@ -78,6 +78,8 @@ export default async function handler(req, res) {
       healthAssessmentDocuments,
       enrollmentDocuments,
       feedingPlan,
+      enrollmentStartDate,
+      enrollmentEndDate,
     } = req.body;
 
     const child = await prisma.child.update({
@@ -114,6 +116,12 @@ export default async function handler(req, res) {
           : undefined,
         feedingPlan: Object.prototype.hasOwnProperty.call(req.body, "feedingPlan")
           ? normalizeFeedingPlan(feedingPlan)
+          : undefined,
+        enrollmentStartDate: Object.prototype.hasOwnProperty.call(req.body, "enrollmentStartDate")
+          ? enrollmentStartDate ? new Date(enrollmentStartDate) : null
+          : undefined,
+        enrollmentEndDate: Object.prototype.hasOwnProperty.call(req.body, "enrollmentEndDate")
+          ? enrollmentEndDate ? new Date(enrollmentEndDate) : null
           : undefined,
       },
       include: { progress: true, activities: true },

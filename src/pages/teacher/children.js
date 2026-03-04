@@ -1,4 +1,5 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { apiJson } from "@/lib/api";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -46,6 +47,7 @@ export default function TeacherChildren() {
   const [editNotes, setEditNotes] = useState("");
   const [savingLogId, setSavingLogId] = useState("");
   const [deletingLogId, setDeletingLogId] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   async function load() {
     setError("");
@@ -188,7 +190,6 @@ export default function TeacherChildren() {
 
   async function deleteLog(logId) {
     if (!logId) return;
-    if (!confirm("Delete this log entry?")) return;
     setDeletingLogId(logId);
     setLogsError("");
     setLogsSuccess("");
@@ -203,6 +204,7 @@ export default function TeacherChildren() {
       setLogsError(e.message || "Failed to delete log");
     } finally {
       setDeletingLogId("");
+      setDeleteTarget(null);
     }
   }
 
@@ -343,6 +345,9 @@ export default function TeacherChildren() {
       {selectedChild ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Manage logs for ${fullName(selectedChild)}`}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) closeManageLogs();
           }}
@@ -360,6 +365,7 @@ export default function TeacherChildren() {
               <button
                 type="button"
                 onClick={closeManageLogs}
+                aria-label="Close manage logs"
                 className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50"
               >
                 Close
@@ -475,7 +481,7 @@ export default function TeacherChildren() {
 
                                 <button
                                   type="button"
-                                  onClick={() => deleteLog(log.id)}
+                                  onClick={() => setDeleteTarget(log.id)}
                                   disabled={isSaving || isDeleting}
                                   className="rounded-lg bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
@@ -494,6 +500,15 @@ export default function TeacherChildren() {
           </div>
         </div>
       ) : null}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Remove Log Entry"
+        message="Are you sure you want to remove this log entry? This action cannot be undone."
+        confirmLabel="Remove"
+        variant="danger"
+        onConfirm={() => deleteLog(deleteTarget)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </TeacherLayout>
   );
 }

@@ -194,7 +194,9 @@ export default function ParentPermissions() {
                                     "rounded-lg px-3 py-1.5 text-xs font-extrabold transition",
                                     isGranted
                                       ? "cursor-default bg-green-200 text-green-800"
-                                      : "bg-green-600 text-white hover:bg-green-700",
+                                      : isSaving
+                                        ? "cursor-not-allowed bg-green-400 text-white opacity-60"
+                                        : "bg-green-600 text-white hover:bg-green-700",
                                   ].join(" ")}
                                 >
                                   {isSaving ? "..." : "Grant"}
@@ -207,7 +209,9 @@ export default function ParentPermissions() {
                                     "rounded-lg px-3 py-1.5 text-xs font-extrabold transition",
                                     isDenied
                                       ? "cursor-default bg-red-200 text-red-800"
-                                      : "bg-red-600 text-white hover:bg-red-700",
+                                      : isSaving
+                                        ? "cursor-not-allowed bg-red-400 text-white opacity-60"
+                                        : "bg-red-600 text-white hover:bg-red-700",
                                   ].join(" ")}
                                 >
                                   {isSaving ? "..." : "Deny"}

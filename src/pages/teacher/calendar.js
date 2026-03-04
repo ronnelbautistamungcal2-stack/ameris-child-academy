@@ -27,6 +27,8 @@ export default function TeacherCalendarPage() {
   const [selectedDay, setSelectedDay] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const [error, setError] = useState("");
+
   useEffect(() => {
     (async () => {
       try {
@@ -34,7 +36,7 @@ export default function TeacherCalendarPage() {
         const arr = Array.isArray(c) ? c : [];
         setCenters(arr);
         if (arr.length === 1) setCenterId(arr[0].id);
-      } catch {} finally { setLoading(false); }
+      } catch (err) { setError(err.message || "Failed to load centers"); } finally { setLoading(false); }
     })();
   }, []);
 
@@ -45,7 +47,7 @@ export default function TeacherCalendarPage() {
       const to = new Date(calYear, calMonth + 1, 0).toISOString();
       const data = await apiJson(`/api/v1/calendar?centerId=${centerId}&from=${from}&to=${to}`);
       setCalData(data);
-    } catch {}
+    } catch (err) { setError(err.message || "Failed to load calendar data"); }
   }, [centerId, calYear, calMonth]);
 
   useEffect(() => { loadCalendar(); }, [loadCalendar]);
@@ -124,6 +126,8 @@ export default function TeacherCalendarPage() {
           </select>
         </div>
 
+        {error && <div style={{ padding: 10, background: "#fef2f2", color: "#991b1b", borderRadius: 8, marginBottom: 12, fontSize: 13, border: "1px solid #fecaca" }}>{error}</div>}
+
         {/* Filter toggles */}
         <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
           {[
@@ -143,7 +147,7 @@ export default function TeacherCalendarPage() {
         </div>
 
         {centerId ? (
-          <div style={{ display: "grid", gridTemplateColumns: selectedDay ? "1fr 300px" : "1fr", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: selectedDay ? "1fr minmax(0, 300px)" : "1fr", gap: 16 }}>
             <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, padding: 16 }}>
               <MonthlyCalendar
                 year={calYear}
@@ -162,7 +166,7 @@ export default function TeacherCalendarPage() {
                   <div style={{ fontWeight: 700, fontSize: 14 }}>
                     {new Date(calYear, calMonth, selectedDay).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
                   </div>
-                  <button type="button" onClick={() => setSelectedDay(null)}
+                  <button type="button" onClick={() => setSelectedDay(null)} aria-label="Close day detail"
                     style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "#9ca3af" }}>✕</button>
                 </div>
                 {dayItems.length === 0 && <div style={{ fontSize: 13, color: "#9ca3af" }}>No items this day</div>}

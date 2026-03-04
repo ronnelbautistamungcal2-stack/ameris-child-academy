@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -20,6 +21,7 @@ export default function AdminPolicies() {
   const [centerId, setCenterId] = useState("");
   const [roles, setRoles] = useState(["TEACHER"]);
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   async function refresh() {
     setLoading(true);
@@ -100,14 +102,15 @@ export default function AdminPolicies() {
   }
 
   async function deletePolicy(id) {
-    if (!confirm("Delete this policy document?")) return;
     setError(""); setSuccess("");
     try {
       await apiJson(`/api/v1/policies/${id}`, { method: "DELETE" });
       setSuccess("Policy deleted.");
+      setDeleteTarget(null);
       await refresh();
     } catch (e2) {
       setError(e2.message || "Failed to delete policy");
+      setDeleteTarget(null);
     }
   }
 
@@ -174,7 +177,7 @@ export default function AdminPolicies() {
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                 <button type="submit" disabled={saving || roles.length === 0}
-                  style={{ ...primaryButton, opacity: saving || roles.length === 0 ? 0.6 : 1 }}>
+                  style={{ ...primaryButton, opacity: saving || roles.length === 0 ? 0.6 : 1, cursor: saving || roles.length === 0 ? "not-allowed" : "pointer" }}>
                   {saving ? "Saving…" : editingId ? "Update Policy" : "Publish"}
                 </button>
                 <button type="button" onClick={() => { resetForm(); setShowForm(false); }}
@@ -217,7 +220,7 @@ export default function AdminPolicies() {
                         style={{ fontSize: 11, padding: "3px 8px", background: "var(--admin-accent-bg)", color: "var(--admin-accent-text)", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>
                         Edit
                       </button>
-                      <button type="button" onClick={() => deletePolicy(d.id)}
+                      <button type="button" onClick={() => setDeleteTarget(d.id)}
                         style={{ fontSize: 11, padding: "3px 8px", background: "var(--admin-danger-accent-bg)", color: "var(--admin-danger-accent-text)", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>
                         Delete
                       </button>
@@ -244,6 +247,15 @@ export default function AdminPolicies() {
           )}
         </div>
       </div>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Policy"
+        message="Are you sure you want to delete this policy document? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => deletePolicy(deleteTarget)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </AdminLayout>
   );
 }

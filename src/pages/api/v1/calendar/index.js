@@ -20,8 +20,16 @@ async function handleGet(req, res, session) {
   if (!centerId) return res.status(400).json({ error: "centerId is required" });
 
   const dateFilter = {};
-  if (from) dateFilter.gte = new Date(from);
-  if (to) dateFilter.lte = new Date(to);
+  if (from) {
+    const parsedFrom = new Date(from);
+    if (isNaN(parsedFrom.getTime())) return res.status(400).json({ error: "Invalid 'from' date format" });
+    dateFilter.gte = parsedFrom;
+  }
+  if (to) {
+    const parsedTo = new Date(to);
+    if (isNaN(parsedTo.getTime())) return res.status(400).json({ error: "Invalid 'to' date format" });
+    dateFilter.lte = parsedTo;
+  }
   const hasDateFilter = from || to;
 
   const shiftUserFilter = session.user.role === "TEACHER" ? { userId: session.user.id } : {};

@@ -1,4 +1,5 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import MonthlyCalendar from "@/components/calendar/MonthlyCalendar";
 import { apiJson } from "@/lib/api";
 import { useEffect, useState, useCallback } from "react";
@@ -38,6 +39,7 @@ export default function TeacherTimeOff() {
   const [endDate, setEndDate] = useState(toDateInputValue(new Date()));
   const [requestType, setRequestType] = useState("PTO");
   const [reason, setReason] = useState("");
+  const [cancelTarget, setCancelTarget] = useState(null);
 
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
@@ -124,16 +126,17 @@ export default function TeacherTimeOff() {
   }
 
   async function cancelRequest(id) {
-    if (!confirm("Cancel this request?")) return;
     try {
       await apiJson(`/api/v1/time-off/${id}`, {
         method: "PUT",
         body: JSON.stringify({ status: "CANCELLED" }),
       });
+      setCancelTarget(null);
       loadRequests();
       loadCalendarEvents();
     } catch (e) {
       setError(e.message || "Failed to cancel request");
+      setCancelTarget(null);
     }
   }
 
@@ -256,7 +259,7 @@ export default function TeacherTimeOff() {
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="rounded-full border border-amber-200 bg-white px-2 py-1 text-[11px] font-extrabold text-amber-700">PENDING</span>
-                              <button onClick={() => cancelRequest(r.id)}
+                              <button onClick={() => setCancelTarget(r.id)}
                                 className="rounded-lg border border-red-200 px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50">Cancel</button>
                             </div>
                           </div>
@@ -300,6 +303,15 @@ export default function TeacherTimeOff() {
           )}
         </div>
       </div>
+      <ConfirmDialog
+        open={!!cancelTarget}
+        title="Cancel Request"
+        message="Are you sure you want to cancel this time off request?"
+        confirmLabel="Cancel Request"
+        variant="danger"
+        onConfirm={() => cancelRequest(cancelTarget)}
+        onCancel={() => setCancelTarget(null)}
+      />
     </TeacherLayout>
   );
 }

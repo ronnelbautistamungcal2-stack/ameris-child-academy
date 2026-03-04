@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { apiJson } from "@/lib/api";
 import { useEffect, useState, useCallback } from "react";
 
@@ -18,6 +19,7 @@ export default function AffiliatesPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -26,7 +28,7 @@ export default function AffiliatesPage() {
         const arr = Array.isArray(c) ? c : [];
         setCenters(arr);
         if (arr.length === 1) setCenterId(arr[0].id);
-      } catch {} finally { setLoading(false); }
+      } catch (err) { setError(err.message || "Failed to load centers"); } finally { setLoading(false); }
     })();
   }, []);
 
@@ -35,7 +37,7 @@ export default function AffiliatesPage() {
     try {
       const data = await apiJson(`/api/v1/affiliates?centerId=${centerId}`);
       setAffiliates(Array.isArray(data) ? data : []);
-    } catch {}
+    } catch (err) { setError(err.message || "Failed to load affiliates"); }
   }, [centerId]);
 
   useEffect(() => { loadAffiliates(); }, [loadAffiliates]);
@@ -88,13 +90,14 @@ export default function AffiliatesPage() {
   }
 
   async function deleteAffiliate(id) {
-    if (!confirm("Delete this affiliate?")) return;
     try {
       await apiJson(`/api/v1/affiliates/${id}`, { method: "DELETE" });
       setSuccess("Affiliate deleted");
+      setDeleteTarget(null);
       await loadAffiliates();
     } catch (err) {
       setError(err.message || "Failed to delete affiliate");
+      setDeleteTarget(null);
     }
   }
 
@@ -165,7 +168,7 @@ export default function AffiliatesPage() {
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                 <button type="submit" disabled={saving}
-                  style={{ padding: "8px 16px", background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+                  style={{ padding: "8px 16px", background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
                   {saving ? "Saving…" : editingId ? "Update" : "Add Affiliate"}
                 </button>
                 <button type="button" onClick={() => { resetForm(); setShowForm(false); }}
@@ -191,7 +194,7 @@ export default function AffiliatesPage() {
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       {a.logoUrl && (
                         <img src={a.logoUrl} alt="" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover", border: "1px solid var(--admin-border)" }}
-                          onError={e => { e.target.style.display = "none"; }} />
+                          onError={e => { e.target.src = ""; e.target.style.background = "var(--admin-bg-tertiary)"; e.target.alt = a.name?.charAt(0) || "?"; }} />
                       )}
                       <div>
                         <div style={{ fontWeight: 700, fontSize: 15, color: "var(--admin-text)" }}>{a.name}</div>
@@ -213,7 +216,7 @@ export default function AffiliatesPage() {
                         style={{ fontSize: 11, padding: "3px 8px", background: "var(--admin-accent-bg)", color: "var(--admin-accent-text)", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>
                         Edit
                       </button>
-                      <button type="button" onClick={() => deleteAffiliate(a.id)}
+                      <button type="button" onClick={() => setDeleteTarget(a.id)}
                         style={{ fontSize: 11, padding: "3px 8px", background: "var(--admin-danger-accent-bg)", color: "var(--admin-danger-accent-text)", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>
                         Delete
                       </button>
@@ -239,6 +242,15 @@ export default function AffiliatesPage() {
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Affiliate"
+        message="Are you sure you want to delete this affiliate? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => deleteAffiliate(deleteTarget)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </AdminLayout>
   );
 }

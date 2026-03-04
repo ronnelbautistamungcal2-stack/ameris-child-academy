@@ -89,8 +89,9 @@ export default function ParentForms() {
         </p>
 
         {error ? (
-          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            {error}
+          <div className="mt-3 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            <span>{error}</span>
+            <button type="button" onClick={() => { setError(""); refresh(); }} className="ml-3 text-xs font-semibold text-red-600 underline hover:text-red-800">Retry</button>
           </div>
         ) : null}
         {success ? (

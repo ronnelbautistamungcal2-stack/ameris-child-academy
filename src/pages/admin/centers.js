@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -10,6 +11,7 @@ export default function AdminCenters() {
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [editing, setEditing] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   async function refresh() {
     setError("");
@@ -73,13 +75,14 @@ export default function AdminCenters() {
   }
 
   async function deleteCenter(id) {
-    if (!confirm("Delete this center? This cannot be undone.")) return;
     setError("");
     try {
       await apiJson(`/api/v1/centers/${id}`, { method: "DELETE" });
+      setDeleteTarget(null);
       await refresh();
     } catch (e2) {
       setError(e2.message || "Failed to delete center");
+      setDeleteTarget(null);
     }
   }
 
@@ -166,7 +169,7 @@ export default function AdminCenters() {
                         <button
                           type="button"
                           style={dangerButton}
-                          onClick={() => deleteCenter(c.id)}
+                          onClick={() => setDeleteTarget(c.id)}
                         >
                           Delete
                         </button>
@@ -186,6 +189,15 @@ export default function AdminCenters() {
           )}
         </div>
       </Panel>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Center"
+        message="Are you sure you want to delete this center? This cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => deleteCenter(deleteTarget)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </AdminLayout>
   );
 }

@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import MonthlyCalendar from "@/components/calendar/MonthlyCalendar";
 import { apiJson } from "@/lib/api";
 import { useEffect, useState, useCallback } from "react";
@@ -50,6 +51,7 @@ export default function CalendarPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -58,7 +60,7 @@ export default function CalendarPage() {
         const arr = Array.isArray(c) ? c : [];
         setCenters(arr);
         if (arr.length === 1) setCenterId(arr[0].id);
-      } catch {} finally { setLoading(false); }
+      } catch (err) { setError(err.message || "Failed to load centers"); } finally { setLoading(false); }
     })();
   }, []);
 
@@ -69,7 +71,7 @@ export default function CalendarPage() {
       const to = new Date(calYear, calMonth + 1, 0).toISOString();
       const data = await apiJson(`/api/v1/calendar?centerId=${centerId}&from=${from}&to=${to}`);
       setCalData(data);
-    } catch {}
+    } catch (err) { setError(err.message || "Failed to load calendar data"); }
   }, [centerId, calYear, calMonth]);
 
   useEffect(() => { loadCalendar(); }, [loadCalendar]);
@@ -183,13 +185,14 @@ export default function CalendarPage() {
   }
 
   async function deleteEvent(id) {
-    if (!confirm("Delete this event?")) return;
     try {
       await apiJson(`/api/v1/events/${id}`, { method: "DELETE" });
       setSuccess("Event deleted");
+      setDeleteTarget(null);
       await loadCalendar();
     } catch (err) {
       setError(err.message || "Failed to delete event");
+      setDeleteTarget(null);
     }
   }
 
@@ -280,7 +283,7 @@ export default function CalendarPage() {
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                 <button type="submit" disabled={saving}
-                  style={{ padding: "8px 16px", background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+                  style={{ padding: "8px 16px", background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
                   {saving ? "Saving…" : editingEvent ? "Update Event" : "Create Event"}
                 </button>
                 <button type="button" onClick={() => { resetForm(); setShowForm(false); }}
@@ -294,7 +297,7 @@ export default function CalendarPage() {
 
         {/* Calendar */}
         {centerId ? (
-          <div style={{ display: "grid", gridTemplateColumns: selectedDay ? "1fr 320px" : "1fr", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: selectedDay ? "1fr minmax(0, 320px)" : "1fr", gap: 16 }}>
             <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: 16 }}>
               <MonthlyCalendar
                 year={calYear}
@@ -313,7 +316,7 @@ export default function CalendarPage() {
                   <div style={{ fontWeight: 700, fontSize: 14 }}>
                     {new Date(calYear, calMonth, selectedDay).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
                   </div>
-                  <button type="button" onClick={() => setSelectedDay(null)}
+                  <button type="button" onClick={() => setSelectedDay(null)} aria-label="Close day detail"
                     style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--admin-text-faint)" }}>✕</button>
                 </div>
                 {dayItems.length === 0 && <div style={{ fontSize: 13, color: "var(--admin-text-faint)" }}>No items this day</div>}
@@ -333,7 +336,7 @@ export default function CalendarPage() {
                             style={{ fontSize: 11, padding: "2px 8px", background: "var(--admin-accent-bg)", color: "var(--admin-accent-text)", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>
                             Edit
                           </button>
-                          <button type="button" onClick={() => deleteEvent(item.id)}
+                          <button type="button" onClick={() => setDeleteTarget(item.id)}
                             style={{ fontSize: 11, padding: "2px 8px", background: "var(--admin-danger-accent-bg)", color: "var(--admin-danger-accent-text)", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>
                             Del
                           </button>
@@ -360,6 +363,15 @@ export default function CalendarPage() {
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Event"
+        message="Are you sure you want to delete this event? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => deleteEvent(deleteTarget)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </AdminLayout>
   );
 }

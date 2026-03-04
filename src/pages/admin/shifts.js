@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { apiJson } from "@/lib/api";
 import { useEffect, useState, useCallback, useMemo } from "react";
 
@@ -35,6 +36,7 @@ export default function ShiftsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -43,7 +45,7 @@ export default function ShiftsPage() {
         const arr = Array.isArray(c) ? c : [];
         setCenters(arr);
         if (arr.length === 1) setCenterId(arr[0].id);
-      } catch {} finally { setLoading(false); }
+      } catch (err) { setError(err.message || "Failed to load centers"); } finally { setLoading(false); }
     })();
   }, []);
 
@@ -53,7 +55,7 @@ export default function ShiftsPage() {
       try {
         const users = await apiJson(`/api/v1/users?centerId=${centerId}`);
         setStaff(Array.isArray(users) ? users.filter(u => u.role === "TEACHER" || u.role === "ADMIN") : []);
-      } catch {}
+      } catch (err) { setError(err.message || "Failed to load staff"); }
     })();
   }, [centerId]);
 
@@ -64,7 +66,7 @@ export default function ShiftsPage() {
     try {
       const data = await apiJson(`/api/v1/shifts?centerId=${centerId}&from=${from}&to=${to}`);
       setShifts(Array.isArray(data) ? data : []);
-    } catch {}
+    } catch (err) { setError(err.message || "Failed to load shifts"); }
   }, [centerId, weekStart]);
 
   useEffect(() => { loadShifts(); }, [loadShifts]);
@@ -139,13 +141,14 @@ export default function ShiftsPage() {
   }
 
   async function deleteShift(id) {
-    if (!confirm("Delete this shift?")) return;
     try {
       await apiJson(`/api/v1/shifts/${id}`, { method: "DELETE" });
       setSuccess("Shift deleted");
+      setDeleteTarget(null);
       await loadShifts();
     } catch (err) {
       setError(err.message || "Failed to delete shift");
+      setDeleteTarget(null);
     }
   }
 
@@ -245,7 +248,7 @@ export default function ShiftsPage() {
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                 <button type="submit" disabled={saving}
-                  style={{ padding: "8px 16px", background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+                  style={{ padding: "8px 16px", background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
                   {saving ? "Saving…" : editingId ? "Update Shift" : "Add Shift"}
                 </button>
                 <button type="button" onClick={() => { resetForm(); setShowForm(false); }}
@@ -323,7 +326,7 @@ export default function ShiftsPage() {
                                 title={`${s.position}${s.notes ? ` - ${s.notes}` : ""}`}
                               >
                                 <span onClick={() => startEdit(s)}>{s.startTime}–{s.endTime}</span>
-                                <button type="button" onClick={() => deleteShift(s.id)}
+                                <button type="button" onClick={() => setDeleteTarget(s.id)} aria-label="Delete shift"
                                   style={{ position: "absolute", top: -2, right: 2, background: "none", border: "none", cursor: "pointer", fontSize: 10, color: "var(--admin-text-faint)" }}>
                                   ✕
                                 </button>
@@ -349,6 +352,15 @@ export default function ShiftsPage() {
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Shift"
+        message="Are you sure you want to delete this shift? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => deleteShift(deleteTarget)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </AdminLayout>
   );
 }

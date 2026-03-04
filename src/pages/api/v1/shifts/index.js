@@ -60,11 +60,22 @@ async function handlePost(req, res, session) {
     return res.status(400).json({ error: "startTime and endTime must be in HH:MM format" });
   }
 
+  const [startH, startM] = startTime.split(":").map(Number);
+  const [endH, endM] = endTime.split(":").map(Number);
+  if (startH > 23 || startM > 59 || endH > 23 || endM > 59) {
+    return res.status(400).json({ error: "Invalid time values. Hours must be 00-23, minutes 00-59" });
+  }
+
+  const parsedDate = new Date(date);
+  if (isNaN(parsedDate.getTime())) {
+    return res.status(400).json({ error: "Invalid date format" });
+  }
+
   const shift = await prisma.shiftSchedule.create({
     data: {
       centerId,
       userId,
-      date: new Date(date),
+      date: parsedDate,
       startTime,
       endTime,
       position: position || "Teacher",

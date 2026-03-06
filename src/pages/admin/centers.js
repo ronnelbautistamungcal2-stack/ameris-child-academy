@@ -1,5 +1,6 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -136,7 +137,7 @@ export default function AdminCenters() {
 
         <div style={{ marginTop: 16 }}>
           {loading ? (
-            <p>Loading…</p>
+            <SkeletonTable rows={3} cols={3} />
           ) : (
             <table style={tableStyle}>
               <thead>

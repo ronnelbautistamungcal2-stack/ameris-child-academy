@@ -26,18 +26,27 @@ export default function Home() {
     }
   }, [session, status, router]);
 
-  if (status === "loading") {
+  if (status === "loading" || session) {
     return (
-      <div className="grid h-screen place-items-center bg-gray-50 text-sm text-gray-500">
-        Loading...
-      </div>
-    );
-  }
-
-  if (session) {
-    return (
-      <div className="grid h-screen place-items-center bg-gray-50 text-sm text-gray-500">
-        Redirecting...
+      <div className="flex flex-col items-center justify-center h-screen bg-gradient-to-b from-sky-50 to-white">
+        <div className="animate-fade-in flex flex-col items-center">
+          <div className="relative">
+            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-sky-400 to-sky-600 flex items-center justify-center shadow-lg shadow-sky-200">
+              <svg viewBox="0 0 32 32" className="h-9 w-9 text-white" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 6c-3 0-5.5 2-6.5 4.5C8.5 8 6 8.5 4.5 11 3 13.5 3.5 16.5 5 18.5L16 28l11-9.5c1.5-2 2-5 .5-7.5S23.5 8 22.5 10.5C21.5 8 19 6 16 6z" />
+              </svg>
+            </div>
+            <div className="absolute -inset-3 rounded-3xl border-2 border-sky-200 animate-ping opacity-30" />
+          </div>
+          <h2 className="mt-5 text-lg font-extrabold text-gray-900 tracking-tight">
+            Ameris Child Academy
+          </h2>
+          <div className="mt-4 flex gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+            <span className="h-2 w-2 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+            <span className="h-2 w-2 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+          </div>
+        </div>
       </div>
     );
   }
@@ -58,18 +67,13 @@ export default function Home() {
 
 function HeroSection() {
   const videoRef = useRef(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
 
   const handlePlay = () => {
     const video = videoRef.current;
     if (!video) return;
-    if (video.paused) {
-      video.play();
-      setIsPlaying(true);
-    } else {
-      video.pause();
-      setIsPlaying(false);
-    }
+    video.play();
+    setHasStarted(true);
   };
 
   return (
@@ -97,11 +101,10 @@ function HeroSection() {
               src="/home-video.mp4"
               playsInline
               preload="metadata"
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
-              onEnded={() => setIsPlaying(false)}
+              controls={hasStarted}
+              onEnded={() => setHasStarted(false)}
             />
-            {!isPlaying && (
+            {!hasStarted && (
               <button
                 type="button"
                 onClick={handlePlay}
@@ -112,14 +115,6 @@ function HeroSection() {
                   <PlayIcon className="h-10 w-10 ml-1" />
                 </div>
               </button>
-            )}
-            {isPlaying && (
-              <button
-                type="button"
-                onClick={handlePlay}
-                className="absolute inset-0 z-10"
-                aria-label="Pause video"
-              />
             )}
           </div>
         </div>

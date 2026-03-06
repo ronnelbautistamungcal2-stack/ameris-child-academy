@@ -1,4 +1,5 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
+import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -138,7 +139,7 @@ export default function TeacherAlerts() {
             </div>
 
             {loading ? (
-              <div className="mt-3 text-sm text-gray-600">Loading…</div>
+              <div className="mt-3"><Skeleton count={3} /></div>
             ) : threadPreview.length === 0 ? (
               <div className="mt-3 text-sm text-gray-600">No threads yet.</div>
             ) : (

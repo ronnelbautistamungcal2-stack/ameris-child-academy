@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -211,7 +212,7 @@ export default function AdminTeacherDetail() {
     return (
       <AdminLayout title="Teacher Profile">
         <div className="rounded-2xl border border-gray-200 bg-white p-5">
-          <p className="text-sm text-gray-500">Loading...</p>
+          <Skeleton count={4} />
         </div>
       </AdminLayout>
     );

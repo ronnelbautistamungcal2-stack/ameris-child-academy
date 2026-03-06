@@ -1,4 +1,5 @@
 import AppShell from "@/components/shell/AppShell";
+import Skeleton from "@/components/ui/Skeleton";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import { apiJson } from "@/lib/api";
 import { ADMIN_NAV_ITEMS } from "@/components/admin/adminNav";
@@ -100,7 +101,7 @@ export default function SettingsPage() {
   }
 
   if (status === "loading")
-    return <div className="p-6 text-sm text-gray-600">Loading...</div>;
+    return <div className="p-6"><Skeleton count={5} /></div>;
   if (!allowed)
     return <div className="p-6 text-sm text-gray-600">Redirecting...</div>;
 

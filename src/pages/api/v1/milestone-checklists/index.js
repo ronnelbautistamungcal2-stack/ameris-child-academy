@@ -56,6 +56,7 @@ export default async function handler(req, res) {
               },
             },
             lessonGoal: true,
+            assignedTo: { select: { id: true, name: true, email: true } },
           },
         },
       },
@@ -207,6 +208,9 @@ export default async function handler(req, res) {
                     (it.lessonGoalId ? lessonGoalMetaById[it.lessonGoalId]?.lessonId : null) ||
                     null,
                   lessonGoalId: it.lessonGoalId || null,
+                  priority: it.priority || null,
+                  dueAt: it.dueAt ? new Date(it.dueAt) : null,
+                  assignedToId: it.assignedToId || null,
                 })),
             }
           : undefined,

@@ -1,5 +1,6 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import MessageInbox from "@/components/messages/MessageInbox";
+import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
@@ -50,7 +51,7 @@ export default function AdminMessages() {
         </label>
       </div>
       {loading ? (
-        <div className="text-sm text-gray-600">Loading...</div>
+        <Skeleton count={4} />
       ) : (
         <MessageInbox centerId={centerId || undefined} isAdmin />
       )}

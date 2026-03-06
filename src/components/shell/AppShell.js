@@ -157,7 +157,7 @@ export default function AppShell({
               <div className="flex min-w-0 items-center gap-3">
                 <button
                   type="button"
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 md:hidden"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 md:hidden"
                   aria-label="Open navigation"
                   onClick={() => setMobileOpen(true)}
                 >
@@ -167,11 +167,11 @@ export default function AppShell({
                 </button>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <NotificationBell userId={userId} />
                 <button
                   type="button"
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                   aria-label="Toggle theme"
                   onClick={toggleTheme}
                 >
@@ -225,9 +225,13 @@ export default function AppShell({
 
                 <button
                   onClick={() => signOut({ callbackUrl: "/login" })}
-                  className="rounded-2xl bg-red-500 px-4 py-2 text-sm font-extrabold text-white hover:bg-red-600"
+                  className="rounded-2xl bg-red-500 px-2.5 py-2 text-xs font-extrabold text-white transition-colors hover:bg-red-600 sm:px-4 sm:text-sm"
                 >
-                  Sign Out
+                  <span className="hidden sm:inline">Sign Out</span>
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 sm:hidden">
+                    <path fillRule="evenodd" d="M3 4.25A2.25 2.25 0 015.25 2h5.5A2.25 2.25 0 0113 4.25v2a.75.75 0 01-1.5 0v-2a.75.75 0 00-.75-.75h-5.5a.75.75 0 00-.75.75v11.5c0 .414.336.75.75.75h5.5a.75.75 0 00.75-.75v-2a.75.75 0 011.5 0v2A2.25 2.25 0 0110.75 18h-5.5A2.25 2.25 0 013 15.75V4.25z" clipRule="evenodd" />
+                    <path fillRule="evenodd" d="M19 10a.75.75 0 00-.75-.75H8.704l1.048-.943a.75.75 0 10-1.004-1.114l-2.5 2.25a.75.75 0 000 1.114l2.5 2.25a.75.75 0 101.004-1.114l-1.048-.943h9.546A.75.75 0 0019 10z" clipRule="evenodd" />
+                  </svg>
                 </button>
               </div>
             </div>
@@ -418,10 +422,10 @@ function MobileSidebar({ onClose, children }) {
   return (
     <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
       <div
-        className="absolute inset-0 bg-gray-900/40 dark:bg-black/60"
+        className="absolute inset-0 bg-gray-900/40 dark:bg-black/60 animate-[overlayIn_0.2s_ease-out]"
         onClick={onClose}
       />
-      <div ref={sidebarRef} className="absolute inset-y-0 left-0 w-80 max-w-[85vw] shadow-xl">
+      <div ref={sidebarRef} className="absolute inset-y-0 left-0 w-80 max-w-[85vw] shadow-xl animate-[slideInLeft_0.25s_ease-out]">
         {children}
       </div>
     </div>

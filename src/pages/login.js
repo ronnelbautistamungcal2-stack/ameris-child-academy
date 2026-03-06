@@ -79,7 +79,7 @@ export default function Login() {
           </div>
 
           {/* Login card */}
-          <div className="rounded-3xl border border-gray-200 bg-white/90 p-8 shadow-sm backdrop-blur">
+          <div className="rounded-3xl border border-gray-200 bg-white/90 p-8 shadow-sm backdrop-blur animate-[modalIn_0.4s_ease-out]">
             <div className="text-center">
               <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-sky-100 text-lg font-extrabold text-sky-700">
                 ACA
@@ -91,7 +91,10 @@ export default function Login() {
             </div>
 
             {error && (
-              <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">
+              <div className="mt-5 flex items-center gap-2.5 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800 animate-[toastIn_0.25s_ease-out]">
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5 shrink-0 text-red-500">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+                </svg>
                 {error}
               </div>
             )}
@@ -173,8 +176,14 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-2 w-full rounded-full bg-sky-600 px-4 py-3 text-sm font-extrabold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-full bg-sky-600 px-4 py-3 text-sm font-extrabold text-white transition-all hover:bg-sky-700 hover:shadow-lg hover:shadow-sky-600/25 disabled:cursor-not-allowed disabled:opacity-60"
               >
+                {loading && (
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                )}
                 {loading ? "Signing in..." : "Sign In"}
               </button>
             </form>
@@ -191,10 +200,11 @@ export default function Login() {
               <p className="text-center text-xs font-semibold uppercase tracking-wide text-gray-400">
                 Portal Access
               </p>
-              <div className="mt-3 grid grid-cols-3 gap-2">
+              <div className="mt-3 grid grid-cols-4 gap-2">
                 {[
                   { label: "Parents", color: "bg-sky-50 text-sky-700" },
                   { label: "Teachers", color: "bg-emerald-50 text-emerald-700" },
+                  { label: "Coaches", color: "bg-indigo-50 text-indigo-700" },
                   { label: "Admin", color: "bg-violet-50 text-violet-700" },
                 ].map((portal) => (
                   <div
@@ -218,6 +228,7 @@ export default function Login() {
                     { role: "Admin", email: "admin@demo.com", pw: "adminpass" },
                     { role: "Teacher", email: "teacher@demo.com", pw: "teacherpass" },
                     { role: "Parent", email: "parent@demo.com", pw: "parentpass" },
+                    { role: "Coach", email: "coach@demo.com", pw: "coachpass" },
                   ].map((cred) => (
                     <button
                       key={cred.role}

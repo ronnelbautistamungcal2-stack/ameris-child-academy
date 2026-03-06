@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
@@ -215,7 +216,7 @@ export default function AdminActivityOverrides() {
         <div style={{ marginTop: 16 }}>
           <h3 style={{ margin: "0 0 8px 0" }}>Recent Activity Logs</h3>
           {loading ? (
-            <p>Loading…</p>
+            <SkeletonTable rows={4} cols={3} />
           ) : !childId ? (
             <p style={{ color: "var(--admin-text-muted)" }}>Select a child to view logs.</p>
           ) : (

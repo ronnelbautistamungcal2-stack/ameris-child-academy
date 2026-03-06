@@ -1,5 +1,6 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -203,7 +204,7 @@ export default function AdminPolicies() {
         <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: 16 }}>
           <h3 style={{ margin: "0 0 12px 0", fontWeight: 700, fontSize: 15 }}>Published ({sorted.length})</h3>
           {loading ? (
-            <p style={{ color: "var(--admin-text-muted)" }}>Loading…</p>
+            <Skeleton variant="card" count={3} />
           ) : sorted.length === 0 ? (
             <p style={{ color: "var(--admin-text-muted)" }}>No policies found.</p>
           ) : (

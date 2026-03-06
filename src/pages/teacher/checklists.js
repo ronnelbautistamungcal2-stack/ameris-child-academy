@@ -1,4 +1,5 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
+import Skeleton from "@/components/ui/Skeleton";
 import WeeklyLessonPlanner from "@/components/planning/WeeklyLessonPlanner";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
@@ -13,7 +14,7 @@ export default function TeacherChecklists() {
   const [childSearch, setChildSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState("planner"); // planner | tasks
+  const [tab, setTab] = useState("planner"); // planner | tasks | daily
 
   useEffect(() => {
     (async () => {
@@ -180,6 +181,18 @@ export default function TeacherChecklists() {
           >
             Task Checklists
           </button>
+          <button
+            type="button"
+            onClick={() => setTab("daily")}
+            className={[
+              "rounded-xl px-3 py-2 text-sm font-extrabold",
+              tab === "daily"
+                ? "bg-sky-100 text-sky-900"
+                : "border border-gray-200 bg-white text-gray-800 hover:bg-gray-50",
+            ].join(" ")}
+          >
+            Daily Operations
+          </button>
         </div>
 
         {tab === "planner" && (
@@ -286,6 +299,8 @@ export default function TeacherChecklists() {
             childId={childId}
             bulkChildIds={bulkMode ? bulkChildIds : []}
           />
+        ) : tab === "daily" ? (
+          <TeacherDailyChecklist centerId={centerId} />
         ) : (
           <TaskChecklistTracker centerId={centerId} children={children} />
         )}
@@ -411,7 +426,7 @@ function TaskChecklistTracker({ centerId, children }) {
 
       {/* Checklists */}
       {loading ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-500">Loading...</div>
+        <div className="rounded-xl border border-gray-200 bg-white p-6"><Skeleton count={4} /></div>
       ) : checklists.length === 0 ? (
         <div className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-500">
           No task checklists available. Ask an admin to create checklists for this center.
@@ -546,4 +561,200 @@ function TaskChecklistTracker({ centerId, children }) {
       )}
     </div>
   );
+}
+
+/* -- Teacher Daily Operations Checklist -- */
+
+const CAT_LABELS = {
+  OPENING: "Opening", CLOSING: "Closing", HEALTH_SAFETY: "Health & Safety",
+  CLEANING: "Cleaning", MEALS: "Meals", CLASSROOM: "Classroom", OTHER: "Other",
+};
+const CAT_BORDER = {
+  OPENING: "border-l-amber-400", CLOSING: "border-l-indigo-400", HEALTH_SAFETY: "border-l-red-400",
+  CLEANING: "border-l-emerald-400", MEALS: "border-l-orange-400", CLASSROOM: "border-l-sky-400", OTHER: "border-l-gray-400",
+};
+const FREQ_COLORS_T = {
+  DAILY: "bg-blue-50 text-blue-700", WEEKLY: "bg-purple-50 text-purple-700", MONTHLY: "bg-amber-50 text-amber-700",
+};
+
+function TeacherDailyChecklist({ centerId }) {
+  const [checklists, setChecklists] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [selectedDate, setSelectedDate] = useState(todayStr());
+  const [completing, setCompleting] = useState("");
+
+  async function load() {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await apiJson(
+        `/api/v1/daily-checklists?centerId=${encodeURIComponent(centerId)}&date=${encodeURIComponent(selectedDate)}`
+      );
+      setChecklists(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setError(e.message || "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, [centerId, selectedDate]);
+
+  async function toggleItem(itemId, isCompleted) {
+    setCompleting(itemId);
+    try {
+      await apiJson("/api/v1/daily-checklists/complete", {
+        method: "POST",
+        body: JSON.stringify({ itemId, date: selectedDate, undo: isCompleted }),
+      });
+      await load();
+    } catch (e) {
+      setError(e.message || "Failed to update");
+    } finally {
+      setCompleting("");
+    }
+  }
+
+  const totalItems = checklists.reduce((a, cl) => a + (cl.items?.length || 0), 0);
+  const completedItems = checklists.reduce(
+    (a, cl) => a + (cl.items || []).filter((it) => (it.completions || []).length > 0).length, 0
+  );
+  const pct = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-4">
+        <div>
+          <h3 className="text-sm font-extrabold text-gray-900">Daily Operations</h3>
+          <p className="text-xs text-gray-500">Check off tasks as you complete them.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
+          />
+          <button
+            type="button"
+            onClick={() => setSelectedDate(todayStr())}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            Today
+          </button>
+        </div>
+      </div>
+
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
+
+      {/* Progress */}
+      {totalItems > 0 && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-semibold text-gray-700">Progress</span>
+            <span className="font-extrabold text-gray-900">{completedItems}/{totalItems} ({pct}%)</span>
+          </div>
+          <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+            <div
+              className={`h-full rounded-full transition-all ${pct === 100 ? "bg-emerald-500" : "bg-sky-500"}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="rounded-xl border border-gray-200 bg-white p-6"><Skeleton count={5} /></div>
+      ) : checklists.length === 0 ? (
+        <div className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-500">
+          No daily checklists assigned to your center.
+        </div>
+      ) : (
+        checklists.map((cl) => {
+          const items = cl.items || [];
+          const done = items.filter((it) => (it.completions || []).length > 0).length;
+          const allDone = done === items.length && items.length > 0;
+
+          return (
+            <div key={cl.id} className={`rounded-xl border-l-4 border border-gray-200 bg-white ${CAT_BORDER[cl.category] || "border-l-gray-400"} ${allDone ? "opacity-60" : ""}`}>
+              <div className="p-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-extrabold text-gray-900">{cl.title}</span>
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
+                    {CAT_LABELS[cl.category] || cl.category}
+                  </span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${FREQ_COLORS_T[cl.frequency] || ""}`}>
+                    {cl.frequency}
+                  </span>
+                  {allDone && (
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                      Complete
+                    </span>
+                  )}
+                </div>
+                {cl.description && <p className="mt-0.5 text-xs text-gray-500">{cl.description}</p>}
+              </div>
+              <div className="border-t border-gray-100 px-4 pb-4">
+                <div className="divide-y divide-gray-50">
+                  {items.map((item) => {
+                    const isDone = (item.completions || []).length > 0;
+                    const completion = (item.completions || [])[0];
+                    const busy = completing === item.id;
+                    return (
+                      <div key={item.id} className={`flex items-start gap-3 py-3 ${isDone ? "opacity-50" : ""}`}>
+                        <button
+                          type="button"
+                          onClick={() => toggleItem(item.id, isDone)}
+                          disabled={busy}
+                          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition ${
+                            isDone ? "border-emerald-500 bg-emerald-500 text-white" : "border-gray-300 bg-white hover:border-sky-400"
+                          } ${busy ? "animate-pulse" : ""}`}
+                        >
+                          {isDone && (
+                            <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </button>
+                        <div className="min-w-0 flex-1">
+                          <div className={`text-sm font-medium ${isDone ? "text-gray-400 line-through" : "text-gray-900"}`}>
+                            {item.title}
+                          </div>
+                          {item.description && <p className="mt-0.5 text-xs text-gray-500">{item.description}</p>}
+                          <div className="mt-1 flex flex-wrap gap-1.5">
+                            {item.policyLink && (
+                              <a href={item.policyLink} target="_blank" rel="noopener noreferrer" className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 hover:bg-blue-100">
+                                Policy
+                              </a>
+                            )}
+                            {item.mediaLink && (
+                              <a href={item.mediaLink} target="_blank" rel="noopener noreferrer" className="rounded-md bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 hover:bg-violet-100">
+                                Video
+                              </a>
+                            )}
+                          </div>
+                          {isDone && completion && (
+                            <div className="mt-1 text-[10px] text-emerald-600">
+                              Completed by {completion.completedBy?.name || completion.completedBy?.email || "Staff"}{" "}
+                              at {new Date(completion.completedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }

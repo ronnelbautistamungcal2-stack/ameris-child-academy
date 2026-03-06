@@ -1,4 +1,5 @@
 import { useSession } from "next-auth/react";
+import Skeleton from "@/components/ui/Skeleton";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
@@ -38,6 +39,9 @@ export default function Dashboard() {
     }
     if (session?.user?.role === "TEACHER") {
       router.replace("/teacher/dashboard");
+    }
+    if (session?.user?.role === "COACH") {
+      router.replace("/coach/dashboard");
     }
   }, [status, session?.user?.role, router]);
 
@@ -149,7 +153,7 @@ export default function Dashboard() {
   }, [centers]);
 
   if (status === "loading")
-    return <div className="p-6 text-sm text-gray-600">Loading...</div>;
+    return <div className="p-6"><Skeleton count={5} /></div>;
   if (!session)
     return <div className="p-6 text-sm text-gray-600">Redirecting...</div>;
 
@@ -254,7 +258,7 @@ export default function Dashboard() {
                 ) : null}
 
                 {loading ? (
-                  <div className="mt-4 text-sm text-gray-600">Loading…</div>
+                  <div className="mt-4"><Skeleton count={4} /></div>
                 ) : role !== "PARENT" && !centerId ? (
                   <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
                     Select a center to load children.
@@ -807,7 +811,7 @@ function ParentDashboard({
           ) : null}
 
           {loading ? (
-            <div className="mt-4 text-sm text-gray-600">Loading...</div>
+            <div className="mt-4"><Skeleton count={4} /></div>
           ) : visibleChildren.length === 0 ? (
             <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
               No children found for this account.

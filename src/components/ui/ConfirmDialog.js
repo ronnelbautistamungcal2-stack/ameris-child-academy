@@ -58,10 +58,10 @@ export default function ConfirmDialog({
       aria-label={title}
       onKeyDown={handleKeyDown}
     >
-      <div className="absolute inset-0 bg-gray-900/50 dark:bg-black/60" onClick={onCancel} />
+      <div className="absolute inset-0 bg-gray-900/50 dark:bg-black/60 animate-[overlayIn_0.2s_ease-out]" onClick={onCancel} />
       <div
         ref={dialogRef}
-        className="relative z-10 w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800"
+        className="relative z-10 w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800 animate-[modalIn_0.2s_ease-out]"
       >
         <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">{title}</h3>
         {message && (

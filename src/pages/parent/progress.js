@@ -1,4 +1,5 @@
 import ParentLayout from "@/components/parent/ParentLayout";
+import Skeleton from "@/components/ui/Skeleton";
 import ProgressEntryTimeline from "@/components/progression/ProgressEntryTimeline";
 import { apiJson } from "@/lib/api";
 import { useRouter } from "next/router";
@@ -202,7 +203,7 @@ export default function ParentProgress() {
         {/* Progress list */}
         <div className="rounded-2xl border border-gray-200 bg-white p-5">
           {loading ? (
-            <div className="text-sm text-gray-600">Loading...</div>
+            <div><Skeleton count={5} /></div>
           ) : !selectedChild ? (
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
               Select a child to view progress.

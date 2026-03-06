@@ -1,4 +1,5 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import { formatAge } from "@/lib/ageUtils";
 import { apiJson } from "@/lib/api";
 import Link from "next/link";
@@ -357,7 +358,7 @@ export default function TeacherClassroom() {
         ) : null}
 
         {loading ? (
-          <div className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-600">Loading...</div>
+          <div className="rounded-xl border border-gray-200 bg-white p-6"><SkeletonTable rows={5} cols={4} /></div>
         ) : !centerId ? (
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-600">
             Select a center to view your classroom roster.

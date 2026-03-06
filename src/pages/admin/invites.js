@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -175,7 +176,7 @@ export default function AdminInvites() {
           </div>
 
           {loading ? (
-            <div className="mt-3 text-sm text-gray-600">Loading...</div>
+            <div className="mt-3"><SkeletonTable rows={3} cols={3} /></div>
           ) : sorted.length === 0 ? (
             <div className="mt-3 text-sm text-gray-600">No invites yet.</div>
           ) : (

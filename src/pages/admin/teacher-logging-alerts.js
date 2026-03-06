@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
@@ -153,7 +154,7 @@ export default function ComplianceAlerts() {
         )}
 
         {loading ? (
-          <div className="mt-4 text-sm text-gray-600">Loading...</div>
+          <div className="mt-4"><SkeletonTable rows={4} cols={4} /></div>
         ) : !centerId ? (
           <div className="mt-4 text-sm text-gray-600">
             Choose a center to view compliance alerts.

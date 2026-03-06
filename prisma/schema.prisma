@@ -95,6 +95,31 @@ enum BehaviorPlanStatus {
   ARCHIVED
 }
 
+enum ObservationType {
+  CAMERA
+  IN_CLASS
+}
+
+enum FollowUpType {
+  PARENT
+  CAMERA_OBSERVATION
+  GENERAL
+}
+
+enum FollowUpStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
 enum PermissionType {
   PHOTO_RELEASE
   FIELD_TRIP
@@ -182,6 +207,12 @@ model User {
   permissionsGranted           ChildPermission[]         @relation("PermissionsGranted")
   eventsCreated                Event[]                   @relation("EventsCreated")
   shiftSchedules               ShiftSchedule[]           @relation("ShiftSchedules")
+  assignedChecklistItems       MilestoneChecklistItem[]   @relation("ChecklistItemAssignee")
+  coachObservationsGiven       CoachObservation[]         @relation("CoachObservationsGiven")
+  coachObservationsReceived    CoachObservation[]         @relation("CoachObservationsReceived")
+  coachFollowUpsCreated        CoachFollowUp[]            @relation("CoachFollowUpsCreated")
+  coachFollowUpsAssigned       CoachFollowUp[]            @relation("CoachFollowUpsAssigned")
+  dailyChecklistCompletions    DailyChecklistCompletion[] @relation("DailyChecklistCompletedBy")
 }
 
 model Center {
@@ -213,6 +244,9 @@ model Center {
   events           Event[]
   shiftSchedules   ShiftSchedule[]
   affiliates       Affiliate[]
+  coachObservations CoachObservation[]
+  coachFollowUps   CoachFollowUp[]
+  dailyChecklists  DailyChecklist[]
   createdAt        DateTime         @default(now())
 }
 
@@ -237,6 +271,8 @@ model ClassRoom {
   children Child[]
   teachers TeacherClass[]
   budgets  ClassroomBudget[]
+  coachObservations CoachObservation[]
+  dailyChecklists   DailyChecklist[]
 }
 
 model TeacherClass {
@@ -482,6 +518,10 @@ model MilestoneChecklistItem {
   lessonGoal       LessonGoal?            @relation(fields: [lessonGoalId], references: [id], onDelete: SetNull)
   lessonGoalId     String?
   notes            String?
+  priority         Priority?
+  dueAt            DateTime?
+  assignedToId     String?
+  assignedTo       User?                  @relation("ChecklistItemAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
   completions      MilestoneChecklistItemCompletion[]
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
@@ -490,6 +530,8 @@ model MilestoneChecklistItem {
   @@index([lessonId])
   @@index([lessonGoalId])
   @@index([policyDocumentId])
+  @@index([assignedToId])
+  @@index([dueAt])
 }
 
 model MilestoneChecklistItemCompletion {
@@ -1059,4 +1101,120 @@ model Affiliate {
   updatedAt       DateTime @updatedAt
 
   @@index([centerId, isActive])
+}
+
+model CoachObservation {
+  id          String          @id @default(uuid())
+  center      Center          @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  coach       User            @relation("CoachObservationsGiven", fields: [coachId], references: [id], onDelete: Cascade)
+  coachId     String
+  teacher     User            @relation("CoachObservationsReceived", fields: [teacherId], references: [id], onDelete: Cascade)
+  teacherId   String
+  type        ObservationType
+  classRoomId String?
+  classRoom   ClassRoom?      @relation(fields: [classRoomId], references: [id], onDelete: SetNull)
+  date        DateTime        @default(now())
+  duration    Int?
+  score       Float?
+  strengths   String?
+  improvements String?
+  actionItems String?
+  notes       String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([coachId, date])
+  @@index([teacherId, date])
+  @@index([centerId, date])
+}
+
+model CoachFollowUp {
+  id          String       @id @default(uuid())
+  center      Center       @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  createdBy   User         @relation("CoachFollowUpsCreated", fields: [createdById], references: [id], onDelete: Cascade)
+  createdById String
+  assignedTo  User?        @relation("CoachFollowUpsAssigned", fields: [assignedToId], references: [id], onDelete: SetNull)
+  assignedToId String?
+  type        FollowUpType
+  status      FollowUpStatus @default(OPEN)
+  priority    Priority       @default(MEDIUM)
+  title       String
+  description String?
+  dueDate     DateTime?
+  completedAt DateTime?
+  notes       String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([centerId, status])
+  @@index([createdById, status])
+  @@index([assignedToId, status])
+  @@index([dueDate])
+}
+
+enum ChecklistCategory {
+  OPENING
+  CLOSING
+  HEALTH_SAFETY
+  CLEANING
+  MEALS
+  CLASSROOM
+  OTHER
+}
+
+enum ChecklistFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+model DailyChecklist {
+  id          String             @id @default(uuid())
+  center      Center             @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  classRoom   ClassRoom?         @relation(fields: [classRoomId], references: [id], onDelete: SetNull)
+  classRoomId String?
+  title       String
+  description String?
+  category    ChecklistCategory  @default(OTHER)
+  frequency   ChecklistFrequency @default(DAILY)
+  active      Boolean            @default(true)
+  items       DailyChecklistItem[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([centerId, category])
+  @@index([centerId, classRoomId])
+}
+
+model DailyChecklistItem {
+  id          String              @id @default(uuid())
+  checklist   DailyChecklist      @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  checklistId String
+  sortOrder   Int                 @default(0)
+  title       String
+  description String?
+  policyLink  String?
+  mediaLink   String?
+  completions DailyChecklistCompletion[]
+  createdAt   DateTime            @default(now())
+
+  @@index([checklistId, sortOrder])
+}
+
+model DailyChecklistCompletion {
+  id          String             @id @default(uuid())
+  item        DailyChecklistItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId      String
+  completedBy User               @relation("DailyChecklistCompletedBy", fields: [completedById], references: [id], onDelete: Cascade)
+  completedById String
+  date        DateTime           @db.Date
+  notes       String?
+  completedAt DateTime           @default(now())
+
+  @@unique([itemId, completedById, date])
+  @@index([itemId, date])
+  @@index([completedById, date])
 }

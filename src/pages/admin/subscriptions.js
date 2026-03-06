@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -115,7 +116,7 @@ export default function AdminSubscriptions() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 420px", gap: 16, marginTop: 12 }}>
           <div>
             {loading ? (
-              <p>Loading…</p>
+              <SkeletonTable rows={3} cols={3} />
             ) : (
               <table style={tableStyle}>
                 <thead>

@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import { SkeletonCard } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -120,7 +121,9 @@ export default function AdminDashboard() {
           ) : null}
 
           {loading ? (
-            <div className="mt-4 text-sm text-gray-600">Loading…</div>
+            <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {Array.from({ length: 4 }, (_, i) => <SkeletonCard key={i} />)}
+            </div>
           ) : !centerId ? (
             <div className="mt-4 text-sm text-gray-600">
               Choose a center to view the admin dashboard.
@@ -206,8 +209,11 @@ export default function AdminDashboard() {
                   ))}
                 </div>
               ) : (
-                <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                  No missing teacher logs detected.
+                <div className="mt-3 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5 shrink-0 text-emerald-500">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+                  </svg>
+                  All teachers have submitted their daily logs. Great job!
                 </div>
               )}
             </div>
@@ -220,12 +226,17 @@ export default function AdminDashboard() {
 
 function Tile({ title, value, subtitle, href }) {
   return (
-    <Link href={href} className="block rounded-2xl border border-gray-200 bg-white p-4 hover:bg-gray-50">
+    <Link href={href} className="group block rounded-2xl border border-gray-200 bg-white p-4 transition-all duration-200 hover:border-sky-200 hover:bg-sky-50/50 hover:shadow-md">
       <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
         {title}
       </div>
       <div className="mt-2 text-2xl font-extrabold text-gray-900">{value}</div>
-      <div className="mt-1 text-sm text-gray-600">{subtitle}</div>
+      <div className="mt-1 flex items-center justify-between text-sm text-gray-600">
+        <span>{subtitle}</span>
+        <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-gray-400 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-sky-500">
+          <path fillRule="evenodd" d="M5 10a.75.75 0 01.75-.75h6.638L10.23 7.29a.75.75 0 111.04-1.08l3.5 3.25a.75.75 0 010 1.08l-3.5 3.25a.75.75 0 11-1.04-1.08l2.158-1.96H5.75A.75.75 0 015 10z" clipRule="evenodd" />
+        </svg>
+      </div>
     </Link>
   );
 }
@@ -234,9 +245,12 @@ function QuickLink({ href, label }) {
   return (
     <Link
       href={href}
-      className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+      className="group flex items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 transition-all duration-200 hover:border-sky-200 hover:bg-sky-50/50 hover:text-sky-700"
     >
-      {label}
+      <span>{label}</span>
+      <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 text-gray-400 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-sky-500">
+        <path fillRule="evenodd" d="M5 10a.75.75 0 01.75-.75h6.638L10.23 7.29a.75.75 0 111.04-1.08l3.5 3.25a.75.75 0 010 1.08l-3.5 3.25a.75.75 0 11-1.04-1.08l2.158-1.96H5.75A.75.75 0 015 10z" clipRule="evenodd" />
+      </svg>
     </Link>
   );
 }

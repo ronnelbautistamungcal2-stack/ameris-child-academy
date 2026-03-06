@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -251,7 +252,7 @@ export default function AdminForms() {
       <Panel style={{ marginTop: 16 }}>
         <h3 style={{ marginTop: 0 }}>Templates</h3>
         {loading ? (
-          <p>Loading...</p>
+          <SkeletonTable rows={3} cols={3} />
         ) : sorted.length === 0 ? (
           <p style={{ color: "#6b7280" }}>No templates yet.</p>
         ) : (
@@ -284,7 +285,7 @@ export default function AdminForms() {
           Review parent submissions and apply form data to child records when auto-fill mapping is configured.
         </p>
         {loading ? (
-          <p>Loading...</p>
+          <SkeletonTable rows={3} cols={4} />
         ) : submissions.length === 0 ? (
           <p style={{ color: "#6b7280" }}>No submissions yet.</p>
         ) : (

@@ -2,7 +2,9 @@ import "../styles/globals.css";
 import { useEffect } from "react";
 import { SessionProvider } from "next-auth/react";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { ToastProvider } from "@/contexts/ToastContext";
 import ErrorBoundary from "@/components/ui/ErrorBoundary";
+import PageLoadingBar from "@/components/ui/PageLoadingBar";
 
 export default function App({
   Component,
@@ -19,9 +21,12 @@ export default function App({
   return (
     <SessionProvider session={session}>
       <ThemeProvider>
-        <ErrorBoundary>
-          <Component {...pageProps} />
-        </ErrorBoundary>
+        <ToastProvider>
+          <ErrorBoundary>
+            <PageLoadingBar />
+            <Component {...pageProps} />
+          </ErrorBoundary>
+        </ToastProvider>
       </ThemeProvider>
     </SessionProvider>
   );

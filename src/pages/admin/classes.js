@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -517,7 +518,7 @@ export default function AdminClasses() {
 
         <div style={{ marginTop: 16 }}>
           {loading ? (
-            <p>Loading...</p>
+            <SkeletonTable rows={4} cols={4} />
           ) : (
             <table style={tableStyle}>
               <thead>

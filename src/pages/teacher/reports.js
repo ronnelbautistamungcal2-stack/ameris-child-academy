@@ -1,4 +1,5 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -276,7 +277,7 @@ export default function TeacherReports() {
               Select a center.
             </div>
           ) : loadingChild ? (
-            <div className="mt-4 text-sm text-gray-600 print:hidden">Loading…</div>
+            <div className="mt-4 print:hidden"><SkeletonTable rows={5} cols={3} /></div>
           ) : !child ? (
             <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600 print:hidden">
               Select a child to generate a report.

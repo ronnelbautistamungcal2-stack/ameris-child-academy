@@ -1,5 +1,6 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import MonthlyCalendar from "@/components/calendar/MonthlyCalendar";
 import { apiJson } from "@/lib/api";
 import { useEffect, useState, useCallback } from "react";
@@ -180,7 +181,7 @@ export default function TeacherTimeOff() {
           )}
 
           {loading ? (
-            <div className="mt-4 text-sm text-gray-600">Loading…</div>
+            <div className="mt-4"><SkeletonTable rows={5} cols={4} /></div>
           ) : !centerId ? (
             <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
               Select a center to submit requests and view your calendar.

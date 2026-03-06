@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -110,7 +111,7 @@ export default function AdminTeachers() {
           ) : null}
 
           {loading ? (
-            <p className="mt-4 text-sm text-gray-500">Loading…</p>
+            <div className="mt-4"><SkeletonTable rows={4} cols={4} /></div>
           ) : (
             <div className="mt-4 overflow-hidden rounded-xl border border-gray-200">
               <table className="w-full text-sm">

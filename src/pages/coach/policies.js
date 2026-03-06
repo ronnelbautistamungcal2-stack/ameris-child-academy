@@ -1,4 +1,5 @@
 import CoachLayout from "@/components/coach/CoachLayout";
+import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useState } from "react";
 
@@ -37,7 +38,7 @@ export default function CoachPolicies() {
         ) : null}
 
         {loading ? (
-          <div className="mt-4 text-sm text-gray-600">Loading…</div>
+          <div className="mt-4"><Skeleton count={4} /></div>
         ) : docs.length ? (
           <div className="mt-4 space-y-3">
             {docs.map((d) => (

@@ -1,4 +1,5 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
+import { SkeletonCard } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -207,7 +208,7 @@ export default function TeacherDashboard() {
           ) : null}
 
           {loading ? (
-            <div className="mt-4 text-sm text-gray-600">Loading…</div>
+            <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2"><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /></div>
           ) : !centerId ? (
             <div className="mt-4 text-sm text-gray-600">
               Choose a center to view your teacher dashboard.

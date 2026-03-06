@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -96,7 +97,7 @@ export default function FormRenewals() {
         </div>
 
         {loading ? (
-          <p>Loading...</p>
+          <Skeleton variant="card" count={3} />
         ) : submissions.length === 0 ? (
           <p style={{ color: "var(--admin-text-muted)" }}>No forms with renewal tracking found.</p>
         ) : (

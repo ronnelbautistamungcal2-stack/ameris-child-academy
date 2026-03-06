@@ -1,4 +1,5 @@
 import ParentLayout from "@/components/parent/ParentLayout";
+import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -105,7 +106,7 @@ export default function ParentPermissions() {
           ) : null}
 
           {loading ? (
-            <div className="mt-4 text-sm text-gray-600">Loading...</div>
+            <div className="mt-4"><Skeleton count={3} /></div>
           ) : children.length === 0 ? (
             <div className="mt-4 text-sm text-gray-600">No children found.</div>
           ) : (

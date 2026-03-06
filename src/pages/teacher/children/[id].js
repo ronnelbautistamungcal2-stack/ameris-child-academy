@@ -1,5 +1,6 @@
 
 import TeacherLayout from "@/components/teacher/TeacherLayout";
+import Skeleton from "@/components/ui/Skeleton";
 import CatchupPlansPanel from "@/components/reports/CatchupPlansPanel";
 import MilestoneCalendarPanel from "@/components/reports/MilestoneCalendarPanel";
 import ActiveGoalsPanel from "@/components/progression/ActiveGoalsPanel";
@@ -614,7 +615,7 @@ export default function TeacherChildDetailPage() {
   if (loading) {
     return (
       <TeacherLayout title="Child Profile">
-        <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600">Loading...</div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4"><Skeleton count={6} /></div>
       </TeacherLayout>
     );
   }

@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -210,7 +211,7 @@ function CategoriesTab({ centerId }) {
 
       {/* Table */}
       {loading ? (
-        <div className="mt-4 text-sm text-gray-500">Loading...</div>
+        <div className="mt-4"><Skeleton count={4} /></div>
       ) : categories.length === 0 ? (
         <div className="mt-4 text-sm text-gray-500">No categories yet.</div>
       ) : (
@@ -438,7 +439,7 @@ function LessonsTab({ centerId }) {
 
       {/* Lessons list */}
       {loading ? (
-        <div className="mt-4 text-sm text-gray-500">Loading...</div>
+        <div className="mt-4"><Skeleton count={4} /></div>
       ) : filtered.length === 0 ? (
         <div className="mt-4 text-sm text-gray-500">No lessons found.</div>
       ) : (
@@ -783,7 +784,7 @@ function RemediationsTab({ centerId }) {
       )}
 
       {loading ? (
-        <div className="mt-4 text-sm text-gray-500">Loading...</div>
+        <div className="mt-4"><Skeleton count={4} /></div>
       ) : remediations.length === 0 ? (
         <div className="mt-4 text-sm text-gray-500">No remediation links yet.</div>
       ) : (

@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -190,7 +191,7 @@ export default function AdminSupplyLists() {
           ) : null}
 
           {loading || supplyLoading ? (
-            <div className="mt-4 text-sm text-gray-600">Loading...</div>
+            <div className="mt-4"><SkeletonTable rows={4} cols={3} /></div>
           ) : supplyList.length === 0 ? (
             <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
               No supplies found. Add supplies to lessons to generate a supply list.

@@ -1,5 +1,6 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -276,7 +277,7 @@ export default function TeacherChildren() {
 
         <div className="mt-4">
           {loading ? (
-            <div className="text-sm text-gray-600">Loading…</div>
+            <div><Skeleton count={5} /></div>
           ) : (
             <div className="overflow-hidden rounded-xl border border-gray-200">
               <table className="w-full text-left text-sm">

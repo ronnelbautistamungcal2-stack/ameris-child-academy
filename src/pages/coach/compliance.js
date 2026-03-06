@@ -1,4 +1,5 @@
 import CoachLayout from "@/components/coach/CoachLayout";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -44,7 +45,7 @@ export default function CoachCompliance() {
         ) : null}
 
         {loading ? (
-          <div className="mt-4 text-sm text-gray-600">Loading…</div>
+          <div className="mt-4"><SkeletonTable rows={5} cols={4} /></div>
         ) : !rows.length ? (
           <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
             No teacher data available.

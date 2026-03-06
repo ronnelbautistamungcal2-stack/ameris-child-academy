@@ -1,7 +1,8 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const ROLES = ["ADMIN", "TEACHER", "PARENT", "COACH", "SUBSCRIBER"];
 
@@ -277,13 +278,8 @@ export default function AdminUsers() {
                 type="date"
               />
             </Field>
-            <Field label="Picture URL">
-              <input
-                value={pictureUrl}
-                onChange={(e) => setPictureUrl(e.target.value)}
-                style={inputStyle}
-                placeholder="https://…"
-              />
+            <Field label="Profile Picture">
+              <PictureUpload value={pictureUrl} onChange={setPictureUrl} />
             </Field>
           </div>
 
@@ -376,7 +372,7 @@ export default function AdminUsers() {
           </div>
 
           {loading ? (
-            <p>Loading…</p>
+            <SkeletonTable rows={5} cols={4} />
           ) : (
             <table style={tableStyle}>
               <thead>
@@ -509,6 +505,129 @@ function ErrorBanner({ message }) {
       }}
     >
       {message}
+    </div>
+  );
+}
+
+function PictureUpload({ value, onChange }) {
+  const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleFile = async (file) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image file.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert("File too large. Max 5MB.");
+      return;
+    }
+    setUploading(true);
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await apiJson("/api/v1/upload", {
+        method: "POST",
+        body: JSON.stringify({ file: base64, fileName: file.name }),
+      });
+      onChange(res.url);
+    } catch (e) {
+      alert(e.message || "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer?.files?.[0];
+    if (file) handleFile(file);
+  };
+
+  return (
+    <div>
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+        onClick={() => fileRef.current?.click()}
+        style={{
+          border: `2px dashed ${dragOver ? "#2563eb" : "var(--admin-border)"}`,
+          borderRadius: 10,
+          padding: 12,
+          textAlign: "center",
+          cursor: "pointer",
+          background: dragOver ? "#eff6ff" : "var(--admin-bg-secondary)",
+          transition: "all 0.15s",
+          position: "relative",
+        }}
+      >
+        {value ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <img
+              src={value}
+              alt="Profile"
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 10,
+                objectFit: "cover",
+                border: "1px solid var(--admin-border)",
+              }}
+            />
+            <div style={{ flex: 1, textAlign: "left" }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>
+                Photo uploaded
+              </div>
+              <div style={{ fontSize: 11, color: "var(--admin-text-muted)", marginTop: 2 }}>
+                Click or drag to replace
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onChange(""); }}
+              style={{
+                background: "#ef4444",
+                color: "white",
+                border: "none",
+                borderRadius: 6,
+                padding: "4px 10px",
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Remove
+            </button>
+          </div>
+        ) : (
+          <div>
+            <div style={{ fontSize: 24, color: "var(--admin-text-muted)" }}>
+              {uploading ? "..." : "+"}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginTop: 4 }}>
+              {uploading ? "Uploading..." : "Click or drag photo here"}
+            </div>
+            <div style={{ fontSize: 10, color: "var(--admin-text-muted)", marginTop: 2 }}>
+              JPG, PNG — max 5MB
+            </div>
+          </div>
+        )}
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={(e) => handleFile(e.target.files?.[0])}
+      />
     </div>
   );
 }

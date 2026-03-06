@@ -1,4 +1,5 @@
 import SubscriberLayout from "@/components/subscriber/SubscriberLayout";
+import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -42,7 +43,7 @@ export default function SubscriberHome() {
         ) : null}
 
         {loading ? (
-          <div className="mt-4 text-sm text-gray-600">Loading…</div>
+          <div className="mt-4"><Skeleton count={4} /></div>
         ) : sorted.length === 0 ? (
           <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
             No centers are linked to this subscriber account.

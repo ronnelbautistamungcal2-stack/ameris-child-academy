@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -241,7 +242,7 @@ export default function ProgressArchive() {
               Archived Records ({schoolYear})
             </h3>
             {loading ? (
-              <div className="mt-3 text-sm text-gray-500">Loading...</div>
+              <div className="mt-3"><SkeletonTable rows={4} cols={3} /></div>
             ) : archives.length === 0 ? (
               <div className="mt-3 text-sm text-gray-500">No archives for this school year.</div>
             ) : (

@@ -1,4 +1,5 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
+import Skeleton, { SkeletonCard } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -203,7 +204,7 @@ export default function TeacherTraining() {
           {tab === "training" && (
             <>
               {loading ? (
-                <div className="mt-4 text-sm text-gray-600">Loading…</div>
+                <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2"><SkeletonCard /><SkeletonCard /></div>
               ) : (
                 <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
                   <div className="rounded-2xl border border-gray-200 bg-white p-4">
@@ -256,7 +257,7 @@ export default function TeacherTraining() {
                         Select a center to preview today's training pathway.
                       </div>
                     ) : loadingPlans ? (
-                      <div className="mt-3 text-sm text-gray-600">Loading…</div>
+                      <div className="mt-3"><Skeleton count={3} /></div>
                     ) : sortedPlans.length ? (
                       <div className="mt-3 space-y-2">
                         {sortedPlans.map((p) => (
@@ -327,7 +328,7 @@ const TYPE_CONFIG = {
 };
 
 function CareerLadderPanel({ records, loading }) {
-  if (loading) return <div className="mt-4 text-sm text-gray-600">Loading…</div>;
+  if (loading) return <div className="mt-4"><Skeleton count={4} /></div>;
 
   if (!records.length) {
     return (
@@ -508,7 +509,7 @@ function TrainingHoursPanel({ centerId }) {
         )}
 
         {loading ? (
-          <div className="mt-3 text-sm text-gray-600">Loading…</div>
+          <div className="mt-3"><Skeleton count={3} /></div>
         ) : logs.length === 0 ? (
           <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
             No training hours logged yet.

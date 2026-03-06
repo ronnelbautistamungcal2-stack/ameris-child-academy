@@ -1,4 +1,5 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
+import { SkeletonCard } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useState } from "react";
 
@@ -37,7 +38,7 @@ export default function TeacherMetrics() {
         ) : null}
 
         {loading ? (
-          <div className="mt-4 text-sm text-gray-600">Loading…</div>
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"><SkeletonCard /><SkeletonCard /><SkeletonCard /></div>
         ) : data ? (
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <Metric label="Activities (Today)" value={data.activities?.today ?? 0} />

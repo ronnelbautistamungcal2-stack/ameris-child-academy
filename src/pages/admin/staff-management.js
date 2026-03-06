@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useState, useCallback } from "react";
 
@@ -910,7 +911,7 @@ function TextBlock({ label, value }) {
 }
 
 function Loading() {
-  return <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">Loading…</div>;
+  return <div className="rounded-2xl border border-gray-200 bg-white p-8 dark:border-gray-700 dark:bg-gray-800"><SkeletonTable rows={4} cols={4} /></div>;
 }
 
 function Empty({ msg }) {

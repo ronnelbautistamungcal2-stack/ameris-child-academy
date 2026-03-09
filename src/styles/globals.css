@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -96,6 +98,8 @@
 
   body {
     @apply bg-gray-50 text-gray-900;
+    font-family: 'Nunito', ui-rounded, system-ui, sans-serif;
+    font-weight: 500;
   }
 
   .dark body {
@@ -127,11 +131,11 @@
   }
 
   tbody tr:hover {
-    @apply bg-sky-50/50;
+    @apply bg-violet-50/50;
   }
 
   .dark tbody tr:hover {
-    @apply bg-sky-900/20;
+    @apply bg-violet-900/20;
   }
 
   /* Sticky table headers */
@@ -159,13 +163,56 @@
   input:focus,
   textarea:focus,
   select:focus {
-    @apply border-sky-400 ring-2 ring-sky-100 outline-none;
+    @apply border-violet-400 ring-2 ring-violet-100 outline-none;
   }
 
   .dark input:focus,
   .dark textarea:focus,
   .dark select:focus {
-    @apply border-sky-500 ring-sky-900/50;
+    @apply border-violet-500 ring-violet-900/50;
+  }
+
+  /* Child-friendly button press effect */
+  button:not(:disabled):active {
+    transform: scale(0.97);
+  }
+
+  /* Fun link underline */
+  a:not(.no-underline-hover):hover {
+    text-decoration-thickness: 2px;
+  }
+}
+
+/* ── Child-friendly global enhancements ── */
+@layer components {
+  /* Fun card hover lift */
+  .card-hover {
+    @apply transition-all duration-200 hover:-translate-y-1 hover:shadow-lg;
+  }
+
+  /* Colorful focus ring */
+  *:focus-visible {
+    outline: 3px solid rgb(139 92 246);
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+
+  /* Friendly colorful scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #f3f4f6;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(to bottom, #a78bfa, #f472b6);
+    border-radius: 999px;
+    border: 2px solid #f3f4f6;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(to bottom, #7c3aed, #db2777);
   }
 }
 
@@ -228,18 +275,22 @@
 
 /* ── Gradients ── */
 .dark .from-sky-50 { --tw-gradient-from: rgb(17 24 39) !important; }
+.dark .from-violet-50 { --tw-gradient-from: rgb(17 24 39) !important; }
 .dark .from-blue-50 { --tw-gradient-from: rgb(30 58 138 / 0.3) !important; }
 .dark .from-emerald-100 { --tw-gradient-from: rgb(6 78 59 / 0.4) !important; }
 .dark .from-sky-600 { --tw-gradient-from: rgb(3 105 161) !important; }
 .dark .from-sky-700 { --tw-gradient-from: rgb(3 105 161) !important; }
+.dark .from-violet-500 { --tw-gradient-from: rgb(109 40 217) !important; }
 .dark .to-gray-50 { --tw-gradient-to: rgb(3 7 18) !important; }
 .dark .to-white { --tw-gradient-to: rgb(31 41 55) !important; }
 .dark .to-cyan-50 { --tw-gradient-to: rgb(22 78 99 / 0.3) !important; }
 .dark .to-emerald-50 { --tw-gradient-to: rgb(6 78 59 / 0.3) !important; }
 .dark .to-emerald-200 { --tw-gradient-to: rgb(6 78 59 / 0.5) !important; }
 .dark .to-sky-200 { --tw-gradient-to: rgb(12 74 110 / 0.5) !important; }
+.dark .to-sky-200 { --tw-gradient-to: rgb(12 74 110 / 0.5) !important; }
 .dark .to-sky-300 { --tw-gradient-to: rgb(12 74 110 / 0.6) !important; }
 .dark .to-sky-400 { --tw-gradient-to: rgb(12 74 110 / 0.7) !important; }
+.dark .to-pink-500 { --tw-gradient-to: rgb(219 39 119) !important; }
 
 /* ── Borders ── */
 .dark .border-gray-100 { border-color: rgb(55 65 81) !important; }

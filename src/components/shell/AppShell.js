@@ -77,23 +77,23 @@ export default function AppShell({
   );
 
   const Sidebar = (
-    <aside className="sticky top-0 flex h-screen w-72 flex-col border-r border-gray-200 bg-white/90 backdrop-blur dark:border-gray-700 dark:bg-gray-900/90">
+    <aside className="sticky top-0 flex h-screen w-72 flex-col border-r border-violet-100 bg-white/90 backdrop-blur dark:border-gray-700 dark:bg-gray-900/90">
       <div className="px-6 pb-5 pt-6">
         <Link href="/dashboard" className="flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-2xl bg-sky-100 text-sm font-extrabold text-sky-700 dark:bg-sky-900/50 dark:text-sky-300">
+          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-violet-500 to-pink-500 text-sm font-extrabold text-white shadow-md shadow-violet-200 dark:shadow-violet-900/40">
             ACA
           </div>
           <div className="min-w-0">
             <div className="truncate text-sm font-extrabold text-gray-900 dark:text-gray-100">
               Ameris Academy
             </div>
-            <div className="truncate text-xs text-gray-500 dark:text-gray-400">Childcare</div>
+            <div className="truncate text-xs font-semibold text-violet-500 dark:text-violet-400">Childcare</div>
           </div>
         </Link>
       </div>
 
       <nav className="scrollbar-hide flex-1 overflow-y-auto px-4 pb-6">
-        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+        <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-violet-300 dark:text-violet-500">
           Navigation
         </div>
         <div className="space-y-1">
@@ -120,15 +120,15 @@ export default function AppShell({
                 key={item.href}
                 href={item.href}
                 className={[
-                  "flex items-center justify-between rounded-2xl px-4 py-2.5 text-sm font-semibold transition",
+                  "flex items-center justify-between rounded-2xl px-4 py-2.5 text-sm font-bold transition-all duration-150",
                   active
-                    ? "bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-200"
-                    : "text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800",
+                    ? "bg-gradient-to-r from-violet-100 to-pink-50 text-violet-900 shadow-sm dark:bg-violet-900/40 dark:from-violet-900/40 dark:to-pink-900/20 dark:text-violet-200"
+                    : "text-gray-600 hover:bg-violet-50 hover:text-violet-800 dark:text-gray-300 dark:hover:bg-gray-800",
                 ].join(" ")}
               >
                 <span className="truncate">{item.label}</span>
                 {item.badge > 0 && (
-                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-extrabold text-white">
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-1 text-[10px] font-extrabold text-white shadow-sm">
                     {item.badge > 99 ? "99+" : item.badge}
                   </span>
                 )}
@@ -141,7 +141,7 @@ export default function AppShell({
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-sky-50 to-gray-50 dark:from-gray-900 dark:to-gray-950">
+    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-pink-50/40 to-sky-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-950">
       <div className="mx-auto flex min-h-screen max-w-[1500px]">
         <div className="hidden md:block">{Sidebar}</div>
 
@@ -152,7 +152,7 @@ export default function AppShell({
         ) : null}
 
         <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/70 backdrop-blur dark:border-gray-700 dark:bg-gray-900/70">
+          <header className="sticky top-0 z-10 border-b border-violet-100 bg-white/70 backdrop-blur dark:border-gray-700 dark:bg-gray-900/70">
             <div className="flex items-center justify-between gap-3 px-4 py-3">
               <div className="flex min-w-0 items-center gap-3">
                 <button
@@ -208,7 +208,7 @@ export default function AppShell({
                       }}
                     />
                   ) : (
-                    <div className="grid h-10 w-10 place-items-center rounded-full bg-emerald-100 text-sm font-extrabold text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
+                    <div className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-violet-400 to-pink-400 text-sm font-extrabold text-white shadow-md shadow-violet-200 dark:shadow-violet-900/40">
                       {initials}
                     </div>
                   )}
@@ -225,7 +225,7 @@ export default function AppShell({
 
                 <button
                   onClick={() => signOut({ callbackUrl: "/login" })}
-                  className="rounded-2xl bg-red-500 px-2.5 py-2 text-xs font-extrabold text-white transition-colors hover:bg-red-600 sm:px-4 sm:text-sm"
+                  className="rounded-2xl bg-gradient-to-r from-rose-400 to-pink-500 px-2.5 py-2 text-xs font-extrabold text-white shadow-sm transition-all hover:shadow-md hover:from-rose-500 hover:to-pink-600 sm:px-4 sm:text-sm"
                 >
                   <span className="hidden sm:inline">Sign Out</span>
                   <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 sm:hidden">
@@ -251,12 +251,12 @@ export default function AppShell({
           </main>
 
           {showFooter ? (
-            <footer className="border-t border-gray-200 bg-white/70 backdrop-blur dark:border-gray-700 dark:bg-gray-900/70">
+            <footer className="border-t border-violet-100 bg-white/70 backdrop-blur dark:border-gray-700 dark:bg-gray-900/70">
               <div className="mx-auto w-full max-w-6xl px-4 py-10">
                 <div className="grid grid-cols-1 gap-10 md:grid-cols-[1.4fr_1fr_1fr_1.2fr]">
                   <div className="min-w-0">
                     <div className="flex items-center gap-3">
-                      <div className="grid h-10 w-10 place-items-center rounded-2xl bg-sky-100 text-sm font-extrabold text-sky-700 dark:bg-sky-900/50 dark:text-sky-300">
+                      <div className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-violet-500 to-pink-500 text-sm font-extrabold text-white shadow-md shadow-violet-200 dark:shadow-violet-900/40">
                         ACA
                       </div>
                       <div className="min-w-0">
@@ -328,10 +328,10 @@ function NavGroup({ label, items, isActive, activePath }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={[
-          "flex w-full items-center justify-between rounded-2xl px-4 py-2.5 text-sm font-semibold transition",
+          "flex w-full items-center justify-between rounded-2xl px-4 py-2.5 text-sm font-bold transition-all duration-150",
           hasActiveChild
-            ? "text-sky-700 dark:text-sky-300"
-            : "text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800",
+            ? "text-violet-700 dark:text-violet-300"
+            : "text-gray-600 hover:bg-violet-50 hover:text-violet-800 dark:text-gray-300 dark:hover:bg-gray-800",
         ].join(" ")}
       >
         <span className="truncate">{label}</span>
@@ -352,7 +352,7 @@ function NavGroup({ label, items, isActive, activePath }) {
       </button>
 
       {open && (
-        <div className="ml-3 mt-0.5 space-y-0.5 border-l-2 border-gray-200 pl-3 dark:border-gray-700">
+        <div className="ml-3 mt-0.5 space-y-0.5 border-l-2 border-violet-100 pl-3 dark:border-gray-700">
           {items.map((child) => {
             if (!child?.href) return null;
             const active = isActive(child.href);
@@ -361,15 +361,15 @@ function NavGroup({ label, items, isActive, activePath }) {
                 key={child.href}
                 href={child.href}
                 className={[
-                  "flex items-center justify-between rounded-xl px-3 py-2 text-[13px] font-medium transition",
+                  "flex items-center justify-between rounded-xl px-3 py-2 text-[13px] font-bold transition-all duration-150",
                   active
-                    ? "bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-200"
-                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200",
+                    ? "bg-gradient-to-r from-violet-100 to-pink-50 text-violet-900 dark:bg-violet-900/40 dark:from-violet-900/40 dark:to-pink-900/20 dark:text-violet-200"
+                    : "text-gray-500 hover:bg-violet-50 hover:text-violet-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200",
                 ].join(" ")}
               >
                 <span className="truncate">{child.label}</span>
                 {child.badge > 0 && (
-                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-extrabold text-white">
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-1 text-[10px] font-extrabold text-white shadow-sm">
                     {child.badge > 99 ? "99+" : child.badge}
                   </span>
                 )}

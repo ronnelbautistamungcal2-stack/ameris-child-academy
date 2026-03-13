@@ -178,7 +178,8 @@ export default function TeacherDashboard() {
             <div>
               <h2 className="text-lg font-extrabold text-gray-900">Dashboard</h2>
               <p className="mt-1 text-sm text-gray-600">
-                Attendance, birthdays, daily schedule, and red flags.
+                {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                {" · "}Attendance, birthdays & schedule
               </p>
             </div>
 
@@ -224,6 +225,7 @@ export default function TeacherDashboard() {
                 }
                 href="/teacher/classroom"
                 hrefLabel="Open My Classroom"
+                accent="sky"
               >
                 {attendance?.checkedInChildren?.length ? (
                   <ul className="mt-3 space-y-1 text-sm text-gray-700">
@@ -248,6 +250,7 @@ export default function TeacherDashboard() {
                 subtitle={upcomingBirthdays.length ? "Next 6 birthdays" : "No birthdays on file"}
                 href="/teacher/classroom"
                 hrefLabel="View Roster"
+                accent="pink"
               >
                 {upcomingBirthdays.length ? (
                   <ul className="mt-3 space-y-1 text-sm text-gray-700">
@@ -269,16 +272,18 @@ export default function TeacherDashboard() {
 
               <Card
                 title="Today’s daily schedule"
-                subtitle={`For ${dayKey} (local only)`}
+                subtitle={`${dayKey} · saved locally`}
                 href="/teacher/checklists"
                 hrefLabel="Open Checklists"
+                accent="violet"
               >
                 <div className="mt-3 flex gap-2">
                   <input
                     value={scheduleDraft}
                     onChange={(e) => setScheduleDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addScheduleItem(); } }}
                     className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                    placeholder="Add schedule item (e.g., Circle time at 9:30)"
+                    placeholder="Add item and press Enter (e.g., Circle time 9:30)"
                   />
                   <button
                     type="button"
@@ -316,9 +321,10 @@ export default function TeacherDashboard() {
 
               <Card
                 title="Red flag children"
-                subtitle={redFlagChildren.length ? `${redFlagChildren.length} flagged` : "None detected"}
+                subtitle={redFlagChildren.length ? `${redFlagChildren.length} need attention` : "All clear"}
                 href="/teacher/classroom"
                 hrefLabel="Review in Classroom"
+                accent={redFlagChildren.length > 0 ? "amber" : "emerald"}
               >
                 {redFlagChildren.length ? (
                   <ul className="mt-3 space-y-2">
@@ -357,20 +363,29 @@ export default function TeacherDashboard() {
   );
 }
 
-function Card({ title, subtitle, href, hrefLabel, children }) {
+const CARD_ACCENTS = {
+  sky: "border-l-sky-400",
+  pink: "border-l-pink-400",
+  violet: "border-l-violet-400",
+  amber: "border-l-amber-400",
+  emerald: "border-l-emerald-400",
+};
+
+function Card({ title, subtitle, href, hrefLabel, children, accent }) {
+  const accentClass = accent ? CARD_ACCENTS[accent] : "";
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4">
+    <div className={["rounded-2xl border border-gray-200 bg-white p-4", accentClass ? `border-l-4 ${accentClass}` : ""].join(" ")}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
             {title}
           </div>
-          <div className="mt-2 text-base font-extrabold text-gray-900">{subtitle}</div>
+          <div className="mt-1.5 text-base font-extrabold text-gray-900">{subtitle}</div>
         </div>
         {href ? (
           <Link
             href={href}
-            className="shrink-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-extrabold text-gray-800 hover:bg-gray-50"
+            className="shrink-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-extrabold text-gray-700 transition hover:bg-gray-50 hover:border-gray-300"
           >
             {hrefLabel || "Open"}
           </Link>

@@ -106,6 +106,7 @@ export default function AppShell({
                 <NavGroup
                   key={`group:${item.label || idx}`}
                   label={item.label}
+                  icon={item.icon}
                   items={item.children}
                   isActive={isActive}
                   activePath={activePath}
@@ -126,7 +127,14 @@ export default function AppShell({
                     : "text-gray-600 hover:bg-violet-50 hover:text-violet-800 dark:text-gray-300 dark:hover:bg-gray-800",
                 ].join(" ")}
               >
-                <span className="truncate">{item.label}</span>
+                <span className="flex items-center gap-2.5 truncate">
+                  {item.icon ? (
+                    <span className={active ? "text-violet-600 dark:text-violet-300" : "text-gray-400 dark:text-gray-500"}>
+                      {item.icon}
+                    </span>
+                  ) : null}
+                  <span className="truncate">{item.label}</span>
+                </span>
                 {item.badge > 0 && (
                   <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-1 text-[10px] font-extrabold text-white shadow-sm">
                     {item.badge > 99 ? "99+" : item.badge}
@@ -165,6 +173,13 @@ export default function AppShell({
                     <path strokeLinecap="round" d="M4 6h16M4 12h16M4 18h16" />
                   </svg>
                 </button>
+                {title ? (
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-extrabold text-gray-900 dark:text-gray-100 md:text-base">
+                      {title}
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               <div className="flex items-center gap-1.5 sm:gap-2">
@@ -313,7 +328,7 @@ export default function AppShell({
   );
 }
 
-function NavGroup({ label, items, isActive, activePath }) {
+function NavGroup({ label, icon, items, isActive, activePath }) {
   const hasActiveChild = items.some((i) => i.href && isActive(i.href));
   const [open, setOpen] = useState(hasActiveChild);
 
@@ -334,7 +349,14 @@ function NavGroup({ label, items, isActive, activePath }) {
             : "text-gray-600 hover:bg-violet-50 hover:text-violet-800 dark:text-gray-300 dark:hover:bg-gray-800",
         ].join(" ")}
       >
-        <span className="truncate">{label}</span>
+        <span className="flex items-center gap-2.5 truncate">
+          {icon ? (
+            <span className={hasActiveChild ? "text-violet-500 dark:text-violet-400" : "text-gray-400 dark:text-gray-500"}>
+              {icon}
+            </span>
+          ) : null}
+          <span className="truncate">{label}</span>
+        </span>
         <svg
           viewBox="0 0 20 20"
           fill="currentColor"

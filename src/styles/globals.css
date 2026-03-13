@@ -107,10 +107,38 @@
     color-scheme: dark;
   }
 
+  .dark .bg-white {
+    background-color: theme('colors.gray.800') !important;
+  }
+  .dark .bg-white\/90 {
+    background-color: rgb(31 41 55 / 0.9) !important;
+  }
+  .dark .border-gray-200 {
+    border-color: theme('colors.gray.700') !important;
+  }
+  .dark .text-gray-900 {
+    color: theme('colors.gray.100') !important;
+  }
+  .dark .text-gray-800 {
+    color: theme('colors.gray.200') !important;
+  }
+  .dark .text-gray-600 {
+    color: theme('colors.gray.400') !important;
+  }
+  .dark .text-gray-500 {
+    color: theme('colors.gray.400') !important;
+  }
+  .dark .bg-gray-50 {
+    background-color: theme('colors.gray.900') !important;
+  }
+
   .dark input,
   .dark textarea,
   .dark select {
-    @apply border-gray-600 bg-gray-800 text-gray-100 placeholder-gray-400;
+    border-color: theme('colors.gray.600') !important;
+    background-color: theme('colors.gray.800') !important;
+    color: theme('colors.gray.100') !important;
+    @apply placeholder-gray-400;
   }
 
   .dark table {

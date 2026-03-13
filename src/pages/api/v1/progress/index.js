@@ -32,7 +32,7 @@ export default async function handler(req, res) {
             ? teacherChildFilter(session.user.id)
             : undefined,
       },
-      include: { child: true, lesson: { include: { category: true } } },
+      include: { child: true, lesson: { include: { category: true } }, lessonGoal: true },
       orderBy: { createdAt: "desc" },
     });
 

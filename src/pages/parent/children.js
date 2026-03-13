@@ -159,26 +159,35 @@ export default function ParentChildren() {
             />
           ) : (
             <div className="mt-4 space-y-4">
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-6">
+              <div className="flex flex-wrap gap-2">
                 {children.map((ch) => {
                   const active = ch.id === selectedChildId;
+                  const childInitials = initials(ch.firstName, ch.lastName);
                   return (
                     <button
                       key={ch.id}
                       type="button"
                       onClick={() => setSelectedChildId(ch.id)}
                       className={[
-                        "rounded-xl border px-3 py-2 text-left transition",
+                        "flex items-center gap-2.5 rounded-2xl border px-3 py-2 text-left transition-all duration-150",
                         active
-                          ? "border-sky-200 bg-sky-50"
-                          : "border-gray-200 bg-white hover:bg-gray-50",
+                          ? "border-sky-300 bg-sky-50 shadow-sm ring-2 ring-sky-200"
+                          : "border-gray-200 bg-white hover:border-sky-200 hover:bg-sky-50/50",
                       ].join(" ")}
                     >
-                      <div className="truncate text-sm font-extrabold text-gray-900">
-                        {ch.firstName} {ch.lastName || ""}
+                      <div className={[
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-extrabold",
+                        active ? "bg-sky-500 text-white" : "bg-gray-100 text-gray-600",
+                      ].join(" ")}>
+                        {childInitials}
                       </div>
-                      <div className="mt-1 text-xs text-gray-500">
-                        {active ? "Selected" : "View details"}
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-extrabold text-gray-900">
+                          {ch.firstName} {ch.lastName || ""}
+                        </div>
+                        {active && (
+                          <div className="text-[10px] font-semibold text-sky-600">Selected</div>
+                        )}
                       </div>
                     </button>
                   );
@@ -208,55 +217,73 @@ export default function ParentChildren() {
                                 : " — Present"}
                             </div>
                           )}
-                          <div className="mt-1 text-xs text-gray-600">
-                            Parent: Family Account
-                          </div>
+                          {selectedChild.parent?.name || selectedChild.parent?.email ? (
+                            <div className="mt-1 text-xs text-gray-600">
+                              Parent: {selectedChild.parent?.name || selectedChild.parent?.email}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </div>
 
-                    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        Class
+                    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          Classroom
+                        </div>
+                        <div className="mt-1 flex items-center gap-2">
+                          <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0 text-sky-400">
+                            <path d="M10.75 16.82A7.462 7.462 0 0115 15.5c.71 0 1.396.098 2.046.282A.75.75 0 0018 15.06v-11a.75.75 0 00-.546-.721A9.006 9.006 0 0015 3a8.963 8.963 0 00-4.25 1.065V16.82zM9.25 4.065A8.963 8.963 0 005 3c-.85 0-1.673.118-2.454.339A.75.75 0 002 4.06v11a.75.75 0 00.954.721A7.506 7.506 0 015 15.5c1.579 0 3.042.487 4.25 1.32V4.065z" />
+                          </svg>
+                          <span className="text-sm font-semibold text-gray-900">
+                            {selectedChild.classRoom?.name || selectedChild.className || (selectedChild.classRoomId ? "Assigned" : "Not assigned")}
+                          </span>
+                        </div>
                       </div>
-                      <div className="mt-1 text-sm font-semibold text-gray-900">
-                        {selectedChild.classRoomId || "Infant Care"}
-                      </div>
-                      <div className="mt-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        Center
-                      </div>
-                      <div className="mt-1 text-sm text-gray-700">
-                        {selectedChild.centerId || "-"}
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          Center
+                        </div>
+                        <div className="mt-1 flex items-center gap-2">
+                          <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0 text-violet-400">
+                            <path fillRule="evenodd" d="M1 2.75A.75.75 0 011.75 2h10.5a.75.75 0 010 1.5H12v13.75a.75.75 0 01-.75.75h-1.5a.75.75 0 01-.75-.75v-2.5a.75.75 0 00-.75-.75h-2.5a.75.75 0 00-.75.75v2.5a.75.75 0 01-.75.75h-2.5a.75.75 0 010-1.5H2V3.5h-.25A.75.75 0 011 2.75zM4 5.5a.5.5 0 01.5-.5h1a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-1a.5.5 0 01-.5-.5v-1zM4.5 9a.5.5 0 00-.5.5v1a.5.5 0 00.5.5h1a.5.5 0 00.5-.5v-1a.5.5 0 00-.5-.5h-1zM8 5.5a.5.5 0 01.5-.5h1a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-1a.5.5 0 01-.5-.5v-1zM8.5 9a.5.5 0 00-.5.5v1a.5.5 0 00.5.5h1a.5.5 0 00.5-.5v-1a.5.5 0 00-.5-.5h-1zM14.25 6a.75.75 0 00-.75.75V17H18V6.75a.75.75 0 00-.75-.75h-3zM15 9.5a.5.5 0 01.5-.5h1a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-1a.5.5 0 01-.5-.5v-1zm.5 3.5a.5.5 0 00-.5.5v1a.5.5 0 00.5.5h1a.5.5 0 00.5-.5v-1a.5.5 0 00-.5-.5h-1z" clipRule="evenodd" />
+                          </svg>
+                          <span className="text-sm text-gray-700">
+                            {selectedChild.center?.name || selectedChild.centerName || (selectedChild.centerId ? "Assigned" : "Not assigned")}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-4 flex flex-wrap gap-2 border-b border-gray-200 pb-3" role="tablist">
-                    {tabList.map((tab) => (
+                  <div className="mt-4 -mx-1 overflow-x-auto border-b border-gray-200 pb-3" role="tablist" aria-label="Child reports">
+                    <div className="flex gap-2 px-1 min-w-max">
+                      {tabList.map((tab) => (
+                        <button
+                          key={tab.key}
+                          type="button"
+                          role="tab"
+                          aria-selected={activeTab === tab.key}
+                          onClick={() => setActiveTab(tab.key)}
+                          className={[
+                            "whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold transition",
+                            activeTab === tab.key
+                              ? "bg-sky-100 text-sky-900"
+                              : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                          ].join(" ")}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
                       <button
-                        key={tab.key}
                         type="button"
-                        role="tab"
-                        aria-selected={activeTab === tab.key}
-                        onClick={() => setActiveTab(tab.key)}
-                        className={[
-                          "rounded-xl px-3 py-2 text-xs font-semibold transition",
-                          activeTab === tab.key
-                            ? "bg-sky-100 text-sky-900"
-                            : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
-                        ].join(" ")}
+                        onClick={() => loadChildRecords(selectedChildId)}
+                        disabled={!selectedChildId || activitiesLoading || progressLoading}
+                        className="whitespace-nowrap rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {tab.label}
+                        Refresh
                       </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => loadChildRecords(selectedChildId)}
-                      disabled={!selectedChildId || activitiesLoading || progressLoading}
-                      className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Refresh
-                    </button>
+                    </div>
                   </div>
                   <div className="mt-2 text-xs text-gray-500">
                     Last synced: {lastSyncAt ? formatDateTime(lastSyncAt) : "-"}
@@ -276,6 +303,7 @@ export default function ParentChildren() {
                           selectedChildId={selectedChildId}
                           progressRows={progressRows}
                           loading={progressLoading}
+                          birthDate={selectedChild.birthDate}
                         />
                       ) : null}
 
@@ -415,7 +443,7 @@ function DailyReportPanel({ activities, loading }) {
   );
 }
 
-function ProgressReportPanel({ selectedChildId, progressRows, loading }) {
+function ProgressReportPanel({ selectedChildId, progressRows, loading, birthDate }) {
   const domainStats = useMemo(() => {
     const config = [
       { name: "Cognitive", barClass: "bg-sky-400" },
@@ -511,7 +539,7 @@ function ProgressReportPanel({ selectedChildId, progressRows, loading }) {
         </div>
 
         <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
-          <span>Comparison based on age-appropriate milestone for 18-24 months</span>
+          <span>Comparison based on age-appropriate milestones{birthDate ? ` for ${formatAgeLabel(birthDate)}` : ""}</span>
           <span>{formatDateTime(new Date())}</span>
         </div>
       </div>
@@ -762,7 +790,14 @@ function StepsProgressionPanel({ progressRows, loading, childName }) {
 function CarePanel({ title, items }) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4">
-      <h4 className="text-sm font-extrabold text-gray-900">{title}</h4>
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-extrabold text-gray-900">{title}</h4>
+        {items.length ? (
+          <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
+            {items.length}
+          </span>
+        ) : null}
+      </div>
       {items.length ? (
         <div className="mt-2 space-y-2">
           {items.map((row, index) => (
@@ -770,15 +805,20 @@ function CarePanel({ title, items }) {
               key={row.id || `${row.createdAt}-${index}`}
               className="rounded-xl border border-gray-200 bg-gray-50 p-2"
             >
-              <div className="text-xs font-semibold text-gray-800">
-                {formatTime(row.createdAt)}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-gray-800">
+                  {formatTime(row.createdAt)}
+                </span>
+                <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">
+                  {formatActivityType(row.type)}
+                </span>
               </div>
               <div className="mt-1 text-xs text-gray-600">{row.notes || "Update logged"}</div>
             </div>
           ))}
         </div>
       ) : (
-        <div className="mt-2 text-xs text-gray-600">No recent updates.</div>
+        <div className="mt-2 text-xs text-gray-500">No recent updates.</div>
       )}
     </div>
   );
@@ -934,6 +974,21 @@ function resolveMediaUrl(url) {
   if (/^https?:\/\//i.test(value)) return value;
   if (value.startsWith("/")) return value;
   return `/${value}`;
+}
+
+function formatAgeLabel(birthDate) {
+  if (!birthDate) return "";
+  const dob = new Date(birthDate);
+  if (Number.isNaN(dob.getTime())) return "";
+  const now = new Date();
+  let months = (now.getFullYear() - dob.getFullYear()) * 12 + (now.getMonth() - dob.getMonth());
+  if (now.getDate() < dob.getDate()) months -= 1;
+  if (months < 0) return "";
+  if (months <= 11) return "0-12 months";
+  if (months <= 23) return "12-24 months";
+  if (months <= 35) return "2-3 years";
+  if (months <= 59) return "4-5 years";
+  return `${Math.floor(months / 12)} years`;
 }
 
 function formatDate(value) {

@@ -57,15 +57,24 @@ export default async function handler(req, res) {
       });
 
       if (!existingNext) {
-        await prisma.progress.create({
-          data: {
-            childId: progress.childId,
-            lessonId: progress.lessonId,
-            status: "NOT_STARTED",
-            goalIndex: progress.goalIndex + 1,
-            previousGoalId: id,
-          },
+        const nextGoalIndex = progress.goalIndex + 1;
+        const nextLessonGoal = await prisma.lessonGoal.findUnique({
+          where: { lessonId_goalIndex: { lessonId: progress.lessonId, goalIndex: nextGoalIndex } },
         });
+
+        // Only auto-advance if a LessonGoal definition exists for the next step
+        if (nextLessonGoal) {
+          await prisma.progress.create({
+            data: {
+              childId: progress.childId,
+              lessonId: progress.lessonId,
+              status: "NOT_STARTED",
+              goalIndex: nextGoalIndex,
+              previousGoalId: id,
+              lessonGoalId: nextLessonGoal.id,
+            },
+          });
+        }
       }
     }
 

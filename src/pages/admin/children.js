@@ -4,9 +4,11 @@ import { SkeletonTable } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import { childAgeGroup, ageInMonths } from "@/lib/ageUtils";
 import { apiJson } from "@/lib/api";
+import { useToast } from "@/contexts/ToastContext";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 export default function AdminChildren() {
+  const toast = useToast();
   const [children, setChildren] = useState([]);
   const [centers, setCenters] = useState([]);
   const [classes, setClasses] = useState([]);
@@ -432,6 +434,7 @@ export default function AdminChildren() {
       resetForm();
       setModalOpen(false);
       await refresh();
+      toast.success(`Child ${firstName} ${lastName || ""} added successfully.`);
     } catch (e2) {
       setError(e2.message || "Failed to create child");
     }
@@ -479,6 +482,7 @@ export default function AdminChildren() {
       resetForm();
       setModalOpen(false);
       await refresh();
+      toast.success(`${firstName} ${lastName || ""} updated successfully.`);
     } catch (e2) {
       setError(e2.message || "Failed to update child");
     }
@@ -490,6 +494,7 @@ export default function AdminChildren() {
     try {
       await apiJson(`/api/v1/children/${id}`, { method: "DELETE" });
       await refresh();
+      toast.success("Child record deleted.");
     } catch (e2) {
       setError(e2.message || "Failed to delete child");
     }

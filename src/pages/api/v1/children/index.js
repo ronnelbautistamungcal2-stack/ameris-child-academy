@@ -57,6 +57,9 @@ export default async function handler(req, res) {
       });
       const centerIds = memberships.map((m) => m.centerId);
       if (!centerIds.length) return res.status(403).json({ error: "Forbidden" });
+      if (centerId && !centerIds.includes(centerId)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
       const active = await prisma.subscription.findFirst({
         where: { centerId: { in: centerIds }, active: true },
       });
@@ -123,6 +126,10 @@ export default async function handler(req, res) {
     } = req.body;
     if (!firstName || !cId) {
       return res.status(400).json({ error: "firstName and centerId required" });
+    }
+    if (session.user.role === "TEACHER") {
+      const hasAccess = await hasAccessToCenter(session.user.id, cId);
+      if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
     }
 
     const child = await prisma.child.create({

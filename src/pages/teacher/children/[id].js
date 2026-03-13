@@ -1,6 +1,7 @@
 
 import TeacherLayout from "@/components/teacher/TeacherLayout";
 import Skeleton from "@/components/ui/Skeleton";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import CatchupPlansPanel from "@/components/reports/CatchupPlansPanel";
 import MilestoneCalendarPanel from "@/components/reports/MilestoneCalendarPanel";
 import ActiveGoalsPanel from "@/components/progression/ActiveGoalsPanel";
@@ -54,6 +55,20 @@ function extractDomains(activity) {
 }
 function fullName(child) {
   return `${child?.firstName || ""}${child?.lastName ? ` ${child.lastName}` : ""}`.trim();
+}
+function formatAgeLabel(birthDate) {
+  if (!birthDate) return "";
+  const dob = new Date(birthDate);
+  if (Number.isNaN(dob.getTime())) return "";
+  const now = new Date();
+  let months = (now.getFullYear() - dob.getFullYear()) * 12 + (now.getMonth() - dob.getMonth());
+  if (now.getDate() < dob.getDate()) months -= 1;
+  if (months < 0) return "";
+  if (months <= 11) return "0-12 months";
+  if (months <= 23) return "12-24 months";
+  if (months <= 35) return "2-3 years";
+  if (months <= 59) return "4-5 years";
+  return `${Math.floor(months / 12)} years`;
 }
 function formatDate(v) {
   if (!v) return "-";
@@ -134,6 +149,7 @@ export default function TeacherChildDetailPage() {
   const editPhotoInputRef = useRef(null);
   const [savingActivityId, setSavingActivityId] = useState("");
   const [deletingActivityId, setDeletingActivityId] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState("");
   const [activityActionError, setActivityActionError] = useState("");
   const [activityActionSuccess, setActivityActionSuccess] = useState("");
 
@@ -398,7 +414,6 @@ export default function TeacherChildDetailPage() {
 
   async function removeActivity(activityId) {
     if (!activityId) return;
-    if (!confirm("Delete this log entry?")) return;
     setDeletingActivityId(activityId);
     setActivityActionError("");
     setActivityActionSuccess("");
@@ -1072,7 +1087,7 @@ export default function TeacherChildDetailPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => removeActivity(a.id)}
+                              onClick={() => setConfirmDeleteId(a.id)}
                               disabled={isSaving || isDeleting}
                               className="rounded-lg bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                             >
@@ -1091,6 +1106,16 @@ export default function TeacherChildDetailPage() {
               No activity logs found for the selected filter.
             </div>
           )}
+
+          <ConfirmDialog
+            open={!!confirmDeleteId}
+            title="Delete activity log"
+            message="Are you sure you want to delete this log entry? This action cannot be undone."
+            confirmLabel="Delete"
+            danger
+            onConfirm={() => { removeActivity(confirmDeleteId); setConfirmDeleteId(""); }}
+            onCancel={() => setConfirmDeleteId("")}
+          />
 
           {editingActivity ? (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-3">
@@ -1239,30 +1264,34 @@ export default function TeacherChildDetailPage() {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2 border-b border-gray-200 pb-3">
-            {[
-              { key: "DAILY_REPORT", label: "Daily Report" },
-              { key: "GRADES", label: "Grades" },
-              { key: "PROGRESS_REPORT", label: "Progress Report" },
-              { key: "STEPS", label: "Steps of Progression" },
-              { key: "CATCHUP", label: "Catch-up Plans" },
-              { key: "ATTENDANCE", label: "Attendance" },
-              { key: "MILESTONE", label: "Milestone Calendar" },
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setReportTab(tab.key)}
-                className={[
-                  "rounded-xl px-3 py-2 text-xs font-semibold",
-                  reportTab === tab.key
-                    ? "bg-sky-100 text-sky-900"
-                    : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
-                ].join(" ")}
-              >
-                {tab.label}
-              </button>
-            ))}
+          <div className="mt-4 -mx-1 overflow-x-auto pb-3 border-b border-gray-200" role="tablist" aria-label="Child reports">
+            <div className="flex gap-2 px-1 min-w-max">
+              {[
+                { key: "DAILY_REPORT", label: "Daily Report" },
+                { key: "GRADES", label: "Grades" },
+                { key: "PROGRESS_REPORT", label: "Progress Report" },
+                { key: "STEPS", label: "Steps of Progression" },
+                { key: "CATCHUP", label: "Catch-up Plans" },
+                { key: "ATTENDANCE", label: "Attendance" },
+                { key: "MILESTONE", label: "Milestone Calendar" },
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={reportTab === tab.key}
+                  onClick={() => setReportTab(tab.key)}
+                  className={[
+                    "whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold transition",
+                    reportTab === tab.key
+                      ? "bg-sky-100 text-sky-900"
+                      : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[1fr_260px]">
@@ -1274,7 +1303,7 @@ export default function TeacherChildDetailPage() {
                 <TeacherGradesPanel activities={activities} loading={loading} />
               ) : null}
               {reportTab === "PROGRESS_REPORT" ? (
-                <TeacherProgressReportPanel progressRows={reportProgress} loading={loading} childId={childId} />
+                <TeacherProgressReportPanel progressRows={reportProgress} loading={loading} childId={childId} birthDate={child.birthDate} />
               ) : null}
               {reportTab === "STEPS" ? (
                 <div className="space-y-3">
@@ -1368,15 +1397,21 @@ function InfoCard({ label, value }) {
 function TeacherDailyReportPanel({ activities, loading }) {
   if (loading) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
-        Loading report...
+      <div className="space-y-3">
+        <Skeleton variant="card" className="h-32 rounded-2xl" />
+        <Skeleton variant="card" className="h-24 rounded-2xl" />
+        <Skeleton variant="card" className="h-24 rounded-2xl" />
       </div>
     );
   }
   if (!arr(activities).length) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-        No daily activities yet for this child.
+      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 text-center">
+        <svg viewBox="0 0 24 24" className="mx-auto h-10 w-10 text-gray-300" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div className="mt-2 text-sm font-semibold text-gray-600">No daily activities yet</div>
+        <div className="mt-1 text-xs text-gray-500">Activities will appear here once logged.</div>
       </div>
     );
   }
@@ -1445,7 +1480,7 @@ function TeacherDailyReportPanel({ activities, loading }) {
   );
 }
 
-function TeacherProgressReportPanel({ progressRows, loading, childId }) {
+function TeacherProgressReportPanel({ progressRows, loading, childId, birthDate }) {
   const domainStats = useMemo(() => {
     const config = [
       { name: "Cognitive", barClass: "bg-sky-400" },
@@ -1505,7 +1540,9 @@ function TeacherProgressReportPanel({ progressRows, loading, childId }) {
           </div>
         </div>
 
-        {loading ? <div className="mt-3 text-sm text-gray-600">Loading progress records...</div> : null}
+        {loading ? (
+          <div className="mt-3"><Skeleton variant="line" count={4} /></div>
+        ) : null}
 
         <div className="mt-3 space-y-3">
           {domainStats.map((domain) => (
@@ -1518,7 +1555,7 @@ function TeacherProgressReportPanel({ progressRows, loading, childId }) {
           ))}
         </div>
         <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
-          <span>Comparison based on age-appropriate milestone for 18-24 months</span>
+          <span>Comparison based on age-appropriate milestones{childId && child?.birthDate ? ` for ${formatAgeLabel(child.birthDate)}` : ""}</span>
           <span>{formatDateTime(new Date())}</span>
         </div>
       </div>
@@ -1534,7 +1571,10 @@ function TeacherProgressReportPanel({ progressRows, loading, childId }) {
           </Link>
         </div>
         {loading ? (
-          <div className="mt-3 text-sm text-gray-600">Loading milestones...</div>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Skeleton variant="card" className="h-20 rounded-xl" />
+            <Skeleton variant="card" className="h-20 rounded-xl" />
+          </div>
         ) : milestoneCards.length ? (
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {milestoneCards.map((item, index) => (
@@ -1633,7 +1673,12 @@ function TeacherStepsProgressionPanel({ progressRows, loading, childName, status
       </p>
 
       {loading ? (
-        <div className="mt-3 text-sm text-gray-600">Loading progression steps...</div>
+        <div className="mt-3 space-y-3">
+          <Skeleton variant="card" className="h-16 rounded-xl" />
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} variant="card" className="h-20 rounded-xl" />)}
+          </div>
+        </div>
       ) : sorted.length === 0 ? (
         <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
           No progression records yet.
@@ -1833,16 +1878,23 @@ function TeacherGradesPanel({ activities, loading }) {
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
-        Loading grades...
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} variant="card" className="h-20 rounded-xl" />)}
+        </div>
+        <Skeleton variant="card" className="h-32 rounded-2xl" />
       </div>
     );
   }
 
   if (!assessments.length) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-        No developmental assessments logged yet. Use the Activity Logger to record grades.
+      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 text-center">
+        <svg viewBox="0 0 24 24" className="mx-auto h-10 w-10 text-gray-300" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
+        </svg>
+        <div className="mt-2 text-sm font-semibold text-gray-600">No developmental assessments</div>
+        <div className="mt-1 text-xs text-gray-500">Use the Activity Logger to record grades.</div>
       </div>
     );
   }
@@ -2050,25 +2102,38 @@ function teacherInferDomain(row) {
 }
 
 function TeacherCarePanel({ title, items }) {
+  const safeItems = arr(items);
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4">
-      <h4 className="text-sm font-extrabold text-gray-900">{title}</h4>
-      {arr(items).length ? (
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-extrabold text-gray-900">{title}</h4>
+        {safeItems.length ? (
+          <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
+            {safeItems.length}
+          </span>
+        ) : null}
+      </div>
+      {safeItems.length ? (
         <div className="mt-2 space-y-2">
-          {arr(items).map((row, index) => (
+          {safeItems.map((row, index) => (
             <div
               key={row.id || `${row.createdAt}-${index}`}
               className="rounded-xl border border-gray-200 bg-gray-50 p-2"
             >
-              <div className="text-xs font-semibold text-gray-800">
-                {teacherFormatTime(row.createdAt)}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-gray-800">
+                  {teacherFormatTime(row.createdAt)}
+                </span>
+                <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">
+                  {teacherFormatActivityType(row.type)}
+                </span>
               </div>
               <div className="mt-1 text-xs text-gray-600">{row.notes || "Update logged"}</div>
             </div>
           ))}
         </div>
       ) : (
-        <div className="mt-2 text-xs text-gray-600">No recent updates.</div>
+        <div className="mt-2 text-xs text-gray-500">No recent updates.</div>
       )}
     </div>
   );
@@ -2148,7 +2213,14 @@ function ChildAttendancePanel({ records, loading, childName }) {
   }
 
   if (loading) {
-    return <div className="rounded-2xl border border-gray-200 bg-white p-4 text-sm text-gray-600">Loading attendance records...</div>;
+    return (
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} variant="card" className="h-20 rounded-xl" />)}
+        </div>
+        <Skeleton variant="card" className="h-16 rounded-xl" />
+      </div>
+    );
   }
 
   return (

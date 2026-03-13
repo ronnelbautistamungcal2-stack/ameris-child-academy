@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -19,6 +19,12 @@ export default function Login() {
         ? callbackUrlRaw[0]
         : null;
 
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => setError(""), 8000);
+    return () => clearTimeout(timer);
+  }, [error]);
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
@@ -32,38 +38,42 @@ export default function Login() {
     if (res && !res.error) {
       router.replace(callbackUrl || "/dashboard");
     } else {
-      setError(res?.error || "Login failed");
+      setError(
+        res?.error === "CredentialsSignin"
+          ? "Invalid email or password. Please try again."
+          : res?.error || "Login failed. Please try again.",
+      );
     }
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-50">
+    <div className="relative min-h-screen overflow-hidden bg-slate-50 dark:bg-gray-950">
       {/* Background decoration */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-24 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-sky-200/50 blur-2xl" />
-        <div className="absolute -bottom-24 left-0 h-[420px] w-[420px] rounded-full bg-emerald-200/40 blur-2xl" />
-        <div className="absolute -bottom-24 right-0 h-[420px] w-[420px] rounded-full bg-yellow-200/30 blur-2xl" />
-        <div className="absolute left-10 top-28 h-10 w-28 rounded-full bg-white/70 shadow-sm" />
-        <div className="absolute left-36 top-20 h-8 w-20 rounded-full bg-white/70 shadow-sm" />
-        <div className="absolute right-24 top-24 h-10 w-28 rounded-full bg-white/70 shadow-sm" />
-        <div className="absolute right-44 top-16 h-8 w-20 rounded-full bg-white/70 shadow-sm" />
+        <div className="absolute -top-24 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-violet-200/50 blur-2xl dark:bg-violet-900/30" />
+        <div className="absolute -bottom-24 left-0 h-[420px] w-[420px] rounded-full bg-emerald-200/40 blur-2xl dark:bg-emerald-900/20" />
+        <div className="absolute -bottom-24 right-0 h-[420px] w-[420px] rounded-full bg-yellow-200/30 blur-2xl dark:bg-yellow-900/20" />
+        <div className="absolute left-10 top-28 h-10 w-28 rounded-full bg-white/70 shadow-sm dark:bg-gray-800/50" />
+        <div className="absolute left-36 top-20 h-8 w-20 rounded-full bg-white/70 shadow-sm dark:bg-gray-800/50" />
+        <div className="absolute right-24 top-24 h-10 w-28 rounded-full bg-white/70 shadow-sm dark:bg-gray-800/50" />
+        <div className="absolute right-44 top-16 h-8 w-20 rounded-full bg-white/70 shadow-sm dark:bg-gray-800/50" />
       </div>
 
       {/* Header */}
       <header className="relative z-10 px-6 py-6">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-sky-100 text-sm font-extrabold text-sky-700">
+            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-violet-100 text-sm font-extrabold text-violet-700 dark:bg-violet-900 dark:text-violet-300">
               ACA
             </div>
             <div>
-              <div className="text-sm font-extrabold text-gray-900">Ameris Academy</div>
-              <div className="text-xs text-gray-500">Childcare</div>
+              <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">Ameris Academy</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Childcare</div>
             </div>
           </Link>
           <Link
             href="/signup"
-            className="text-sm font-semibold text-sky-700 hover:text-sky-800"
+            className="text-sm font-semibold text-violet-700 hover:text-violet-800 dark:text-violet-400 dark:hover:text-violet-300"
           >
             Sign up
           </Link>
@@ -79,13 +89,13 @@ export default function Login() {
           </div>
 
           {/* Login card */}
-          <div className="rounded-3xl border border-gray-200 bg-white/90 p-8 shadow-sm backdrop-blur animate-[modalIn_0.4s_ease-out]">
+          <div className="rounded-3xl border border-gray-200 bg-white/90 p-8 shadow-sm backdrop-blur animate-[modalIn_0.4s_ease-out] dark:border-gray-700 dark:bg-gray-900/90">
             <div className="text-center">
-              <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-sky-100 text-lg font-extrabold text-sky-700">
+              <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-violet-100 text-lg font-extrabold text-violet-700 dark:bg-violet-900 dark:text-violet-300">
                 ACA
               </div>
-              <h1 className="mt-4 text-2xl font-extrabold text-gray-900">Welcome back</h1>
-              <p className="mt-1 text-sm text-gray-500">
+              <h1 className="mt-4 text-2xl font-extrabold text-gray-900 dark:text-gray-100">Welcome back</h1>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 Sign in to your Ameris Academy account
               </p>
             </div>
@@ -101,11 +111,11 @@ export default function Login() {
 
             <form onSubmit={handleSubmit} className="mt-6 space-y-4">
               <label className="block">
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Email Address
                 </div>
                 <div className="relative">
-                  <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400 dark:text-gray-500">
                     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
                       <path strokeLinecap="round" strokeLinejoin="round" d="M22 6l-10 7L2 6" />
@@ -118,22 +128,19 @@ export default function Login() {
                     required
                     placeholder="you@example.com"
                     autoComplete="email"
-                    className="w-full rounded-2xl border border-gray-200 py-3 pl-12 pr-4 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-300"
+                    className="w-full rounded-2xl border border-gray-200 py-3 pl-12 pr-4 text-sm focus:border-violet-300 focus:outline-none focus:ring-1 focus:ring-violet-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500 dark:focus:border-violet-600 dark:focus:ring-violet-600"
                   />
                 </div>
               </label>
 
               <label className="block">
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                     Password
                   </span>
-                  <a href="#" className="text-xs font-semibold text-sky-600 hover:text-sky-700">
-                    Forgot password?
-                  </a>
                 </div>
                 <div className="relative">
-                  <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400 dark:text-gray-500">
                     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
                       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" strokeLinecap="round" strokeLinejoin="round" />
                       <path strokeLinecap="round" d="M7 11V7a5 5 0 0110 0v4" />
@@ -146,12 +153,12 @@ export default function Login() {
                     required
                     placeholder="Enter your password"
                     autoComplete="current-password"
-                    className="w-full rounded-2xl border border-gray-200 py-3 pl-12 pr-12 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-300"
+                    className="w-full rounded-2xl border border-gray-200 py-3 pl-12 pr-12 text-sm focus:border-violet-300 focus:outline-none focus:ring-1 focus:ring-violet-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500 dark:focus:border-violet-600 dark:focus:ring-violet-600"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((s) => !s)}
-                    className="absolute inset-y-0 right-0 flex items-center px-4 text-gray-500 hover:text-gray-700"
+                    className="absolute inset-y-0 right-0 flex items-center px-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                     aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
@@ -176,7 +183,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-2 flex w-full items-center justify-center gap-2 rounded-full bg-sky-600 px-4 py-3 text-sm font-extrabold text-white transition-all hover:bg-sky-700 hover:shadow-lg hover:shadow-sky-600/25 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-pink-500 px-4 py-3 text-sm font-extrabold text-white transition-all hover:from-violet-700 hover:to-pink-600 hover:shadow-lg hover:shadow-violet-600/25 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading && (
                   <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -188,16 +195,16 @@ export default function Login() {
               </button>
             </form>
 
-            <div className="mt-6 text-center text-sm text-gray-600">
+            <div className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
               Don&apos;t have an account?{" "}
-              <Link href="/signup" className="font-semibold text-sky-700 hover:text-sky-800">
+              <Link href="/signup" className="font-semibold text-violet-700 hover:text-violet-800 dark:text-violet-400 dark:hover:text-violet-300">
                 Create one
               </Link>
             </div>
 
             {/* Portal quick links */}
-            <div className="mt-6 border-t border-gray-200 pt-5">
-              <p className="text-center text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <div className="mt-6 border-t border-gray-200 pt-5 dark:border-gray-700">
+              <p className="text-center text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
                 Portal Access
               </p>
               <div className="mt-3 grid grid-cols-4 gap-2">
@@ -263,26 +270,26 @@ export default function Login() {
 function LeftIllustration() {
   return (
     <div className="relative mx-auto max-w-xs">
-      <div className="rounded-[48px] bg-white/60 p-8 shadow-sm backdrop-blur">
+      <div className="rounded-[48px] bg-white/60 p-8 shadow-sm backdrop-blur dark:bg-gray-800/60">
         <svg viewBox="0 0 200 200" className="h-auto w-full">
           {/* Building blocks / daycare */}
-          <rect x="30" y="120" width="140" height="60" rx="12" fill="#BAE6FD" />
-          <rect x="50" y="90" width="100" height="50" rx="10" fill="#7DD3FC" />
-          <rect x="70" y="65" width="60" height="40" rx="8" fill="#38BDF8" />
+          <rect x="30" y="120" width="140" height="60" rx="12" fill="#DDD6FE" />
+          <rect x="50" y="90" width="100" height="50" rx="10" fill="#C4B5FD" />
+          <rect x="70" y="65" width="60" height="40" rx="8" fill="#A78BFA" />
           {/* Roof */}
-          <polygon points="100,40 55,68 145,68" fill="#0284C7" />
+          <polygon points="100,40 55,68 145,68" fill="#7C3AED" />
           {/* Door */}
-          <rect x="85" y="140" width="30" height="40" rx="4" fill="#F0F9FF" />
+          <rect x="85" y="140" width="30" height="40" rx="4" fill="#F5F3FF" />
           {/* Windows */}
-          <rect x="55" y="130" width="18" height="18" rx="3" fill="#F0F9FF" />
-          <rect x="127" y="130" width="18" height="18" rx="3" fill="#F0F9FF" />
-          <rect x="70" y="100" width="18" height="18" rx="3" fill="#F0F9FF" />
-          <rect x="112" y="100" width="18" height="18" rx="3" fill="#F0F9FF" />
+          <rect x="55" y="130" width="18" height="18" rx="3" fill="#F5F3FF" />
+          <rect x="127" y="130" width="18" height="18" rx="3" fill="#F5F3FF" />
+          <rect x="70" y="100" width="18" height="18" rx="3" fill="#F5F3FF" />
+          <rect x="112" y="100" width="18" height="18" rx="3" fill="#F5F3FF" />
           {/* Sun */}
           <circle cx="165" cy="35" r="16" fill="#FCD34D" />
           <circle cx="165" cy="35" r="10" fill="#FBBF24" />
         </svg>
-        <p className="mt-4 text-center text-sm font-semibold text-gray-600">
+        <p className="mt-4 text-center text-sm font-semibold text-gray-600 dark:text-gray-300">
           Nurturing young minds since 2015
         </p>
       </div>
@@ -293,7 +300,7 @@ function LeftIllustration() {
 function RightIllustration() {
   return (
     <div className="relative mx-auto max-w-xs">
-      <div className="rounded-[48px] bg-white/60 p-8 shadow-sm backdrop-blur">
+      <div className="rounded-[48px] bg-white/60 p-8 shadow-sm backdrop-blur dark:bg-gray-800/60">
         <svg viewBox="0 0 200 200" className="h-auto w-full">
           {/* Graduation cap scene */}
           <circle cx="100" cy="105" r="50" fill="#A7F3D0" />
@@ -313,7 +320,7 @@ function RightIllustration() {
           <polygon points="160,50 161.5,54 166,54 162.5,57 164,61 160,58 156,61 157.5,57 154,54 158.5,54" fill="#FCD34D" />
           <polygon points="50,150 51.5,154 56,154 52.5,157 54,161 50,158 46,161 47.5,157 44,154 48.5,154" fill="#FCD34D" />
         </svg>
-        <p className="mt-4 text-center text-sm font-semibold text-gray-600">
+        <p className="mt-4 text-center text-sm font-semibold text-gray-600 dark:text-gray-300">
           Every child deserves a brighter beginning
         </p>
       </div>

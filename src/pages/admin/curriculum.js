@@ -480,21 +480,7 @@ function LessonsTab({ centerId }) {
                   {lesson.description && <p className="text-sm text-gray-600">{lesson.description}</p>}
 
                   {/* Goals */}
-                  {lesson.goals?.length > 0 && (
-                    <div>
-                      <div className="mb-1 text-xs font-semibold text-gray-500">Goals</div>
-                      <div className="space-y-1">
-                        {lesson.goals.map((g) => (
-                          <div key={g.id} className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm">
-                            <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs font-semibold text-gray-700">
-                              Step {g.goalIndex}
-                            </span>
-                            <span className="text-gray-800">{g.title}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <GoalEditor lessonId={lesson.id} goals={lesson.goals || []} onUpdate={load} />
 
                   {/* Media */}
                   {lesson.media?.length > 0 && (
@@ -802,6 +788,164 @@ function RemediationsTab({ centerId }) {
               </button>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Goal Editor ────────────────────────────────────── */
+
+function GoalEditor({ lessonId, goals, onUpdate }) {
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState({ title: "", description: "" });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function openAdd() {
+    setAdding(true);
+    setEditingId(null);
+    setForm({ title: "", description: "" });
+    setError("");
+  }
+
+  function openEdit(goal) {
+    setAdding(false);
+    setEditingId(goal.id);
+    setForm({ title: goal.title || "", description: goal.description || "" });
+    setError("");
+  }
+
+  function cancel() {
+    setAdding(false);
+    setEditingId(null);
+    setForm({ title: "", description: "" });
+    setError("");
+  }
+
+  async function saveGoal() {
+    if (!form.title.trim()) return;
+    setSaving(true);
+    setError("");
+    try {
+      if (adding) {
+        await apiJson(`/api/v1/lessons/${encodeURIComponent(lessonId)}/goals`, {
+          method: "POST",
+          body: JSON.stringify({ title: form.title, description: form.description || null }),
+        });
+      } else {
+        await apiJson(`/api/v1/lessons/${encodeURIComponent(lessonId)}/goals`, {
+          method: "PUT",
+          body: JSON.stringify({ goalId: editingId, title: form.title, description: form.description || null }),
+        });
+      }
+      cancel();
+      if (onUpdate) await onUpdate();
+    } catch (e) {
+      setError(e.message || "Failed to save goal");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteGoal(goalId) {
+    if (!confirm("Delete this goal step? Progress records linked to it will be orphaned.")) return;
+    setError("");
+    try {
+      await apiJson(`/api/v1/lessons/${encodeURIComponent(lessonId)}/goals`, {
+        method: "DELETE",
+        body: JSON.stringify({ goalId }),
+      });
+      if (onUpdate) await onUpdate();
+    } catch (e) {
+      setError(e.message || "Failed to delete goal");
+    }
+  }
+
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between">
+        <div className="text-xs font-semibold text-gray-500">Goals / Steps</div>
+        {!adding && !editingId && (
+          <button type="button" className="text-xs font-semibold text-blue-600 hover:text-blue-700" onClick={openAdd}>
+            + Add Goal
+          </button>
+        )}
+      </div>
+
+      {error && <div className="mb-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-800">{error}</div>}
+
+      {goals.length === 0 && !adding && (
+        <div className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+          No goals defined. Add goals to enable multi-step progression tracking.
+        </div>
+      )}
+
+      <div className="space-y-1">
+        {goals.map((g) => (
+          <div key={g.id} className="flex items-start gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm">
+            {editingId === g.id ? (
+              <div className="flex-1 space-y-2">
+                <input
+                  className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm"
+                  placeholder="Goal title"
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                />
+                <input
+                  className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm"
+                  placeholder="Description (optional)"
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                />
+                <div className="flex gap-2">
+                  <button type="button" className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60" onClick={saveGoal} disabled={saving || !form.title.trim()}>
+                    {saving ? "Saving..." : "Save"}
+                  </button>
+                  <button type="button" className="text-xs font-semibold text-gray-500 hover:text-gray-700" onClick={cancel}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-xs font-semibold text-gray-700">
+                  Step {g.goalIndex}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-gray-800">{g.title}</div>
+                  {g.description && <div className="mt-0.5 text-xs text-gray-500">{g.description}</div>}
+                </div>
+                <div className="flex shrink-0 gap-1.5">
+                  <button type="button" className="text-xs font-semibold text-blue-600 hover:text-blue-700" onClick={() => openEdit(g)}>Edit</button>
+                  <button type="button" className="text-xs font-semibold text-red-600 hover:text-red-700" onClick={() => deleteGoal(g.id)}>Delete</button>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {adding && (
+        <div className="mt-2 space-y-2 rounded-lg border border-blue-200 bg-blue-50/30 p-3">
+          <input
+            className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm"
+            placeholder="Goal title (e.g. Recognize 5 colors)"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            autoFocus
+          />
+          <input
+            className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm"
+            placeholder="Description (optional)"
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+          />
+          <div className="flex gap-2">
+            <button type="button" className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60" onClick={saveGoal} disabled={saving || !form.title.trim()}>
+              {saving ? "Saving..." : `Add as Step ${(goals.length || 0) + 1}`}
+            </button>
+            <button type="button" className="text-xs font-semibold text-gray-500 hover:text-gray-700" onClick={cancel}>Cancel</button>
+          </div>
         </div>
       )}
     </div>

@@ -133,16 +133,19 @@ export default async function handler(req, res) {
           where: { lessonId_goalIndex: { lessonId: updated.lessonId, goalIndex: nextGoalIndex } },
         });
 
-        await prisma.progress.create({
-          data: {
-            childId: updated.childId,
-            lessonId: updated.lessonId,
-            status: "NOT_STARTED",
-            goalIndex: nextGoalIndex,
-            previousGoalId: updated.id,
-            lessonGoalId: nextLessonGoal?.id || null,
-          },
-        });
+        // Only auto-advance if a LessonGoal definition exists for the next step
+        if (nextLessonGoal) {
+          await prisma.progress.create({
+            data: {
+              childId: updated.childId,
+              lessonId: updated.lessonId,
+              status: "NOT_STARTED",
+              goalIndex: nextGoalIndex,
+              previousGoalId: updated.id,
+              lessonGoalId: nextLessonGoal.id,
+            },
+          });
+        }
       }
     }
 

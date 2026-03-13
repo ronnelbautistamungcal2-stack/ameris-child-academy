@@ -4,11 +4,11 @@ import { apiJson } from "@/lib/api";
 const STATUSES = ["NOT_STARTED", "IN_PROGRESS", "PASSED", "FAILED", "COMPLETED"];
 
 const STATUS_BADGE = {
-  NOT_STARTED: "bg-gray-100 text-gray-700",
-  IN_PROGRESS: "bg-amber-100 text-amber-800",
-  COMPLETED: "bg-emerald-100 text-emerald-800",
-  PASSED: "bg-emerald-100 text-emerald-800",
-  FAILED: "bg-red-100 text-red-800",
+  NOT_STARTED: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
+  IN_PROGRESS: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  COMPLETED: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+  PASSED: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+  FAILED: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
 };
 
 const STATUS_LABEL = {
@@ -143,7 +143,7 @@ export default function ActiveGoalsPanel({
 
   if (!childId) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
+      <div className="rounded-2xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
         Select a child to view active goals.
       </div>
     );
@@ -153,7 +153,7 @@ export default function ActiveGoalsPanel({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-base font-extrabold text-gray-900">
+          <h3 className="text-base font-extrabold text-gray-900 dark:text-gray-100">
             Active Goals{childName ? ` for ${childName}` : ""}
           </h3>
           <p className="mt-0.5 text-xs text-gray-500">
@@ -174,8 +174,11 @@ export default function ActiveGoalsPanel({
       )}
 
       {displayed.length === 0 ? (
-        <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
-          No active goals. All goals are completed or no progress has been started.
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center dark:border-emerald-800 dark:bg-emerald-900/20">
+          <div className="text-lg font-extrabold text-emerald-700 dark:text-emerald-400">All caught up!</div>
+          <div className="mt-1 text-sm text-emerald-600 dark:text-emerald-400/70">
+            No active goals. All goals are completed or no progress has been started yet.
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -197,27 +200,24 @@ export default function ActiveGoalsPanel({
                 key={pr.id}
                 className={`rounded-2xl border p-5 transition ${
                   isFailed
-                    ? "border-red-200 bg-red-50/30"
-                    : "border-gray-200 bg-white"
+                    ? "border-red-200 bg-red-50/30 dark:border-red-800 dark:bg-red-900/20"
+                    : "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
                 }`}
               >
                 {/* Header */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="font-extrabold text-gray-900">
+                    <div className="font-extrabold text-gray-900 dark:text-gray-100">
                       {lesson?.title || "Unknown Lesson"}
                     </div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                       {lesson?.category?.name && (
-                        <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-700">
+                        <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
                           {lesson.category.name}
                         </span>
                       )}
-                      <span>
-                        Step {pr.goalIndex} of {totalGoals || "?"}
-                      </span>
                       {pr.updatedAt && (
-                        <span>&middot; Updated {formatDate(pr.updatedAt)}</span>
+                        <span>Updated {formatDate(pr.updatedAt)}</span>
                       )}
                     </div>
                   </div>
@@ -230,10 +230,42 @@ export default function ActiveGoalsPanel({
                   </span>
                 </div>
 
+                {/* Step progress indicator */}
+                {totalGoals > 0 && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <div className="flex flex-1 gap-1">
+                      {Array.from({ length: totalGoals }, (_, i) => {
+                        const stepIndex = i + 1;
+                        const isComplete = stepIndex < pr.goalIndex;
+                        const isCurrent = stepIndex === pr.goalIndex;
+                        return (
+                          <div
+                            key={stepIndex}
+                            className={`h-1.5 flex-1 rounded-full transition-all ${
+                              isComplete
+                                ? "bg-emerald-400 dark:bg-emerald-500"
+                                : isCurrent
+                                  ? isFailed ? "bg-red-400 dark:bg-red-500" : "bg-amber-400 dark:bg-amber-500"
+                                  : "bg-gray-200 dark:bg-gray-700"
+                            }`}
+                            title={`Step ${stepIndex}${isComplete ? " (done)" : isCurrent ? " (current)" : ""}`}
+                          />
+                        );
+                      })}
+                    </div>
+                    <span className="shrink-0 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                      {pr.goalIndex}/{totalGoals}
+                    </span>
+                  </div>
+                )}
+
                 {/* Current Goal Title */}
                 {currentGoal?.title && (
-                  <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                  <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:bg-gray-800 dark:text-gray-300">
                     {currentGoal.title}
+                    {currentGoal.description && (
+                      <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">{currentGoal.description}</div>
+                    )}
                   </div>
                 )}
 
@@ -269,7 +301,7 @@ export default function ActiveGoalsPanel({
                 )}
 
                 {isFailed && recommended.length === 0 && (
-                  <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+                  <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
                     No corrective lessons linked. Use the Curriculum Manager to add remediations.
                   </div>
                 )}
@@ -278,7 +310,7 @@ export default function ActiveGoalsPanel({
                 <div className="mt-3 space-y-2">
                   <div className="flex gap-2">
                     <select
-                      className="flex-1 rounded-lg border border-gray-200 px-2.5 py-2 text-sm"
+                      className="flex-1 rounded-lg border border-gray-200 px-2.5 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
                       value={draft.status}
                       onChange={(e) =>
                         setDraft(pr.id, { status: e.target.value })
@@ -293,7 +325,7 @@ export default function ActiveGoalsPanel({
                     </select>
                     <button
                       type="button"
-                      className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                      className="shrink-0 rounded-lg bg-gradient-to-r from-violet-600 to-pink-500 px-4 py-2 text-xs font-semibold text-white hover:from-violet-700 hover:to-pink-600 disabled:opacity-60"
                       onClick={() => recordEntry(pr)}
                       disabled={isSaving}
                     >
@@ -302,7 +334,7 @@ export default function ActiveGoalsPanel({
                   </div>
                   <input
                     type="text"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
                     placeholder="Optional notes..."
                     value={draft.notes || ""}
                     onChange={(e) =>
@@ -378,10 +410,10 @@ function ProgressHistory({ progressId }) {
       {entries.map((entry) => (
         <div
           key={entry.id}
-          className="rounded-lg border border-gray-100 bg-gray-50 p-2.5 text-xs"
+          className="rounded-lg border border-gray-100 bg-gray-50 p-2.5 text-xs dark:border-gray-700 dark:bg-gray-800"
         >
           <div className="flex items-center justify-between">
-            <span className="font-semibold text-gray-700">
+            <span className="font-semibold text-gray-700 dark:text-gray-300">
               {entry.recordedBy?.name || "Unknown"}
             </span>
             <span className="text-gray-400">

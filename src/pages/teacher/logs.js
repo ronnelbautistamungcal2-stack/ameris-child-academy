@@ -1,5 +1,6 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
 import { apiJson } from "@/lib/api";
+import { useToast } from "@/contexts/ToastContext";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -76,6 +77,7 @@ const JPEG_QUALITIES = [0.88, 0.8, 0.72, 0.64, 0.56, 0.48];
 
 export default function TeacherLogs() {
   const router = useRouter();
+  const toast = useToast();
   const initialCenterId =
     typeof router.query.centerId === "string" ? router.query.centerId : "";
   const initialChildId =
@@ -550,10 +552,10 @@ export default function TeacherLogs() {
       setDomainScores({});
       setAssessmentOpen(false);
       clearPhotos();
-      setSuccess(
+      toast.success(
         warning
           ? `Logged ${payloadType} for ${childLabel || "child"}. ${warning}`
-          : `Logged ${payloadType} for ${childLabel || "child"}.`,
+          : `Activity logged for ${childLabel || "child"}.`,
       );
     } catch (e2) {
       setError(e2.message || "Failed to log activity");
@@ -601,7 +603,7 @@ export default function TeacherLogs() {
             .join(" • ")}`,
         );
       } else {
-        setSuccess(
+        toast.success(
           warning
             ? `Bulk logged ${payloadType} for ${ok} children. ${warning}`
             : `Bulk logged ${payloadType} for ${ok} children.`,
@@ -626,12 +628,6 @@ export default function TeacherLogs() {
           <div className="mt-3 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
             <span>{error}</span>
             <button type="button" onClick={() => setError("")} className="ml-2 text-lg font-bold text-red-600 hover:text-red-800">&times;</button>
-          </div>
-        ) : null}
-        {success ? (
-          <div className="mt-3 flex items-center justify-between rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-            <span>{success}</span>
-            <button type="button" onClick={() => setSuccess("")} className="ml-2 text-lg font-bold text-green-600 hover:text-green-800">&times;</button>
           </div>
         ) : null}
 

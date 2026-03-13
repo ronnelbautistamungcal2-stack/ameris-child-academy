@@ -20,10 +20,11 @@ const AGE_GROUPS = [
 function ageInMonths(birthDate) {
   if (!birthDate) return null;
   const dob = new Date(birthDate);
+  if (Number.isNaN(dob.getTime())) return null;
   const now = new Date();
   let months = (now.getFullYear() - dob.getFullYear()) * 12 + (now.getMonth() - dob.getMonth());
   if (now.getDate() < dob.getDate()) months -= 1;
-  return months;
+  return months < 0 ? 0 : months;
 }
 
 function getAgeGroup(birthDate) {
@@ -138,20 +139,20 @@ export default function CatchupPlansPanel({ progressRows, childName, birthDate }
   const notStartedCount = pending.filter((p) => p.status === "NOT_STARTED").length;
 
   const statusColors = {
-    FAILED: "border-red-200 bg-red-50",
-    IN_PROGRESS: "border-amber-200 bg-amber-50",
-    NOT_STARTED: "border-gray-200 bg-gray-50",
+    FAILED: "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/30",
+    IN_PROGRESS: "border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/30",
+    NOT_STARTED: "border-gray-200 bg-gray-50 dark:border-gray-600 dark:bg-gray-800",
   };
   const statusTextColors = {
-    FAILED: "text-red-700",
-    IN_PROGRESS: "text-amber-700",
-    NOT_STARTED: "text-gray-600",
+    FAILED: "text-red-700 dark:text-red-400",
+    IN_PROGRESS: "text-amber-700 dark:text-amber-400",
+    NOT_STARTED: "text-gray-600 dark:text-gray-400",
   };
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4">
-      <h4 className="text-base font-extrabold text-gray-900">Catch-up Plans</h4>
-      <p className="mt-1 text-sm text-gray-600">
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+      <h4 className="text-base font-extrabold text-gray-900 dark:text-gray-100">Catch-up Plans</h4>
+      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
         {childName
           ? `Auto-generated catch-up actions for ${childName}${ageLabel ? ` (${ageLabel}${ageGroup ? `, ${ageGroup.label} group` : ""})` : ""}.`
           : "Auto-generated catch-up actions based on progress records."}
@@ -159,7 +160,7 @@ export default function CatchupPlansPanel({ progressRows, childName, birthDate }
 
       {totalSteps > 0 && (
         <div className="mt-3 flex flex-wrap gap-2">
-          <span className="rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-700">
+          <span className="rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
             {completedSteps}/{totalSteps} steps completed ({completionRate}%)
           </span>
           {failedCount > 0 && (
@@ -191,9 +192,9 @@ export default function CatchupPlansPanel({ progressRows, childName, birthDate }
               ].join(" ")}
             >
               <div className="flex items-start justify-between gap-2">
-                <div className="text-sm font-extrabold text-gray-900">{item.title}</div>
+                <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">{item.title}</div>
                 {item.ageRelevant && ageGroup ? (
-                  <span className="shrink-0 rounded-md border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
+                  <span className="shrink-0 rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:border-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
                     Age-appropriate
                   </span>
                 ) : null}
@@ -212,12 +213,12 @@ export default function CatchupPlansPanel({ progressRows, childName, birthDate }
                   Updated: {formatDate(item.when)}
                 </span>
               </div>
-              <div className="mt-2 text-xs text-gray-700">{item.recommendation}</div>
+              <div className="mt-2 text-xs text-gray-700 dark:text-gray-300">{item.recommendation}</div>
             </div>
           ))}
         </div>
       ) : (
-        <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
+        <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
           No catch-up plans needed right now. All steps are on track!
         </div>
       )}

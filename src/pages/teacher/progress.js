@@ -692,7 +692,7 @@ export default function TeacherProgress() {
                           <td className="px-4 py-3 align-top">
                             <button
                               type="button"
-                              className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                              className="rounded-lg bg-gradient-to-r from-violet-600 to-pink-500 px-3 py-2 text-xs font-semibold text-white hover:from-violet-700 hover:to-pink-600 disabled:opacity-60"
                               onClick={() => recordEntry(lesson.id)}
                               disabled={savingLessonId === lesson.id}
                             >

@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -20,6 +21,7 @@ export default function AdminClasses() {
   const [selectedTeacherIds, setSelectedTeacherIds] = useState([]);
   const [teacherQuery, setTeacherQuery] = useState("");
   const [teacherDropdownOpen, setTeacherDropdownOpen] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
   async function refresh() {
     setError("");
@@ -312,12 +314,13 @@ export default function AdminClasses() {
   }
 
   async function deleteClass(id) {
-    if (!confirm("Delete this class? This cannot be undone.")) return;
     setError("");
     try {
       await apiJson(`/api/v1/classes/${id}`, { method: "DELETE" });
+      setDeleteConfirmId(null);
       await refresh();
     } catch (e2) {
+      setDeleteConfirmId(null);
       setError(e2.message || "Failed to delete class");
     }
   }
@@ -564,7 +567,7 @@ export default function AdminClasses() {
                         <button
                           type="button"
                           style={dangerButton}
-                          onClick={() => deleteClass(cl.id)}
+                          onClick={() => setDeleteConfirmId(cl.id)}
                         >
                           Delete
                         </button>
@@ -583,6 +586,15 @@ export default function AdminClasses() {
             </table>
           )}
         </div>
+        <ConfirmDialog
+          open={!!deleteConfirmId}
+          title="Delete classroom"
+          message="Are you sure you want to delete this classroom? This action cannot be undone."
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => deleteClass(deleteConfirmId)}
+          onCancel={() => setDeleteConfirmId(null)}
+        />
       </Panel>
     </AdminLayout>
   );

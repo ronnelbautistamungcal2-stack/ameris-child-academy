@@ -24,7 +24,7 @@ const TABS = [
 ];
 
 const DOMAIN_META = {
-  cognitive: { label: "Cognitive", color: "text-violet-700 bg-violet-50" },
+  cognitive: { label: "Cognitive", color: "text-blue-800 bg-blue-50" },
   social: { label: "Social-Emotional", color: "text-sky-700 bg-sky-50" },
   physical: { label: "Physical", color: "text-emerald-700 bg-emerald-50" },
   language: { label: "Language", color: "text-amber-700 bg-amber-50" },
@@ -604,7 +604,7 @@ function TeachersTab({ centerId }) {
             <button
               onClick={handleCompute}
               disabled={computing}
-              className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
+              className="rounded-lg bg-blue-700 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-800 disabled:opacity-60"
             >
               {computing ? "Computing…" : "Compute Scores"}
             </button>
@@ -1018,7 +1018,7 @@ function KpiCard({ label, value, color = "gray" }) {
   const colorMap = {
     sky: "border-sky-200 bg-sky-50 text-sky-800",
     emerald: "border-emerald-200 bg-emerald-50 text-emerald-800",
-    violet: "border-violet-200 bg-violet-50 text-violet-800",
+    violet: "border-blue-200 bg-blue-50 text-blue-900",
     amber: "border-amber-200 bg-amber-50 text-amber-800",
     red: "border-red-200 bg-red-50 text-red-800",
     gray: "border-gray-200 bg-gray-50 text-gray-800",

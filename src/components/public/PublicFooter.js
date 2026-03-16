@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRightIcon } from "./icons";
+import AmerisLogo from "@/components/ui/AmerisLogo";
 
 const QUICK_LINKS = [
   { href: "/programs", label: "Infant Programs" },
@@ -18,22 +19,23 @@ const CLIENT_PORTALS = [
 
 export default function PublicFooter() {
   return (
-    <footer className="border-t border-gray-200 bg-white">
+    <footer className="border-t border-white/60 bg-white/70 backdrop-blur-xl">
       <div className="mx-auto w-full max-w-7xl px-6 py-12">
         <div className="grid grid-cols-1 gap-10 md:grid-cols-[1.4fr_1fr_1fr_1.2fr]">
           <div className="min-w-0">
             <div className="flex items-center gap-3">
-              <div className="grid h-10 w-10 place-items-center rounded-2xl bg-sky-100 text-sm font-extrabold text-sky-700">
-                ACA
-              </div>
+              <AmerisLogo size="sm" showText={false} className="h-10 w-10 rounded-2xl shadow-sm" />
               <div className="min-w-0">
                 <div className="truncate text-sm font-extrabold text-gray-900">Ameris Academy</div>
-                <div className="truncate text-xs text-gray-500">Childcare</div>
+                <div className="truncate text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Childcare</div>
               </div>
             </div>
             <p className="mt-4 max-w-sm text-sm text-gray-600">
               Providing high-quality care and education for children since 2015. Shaping the leaders of tomorrow, today.
             </p>
+            <div className="mt-5 inline-flex rounded-full border border-sky-100 bg-sky-50 px-4 py-2 text-xs font-bold text-sky-800">
+              Family updates, staff tools, and daily progress in one system
+            </div>
           </div>
 
           <div>
@@ -77,11 +79,11 @@ export default function PublicFooter() {
               <input
                 type="email"
                 placeholder="Your email"
-                className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm"
+                className="w-full rounded-2xl border border-gray-200 bg-white/90 px-4 py-2 text-sm"
               />
               <button
                 type="submit"
-                className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-sky-600 text-white hover:bg-sky-700"
+                className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-sky-600 text-white shadow-sm hover:bg-sky-700"
                 aria-label="Subscribe"
               >
                 <ArrowRightIcon />

@@ -2,6 +2,9 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { signIn } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
+import { useTheme } from "@/contexts/ThemeContext";
+import { MoonIcon, SunIcon } from "@/components/public/icons";
+import AmerisLogo from "@/components/ui/AmerisLogo";
 
 export default function Signup() {
   const router = useRouter();
@@ -129,27 +132,7 @@ export default function Signup() {
     <div className="relative min-h-screen overflow-hidden bg-slate-50">
       <BackgroundScene />
 
-      <header className="relative z-10 px-6 py-6">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-sky-100 text-sm font-extrabold text-sky-700">
-              ACA
-            </div>
-            <div>
-              <div className="text-sm font-extrabold text-gray-900">
-                Ameris Academy
-              </div>
-              <div className="text-xs text-gray-500">Childcare</div>
-            </div>
-          </div>
-          <Link
-            href="/login"
-            className="text-sm font-semibold text-sky-700 hover:text-sky-800"
-          >
-            Log in
-          </Link>
-        </div>
-      </header>
+      <SignupHeader />
 
       <main className="relative z-10 px-6 pb-16">
         <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-10 lg:grid-cols-[1fr_520px_1fr]">
@@ -158,7 +141,7 @@ export default function Signup() {
           <div className="rounded-3xl border border-gray-200 bg-white/90 p-8 shadow-sm backdrop-blur">
             <Link
               href="/login"
-              className="inline-flex items-center gap-2 text-sm font-semibold text-sky-700 hover:text-sky-800"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-blue-800 hover:text-blue-900"
             >
               <span aria-hidden="true">←</span> Back
             </Link>
@@ -299,7 +282,7 @@ export default function Signup() {
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-2 w-full rounded-full bg-sky-600 px-4 py-3 text-sm font-extrabold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-2 w-full rounded-full bg-gradient-to-r from-blue-800 to-sky-600 px-4 py-3 text-sm font-extrabold text-white hover:from-blue-900 hover:to-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? "Signing up..." : "Sign Up"}
               </button>
@@ -307,7 +290,7 @@ export default function Signup() {
 
             <div className="mt-6 text-center text-sm text-gray-600">
               I already have an account.{" "}
-              <Link href="/login" className="font-semibold text-sky-700 hover:text-sky-800">
+              <Link href="/login" className="font-semibold text-blue-800 hover:text-blue-900">
                 Log in
               </Link>
             </div>
@@ -401,16 +384,51 @@ function PasswordInput({ value, onChange, show, setShow }) {
   );
 }
 
+function SignupHeader() {
+  const { theme, toggleTheme } = useTheme();
+  return (
+    <header className="relative z-10 px-6 py-6">
+      <div className="mx-auto flex max-w-6xl items-center justify-between">
+        <div className="flex items-center gap-3">
+          <AmerisLogo size="sm" showText={false} className="h-10 w-10 rounded-2xl" />
+          <div>
+            <div className="text-sm font-extrabold text-gray-900">
+              Ameris Academy
+            </div>
+            <div className="text-xs text-gray-500">Childcare</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-50"
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+          </button>
+          <Link
+            href="/login"
+            className="text-sm font-semibold text-blue-800 hover:text-blue-900"
+          >
+            Log in
+          </Link>
+        </div>
+      </div>
+    </header>
+  );
+}
+
 function BackgroundScene() {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-      <div className="absolute -top-24 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-sky-200/50 blur-2xl" />
-      <div className="absolute -bottom-24 left-0 h-[420px] w-[420px] rounded-full bg-emerald-200/40 blur-2xl" />
-      <div className="absolute -bottom-24 right-0 h-[420px] w-[420px] rounded-full bg-yellow-200/30 blur-2xl" />
-      <div className="absolute left-10 top-28 h-10 w-28 rounded-full bg-white/70 shadow-sm" />
-      <div className="absolute left-36 top-20 h-8 w-20 rounded-full bg-white/70 shadow-sm" />
-      <div className="absolute right-24 top-24 h-10 w-28 rounded-full bg-white/70 shadow-sm" />
-      <div className="absolute right-44 top-16 h-8 w-20 rounded-full bg-white/70 shadow-sm" />
+      <div className="absolute -top-24 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-blue-200/50 blur-2xl dark:bg-blue-900/30" />
+      <div className="absolute -bottom-24 left-0 h-[420px] w-[420px] rounded-full bg-sky-200/40 blur-2xl dark:bg-sky-900/20" />
+      <div className="absolute -bottom-24 right-0 h-[420px] w-[420px] rounded-full bg-amber-200/30 blur-2xl dark:bg-amber-900/20" />
+      <div className="absolute left-10 top-28 h-10 w-28 rounded-full bg-white/70 shadow-sm dark:bg-gray-800/50" />
+      <div className="absolute left-36 top-20 h-8 w-20 rounded-full bg-white/70 shadow-sm dark:bg-gray-800/50" />
+      <div className="absolute right-24 top-24 h-10 w-28 rounded-full bg-white/70 shadow-sm dark:bg-gray-800/50" />
+      <div className="absolute right-44 top-16 h-8 w-20 rounded-full bg-white/70 shadow-sm dark:bg-gray-800/50" />
     </div>
   );
 }

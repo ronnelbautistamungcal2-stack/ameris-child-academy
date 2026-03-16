@@ -2,7 +2,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useRouter } from "next/router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 
 const TYPES = [
   "DIAPER_CHANGE",
@@ -15,6 +15,32 @@ const TYPES = [
   "BEHAVIOR",
   "OTHER",
 ];
+
+const TYPE_META = {
+  DIAPER_CHANGE: { label: "Diaper Change", icon: "🧷", color: "#8b5cf6" },
+  NAP:           { label: "Nap",           icon: "😴", color: "#6366f1" },
+  BOTTLE:        { label: "Bottle",        icon: "🍼", color: "#0ea5e9" },
+  MEAL:          { label: "Meal",          icon: "🍽️", color: "#f59e0b" },
+  SNACK:         { label: "Snack",         icon: "🍎", color: "#10b981" },
+  ACTIVITY:      { label: "Activity",      icon: "🎨", color: "#ec4899" },
+  TASK_CHECKLIST:{ label: "Task / Checklist", icon: "✅", color: "#14b8a6" },
+  BEHAVIOR:      { label: "Behavior",      icon: "📋", color: "#f97316" },
+  OTHER:         { label: "Other",         icon: "📝", color: "#64748b" },
+};
+
+function relativeTime(dateStr) {
+  const now = new Date();
+  const d = new Date(dateStr);
+  const diffMs = now - d;
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
+}
 
 export default function AdminActivityOverrides() {
   const router = useRouter();
@@ -30,11 +56,14 @@ export default function AdminActivityOverrides() {
   const [type, setType] = useState("MEAL");
   const [notes, setNotes] = useState("");
   const [createdAt, setCreatedAt] = useState("");
+  const [showBackdate, setShowBackdate] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState("");
 
   async function loadCenters() {
     setLoading(true);
@@ -105,6 +134,21 @@ export default function AdminActivityOverrides() {
     return `${ch.firstName}${ch.lastName ? ` ${ch.lastName}` : ""}`;
   }, [children, childId]);
 
+  const filteredActivities = useMemo(() => {
+    let list = activities;
+    if (filterType) list = list.filter((a) => a.type === filterType);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (a) =>
+          (a.notes || "").toLowerCase().includes(q) ||
+          (TYPE_META[a.type]?.label || a.type).toLowerCase().includes(q) ||
+          (a.recordedBy?.name || "").toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [activities, filterType, search]);
+
   async function createOverride(e) {
     e.preventDefault();
     setSaving(true);
@@ -119,7 +163,8 @@ export default function AdminActivityOverrides() {
       });
       setNotes("");
       setCreatedAt("");
-      setSuccess(`Created activity for ${childLabel || "child"}.`);
+      setShowBackdate(false);
+      setSuccess(`Activity "${TYPE_META[type]?.label || type}" created for ${childLabel || "child"}.`);
       await loadActivities(childId);
     } catch (e2) {
       setError(e2.message || "Failed to create activity");
@@ -140,136 +185,292 @@ export default function AdminActivityOverrides() {
     }
   }
 
+  const dismissError = useCallback(() => setError(""), []);
+  const dismissSuccess = useCallback(() => setSuccess(""), []);
+
   return (
     <AdminLayout title="Activity Overrides">
+      {/* Page Header */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 10,
+            background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 20, flexShrink: 0,
+          }}>
+            📝
+          </div>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Activity Overrides</h2>
+            <p style={{ margin: 0, fontSize: 13, color: "var(--admin-text-muted)" }}>
+              Create backdated activity logs or remove incorrect entries for any child.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Alerts */}
+      {error && <AlertBanner kind="error" message={error} onDismiss={dismissError} />}
+      {success && <AlertBanner kind="success" message={success} onDismiss={dismissSuccess} />}
+
+      {/* Selector Row */}
       <Panel>
-        <h2 style={{ marginTop: 0 }}>Override Teacher Activity Entries</h2>
-        <p style={{ color: "var(--admin-text-muted)", marginTop: 6 }}>
-          Admins can create and backdate activity logs and delete logs when needed.
-        </p>
-
-        {error ? <ErrorBanner kind="error" message={error} /> : null}
-        {success ? <ErrorBanner kind="success" message={success} /> : null}
-
-        <form onSubmit={createOverride} style={{ marginTop: 12 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-            <Field label="Center">
-              <select value={centerId} onChange={(e) => setCenterId(e.target.value)} style={inputStyle}>
-                <option value="">Select a center…</option>
-                {centers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+          <span style={{ fontSize: 15, fontWeight: 600 }}>Select Child</span>
+          <span style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>Choose a center and child to manage their activity logs</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Field label="Center" icon="🏫">
+            <select value={centerId} onChange={(e) => setCenterId(e.target.value)} style={inputStyle}>
+              <option value="">Select a center…</option>
+              {centers.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Child" icon="👶">
+            <select
+              value={childId}
+              onChange={(e) => setChildId(e.target.value)}
+              style={{ ...inputStyle, opacity: centerId ? 1 : 0.5 }}
+              disabled={!centerId}
+            >
+              <option value="">{centerId ? "Select a child…" : "Select a center first"}</option>
+              {children
+                .slice()
+                .sort((a, b) => (a.firstName || "").localeCompare(b.firstName || ""))
+                .map((ch) => (
+                  <option key={ch.id} value={ch.id}>
+                    {ch.firstName} {ch.lastName || ""}
                   </option>
                 ))}
-              </select>
-            </Field>
-            <Field label="Child">
-              <select
-                value={childId}
-                onChange={(e) => setChildId(e.target.value)}
-                style={inputStyle}
-                disabled={!centerId}
-                required
-              >
-                <option value="">Select a child…</option>
-                {children
-                  .slice()
-                  .sort((a, b) => (a.firstName || "").localeCompare(b.firstName || ""))
-                  .map((ch) => (
-                    <option key={ch.id} value={ch.id}>
-                      {ch.firstName} {ch.lastName || ""}
+            </select>
+          </Field>
+        </div>
+      </Panel>
+
+      {/* Create Form */}
+      {childId && (
+        <Panel style={{ marginTop: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+            <span style={{ fontSize: 15, fontWeight: 600 }}>New Activity Log</span>
+            <Chip>{childLabel}</Chip>
+          </div>
+          <form onSubmit={createOverride}>
+            <div style={{ display: "grid", gridTemplateColumns: "200px 1fr auto", gap: 12, alignItems: "end" }}>
+              <Field label="Activity Type">
+                <select value={type} onChange={(e) => setType(e.target.value)} style={inputStyle}>
+                  {TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {TYPE_META[t]?.icon} {TYPE_META[t]?.label || t}
                     </option>
                   ))}
-              </select>
-            </Field>
-            <Field label="Type">
-              <select value={type} onChange={(e) => setType(e.target.value)} style={inputStyle}>
-                {TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr auto", gap: 10, marginTop: 10 }}>
-            <Field label="Notes (optional)">
-              <input value={notes} onChange={(e) => setNotes(e.target.value)} style={inputStyle} />
-            </Field>
-            <Field label="Created At (optional backdate)">
-              <input
-                type="datetime-local"
-                value={createdAt}
-                onChange={(e) => setCreatedAt(e.target.value)}
-                style={inputStyle}
-              />
-            </Field>
-            <div style={{ display: "flex", alignItems: "end" }}>
-              <button type="submit" style={primaryButton} disabled={saving || !childId}>
-                {saving ? "Saving…" : "Create Log"}
+                </select>
+              </Field>
+              <Field label="Notes (optional)">
+                <input
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Add any details about this activity…"
+                  style={inputStyle}
+                />
+              </Field>
+              <button type="submit" className="admin-btn-primary" style={primaryButton} disabled={saving || !childId}>
+                {saving ? (
+                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <Spinner /> Saving…
+                  </span>
+                ) : (
+                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />
+                    </svg>
+                    Create Log
+                  </span>
+                )}
               </button>
             </div>
-          </div>
-        </form>
 
-        <div style={{ marginTop: 16 }}>
-          <h3 style={{ margin: "0 0 8px 0" }}>Recent Activity Logs</h3>
-          {loading ? (
-            <SkeletonTable rows={4} cols={3} />
-          ) : !childId ? (
-            <p style={{ color: "var(--admin-text-muted)" }}>Select a child to view logs.</p>
-          ) : (
+            {/* Backdate toggle */}
+            <div style={{ marginTop: 10 }}>
+              {!showBackdate ? (
+                <button
+                  type="button"
+                  onClick={() => setShowBackdate(true)}
+                  style={{ background: "none", border: "none", color: "var(--admin-text-muted)", fontSize: 13, cursor: "pointer", padding: 0, textDecoration: "underline", textUnderlineOffset: 3 }}
+                >
+                  + Backdate this entry
+                </button>
+              ) : (
+                <div style={{ display: "flex", alignItems: "end", gap: 12, padding: 12, background: "var(--admin-bg-tertiary)", borderRadius: 8, marginTop: 4 }}>
+                  <Field label="Backdate To">
+                    <input
+                      type="datetime-local"
+                      value={createdAt}
+                      onChange={(e) => setCreatedAt(e.target.value)}
+                      style={{ ...inputStyle, maxWidth: 260 }}
+                    />
+                  </Field>
+                  <button
+                    type="button"
+                    onClick={() => { setShowBackdate(false); setCreatedAt(""); }}
+                    style={{ background: "none", border: "none", color: "var(--admin-text-muted)", fontSize: 13, cursor: "pointer", padding: "10px 0", textDecoration: "underline", textUnderlineOffset: 3 }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          </form>
+        </Panel>
+      )}
+
+      {/* Activity Logs Table */}
+      <Panel style={{ marginTop: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 15, fontWeight: 600 }}>Activity Logs</span>
+            {childId && activities.length > 0 && (
+              <span style={{
+                fontSize: 11, fontWeight: 700, background: "var(--admin-bg-tertiary)",
+                color: "var(--admin-text-muted)", padding: "2px 8px", borderRadius: 999,
+              }}>
+                {filteredActivities.length}{filteredActivities.length !== activities.length ? ` / ${activities.length}` : ""}
+              </span>
+            )}
+          </div>
+          {childId && activities.length > 0 && (
+            <div style={{ display: "flex", gap: 8 }}>
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                style={{ ...inputStyle, width: "auto", padding: "6px 10px", fontSize: 13 }}
+              >
+                <option value="">All types</option>
+                {TYPES.map((t) => (
+                  <option key={t} value={t}>{TYPE_META[t]?.icon} {TYPE_META[t]?.label || t}</option>
+                ))}
+              </select>
+              <div style={{ position: "relative" }}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--admin-text-muted)" strokeWidth="1.5" strokeLinecap="round"
+                  style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
+                  <circle cx="7" cy="7" r="4.5" /><line x1="10.5" y1="10.5" x2="14" y2="14" />
+                </svg>
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search notes…"
+                  style={{ ...inputStyle, padding: "6px 10px 6px 32px", fontSize: 13, width: 180 }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {loading ? (
+          <SkeletonTable rows={4} cols={4} />
+        ) : !childId ? (
+          <EmptyState
+            icon="👆"
+            title="No child selected"
+            description="Select a center and child above to view and manage their activity logs."
+          />
+        ) : filteredActivities.length === 0 && activities.length === 0 ? (
+          <EmptyState
+            icon="📭"
+            title="No activity logs yet"
+            description={`No logs found for ${childLabel || "this child"}. Use the form above to create one.`}
+          />
+        ) : filteredActivities.length === 0 ? (
+          <EmptyState
+            icon="🔍"
+            title="No matching logs"
+            description="Try adjusting your search or filter."
+          />
+        ) : (
+          <div style={{ overflowX: "auto" }}>
             <table style={tableStyle}>
               <thead>
                 <tr>
-                  <th style={thStyle}>When</th>
                   <th style={thStyle}>Type</th>
+                  <th style={thStyle}>When</th>
                   <th style={thStyle}>Notes</th>
-                  <th style={thStyle}>Backdated</th>
-                  <th style={thStyle}>Actions</th>
+                  <th style={{ ...thStyle, width: 90, textAlign: "center" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {activities.map((a) => (
-                  <tr key={a.id}>
-                    <td style={tdStyle}>{new Date(a.createdAt).toLocaleString()}</td>
-                    <td style={tdStyle}>
-                      <code style={codePill}>{a.type}</code>
-                    </td>
-                    <td style={tdStyle}>{a.notes || "—"}</td>
-                    <td style={tdStyle}>{a.isBackdated ? "Yes" : "No"}</td>
-                    <td style={tdStyle}>
-                      <button type="button" style={dangerButton} onClick={() => deleteActivity(a.id)}>
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {activities.length === 0 ? (
-                  <tr>
-                    <td style={tdStyle} colSpan={5}>
-                      No logs found.
-                    </td>
-                  </tr>
-                ) : null}
+                {filteredActivities.map((a) => {
+                  const meta = TYPE_META[a.type] || TYPE_META.OTHER;
+                  return (
+                    <tr key={a.id} style={{ transition: "background 0.15s" }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = "var(--admin-bg-secondary)"}
+                      onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+                      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                        <span style={{
+                          display: "inline-flex", alignItems: "center", gap: 6,
+                          padding: "3px 10px 3px 6px", borderRadius: 999,
+                          background: meta.color + "14", color: meta.color,
+                          fontSize: 13, fontWeight: 600,
+                        }}>
+                          <span style={{ fontSize: 15 }}>{meta.icon}</span>
+                          {meta.label}
+                        </span>
+                      </td>
+                      <td style={tdStyle}>
+                        <div style={{ fontSize: 13, fontWeight: 500 }}>{relativeTime(a.createdAt)}</div>
+                        <div style={{ fontSize: 11, color: "var(--admin-text-muted)" }}>
+                          {new Date(a.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                          {a.isBackdated && (
+                            <span style={{
+                              marginLeft: 6, padding: "1px 6px", borderRadius: 999, fontSize: 10,
+                              background: "#f59e0b22", color: "#b45309", fontWeight: 600,
+                            }}>
+                              Backdated
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td style={{ ...tdStyle, color: a.notes ? "var(--admin-text)" : "var(--admin-text-muted)", fontStyle: a.notes ? "normal" : "italic" }}>
+                        {a.notes || "No notes"}
+                      </td>
+                      <td style={{ ...tdStyle, textAlign: "center" }}>
+                        <button
+                          type="button"
+                          onClick={() => deleteActivity(a.id)}
+                          title="Delete this log"
+                          style={deleteIconButton}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.color = "#dc2626"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--admin-text-muted)"; }}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                            <path d="M3 4.5h10M6.5 4.5V3a1 1 0 011-1h1a1 1 0 011 1v1.5M5 4.5l.5 8.5h5l.5-8.5M7 7v3.5M9 7v3.5" />
+                          </svg>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-          )}
-        </div>
+          </div>
+        )}
       </Panel>
     </AdminLayout>
   );
 }
 
-function Panel({ children }) {
+/* ── Sub-components ─────────────────────────────────────────── */
+
+function Panel({ children, style }) {
   return (
     <div
       style={{
         background: "var(--admin-bg)",
         border: "1px solid var(--admin-border)",
-        borderRadius: 10,
-        padding: 16,
+        borderRadius: 12,
+        padding: 20,
+        ...style,
       }}
     >
       {children}
@@ -277,81 +478,137 @@ function Panel({ children }) {
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, icon, children }) {
   return (
     <label style={{ display: "block" }}>
-      <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--admin-text-muted)", marginBottom: 6, display: "flex", alignItems: "center", gap: 4 }}>
+        {icon && <span style={{ fontSize: 13 }}>{icon}</span>}
+        {label}
+      </div>
       {children}
     </label>
   );
 }
 
-function ErrorBanner({ message, kind }) {
-  const style =
-    kind === "success"
-      ? { background: "var(--admin-success-bg)", color: "var(--admin-success-text)", border: "1px solid var(--admin-success-border)" }
-      : { background: "var(--admin-error-bg)", color: "var(--admin-error-text)", border: "1px solid var(--admin-error-border)" };
+function AlertBanner({ message, kind, onDismiss }) {
+  const isSuccess = kind === "success";
+  const bg = isSuccess ? "var(--admin-success-bg)" : "var(--admin-error-bg)";
+  const color = isSuccess ? "var(--admin-success-text)" : "var(--admin-error-text)";
+  const border = isSuccess ? "var(--admin-success-border)" : "var(--admin-error-border)";
+  const icon = isSuccess ? "✓" : "!";
 
   return (
-    <div style={{ padding: 12, borderRadius: 8, marginTop: 12, ...style }}>
-      {message}
+    <div style={{
+      padding: "10px 14px", borderRadius: 10, marginBottom: 14,
+      background: bg, color: color, border: `1px solid ${border}`,
+      display: "flex", alignItems: "center", gap: 10, fontSize: 14,
+    }}>
+      <span style={{
+        width: 22, height: 22, borderRadius: 999,
+        background: color, color: bg,
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        fontSize: 12, fontWeight: 800, flexShrink: 0,
+      }}>
+        {icon}
+      </span>
+      <span style={{ flex: 1 }}>{message}</span>
+      {onDismiss && (
+        <button onClick={onDismiss} style={{
+          background: "none", border: "none", cursor: "pointer", color, fontSize: 18,
+          lineHeight: 1, padding: 0, opacity: 0.6,
+        }}>×</button>
+      )}
     </div>
   );
 }
 
+function EmptyState({ icon, title, description }) {
+  return (
+    <div style={{
+      textAlign: "center", padding: "40px 20px",
+      color: "var(--admin-text-muted)",
+    }}>
+      <div style={{ fontSize: 36, marginBottom: 8 }}>{icon}</div>
+      <div style={{ fontSize: 15, fontWeight: 600, color: "var(--admin-text)", marginBottom: 4 }}>{title}</div>
+      <div style={{ fontSize: 13 }}>{description}</div>
+    </div>
+  );
+}
+
+function Chip({ children }) {
+  return (
+    <span style={{
+      fontSize: 12, fontWeight: 600, padding: "2px 10px",
+      borderRadius: 999, background: "#6366f114", color: "#6366f1",
+    }}>
+      {children}
+    </span>
+  );
+}
+
+function Spinner() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" style={{ animation: "spin 1s linear infinite" }}>
+      <circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="20 12" strokeLinecap="round" />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </svg>
+  );
+}
+
+/* ── Styles ──────────────────────────────────────────────────── */
+
 const inputStyle = {
   width: "100%",
-  padding: 10,
+  padding: "9px 12px",
   border: "1px solid var(--admin-border)",
   borderRadius: 8,
   boxSizing: "border-box",
+  fontSize: 14,
+  background: "var(--admin-bg)",
+  color: "var(--admin-text)",
+  transition: "border-color 0.15s, box-shadow 0.15s",
+  outline: "none",
 };
 
 const tableStyle = {
   width: "100%",
   borderCollapse: "collapse",
-  border: "1px solid var(--admin-border)",
-  borderRadius: 10,
-  overflow: "hidden",
 };
 
 const thStyle = {
   textAlign: "left",
-  fontSize: 12,
+  fontSize: 11,
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
   color: "var(--admin-text-muted)",
-  padding: 10,
-  borderBottom: "1px solid var(--admin-border)",
-  background: "var(--admin-bg-secondary)",
+  padding: "10px 14px",
+  borderBottom: "2px solid var(--admin-border)",
 };
 
 const tdStyle = {
-  padding: 10,
-  borderBottom: "1px solid var(--admin-border-light)",
-  verticalAlign: "top",
-};
-
-const codePill = {
-  background: "var(--admin-bg-tertiary)",
-  padding: "2px 8px",
-  borderRadius: 999,
+  padding: "12px 14px",
+  borderBottom: "1px solid var(--admin-border-light, var(--admin-border))",
+  verticalAlign: "middle",
 };
 
 const primaryButton = {
-  padding: "10px 12px",
-  background: "#2563eb",
+  padding: "9px 18px",
+  background: "#6366f1",
   color: "white",
   border: "none",
   borderRadius: 8,
   cursor: "pointer",
   fontWeight: 700,
+  fontSize: 14,
+  whiteSpace: "nowrap",
+  transition: "background 0.15s, opacity 0.15s",
 };
 
-const dangerButton = {
-  padding: "10px 12px",
-  background: "#ef4444",
-  color: "white",
-  border: "none",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontWeight: 700,
+const deleteIconButton = {
+  width: 32, height: 32, borderRadius: 8,
+  display: "inline-flex", alignItems: "center", justifyContent: "center",
+  background: "transparent", border: "none",
+  color: "var(--admin-text-muted)", cursor: "pointer",
+  transition: "all 0.15s",
 };

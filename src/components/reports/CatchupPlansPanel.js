@@ -194,7 +194,7 @@ export default function CatchupPlansPanel({ progressRows, childName, birthDate }
               <div className="flex items-start justify-between gap-2">
                 <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">{item.title}</div>
                 {item.ageRelevant && ageGroup ? (
-                  <span className="shrink-0 rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:border-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+                  <span className="shrink-0 rounded-md border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                     Age-appropriate
                   </span>
                 ) : null}

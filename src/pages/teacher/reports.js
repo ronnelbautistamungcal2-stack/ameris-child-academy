@@ -43,7 +43,7 @@ function typeLabel(type) {
 }
 
 const DOMAIN_META = {
-  cognitive: { label: "Cognitive", emoji: "\uD83E\uDDE0", color: "text-violet-700 bg-violet-50" },
+  cognitive: { label: "Cognitive", emoji: "\uD83E\uDDE0", color: "text-blue-800 bg-blue-50" },
   social: { label: "Social-Emotional", emoji: "\uD83E\uDD1D", color: "text-sky-700 bg-sky-50" },
   physical: { label: "Physical", emoji: "\uD83C\uDFC3", color: "text-emerald-700 bg-emerald-50" },
   language: { label: "Language", emoji: "\uD83D\uDCAC", color: "text-amber-700 bg-amber-50" },
@@ -54,7 +54,7 @@ const LEVEL_COLORS = {
   1: "bg-amber-100 text-amber-800",
   2: "bg-sky-100 text-sky-800",
   3: "bg-emerald-100 text-emerald-800",
-  4: "bg-violet-100 text-violet-800",
+  4: "bg-blue-100 text-blue-900",
 };
 
 function extractDailyGrade(activity) {

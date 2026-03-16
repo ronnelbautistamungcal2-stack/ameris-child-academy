@@ -5,13 +5,13 @@ import { useEffect, useState, useCallback } from "react";
 
 const SOURCE_BADGE = {
   event: "bg-indigo-100 text-indigo-700",
-  shift: "bg-violet-100 text-violet-700",
+  shift: "bg-blue-100 text-blue-700",
   timeoff: "bg-emerald-100 text-emerald-700",
 };
 
 const LEGEND = [
   { label: "Events", cls: "bg-indigo-100" },
-  { label: "My Shifts", cls: "bg-violet-100" },
+  { label: "My Shifts", cls: "bg-blue-100" },
   { label: "PTO", cls: "bg-emerald-100" },
   { label: "Sick", cls: "bg-red-100" },
   { label: "Pending", cls: "bg-amber-200" },
@@ -132,7 +132,7 @@ export default function TeacherCalendarPage() {
         <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
           {[
             { key: "events", label: "Events", color: "#e0e7ff" },
-            { key: "shifts", label: "My Shifts", color: "#ede9fe" },
+            { key: "shifts", label: "My Shifts", color: "#dbeafe" },
             { key: "timeOff", label: "My Time Off", color: "#d1fae5" },
           ].map(f => (
             <label key={f.key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>

@@ -320,10 +320,10 @@ const TYPE_CONFIG = {
   },
   CAREER_LADDER: {
     label: "Career Milestones",
-    pillClass: "border-violet-200 bg-violet-50",
-    pillText: "text-violet-800",
-    iconBg: "bg-violet-100",
-    iconText: "text-violet-700",
+    pillClass: "border-blue-200 bg-blue-50",
+    pillText: "text-blue-900",
+    iconBg: "bg-blue-100",
+    iconText: "text-blue-800",
   },
 };
 

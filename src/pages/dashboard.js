@@ -10,6 +10,12 @@ import { TEACHER_NAV_ITEMS } from "@/components/teacher/teacherNav";
 import { PARENT_NAV_ITEMS } from "@/components/parent/parentNav";
 import { COACH_NAV_ITEMS } from "@/components/coach/coachNav";
 import { SUBSCRIBER_NAV_ITEMS } from "@/components/subscriber/subscriberNav";
+import {
+  ParentButton,
+  ParentPageHeader,
+  ParentQuickAction,
+  ParentSection,
+} from "@/components/parent/ParentUI";
 
 const NAV_BASE = [{ href: "/dashboard", label: "Dashboard" }];
 
@@ -176,22 +182,22 @@ export default function Dashboard() {
           subscriptionSummary={subscriptionSummary}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_340px]">
-        <section className="min-w-0 space-y-4">
-              <div className="rounded-2xl border border-gray-200 bg-gradient-to-r from-blue-50 to-cyan-50 p-6">
-                <div className="flex items-center justify-between gap-4">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_340px]">
+        <section className="min-w-0 space-y-5">
+              <div className="overflow-hidden rounded-[28px] border border-white/70 bg-gradient-to-br from-sky-50 via-white to-amber-50/80 p-6 shadow-[0_24px_70px_-48px_rgba(14,116,144,0.65)]">
+                <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
                   <div className="min-w-0">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-blue-700/70">
-                      Welcome back
+                    <div className="inline-flex rounded-full bg-white/80 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.22em] text-sky-700">
+                      Workspace overview
                     </div>
-                    <h2 className="mt-1 truncate text-2xl font-extrabold text-gray-900">
-                      {name}!
+                    <h2 className="mt-3 truncate text-3xl font-black tracking-tight text-gray-900">
+                      {name}
                     </h2>
-                    <p className="mt-1 text-sm text-gray-600">
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
                       {role === "PARENT"
                         ? "Your children are ready for a great day."
                         : role === "TEACHER"
-                          ? "Jump into daily logging, lessons, and checklists."
+                          ? "Focus on classroom logging, lessons, and the children currently assigned to your center."
                           : role === "ADMIN"
                             ? "Manage classrooms, students, and staff — with full control."
                             : "Welcome."}
@@ -199,14 +205,14 @@ export default function Dashboard() {
                   </div>
 
                   {(role === "ADMIN" || role === "TEACHER") && centers.length ? (
-                    <div className="w-full max-w-xs">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        Center
+                    <div className="w-full max-w-xs rounded-[24px] border border-white/80 bg-white/85 p-4 shadow-sm">
+                      <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-gray-500">
+                        Active center
                       </div>
                       <select
                         value={centerId}
                         onChange={(e) => setCenterId(e.target.value)}
-                        className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-sm"
                       >
                         <option value="">Select a center…</option>
                         {centers.map((c) => (
@@ -218,13 +224,34 @@ export default function Dashboard() {
                     </div>
                   ) : null}
                 </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  <DashboardStatCard
+                    label="Centers"
+                    value={centers.length}
+                    hint={centerId ? "One center currently in focus" : "Choose a center to filter"}
+                    tone="sky"
+                  />
+                  <DashboardStatCard
+                    label="Children"
+                    value={loading ? "..." : children.length}
+                    hint={centerId ? "Available in this workspace view" : "Awaiting center selection"}
+                    tone="emerald"
+                  />
+                  <DashboardStatCard
+                    label="Recent activity"
+                    value={activities.length}
+                    hint={childId ? "Loaded for the selected child" : "Pick a child to inspect updates"}
+                    tone="amber"
+                  />
+                </div>
               </div>
 
-              <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="rounded-[28px] border border-gray-200 bg-white/85 p-5 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-base font-extrabold text-gray-900">
-                      {role === "PARENT" ? "My Children" : "Children"}
+                    <h3 className="text-lg font-black tracking-tight text-gray-900">
+                      Children
                     </h3>
                     <p className="mt-1 text-sm text-gray-600">
                       {role === "PARENT"
@@ -268,7 +295,7 @@ export default function Dashboard() {
                     No children found.
                   </div>
                 ) : (
-                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     {children.slice(0, 8).map((ch) => {
                       const active = ch.id === childId;
                       return (
@@ -277,21 +304,21 @@ export default function Dashboard() {
                           type="button"
                           onClick={() => setChildId(ch.id)}
                           className={[
-                            "rounded-2xl border p-4 text-left transition",
+                            "rounded-[24px] border p-4 text-left transition-all duration-200",
                             active
-                              ? "border-blue-200 bg-blue-50"
-                              : "border-gray-200 bg-white hover:bg-gray-50",
+                              ? "border-blue-200 bg-gradient-to-br from-blue-50 to-white shadow-sm"
+                              : "border-gray-200 bg-white hover:-translate-y-0.5 hover:bg-gray-50 hover:shadow-sm",
                           ].join(" ")}
                         >
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-sm font-extrabold text-gray-700">
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 text-sm font-extrabold text-gray-700">
                               {initials(ch.firstName, ch.lastName)}
                             </div>
                             <div className="min-w-0">
                               <div className="truncate text-sm font-extrabold text-gray-900">
                                 {ch.firstName} {ch.lastName || ""}
                               </div>
-                              <div className="truncate text-xs text-gray-500">
+                              <div className="mt-1 truncate text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
                                 {ch.classRoomId ? `Class: ${ch.classRoomId}` : "Class: —"}
                               </div>
                             </div>
@@ -303,12 +330,12 @@ export default function Dashboard() {
                 )}
               </div>
 
-              <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="rounded-[28px] border border-gray-200 bg-white/85 p-5 shadow-sm">
                 <h3 className="text-base font-extrabold text-gray-900">
-                  Enrollment & Policies
+                  Quick access
                 </h3>
                 <p className="mt-1 text-sm text-gray-600">
-                  Quick links to documents, policies, and training resources.
+                  Shortcuts for the most common next actions in this workspace.
                 </p>
 
                 <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -351,8 +378,8 @@ export default function Dashboard() {
               </div>
             </section>
 
-            <aside className="space-y-4">
-              <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <aside className="space-y-5">
+              <div className="rounded-[28px] border border-gray-200 bg-white/85 p-5 shadow-sm">
                 <div className="flex items-center justify-between">
                   <h3 className="text-base font-extrabold text-gray-900">
                     Recent Activity
@@ -368,7 +395,7 @@ export default function Dashboard() {
                     activities.map((a) => (
                       <div
                         key={a.id}
-                        className="rounded-xl border border-gray-200 bg-gray-50 p-3"
+                        className="rounded-2xl border border-gray-200 bg-gradient-to-r from-white to-slate-50 p-3"
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div className="text-sm font-extrabold text-gray-900">
@@ -389,7 +416,7 @@ export default function Dashboard() {
                       </div>
                     ))
                   ) : (
-                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+                    <div className="rounded-2xl border border-dashed border-gray-300 bg-slate-50 p-4 text-sm text-gray-600">
                       Select a child to view recent activity.
                     </div>
                   )}
@@ -398,14 +425,14 @@ export default function Dashboard() {
                 {role === "TEACHER" && childId ? (
                   <Link
                     href={`/teacher/logs?centerId=${encodeURIComponent(centerId || "")}&childId=${encodeURIComponent(childId)}`}
-                    className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-3 py-2 text-sm font-extrabold text-white hover:bg-blue-700"
+                    className="mt-4 inline-flex w-full items-center justify-center rounded-2xl bg-blue-600 px-3 py-2.5 text-sm font-extrabold text-white hover:bg-blue-700"
                   >
                     Log Activity
                   </Link>
                 ) : role === "ADMIN" && childId ? (
                   <Link
                     href={`/admin/activity-overrides?centerId=${encodeURIComponent(centerId || "")}&childId=${encodeURIComponent(childId)}`}
-                    className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-3 py-2 text-sm font-extrabold text-white hover:bg-blue-700"
+                    className="mt-4 inline-flex w-full items-center justify-center rounded-2xl bg-blue-600 px-3 py-2.5 text-sm font-extrabold text-white hover:bg-blue-700"
                   >
                     Override Activity
                   </Link>
@@ -413,7 +440,7 @@ export default function Dashboard() {
               </div>
 
               {role === "PARENT" ? (
-                <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                <div className="rounded-[28px] border border-gray-200 bg-white/85 p-5 shadow-sm">
                   <div className="flex items-center justify-between">
                     <h3 className="text-base font-extrabold text-gray-900">
                       Billing
@@ -497,8 +524,8 @@ const GWA_DOMAIN_COLORS = {
   cognitive: "bg-sky-400",
   social: "bg-emerald-400",
   physical: "bg-amber-400",
-  language: "bg-pink-400",
-  creative: "bg-violet-400",
+  language: "bg-blue-400",
+  creative: "bg-blue-400",
 };
 
 function inferProgressDomain(row) {
@@ -520,8 +547,8 @@ const GWA_PROGRESS_DOMAIN_CONFIG = [
   { name: "Cognitive", color: "bg-sky-400" },
   { name: "Social-Emotional", color: "bg-emerald-400" },
   { name: "Physical", color: "bg-amber-400" },
-  { name: "Language & Literacy", color: "bg-pink-400" },
-  { name: "Creative", color: "bg-violet-400" },
+  { name: "Language & Literacy", color: "bg-blue-400" },
+  { name: "Creative", color: "bg-blue-400" },
 ];
 
 const AGE_GROUPS = [
@@ -726,83 +753,62 @@ function ParentDashboard({
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_340px]">
       <section className="min-w-0 space-y-4">
-        <div className="rounded-2xl border border-gray-200 bg-gradient-to-r from-blue-50 to-cyan-50 p-6">
-          <div className="text-xs font-semibold uppercase tracking-wide text-blue-700/70">
-            Welcome back
-          </div>
-          <h2 className="mt-1 truncate text-2xl font-extrabold text-gray-900">
-            {name}!
-          </h2>
-          <p className="mt-1 text-sm text-gray-600">
-            Your children are currently checked in and having a great day.
-          </p>
-        </div>
+        <ParentPageHeader
+          eyebrow="Family overview"
+          title={`Welcome back, ${name}`}
+          description="Check your children, renew forms before they become urgent, and move directly into messages, billing, and progress updates from one dashboard."
+          accent="amber"
+          layout="split"
+          stats={[
+            { label: "Children", value: visibleChildren.length, hint: "On this account", tone: "sky" },
+            { label: "New alerts", value: (activities || []).length, hint: "Recent visible updates", tone: (activities || []).length ? "amber" : "gray" },
+            { label: "Billing", value: subscriptionSummary?.active ? "Active" : "Review", hint: subscriptionSummary?.centerName || "Center plan", tone: subscriptionSummary?.active ? "emerald" : "amber" },
+            { label: "Next stop", value: "Forms", hint: "Most common parent task", tone: "gray" },
+          ]}
+          actions={
+            <>
+              <ParentButton href="/parent/messages" variant="secondary">Messages</ParentButton>
+              <ParentButton href="/parent/forms">Open forms</ParentButton>
+            </>
+          }
+        />
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-          <h3 className="text-base font-extrabold text-gray-900">
-            Policies and Procedures
-          </h3>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <QuickTile
-              title="Parent Handbook"
-              subtitle="Policies, procedures, and guidelines"
-              href="/parent/policies"
-            />
-            <QuickTile
-              title="Parent Enrollment Documents"
-              subtitle="Submit and review enrollment forms"
-              href="/parent/forms"
-            />
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-          <h3 className="text-base font-extrabold text-gray-900">
-            Parent Enrollment Documents
-          </h3>
-          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Link
-              href="/parent/forms"
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
-            >
-              Admission Agreement
-            </Link>
-            <Link
-              href="/parent/forms"
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
-            >
-              Health Assessment
-            </Link>
-            <Link
-              href="/parent/forms"
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
-            >
-              Income Eligibility Form
-            </Link>
-            <Link
-              href="/parent/forms"
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
-            >
-              Baby Forms
-            </Link>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-base font-extrabold text-gray-900">My Children</h3>
-              <p className="mt-1 text-sm text-gray-600">
-                Click on each child to view their page.
-              </p>
-            </div>
-            <Link
+        <ParentSection
+          title="Quick access"
+          description="The most important parent actions are grouped here instead of being spread across multiple sections."
+        >
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[1.1fr_1.1fr_0.9fr_0.9fr]">
+            <ParentQuickAction
               href="/parent/children"
-              className="text-sm font-semibold text-blue-600 hover:text-blue-700"
-            >
-              View All
-            </Link>
+              title="My children"
+              description="Open daily reports, milestones, meals, and care updates."
+            />
+            <ParentQuickAction
+              href="/parent/progress"
+              title="Progress & goals"
+              description="See completed steps and where support is still needed."
+              tone="emerald"
+            />
+            <ParentQuickAction
+              href="/parent/forms"
+              title="Forms & renewals"
+              description="Review paperwork status and renew expiring records."
+              tone="amber"
+            />
+            <ParentQuickAction
+              href="/parent/policies"
+              title="Policies"
+              description="Quick handbook access for pickup, illness, and procedures."
+              tone="sky"
+            />
           </div>
+        </ParentSection>
+
+        <ParentSection
+          title="My children"
+          description="Open each child to view their activity feed, progression, milestones, and classroom details."
+          action={<ParentButton href="/parent/children" variant="soft">View all</ParentButton>}
+        >
 
           {error ? (
             <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
@@ -822,15 +828,15 @@ function ParentDashboard({
                 <Link
                   key={ch.id}
                   href={`/parent/children?childId=${encodeURIComponent(ch.id)}`}
-                  className="rounded-2xl border border-gray-200 bg-white p-4 text-left transition hover:bg-gray-50"
+                  className="rounded-[24px] border border-gray-200 bg-white p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-200 hover:bg-sky-50/70 hover:shadow-md"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-sm font-extrabold text-gray-700">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sm font-extrabold text-sky-700">
                     {initials(ch.firstName, ch.lastName)}
                   </div>
-                  <div className="mt-2 truncate text-sm font-extrabold text-gray-900">
+                  <div className="mt-3 truncate text-sm font-extrabold text-gray-900">
                     {ch.firstName} {ch.lastName || ""}
                   </div>
-                  <div className="text-xs text-gray-500">Child {index + 1}</div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Child {index + 1}</div>
                   {childGWAs[ch.id] != null ? (
                     <ChildGWACard gwa={childGWAs[ch.id]} birthDate={ch.birthDate} />
                   ) : null}
@@ -838,18 +844,26 @@ function ParentDashboard({
               ))}
             </div>
           )}
-        </div>
+        </ParentSection>
       </section>
 
       <aside className="space-y-4">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="rounded-[24px] border border-gray-200 bg-white p-5">
           <h3 className="text-base font-extrabold text-gray-900">
-            New Messages/Alerts
+            New messages and alerts
           </h3>
+          <p className="mt-1 text-sm text-gray-600">
+            A short stream of recent activity that may need your attention.
+          </p>
           <div className="mt-3 space-y-2">
             {(activities || []).slice(0, 3).map((a) => (
-              <div key={a.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                <div className="text-sm font-semibold text-gray-900">{a.type}</div>
+              <div key={a.id} className="rounded-2xl border border-gray-200 bg-gradient-to-r from-white to-sky-50/70 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-semibold text-gray-900">{a.type}</div>
+                  <div className="rounded-full bg-sky-100 px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide text-sky-700">
+                    Update
+                  </div>
+                </div>
                 <div className="mt-1 text-xs text-gray-600">{a.notes || "-"}</div>
               </div>
             ))}
@@ -859,17 +873,14 @@ function ParentDashboard({
               </div>
             ) : null}
           </div>
-          <Link
-            href="/parent/messages"
-            className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
-          >
-            Go to Messages
-          </Link>
+          <ParentButton href="/parent/messages" variant="secondary" className="mt-3 w-full">
+            Go to messages
+          </ParentButton>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="rounded-[24px] border border-gray-200 bg-white p-5">
           <h3 className="text-base font-extrabold text-gray-900">
-            Forms Renewal Reminders
+            Renewal reminders
           </h3>
           <div className="mt-3 space-y-2">
             {reminders.map((item) => (
@@ -883,9 +894,9 @@ function ParentDashboard({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="rounded-[24px] border border-gray-200 bg-white p-5">
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-extrabold text-gray-900">Account Balance</h3>
+            <h3 className="text-base font-extrabold text-gray-900">Billing snapshot</h3>
             {subscriptionSummary ? (
               <span className="text-xs font-semibold text-gray-500">
                 {subscriptionSummary.tier}
@@ -911,17 +922,17 @@ function ParentDashboard({
                     : "-"}
                 </span>
               </div>
-              <button
-                type="button"
-                className="mt-3 w-full rounded-xl bg-blue-600 px-3 py-2 text-sm font-extrabold text-white hover:bg-blue-700"
-                onClick={() => alert("Billing flow not implemented yet")}
-              >
-                Pay Now
-              </button>
-            </div>
-          ) : (
-            <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-              Billing details not available yet.
+                      <button
+                        type="button"
+                        className="mt-3 w-full rounded-xl bg-blue-600 px-3 py-2 text-sm font-extrabold text-white hover:bg-blue-700"
+                        onClick={() => alert("Billing flow not implemented yet")}
+                      >
+                        Request payment link
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+                      Billing details not available yet.
             </div>
           )}
         </div>
@@ -939,7 +950,7 @@ function initials(firstName, lastName) {
 function QuickTile({ title, subtitle, href, disabled = false }) {
   if (disabled) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+      <div className="rounded-[24px] border border-gray-200 bg-slate-50 p-4">
         <div className="font-extrabold text-gray-900">{title}</div>
         <div className="mt-1 text-sm text-gray-600">{subtitle}</div>
         <div className="mt-2 text-xs font-semibold text-gray-500">
@@ -952,7 +963,7 @@ function QuickTile({ title, subtitle, href, disabled = false }) {
   return (
     <Link
       href={href}
-      className="block rounded-2xl border border-gray-200 bg-white p-4 hover:bg-gray-50"
+      className="block rounded-[24px] border border-gray-200 bg-white p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-200 hover:bg-sky-50/60 hover:shadow-sm"
     >
       <div className="font-extrabold text-gray-900">{title}</div>
       <div className="mt-1 text-sm text-gray-600">{subtitle}</div>
@@ -1015,9 +1026,27 @@ function Shortcut({ href, label }) {
   return (
     <Link
       href={href}
-      className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-center font-semibold text-gray-800 hover:bg-gray-50"
+      className="rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-center font-semibold text-gray-800 transition hover:bg-slate-50"
     >
       {label}
     </Link>
+  );
+}
+
+function DashboardStatCard({ label, value, hint, tone = "sky" }) {
+  const tones = {
+    sky: "border-sky-100 bg-sky-50/90",
+    emerald: "border-emerald-100 bg-emerald-50/90",
+    amber: "border-amber-100 bg-amber-50/90",
+  };
+
+  return (
+    <div className={`rounded-[24px] border p-4 ${tones[tone] || tones.sky}`}>
+      <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-gray-500">
+        {label}
+      </div>
+      <div className="mt-2 text-2xl font-black tracking-tight text-gray-900">{value}</div>
+      <div className="mt-1 text-sm text-gray-600">{hint}</div>
+    </div>
   );
 }

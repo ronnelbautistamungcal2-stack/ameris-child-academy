@@ -1,7 +1,29 @@
 import ParentLayout from "@/components/parent/ParentLayout";
+import {
+  ParentButton,
+  ParentEmpty,
+  ParentField,
+  ParentPageHeader,
+  ParentSection,
+  ParentSurface,
+} from "@/components/parent/ParentUI";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString();
+}
+
+function formatDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString();
+}
 
 export default function ParentForms() {
   const [templates, setTemplates] = useState([]);
@@ -25,12 +47,12 @@ export default function ParentForms() {
         apiJson("/api/v1/children"),
       ]);
       const tArr = Array.isArray(t) ? t : [];
-      setTemplates(tArr);
-      if (!templateId) setTemplateId(tArr[0]?.id || "");
-      setSubmissions(Array.isArray(s) ? s : []);
       const kidsArr = Array.isArray(kids) ? kids : [];
+      setTemplates(tArr);
+      setSubmissions(Array.isArray(s) ? s : []);
       setChildren(kidsArr);
-      if (!childId) setChildId(kidsArr[0]?.id || "");
+      setTemplateId((current) => current || tArr[0]?.id || "");
+      setChildId((current) => current || kidsArr[0]?.id || "");
     } catch (e) {
       setError(e.message || "Failed to load forms");
     } finally {
@@ -40,12 +62,34 @@ export default function ParentForms() {
 
   useEffect(() => {
     refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const sortedTemplates = useMemo(() => {
-    return [...templates].sort((a, b) => (a.title || "").localeCompare(b.title || ""));
-  }, [templates]);
+  const sortedTemplates = useMemo(
+    () => [...templates].sort((a, b) => (a.title || "").localeCompare(b.title || "")),
+    [templates],
+  );
+
+  const selectedTemplate = useMemo(
+    () => sortedTemplates.find((t) => t.id === templateId) || null,
+    [sortedTemplates, templateId],
+  );
+
+  const selectedChild = useMemo(
+    () => children.find((child) => child.id === childId) || null,
+    [children, childId],
+  );
+
+  const submissionStats = useMemo(() => {
+    const total = submissions.length;
+    const approved = submissions.filter((item) => item.status === "APPROVED").length;
+    const pending = submissions.filter((item) => item.status === "PENDING").length;
+    const expiringSoon = submissions.filter((item) => {
+      if (!item.expiresAt) return false;
+      const expiresAt = new Date(item.expiresAt).getTime();
+      return expiresAt >= Date.now() && expiresAt <= Date.now() + 30 * 86400000;
+    }).length;
+    return { total, approved, pending, expiringSoon };
+  }, [submissions]);
 
   async function submit(e) {
     e.preventDefault();
@@ -59,7 +103,7 @@ export default function ParentForms() {
         try {
           data = JSON.parse(trimmed);
         } catch {
-          throw new Error("Form data must be valid JSON (or empty).");
+          throw new Error("Form data must be valid JSON or left blank.");
         }
       }
 
@@ -72,7 +116,7 @@ export default function ParentForms() {
         }),
       });
       setDataText("");
-      setSuccess("Form submitted.");
+      setSuccess("Form submitted successfully.");
       await refresh();
     } catch (e2) {
       setError(e2.message || "Failed to submit form");
@@ -82,136 +126,186 @@ export default function ParentForms() {
   }
 
   return (
-    <ParentLayout title="Forms">
-      <div className="rounded-2xl border border-gray-200 bg-white p-5">
-        <h2 className="text-lg font-extrabold text-gray-900">Online Forms</h2>
-        <p className="mt-1 text-sm text-gray-600">
-          Submit enrollment/health/emergency forms online (basic templates + submissions).
-        </p>
+    <ParentLayout title="Forms & Renewals">
+      <div className="space-y-4">
+        <ParentPageHeader
+          eyebrow="Forms center"
+          title="Complete and track family paperwork"
+          description="Review submission status, renew expiring documents, and send updated details to the center without hunting through multiple screens."
+          accent="emerald"
+          layout="split"
+          stats={[
+            { label: "Submitted", value: submissionStats.total, hint: "Total form records", tone: "sky" },
+            { label: "Pending", value: submissionStats.pending, hint: "Awaiting review", tone: submissionStats.pending ? "amber" : "gray" },
+            { label: "Approved", value: submissionStats.approved, hint: "Already accepted", tone: "emerald" },
+            { label: "Renew Soon", value: submissionStats.expiringSoon, hint: "Within 30 days", tone: submissionStats.expiringSoon ? "rose" : "gray" },
+          ]}
+          actions={<ParentButton variant="secondary" onClick={refresh}>Refresh forms</ParentButton>}
+        />
 
         {error ? (
-          <div className="mt-3 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            <span>{error}</span>
-            <button type="button" onClick={() => { setError(""); refresh(); }} className="ml-3 text-xs font-semibold text-red-600 underline hover:text-red-800">Retry</button>
-          </div>
+          <ParentSurface className="border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+            {error}
+          </ParentSurface>
         ) : null}
         {success ? (
-          <div className="mt-3 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+          <ParentSurface className="border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
             {success}
-          </div>
+          </ParentSurface>
         ) : null}
 
-        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
-          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-              My Submissions
-            </div>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+          <ParentSection
+            title="Submission timeline"
+            description="See what has already been filed and jump back into items that are expiring soon."
+            className="bg-gradient-to-br from-white via-emerald-50/40 to-white"
+          >
             {loading ? (
-              <div className="mt-3"><Skeleton count={3} /></div>
+              <Skeleton count={4} />
             ) : submissions.length === 0 ? (
-              <div className="mt-3 text-sm text-gray-600">No submissions yet.</div>
+              <ParentEmpty
+                title="No forms submitted yet"
+                description="Choose a template on the right to send your first form."
+              />
             ) : (
-              <div className="mt-3 space-y-2">
-                {submissions.slice(0, 20).map((s) => {
-                  const isExpired = s.expiresAt && new Date(s.expiresAt) < new Date();
-                  const isExpiringSoon = s.expiresAt && !isExpired && new Date(s.expiresAt) <= new Date(Date.now() + 30 * 86400000);
-                  return (
-                    <div key={s.id} className="rounded-xl border border-gray-200 bg-white p-3">
-                      <div className="text-sm font-extrabold text-gray-900">
-                        {s.template?.title || "Form"}
-                      </div>
-                      <div className="mt-1 text-xs text-gray-500">
-                        {new Date(s.createdAt).toLocaleString()} · {s.status}
-                      </div>
-                      <div className="mt-1 text-xs text-gray-600">
-                        Child: {s.child ? `${s.child.firstName} ${s.child.lastName || ""}` : "—"}
-                      </div>
-                      {s.expiresAt && (
-                        <div className={`mt-1 text-xs font-bold ${isExpired ? "text-red-600" : isExpiringSoon ? "text-amber-600" : "text-gray-500"}`}>
-                          {isExpired ? "EXPIRED" : `Expires: ${new Date(s.expiresAt).toLocaleDateString()}`}
-                          {(isExpired || isExpiringSoon) && (
-                            <button
-                              type="button"
-                              onClick={() => { setTemplateId(s.templateId); setChildId(s.childId || ""); }}
-                              className="ml-2 text-blue-600 underline font-bold"
-                            >
-                              Renew
-                            </button>
-                          )}
+              <div className="space-y-3">
+                {submissions
+                  .slice()
+                  .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+                  .slice(0, 20)
+                  .map((submission) => {
+                    const isExpired =
+                      submission.expiresAt && new Date(submission.expiresAt) < new Date();
+                    const isExpiringSoon =
+                      submission.expiresAt &&
+                      !isExpired &&
+                      new Date(submission.expiresAt) <= new Date(Date.now() + 30 * 86400000);
+                    return (
+                      <div
+                        key={submission.id}
+                        className="rounded-[24px] border border-emerald-100 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900/40"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <div className="text-base font-extrabold text-gray-900 dark:text-gray-100">
+                              {submission.template?.title || "Form"}
+                            </div>
+                            <div className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                              Submitted {formatDateTime(submission.createdAt)}
+                            </div>
+                            <div className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                              Child: {submission.child ? `${submission.child.firstName} ${submission.child.lastName || ""}` : "Not linked to a child"}
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-extrabold text-sky-700 dark:border-sky-800 dark:bg-sky-900/30 dark:text-sky-300">
+                              {submission.status}
+                            </span>
+                            {submission.expiresAt ? (
+                              <span
+                                className={[
+                                  "rounded-full px-3 py-1 text-xs font-extrabold",
+                                  isExpired
+                                    ? "border border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300"
+                                    : isExpiringSoon
+                                      ? "border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+                                      : "border border-gray-200 bg-white text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300",
+                                ].join(" ")}
+                              >
+                                {isExpired ? "Expired" : `Expires ${formatDate(submission.expiresAt)}`}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
+
+                        {(isExpired || isExpiringSoon) ? (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <ParentButton
+                              variant="soft"
+                              onClick={() => {
+                                setTemplateId(submission.templateId);
+                                setChildId(submission.childId || "");
+                              }}
+                            >
+                              Renew this form
+                            </ParentButton>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
               </div>
             )}
-          </div>
+          </ParentSection>
 
-          <div className="rounded-2xl border border-gray-200 bg-white p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Submit a Form
-            </div>
-            <form onSubmit={submit} className="mt-3 space-y-3">
-              <label className="block">
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Template
-                </div>
+          <ParentSection
+            title="Submit a new form"
+            description="Pick the form, choose the child it belongs to, and send structured notes if the template requires extra details."
+            className="relative overflow-hidden bg-gradient-to-br from-white via-white to-cyan-50/40"
+          >
+            <div className="pointer-events-none absolute right-0 top-0 h-40 w-40 rounded-full bg-emerald-100/70 blur-3xl dark:bg-emerald-900/20" />
+            <form onSubmit={submit} className="space-y-4">
+              <ParentField label="Template">
                 <select
                   value={templateId}
                   onChange={(e) => setTemplateId(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-sm dark:border-gray-600 dark:bg-gray-800"
                   disabled={loading}
                 >
-                  <option value="">Select a template…</option>
-                  {sortedTemplates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.title}
+                  <option value="">Select a template</option>
+                  {sortedTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.title}
                     </option>
                   ))}
                 </select>
-              </label>
+              </ParentField>
 
-              <label className="block">
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Child (optional)
-                </div>
+              <ParentField label="Child">
                 <select
                   value={childId}
                   onChange={(e) => setChildId(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-sm dark:border-gray-600 dark:bg-gray-800"
                   disabled={loading}
                 >
-                  <option value="">(none)</option>
-                  {children.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.firstName} {c.lastName || ""}
+                  <option value="">No child selected</option>
+                  {children.map((child) => (
+                    <option key={child.id} value={child.id}>
+                      {child.firstName} {child.lastName || ""}
                     </option>
                   ))}
                 </select>
-              </label>
+              </ParentField>
 
-              <label className="block">
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Data (JSON)
+              <div className="rounded-[24px] border border-emerald-200 bg-gradient-to-br from-emerald-50 to-cyan-50 p-4 dark:border-emerald-800 dark:bg-emerald-900/10">
+                <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
+                  Submission preview
                 </div>
+                <div className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                  <div>Form: {selectedTemplate?.title || "Choose a template"}</div>
+                  <div>For: {selectedChild ? `${selectedChild.firstName} ${selectedChild.lastName || ""}` : "Not linked to a child"}</div>
+                  <div>Description: {selectedTemplate?.description || "No template description available."}</div>
+                </div>
+              </div>
+
+              <ParentField
+                label="Additional data"
+                hint='Optional. JSON only, for example: {"allergies":"Peanuts","notes":"Updated immunization record attached"}'
+              >
                 <textarea
                   value={dataText}
                   onChange={(e) => setDataText(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-mono"
-                  rows={7}
+                  rows={8}
+                  className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-mono dark:border-gray-600 dark:bg-gray-800"
                   placeholder='{"field":"value"}'
                 />
-              </label>
+              </ParentField>
 
-              <button
-                type="submit"
-                disabled={saving || !templateId}
-                className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {saving ? "Submitting…" : "Submit"}
-              </button>
+              <ParentButton type="submit" disabled={saving || !templateId} className="w-full">
+                {saving ? "Submitting..." : "Submit form"}
+              </ParentButton>
             </form>
-          </div>
+          </ParentSection>
         </div>
       </div>
     </ParentLayout>

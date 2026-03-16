@@ -19,18 +19,33 @@ const EVENT_TYPE_LABELS = {
   OTHER: "Other",
 };
 
-const SOURCE_BADGE = {
-  event: "bg-indigo-100 text-indigo-700",
-  shift: "bg-violet-100 text-violet-700",
-  timeoff: "bg-emerald-100 text-emerald-700",
+const EVENT_TYPE_ICONS = {
+  HOLIDAY: "\ud83c\udf34",
+  FIELD_TRIP: "\ud83d\ude8c",
+  PARENT_MEETING: "\ud83e\uddd1\u200d\ud83e\udd1d\u200d\ud83e\uddd1",
+  STAFF_MEETING: "\ud83d\udcbc",
+  PROFESSIONAL_DEVELOPMENT: "\ud83c\udf93",
+  SPECIAL_EVENT: "\u2b50",
+  OTHER: "\ud83d\udcc5",
 };
 
-function fmtDate(d) { return d ? new Date(d).toLocaleDateString() : ""; }
+const SOURCE_BADGE = {
+  event: { bg: "#eef2ff", text: "#4338ca", border: "#c7d2fe", label: "Event", icon: "\ud83d\udcc5" },
+  shift: { bg: "#eff6ff", text: "#1d4ed8", border: "#bfdbfe", label: "Shift", icon: "\u23f0" },
+  timeoff: { bg: "#ecfdf5", text: "#047857", border: "#a7f3d0", label: "Time Off", icon: "\ud83c\udfd6\ufe0f" },
+};
+
+const FILTER_ITEMS = [
+  { key: "events", label: "Events", color: "#6366f1", lightBg: "#eef2ff", icon: "\ud83d\udcc5" },
+  { key: "shifts", label: "Shifts", color: "#3b82f6", lightBg: "#eff6ff", icon: "\u23f0" },
+  { key: "timeOff", label: "Time Off", color: "#10b981", lightBg: "#ecfdf5", icon: "\ud83c\udfd6\ufe0f" },
+];
+
 function toDateInput(d) { return d ? new Date(d).toISOString().split("T")[0] : ""; }
 
 const LEGEND = [
   { label: "Events", cls: "bg-indigo-100" },
-  { label: "Shifts", cls: "bg-violet-100" },
+  { label: "Shifts", cls: "bg-blue-100" },
   { label: "PTO", cls: "bg-emerald-100" },
   { label: "Sick", cls: "bg-red-100" },
   { label: "Pending", cls: "bg-amber-200" },
@@ -47,11 +62,19 @@ export default function CalendarPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [form, setForm] = useState({ title: "", description: "", startDate: "", endDate: "", allDay: true, type: "OTHER", color: "" });
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  // Auto-dismiss notifications
+  useEffect(() => {
+    if (success) { const t = setTimeout(() => setSuccess(""), 3000); return () => clearTimeout(t); }
+  }, [success]);
+  useEffect(() => {
+    if (error) { const t = setTimeout(() => setError(""), 5000); return () => clearTimeout(t); }
+  }, [error]);
 
   useEffect(() => {
     (async () => {
@@ -81,29 +104,18 @@ export default function CalendarPage() {
     if (filters.events && calData.events) {
       for (const evt of calData.events) {
         items.push({
-          id: evt.id,
-          _source: "event",
-          type: evt.type,
-          status: "ACTIVE",
-          startDate: evt.startDate,
-          endDate: evt.endDate,
-          user: evt.createdBy,
-          label: evt.title,
-          _raw: evt,
+          id: evt.id, _source: "event", type: evt.type, status: "ACTIVE",
+          startDate: evt.startDate, endDate: evt.endDate,
+          user: evt.createdBy, label: evt.title, _raw: evt,
         });
       }
     }
     if (filters.shifts && calData.shifts) {
       for (const s of calData.shifts) {
         items.push({
-          id: s.id,
-          _source: "shift",
-          type: "Shift",
-          status: "ACTIVE",
-          startDate: s.date,
-          endDate: s.date,
-          user: s.user,
-          label: `${s.user?.name || "—"} ${s.startTime}–${s.endTime}`,
+          id: s.id, _source: "shift", type: "Shift", status: "ACTIVE",
+          startDate: s.date, endDate: s.date,
+          user: s.user, label: `${s.user?.name || "\u2014"} ${s.startTime}\u2013${s.endTime}`,
           _raw: s,
         });
       }
@@ -111,14 +123,9 @@ export default function CalendarPage() {
     if (filters.timeOff && calData.timeOff) {
       for (const t of calData.timeOff) {
         items.push({
-          id: t.id,
-          _source: "timeoff",
-          type: t.type,
-          status: t.status,
-          startDate: t.startDate,
-          endDate: t.endDate,
-          user: t.user,
-          label: `${t.user?.name || "—"} (${t.type})`,
+          id: t.id, _source: "timeoff", type: t.type, status: t.status,
+          startDate: t.startDate, endDate: t.endDate,
+          user: t.user, label: `${t.user?.name || "\u2014"} (${t.type})`,
           _raw: t,
         });
       }
@@ -144,14 +151,19 @@ export default function CalendarPage() {
   function startEdit(evt) {
     setEditingEvent(evt);
     setForm({
-      title: evt.title,
-      description: evt.description || "",
-      startDate: toDateInput(evt.startDate),
-      endDate: toDateInput(evt.endDate),
-      allDay: evt.allDay,
-      type: evt.type,
-      color: evt.color || "",
+      title: evt.title, description: evt.description || "",
+      startDate: toDateInput(evt.startDate), endDate: toDateInput(evt.endDate),
+      allDay: evt.allDay, type: evt.type, color: evt.color || "",
     });
+    setShowForm(true);
+  }
+
+  function openNewEvent() {
+    resetForm();
+    if (selectedDay) {
+      const dateStr = new Date(calYear, calMonth, selectedDay).toISOString().split("T")[0];
+      setForm(f => ({ ...f, startDate: dateStr, endDate: dateStr }));
+    }
     setShowForm(true);
   }
 
@@ -164,20 +176,13 @@ export default function CalendarPage() {
     setSaving(true);
     try {
       if (editingEvent) {
-        await apiJson(`/api/v1/events/${editingEvent.id}`, {
-          method: "PUT",
-          body: JSON.stringify(form),
-        });
-        setSuccess("Event updated");
+        await apiJson(`/api/v1/events/${editingEvent.id}`, { method: "PUT", body: JSON.stringify(form) });
+        setSuccess("Event updated successfully");
       } else {
-        await apiJson("/api/v1/events", {
-          method: "POST",
-          body: JSON.stringify({ ...form, centerId }),
-        });
-        setSuccess("Event created");
+        await apiJson("/api/v1/events", { method: "POST", body: JSON.stringify({ ...form, centerId }) });
+        setSuccess("Event created successfully");
       }
-      resetForm();
-      setShowForm(false);
+      resetForm(); setShowForm(false);
       await loadCalendar();
     } catch (err) {
       setError(err.message || "Failed to save event");
@@ -197,172 +202,706 @@ export default function CalendarPage() {
   }
 
   const dayItems = getDayItems(selectedDay);
+  const selectedCenter = centers.find(c => c.id === centerId);
+  const totalEventsThisMonth = normalizedEvents.length;
+  const monthLabel = new Date(calYear, calMonth, 1).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+  const hasCenter = !!centerId;
+  const selectedDayDate = selectedDay ? new Date(calYear, calMonth, selectedDay) : null;
+  const counts = {
+    events: (calData.events || []).length,
+    shifts: (calData.shifts || []).length,
+    timeOff: (calData.timeOff || []).length,
+    pendingTimeOff: (calData.timeOff || []).filter(t => t.status === "PENDING").length,
+  };
+
+  function jumpToToday() {
+    const t = new Date();
+    setCalYear(t.getFullYear());
+    setCalMonth(t.getMonth());
+    setSelectedDay(t.getDate());
+  }
 
   return (
     <AdminLayout title="Calendar">
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--admin-text)" }}>Center Calendar</h1>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <select
-              value={centerId}
-              onChange={e => { setCenterId(e.target.value); setSelectedDay(null); }}
-              style={{ padding: "6px 10px", border: "1px solid var(--admin-border)", borderRadius: 8, fontSize: 13, background: "var(--admin-bg)", color: "var(--admin-text)" }}
-            >
-              <option value="">Select center…</option>
-              {centers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <button
-              type="button"
-              onClick={() => { resetForm(); setShowForm(!showForm); }}
-              style={{ padding: "6px 14px", background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: "pointer" }}
-            >
-              {showForm ? "Cancel" : "+ Add Event"}
-            </button>
-          </div>
-        </div>
+      <div style={{ maxWidth: 1240, margin: "0 auto", padding: "20px 16px" }}>
 
-        {error && <div style={{ padding: 10, background: "var(--admin-error-bg)", color: "var(--admin-error-text)", borderRadius: 8, marginBottom: 12, fontSize: 13 }}>{error}</div>}
-        {success && <div style={{ padding: 10, background: "var(--admin-success-bg)", color: "var(--admin-success-text)", borderRadius: 8, marginBottom: 12, fontSize: 13 }}>{success}</div>}
-
-        {/* Filter toggles */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-          {[
-            { key: "events", label: "Events", color: "#e0e7ff" },
-            { key: "shifts", label: "Shifts", color: "#ede9fe" },
-            { key: "timeOff", label: "Time Off", color: "#d1fae5" },
-          ].map(f => (
-            <label key={f.key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={filters[f.key]}
-                onChange={() => setFilters(prev => ({ ...prev, [f.key]: !prev[f.key] }))}
-              />
-              <span style={{ background: f.color, padding: "2px 8px", borderRadius: 6, fontWeight: 600, fontSize: 12 }}>{f.label}</span>
-            </label>
-          ))}
-        </div>
-
-        {/* Event form */}
-        {showForm && (
-          <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: 16, marginBottom: 16 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>{editingEvent ? "Edit Event" : "Create Event"}</div>
-            <form onSubmit={saveEvent}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <label style={{ display: "block", gridColumn: "1 / -1" }}>
-                  <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginBottom: 4 }}>Title *</div>
-                  <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                    style={{ width: "100%", padding: 8, border: "1px solid var(--admin-border)", borderRadius: 8, boxSizing: "border-box", background: "var(--admin-bg)", color: "var(--admin-text)" }} />
-                </label>
-                <label style={{ display: "block" }}>
-                  <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginBottom: 4 }}>Start Date *</div>
-                  <input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))}
-                    style={{ width: "100%", padding: 8, border: "1px solid var(--admin-border)", borderRadius: 8, boxSizing: "border-box", background: "var(--admin-bg)", color: "var(--admin-text)" }} />
-                </label>
-                <label style={{ display: "block" }}>
-                  <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginBottom: 4 }}>End Date *</div>
-                  <input type="date" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
-                    style={{ width: "100%", padding: 8, border: "1px solid var(--admin-border)", borderRadius: 8, boxSizing: "border-box", background: "var(--admin-bg)", color: "var(--admin-text)" }} />
-                </label>
-                <label style={{ display: "block" }}>
-                  <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginBottom: 4 }}>Type</div>
-                  <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
-                    style={{ width: "100%", padding: 8, border: "1px solid var(--admin-border)", borderRadius: 8, boxSizing: "border-box", background: "var(--admin-bg)", color: "var(--admin-text)" }}>
-                    {EVENT_TYPES.map(t => <option key={t} value={t}>{EVENT_TYPE_LABELS[t]}</option>)}
-                  </select>
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 20 }}>
-                  <input type="checkbox" checked={form.allDay} onChange={e => setForm(f => ({ ...f, allDay: e.target.checked }))} />
-                  <span style={{ fontSize: 13 }}>All Day</span>
-                </label>
-                <label style={{ display: "block", gridColumn: "1 / -1" }}>
-                  <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginBottom: 4 }}>Description</div>
-                  <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2}
-                    style={{ width: "100%", padding: 8, border: "1px solid var(--admin-border)", borderRadius: 8, boxSizing: "border-box", resize: "vertical", background: "var(--admin-bg)", color: "var(--admin-text)" }} />
-                </label>
+        {/* Toast notifications */}
+        {(error || success) && (
+          <div style={{
+            position: "fixed", top: 16, right: 16, zIndex: 1000,
+            maxWidth: 360, animation: "slideIn 0.25s ease-out",
+          }}>
+            {error && (
+              <div style={{
+                padding: "12px 16px", background: "var(--admin-error-bg)", color: "var(--admin-error-text)",
+                borderRadius: 10, fontSize: 13, fontWeight: 600,
+                border: "1px solid var(--admin-error-border)",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                display: "flex", alignItems: "center", gap: 8,
+              }}>
+                <span style={{ fontSize: 16 }}>\u26a0\ufe0f</span>
+                <span style={{ flex: 1 }}>{error}</span>
+                <button onClick={() => setError("")} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", fontSize: 14 }}>\u2715</button>
               </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <button type="submit" disabled={saving}
-                  style={{ padding: "8px 16px", background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
-                  {saving ? "Saving…" : editingEvent ? "Update Event" : "Create Event"}
-                </button>
-                <button type="button" onClick={() => { resetForm(); setShowForm(false); }}
-                  style={{ padding: "8px 16px", background: "var(--admin-bg-tertiary)", color: "var(--admin-text-secondary)", border: "1px solid var(--admin-border)", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
-                  Cancel
-                </button>
+            )}
+            {success && (
+              <div style={{
+                padding: "12px 16px", background: "var(--admin-success-bg)", color: "var(--admin-success-text)",
+                borderRadius: 10, fontSize: 13, fontWeight: 600,
+                border: "1px solid var(--admin-success-border)",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                display: "flex", alignItems: "center", gap: 8,
+              }}>
+                <span style={{ fontSize: 16 }}>\u2705</span>
+                <span style={{ flex: 1 }}>{success}</span>
               </div>
-            </form>
+            )}
           </div>
         )}
 
-        {/* Calendar */}
+        {/* Page header */}
+        <div
+          style={{
+            marginBottom: 20,
+            border: "1px solid var(--admin-border)",
+            borderRadius: 18,
+            padding: 18,
+            background: "linear-gradient(120deg, var(--admin-accent-bg), var(--admin-info-bg))",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              inset: -120,
+              background: "radial-gradient(circle, rgba(59,130,246,0.18), transparent 60%)",
+              opacity: 0.7,
+              pointerEvents: "none",
+            }}
+          />
+          <div
+            style={{
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 16,
+            }}
+          >
+            <div style={{ minWidth: 240 }}>
+              <div style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "6px 12px",
+                borderRadius: 999,
+                border: "1px solid var(--admin-border)",
+                background: "var(--admin-bg)",
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: "var(--admin-text-muted)",
+              }}>
+                Admin Calendar
+              </div>
+              <h1 style={{ fontSize: 28, fontWeight: 800, color: "var(--admin-text)", margin: "10px 0 0", lineHeight: 1.2 }}>
+                {monthLabel}
+              </h1>
+              <p style={{ fontSize: 13, color: "var(--admin-text-muted)", marginTop: 6 }}>
+                {selectedCenter ? `${selectedCenter.name} \u2014 ` : ""}
+                {totalEventsThisMonth} item{totalEventsThisMonth !== 1 ? "s" : ""} scheduled
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                <span style={{
+                  padding: "6px 10px",
+                  borderRadius: 999,
+                  background: "var(--admin-bg)",
+                  border: "1px solid var(--admin-border)",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "var(--admin-text-secondary)",
+                }}>
+                  {counts.events} events
+                </span>
+                <span style={{
+                  padding: "6px 10px",
+                  borderRadius: 999,
+                  background: "var(--admin-bg)",
+                  border: "1px solid var(--admin-border)",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "var(--admin-text-secondary)",
+                }}>
+                  {counts.shifts} shifts
+                </span>
+                <span style={{
+                  padding: "6px 10px",
+                  borderRadius: 999,
+                  background: "var(--admin-bg)",
+                  border: "1px solid var(--admin-border)",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "var(--admin-text-secondary)",
+                }}>
+                  {counts.timeOff} time off
+                </span>
+                {counts.pendingTimeOff > 0 && (
+                  <span style={{
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    background: "var(--admin-warning-bg)",
+                    border: "1px solid var(--admin-warning-text)",
+                    fontSize: 12,
+                    fontWeight: 800,
+                    color: "var(--admin-warning-text)",
+                  }}>
+                    {counts.pendingTimeOff} pending
+                  </span>
+                )}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              {(centers.length > 1 || (centers.length === 1 && !centerId)) && (
+                <select
+                  value={centerId}
+                  onChange={e => { setCenterId(e.target.value); setSelectedDay(null); }}
+                  style={{
+                    padding: "10px 14px",
+                    border: "1px solid var(--admin-border)",
+                    borderRadius: 12,
+                    fontSize: 13,
+                    background: "var(--admin-bg)",
+                    color: "var(--admin-text)",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    minWidth: 180,
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+                  }}
+                >
+                  <option value="">Select center\u2026</option>
+                  {centers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              )}
+              <button
+                type="button"
+                onClick={jumpToToday}
+                style={{
+                  padding: "10px 14px",
+                  background: "var(--admin-bg)",
+                  color: "var(--admin-text-secondary)",
+                  border: "1px solid var(--admin-border)",
+                  borderRadius: 12,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                Jump to today
+              </button>
+              <button
+                type="button"
+                onClick={openNewEvent}
+                disabled={!hasCenter}
+                style={{
+                  padding: "10px 18px",
+                  background: hasCenter ? "linear-gradient(90deg, #2563eb, #0ea5e9)" : "#94a3b8",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 12,
+                  fontWeight: 800,
+                  fontSize: 13,
+                  cursor: hasCenter ? "pointer" : "not-allowed",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  boxShadow: hasCenter ? "0 10px 24px rgba(37,99,235,0.2)" : "none",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
+                Add Event
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Filter pills */}
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            marginBottom: 16,
+            flexWrap: "wrap",
+            alignItems: "center",
+            padding: "10px 12px",
+            borderRadius: 14,
+            border: "1px solid var(--admin-border)",
+            background: "var(--admin-bg)",
+          }}
+        >
+          <span style={{ fontSize: 12, fontWeight: 700, color: "var(--admin-text-faint)", marginRight: 4 }}>
+            Filters
+          </span>
+          {FILTER_ITEMS.map(f => {
+            const active = filters[f.key];
+            const count = f.key === "events" ? counts.events : f.key === "shifts" ? counts.shifts : counts.timeOff;
+            return (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setFilters(prev => ({ ...prev, [f.key]: !prev[f.key] }))}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "6px 12px",
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: 800,
+                  border: active ? `2px solid ${f.color}` : "2px solid var(--admin-border)",
+                  background: active ? f.lightBg : "var(--admin-bg)",
+                  color: active ? f.color : "var(--admin-text-faint)",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  opacity: active ? 1 : 0.65,
+                }}
+              >
+                <span style={{ fontSize: 12 }}>{f.icon}</span>
+                {f.label}
+                <span style={{
+                  padding: "2px 6px",
+                  borderRadius: 999,
+                  background: active ? "#ffffff" : "var(--admin-bg-tertiary)",
+                  color: active ? f.color : "var(--admin-text-faint)",
+                  fontSize: 11,
+                  fontWeight: 800,
+                }}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Event form modal overlay */}
+        {showForm && (
+          <div style={{
+            position: "fixed", inset: 0, background: "var(--admin-modal-overlay, rgba(0,0,0,0.5))",
+            zIndex: 900, display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 16, animation: "fadeIn 0.15s ease-out",
+          }}
+            onClick={e => { if (e.target === e.currentTarget) { resetForm(); setShowForm(false); } }}
+          >
+            <div style={{
+              background: "var(--admin-bg)", borderRadius: 14, padding: 24,
+              width: "100%", maxWidth: 520, maxHeight: "85vh", overflow: "auto",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+              animation: "slideUp 0.2s ease-out",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 18, color: "var(--admin-text)" }}>
+                    {editingEvent ? "Edit Event" : "New Event"}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginTop: 2 }}>
+                    {editingEvent ? "Update the event details below" : "Fill in the details to create a new event"}
+                  </div>
+                </div>
+                <button type="button" onClick={() => { resetForm(); setShowForm(false); }}
+                  style={{
+                    width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "var(--admin-bg-tertiary)", border: "none", borderRadius: 8,
+                    cursor: "pointer", fontSize: 14, color: "var(--admin-text-muted)",
+                  }}
+                >\u2715</button>
+              </div>
+
+              <form onSubmit={saveEvent}>
+                {/* Title */}
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--admin-text-secondary)", marginBottom: 6 }}>
+                    Event Title <span style={{ color: "#dc2626" }}>*</span>
+                  </label>
+                  <input
+                    value={form.title}
+                    onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                    placeholder="e.g. Spring Break, Staff Training..."
+                    style={{
+                      width: "100%", padding: "10px 12px", border: "1px solid var(--admin-border)",
+                      borderRadius: 8, boxSizing: "border-box", fontSize: 14,
+                      background: "var(--admin-bg)", color: "var(--admin-text)",
+                      transition: "border-color 0.15s ease",
+                    }}
+                    onFocus={e => { e.target.style.borderColor = "#2563eb"; e.target.style.boxShadow = "0 0 0 3px rgba(37,99,235,0.1)"; }}
+                    onBlur={e => { e.target.style.borderColor = "var(--admin-border)"; e.target.style.boxShadow = "none"; }}
+                    autoFocus
+                  />
+                </div>
+
+                {/* Date row */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--admin-text-secondary)", marginBottom: 6 }}>
+                      Start Date <span style={{ color: "#dc2626" }}>*</span>
+                    </label>
+                    <input
+                      type="date" value={form.startDate}
+                      onChange={e => setForm(f => ({ ...f, startDate: e.target.value, endDate: f.endDate || e.target.value }))}
+                      style={{
+                        width: "100%", padding: "10px 12px", border: "1px solid var(--admin-border)",
+                        borderRadius: 8, boxSizing: "border-box", fontSize: 13,
+                        background: "var(--admin-bg)", color: "var(--admin-text)",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--admin-text-secondary)", marginBottom: 6 }}>
+                      End Date <span style={{ color: "#dc2626" }}>*</span>
+                    </label>
+                    <input
+                      type="date" value={form.endDate}
+                      onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
+                      min={form.startDate || undefined}
+                      style={{
+                        width: "100%", padding: "10px 12px", border: "1px solid var(--admin-border)",
+                        borderRadius: 8, boxSizing: "border-box", fontSize: 13,
+                        background: "var(--admin-bg)", color: "var(--admin-text)",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Type + All Day row */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, marginBottom: 14, alignItems: "end" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--admin-text-secondary)", marginBottom: 6 }}>
+                      Event Type
+                    </label>
+                    <select
+                      value={form.type}
+                      onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+                      style={{
+                        width: "100%", padding: "10px 12px", border: "1px solid var(--admin-border)",
+                        borderRadius: 8, boxSizing: "border-box", fontSize: 13,
+                        background: "var(--admin-bg)", color: "var(--admin-text)", cursor: "pointer",
+                      }}
+                    >
+                      {EVENT_TYPES.map(t => (
+                        <option key={t} value={t}>{EVENT_TYPE_ICONS[t]} {EVENT_TYPE_LABELS[t]}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <label style={{
+                    display: "flex", alignItems: "center", gap: 8, padding: "10px 14px",
+                    background: form.allDay ? "var(--admin-accent-bg)" : "var(--admin-bg-tertiary)",
+                    borderRadius: 8, cursor: "pointer",
+                    border: form.allDay ? "1px solid var(--admin-accent-text)" : "1px solid var(--admin-border)",
+                    transition: "all 0.15s ease",
+                  }}>
+                    <input
+                      type="checkbox" checked={form.allDay}
+                      onChange={e => setForm(f => ({ ...f, allDay: e.target.checked }))}
+                      style={{ accentColor: "#2563eb" }}
+                    />
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--admin-text-secondary)", whiteSpace: "nowrap" }}>All Day</span>
+                  </label>
+                </div>
+
+                {/* Description */}
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--admin-text-secondary)", marginBottom: 6 }}>
+                    Description <span style={{ fontSize: 11, fontWeight: 400, color: "var(--admin-text-faint)" }}>(optional)</span>
+                  </label>
+                  <textarea
+                    value={form.description}
+                    onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                    placeholder="Add any additional details..."
+                    rows={3}
+                    style={{
+                      width: "100%", padding: "10px 12px", border: "1px solid var(--admin-border)",
+                      borderRadius: 8, boxSizing: "border-box", resize: "vertical", fontSize: 13,
+                      background: "var(--admin-bg)", color: "var(--admin-text)",
+                      fontFamily: "inherit",
+                    }}
+                  />
+                </div>
+
+                {/* Actions */}
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <button type="button" onClick={() => { resetForm(); setShowForm(false); }}
+                    style={{
+                      padding: "10px 20px", background: "var(--admin-bg-tertiary)",
+                      color: "var(--admin-text-secondary)", border: "1px solid var(--admin-border)",
+                      borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer",
+                    }}>
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={saving}
+                    style={{
+                      padding: "10px 24px", background: "#2563eb", color: "#fff",
+                      border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13,
+                      cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1,
+                      boxShadow: "0 2px 8px rgba(37,99,235,0.25)",
+                      display: "flex", alignItems: "center", gap: 6,
+                    }}>
+                    {saving && <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />}
+                    {saving ? "Saving\u2026" : editingEvent ? "Update Event" : "Create Event"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Calendar + Day detail */}
         {centerId ? (
-          <div style={{ display: "grid", gridTemplateColumns: selectedDay ? "1fr minmax(0, 320px)" : "1fr", gap: 16 }}>
-            <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: 16 }}>
+          <div className="admin-calendar-grid" style={{ display: "grid", gridTemplateColumns: selectedDay ? "1fr 340px" : "1fr", gap: 20, alignItems: "start" }}>
+            {/* Calendar card */}
+            <div style={{
+              background: "var(--admin-bg)", border: "1px solid var(--admin-border)",
+              borderRadius: 18, padding: 20,
+              boxShadow: "0 10px 24px rgba(15,23,42,0.06)",
+            }}>
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 14,
+                paddingBottom: 8,
+                borderBottom: "1px solid var(--admin-border-light)",
+              }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "var(--admin-text-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    Calendar view
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: "var(--admin-text)" }}>
+                    {monthLabel}
+                  </div>
+                </div>
+                {selectedDayDate && (
+                  <div style={{
+                    padding: "6px 10px",
+                    borderRadius: 10,
+                    background: "var(--admin-bg-secondary)",
+                    border: "1px solid var(--admin-border)",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: "var(--admin-text-secondary)",
+                  }}>
+                    Selected: {selectedDayDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                  </div>
+                )}
+              </div>
               <MonthlyCalendar
                 year={calYear}
                 month={calMonth}
                 events={normalizedEvents}
                 onMonthChange={(y, m) => { setCalYear(y); setCalMonth(m); setSelectedDay(null); }}
                 onDayClick={setSelectedDay}
+                selectedDay={selectedDay}
                 legendItems={LEGEND}
               />
             </div>
 
             {/* Day detail panel */}
             {selectedDay && (
-              <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: 16, alignSelf: "start" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>
-                    {new Date(calYear, calMonth, selectedDay).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+              <div className="admin-calendar-daypanel" style={{
+                background: "var(--admin-bg)", border: "1px solid var(--admin-border)",
+                borderRadius: 16, overflow: "hidden",
+                boxShadow: "0 10px 24px rgba(15,23,42,0.08)",
+                animation: "slideIn 0.2s ease-out",
+                position: "sticky", top: 16,
+              }}>
+                {/* Day header */}
+                <div style={{
+                  padding: "16px 20px", background: "var(--admin-bg-secondary)",
+                  borderBottom: "1px solid var(--admin-border)",
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: "var(--admin-text-faint)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      {selectedDayDate.toLocaleDateString(undefined, { weekday: "long" })}
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: "var(--admin-text)", lineHeight: 1.2 }}>
+                      {selectedDayDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                    </div>
                   </div>
                   <button type="button" onClick={() => setSelectedDay(null)} aria-label="Close day detail"
-                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--admin-text-faint)" }}>✕</button>
+                    style={{
+                      width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center",
+                      background: "var(--admin-bg-tertiary)", border: "none", borderRadius: 8,
+                      cursor: "pointer", fontSize: 12, color: "var(--admin-text-muted)",
+                      transition: "all 0.15s ease",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = "var(--admin-border)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "var(--admin-bg-tertiary)"; }}
+                  >\u2715</button>
                 </div>
-                {dayItems.length === 0 && <div style={{ fontSize: 13, color: "var(--admin-text-faint)" }}>No items this day</div>}
-                {dayItems.map(item => (
-                  <div key={item.id} style={{ padding: 8, borderRadius: 8, marginBottom: 8, border: "1px solid var(--admin-border-light)", background: "var(--admin-card-bg)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 8 }}>
-                      <div>
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 4, marginRight: 6 }}
-                          className={SOURCE_BADGE[item._source] || "bg-gray-100 text-gray-600"}>
-                          {item._source === "event" ? "Event" : item._source === "shift" ? "Shift" : "Time Off"}
-                        </span>
-                        <span style={{ fontSize: 13, fontWeight: 600 }}>{item.label}</span>
-                      </div>
-                      {item._source === "event" && (
-                        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                          <button type="button" onClick={() => startEdit(item._raw)}
-                            style={{ fontSize: 11, padding: "2px 8px", background: "var(--admin-accent-bg)", color: "var(--admin-accent-text)", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>
-                            Edit
-                          </button>
-                          <button type="button" onClick={() => setDeleteTarget(item.id)}
-                            style={{ fontSize: 11, padding: "2px 8px", background: "var(--admin-danger-accent-bg)", color: "var(--admin-danger-accent-text)", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>
-                            Del
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    {item._raw?.description && (
-                      <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginTop: 4 }}>{item._raw.description}</div>
-                    )}
-                    {item._source === "shift" && (
-                      <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginTop: 4 }}>Position: {item._raw.position}{item._raw.notes ? ` • ${item._raw.notes}` : ""}</div>
-                    )}
-                    {item._source === "timeoff" && (
-                      <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginTop: 4 }}>Status: {item._raw.status}{item._raw.reason ? ` • ${item._raw.reason}` : ""}</div>
-                    )}
+
+                {/* Day items */}
+                <div style={{ padding: "12px 16px" }}>
+                  <div style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    marginBottom: 12, padding: "0 4px",
+                  }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--admin-text-muted)" }}>
+                      {dayItems.length} item{dayItems.length !== 1 ? "s" : ""}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={openNewEvent}
+                      style={{
+                        fontSize: 11, fontWeight: 800, padding: "6px 12px",
+                        background: "linear-gradient(90deg, #2563eb, #0ea5e9)",
+                        color: "#fff",
+                        border: "none", borderRadius: 8, cursor: "pointer",
+                      }}
+                    >
+                      + Add
+                    </button>
                   </div>
-                ))}
+
+                  {dayItems.length === 0 && (
+                    <div style={{
+                      textAlign: "center", padding: "28px 16px",
+                      color: "var(--admin-text-faint)", fontSize: 13,
+                    }}>
+                      <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.4 }}>\ud83d\udcc5</div>
+                      <div style={{ fontWeight: 600 }}>No events this day</div>
+                      <div style={{ fontSize: 12, marginTop: 4 }}>Click "+ Add" to create one</div>
+                    </div>
+                  )}
+
+                  {dayItems.map(item => {
+                    const badge = SOURCE_BADGE[item._source] || SOURCE_BADGE.event;
+                    return (
+                      <div key={item.id} style={{
+                        padding: "12px 14px", borderRadius: 10, marginBottom: 8,
+                        border: `1px solid ${badge.border}`,
+                        background: badge.bg,
+                        transition: "transform 0.1s ease",
+                      }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 8 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                              <span style={{ fontSize: 12 }}>{badge.icon}</span>
+                              <span style={{
+                                fontSize: 10, fontWeight: 800, padding: "2px 7px", borderRadius: 4,
+                                background: badge.bg, color: badge.text, textTransform: "uppercase",
+                                letterSpacing: "0.03em",
+                                border: `1px solid ${badge.border}`,
+                              }}>
+                                {badge.label}
+                              </span>
+                              {item._source === "timeoff" && (
+                                <span style={{
+                                  fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4,
+                                  background: item._raw.status === "APPROVED" ? "var(--admin-success-bg)" : "var(--admin-warning-bg)",
+                                  color: item._raw.status === "APPROVED" ? "var(--admin-success-text)" : "var(--admin-warning-text)",
+                                }}>
+                                  {item._raw.status}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--admin-text)", lineHeight: 1.3 }}>
+                              {item.label}
+                            </div>
+                          </div>
+                          {item._source === "event" && (
+                            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                              <button type="button" onClick={() => startEdit(item._raw)}
+                                style={{
+                                  fontSize: 11, padding: "4px 10px",
+                                  background: "var(--admin-bg)", color: "var(--admin-accent-text)",
+                                  border: "1px solid var(--admin-border)", borderRadius: 6,
+                                  cursor: "pointer", fontWeight: 700,
+                                }}>
+                                Edit
+                              </button>
+                              <button type="button" onClick={() => setDeleteTarget(item.id)}
+                                style={{
+                                  fontSize: 11, padding: "4px 10px",
+                                  background: "var(--admin-bg)", color: "var(--admin-danger-accent-text)",
+                                  border: "1px solid var(--admin-border)", borderRadius: 6,
+                                  cursor: "pointer", fontWeight: 700,
+                                }}>
+                                Del
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {item._raw?.description && (
+                          <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginTop: 6, lineHeight: 1.4 }}>
+                            {item._raw.description}
+                          </div>
+                        )}
+                        {item._source === "shift" && (
+                          <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginTop: 6, display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ fontWeight: 600 }}>Position:</span> {item._raw.position}{item._raw.notes ? ` \u2022 ${item._raw.notes}` : ""}
+                          </div>
+                        )}
+                        {item._source === "timeoff" && item._raw.reason && (
+                          <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginTop: 6, lineHeight: 1.4 }}>
+                            {item._raw.reason}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
         ) : (
-          <div style={{ textAlign: "center", padding: 40, color: "var(--admin-text-faint)", fontSize: 14 }}>
-            Select a center to view the calendar
+          <div style={{
+            textAlign: "center", padding: "60px 20px",
+            background: "var(--admin-bg)", border: "1px solid var(--admin-border)",
+            borderRadius: 14,
+          }}>
+            <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.3 }}>\ud83d\udcc5</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--admin-text-secondary)", marginBottom: 6 }}>
+              Select a center to view the calendar
+            </div>
+            <div style={{ fontSize: 13, color: "var(--admin-text-faint)" }}>
+              Choose a center from the dropdown above to get started
+            </div>
           </div>
         )}
       </div>
+
+      {/* CSS animations */}
+      <style jsx global>{`
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateX(8px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(12px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        @media (max-width: 960px) {
+          .admin-calendar-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .admin-calendar-daypanel {
+            position: static !important;
+          }
+        }
+      `}</style>
+
       <ConfirmDialog
         open={!!deleteTarget}
         title="Delete Event"

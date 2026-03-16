@@ -35,7 +35,7 @@ const CURRICULUM_PACKAGES = [
     title: "Preschool",
     description: "Dedicated nurturing for your toddler child with a 1:4 caretaker/infant focus.",
     icon: RocketIcon,
-    color: "bg-violet-100 text-violet-700",
+    color: "bg-blue-100 text-blue-800",
   },
 ];
 

@@ -285,12 +285,12 @@ const TILE_COLORS = {
     arrow: "group-hover:text-rose-600",
   },
   violet: {
-    bg: "bg-violet-50",
-    border: "border-violet-200",
-    hover: "hover:bg-violet-100/70 hover:border-violet-300",
-    icon: "bg-violet-100 text-violet-600",
-    value: "text-violet-900",
-    arrow: "group-hover:text-violet-600",
+    bg: "bg-blue-50",
+    border: "border-blue-200",
+    hover: "hover:bg-blue-100/70 hover:border-blue-300",
+    icon: "bg-blue-100 text-blue-700",
+    value: "text-blue-900",
+    arrow: "group-hover:text-blue-700",
   },
 };
 

@@ -496,7 +496,7 @@ function TaskChecklistTracker({ centerId, children }) {
                                   </a>
                                 )}
                                 {task.mediaLink && (
-                                  <a href={task.mediaLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700 hover:bg-violet-100">
+                                  <a href={task.mediaLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-100">
                                     Training Video
                                   </a>
                                 )}
@@ -536,7 +536,7 @@ function TaskChecklistTracker({ centerId, children }) {
                                     </a>
                                   )}
                                   {task.mediaLink && (
-                                    <a href={task.mediaLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700 hover:bg-violet-100">
+                                    <a href={task.mediaLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-100">
                                       Training Video
                                     </a>
                                   )}
@@ -729,7 +729,7 @@ function TeacherDailyChecklist({ centerId }) {
                               </a>
                             )}
                             {item.mediaLink && (
-                              <a href={item.mediaLink} target="_blank" rel="noopener noreferrer" className="rounded-md bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 hover:bg-violet-100">
+                              <a href={item.mediaLink} target="_blank" rel="noopener noreferrer" className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 hover:bg-blue-100">
                                 Video
                               </a>
                             )}

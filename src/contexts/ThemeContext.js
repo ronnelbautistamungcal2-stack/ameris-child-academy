@@ -4,6 +4,7 @@ const ThemeContext = createContext({ theme: "light", toggleTheme: () => {} });
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState("light");
+  const [isThemeReady, setIsThemeReady] = useState(false);
 
   // Read saved theme on mount
   useEffect(() => {
@@ -13,10 +14,13 @@ export function ThemeProvider({ children }) {
     } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
       setTheme("dark");
     }
+    setIsThemeReady(true);
   }, []);
 
   // Apply class to <html> whenever theme changes
   useEffect(() => {
+    if (!isThemeReady) return;
+
     const root = document.documentElement;
     if (theme === "dark") {
       root.classList.add("dark");
@@ -24,7 +28,7 @@ export function ThemeProvider({ children }) {
       root.classList.remove("dark");
     }
     localStorage.setItem("theme", theme);
-  }, [theme]);
+  }, [theme, isThemeReady]);
 
   function toggleTheme() {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));

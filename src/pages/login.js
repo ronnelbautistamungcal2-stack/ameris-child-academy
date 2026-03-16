@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/router";
 import Link from "next/link";
+import { useTheme } from "@/contexts/ThemeContext";
+import { MoonIcon, SunIcon } from "@/components/public/icons";
+import AmerisLogo from "@/components/ui/AmerisLogo";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -10,6 +13,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+  const { theme, toggleTheme } = useTheme();
 
   const callbackUrlRaw = router.query?.callbackUrl;
   const callbackUrl =
@@ -50,9 +54,9 @@ export default function Login() {
     <div className="relative min-h-screen overflow-hidden bg-slate-50 dark:bg-gray-950">
       {/* Background decoration */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-24 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-violet-200/50 blur-2xl dark:bg-violet-900/30" />
-        <div className="absolute -bottom-24 left-0 h-[420px] w-[420px] rounded-full bg-emerald-200/40 blur-2xl dark:bg-emerald-900/20" />
-        <div className="absolute -bottom-24 right-0 h-[420px] w-[420px] rounded-full bg-yellow-200/30 blur-2xl dark:bg-yellow-900/20" />
+        <div className="absolute -top-24 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-blue-200/50 blur-2xl dark:bg-blue-900/30" />
+        <div className="absolute -bottom-24 left-0 h-[420px] w-[420px] rounded-full bg-sky-200/40 blur-2xl dark:bg-sky-900/20" />
+        <div className="absolute -bottom-24 right-0 h-[420px] w-[420px] rounded-full bg-amber-200/30 blur-2xl dark:bg-amber-900/20" />
         <div className="absolute left-10 top-28 h-10 w-28 rounded-full bg-white/70 shadow-sm dark:bg-gray-800/50" />
         <div className="absolute left-36 top-20 h-8 w-20 rounded-full bg-white/70 shadow-sm dark:bg-gray-800/50" />
         <div className="absolute right-24 top-24 h-10 w-28 rounded-full bg-white/70 shadow-sm dark:bg-gray-800/50" />
@@ -63,20 +67,28 @@ export default function Login() {
       <header className="relative z-10 px-6 py-6">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-violet-100 text-sm font-extrabold text-violet-700 dark:bg-violet-900 dark:text-violet-300">
-              ACA
-            </div>
+            <AmerisLogo size="sm" showText={false} className="h-10 w-10 rounded-2xl" />
             <div>
               <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">Ameris Academy</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">Childcare</div>
             </div>
           </Link>
-          <Link
-            href="/signup"
-            className="text-sm font-semibold text-violet-700 hover:text-violet-800 dark:text-violet-400 dark:hover:text-violet-300"
-          >
-            Sign up
-          </Link>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+            </button>
+            <Link
+              href="/signup"
+              className="text-sm font-semibold text-blue-800 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+            >
+              Sign up
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -91,9 +103,7 @@ export default function Login() {
           {/* Login card */}
           <div className="rounded-3xl border border-gray-200 bg-white/90 p-8 shadow-sm backdrop-blur animate-[modalIn_0.4s_ease-out] dark:border-gray-700 dark:bg-gray-900/90">
             <div className="text-center">
-              <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-violet-100 text-lg font-extrabold text-violet-700 dark:bg-violet-900 dark:text-violet-300">
-                ACA
-              </div>
+              <AmerisLogo size="md" showText={false} className="mx-auto h-14 w-14 rounded-2xl shadow-sm" />
               <h1 className="mt-4 text-2xl font-extrabold text-gray-900 dark:text-gray-100">Welcome back</h1>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 Sign in to your Ameris Academy account
@@ -128,7 +138,7 @@ export default function Login() {
                     required
                     placeholder="you@example.com"
                     autoComplete="email"
-                    className="w-full rounded-2xl border border-gray-200 py-3 pl-12 pr-4 text-sm focus:border-violet-300 focus:outline-none focus:ring-1 focus:ring-violet-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500 dark:focus:border-violet-600 dark:focus:ring-violet-600"
+                    className="w-full rounded-2xl border border-gray-200 py-3 pl-12 pr-4 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500 dark:focus:border-blue-600 dark:focus:ring-blue-600"
                   />
                 </div>
               </label>
@@ -153,7 +163,7 @@ export default function Login() {
                     required
                     placeholder="Enter your password"
                     autoComplete="current-password"
-                    className="w-full rounded-2xl border border-gray-200 py-3 pl-12 pr-12 text-sm focus:border-violet-300 focus:outline-none focus:ring-1 focus:ring-violet-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500 dark:focus:border-violet-600 dark:focus:ring-violet-600"
+                    className="w-full rounded-2xl border border-gray-200 py-3 pl-12 pr-12 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500 dark:focus:border-blue-600 dark:focus:ring-blue-600"
                   />
                   <button
                     type="button"
@@ -183,7 +193,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-2 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-pink-500 px-4 py-3 text-sm font-extrabold text-white transition-all hover:from-violet-700 hover:to-pink-600 hover:shadow-lg hover:shadow-violet-600/25 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-800 to-sky-600 px-4 py-3 text-sm font-extrabold text-white transition-all hover:from-blue-900 hover:to-sky-700 hover:shadow-lg hover:shadow-blue-800/25 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading && (
                   <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -197,7 +207,7 @@ export default function Login() {
 
             <div className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
               Don&apos;t have an account?{" "}
-              <Link href="/signup" className="font-semibold text-violet-700 hover:text-violet-800 dark:text-violet-400 dark:hover:text-violet-300">
+              <Link href="/signup" className="font-semibold text-blue-800 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300">
                 Create one
               </Link>
             </div>
@@ -212,7 +222,7 @@ export default function Login() {
                   { label: "Parents", color: "bg-sky-50 text-sky-700" },
                   { label: "Teachers", color: "bg-emerald-50 text-emerald-700" },
                   { label: "Coaches", color: "bg-indigo-50 text-indigo-700" },
-                  { label: "Admin", color: "bg-violet-50 text-violet-700" },
+                  { label: "Admin", color: "bg-blue-50 text-blue-800" },
                 ].map((portal) => (
                   <div
                     key={portal.label}
@@ -273,18 +283,18 @@ function LeftIllustration() {
       <div className="rounded-[48px] bg-white/60 p-8 shadow-sm backdrop-blur dark:bg-gray-800/60">
         <svg viewBox="0 0 200 200" className="h-auto w-full">
           {/* Building blocks / daycare */}
-          <rect x="30" y="120" width="140" height="60" rx="12" fill="#DDD6FE" />
-          <rect x="50" y="90" width="100" height="50" rx="10" fill="#C4B5FD" />
-          <rect x="70" y="65" width="60" height="40" rx="8" fill="#A78BFA" />
+          <rect x="30" y="120" width="140" height="60" rx="12" fill="#BFDBFE" />
+          <rect x="50" y="90" width="100" height="50" rx="10" fill="#93C5FD" />
+          <rect x="70" y="65" width="60" height="40" rx="8" fill="#3B82F6" />
           {/* Roof */}
-          <polygon points="100,40 55,68 145,68" fill="#7C3AED" />
+          <polygon points="100,40 55,68 145,68" fill="#1E3A8A" />
           {/* Door */}
-          <rect x="85" y="140" width="30" height="40" rx="4" fill="#F5F3FF" />
+          <rect x="85" y="140" width="30" height="40" rx="4" fill="#EFF6FF" />
           {/* Windows */}
-          <rect x="55" y="130" width="18" height="18" rx="3" fill="#F5F3FF" />
-          <rect x="127" y="130" width="18" height="18" rx="3" fill="#F5F3FF" />
-          <rect x="70" y="100" width="18" height="18" rx="3" fill="#F5F3FF" />
-          <rect x="112" y="100" width="18" height="18" rx="3" fill="#F5F3FF" />
+          <rect x="55" y="130" width="18" height="18" rx="3" fill="#EFF6FF" />
+          <rect x="127" y="130" width="18" height="18" rx="3" fill="#EFF6FF" />
+          <rect x="70" y="100" width="18" height="18" rx="3" fill="#EFF6FF" />
+          <rect x="112" y="100" width="18" height="18" rx="3" fill="#EFF6FF" />
           {/* Sun */}
           <circle cx="165" cy="35" r="16" fill="#FCD34D" />
           <circle cx="165" cy="35" r="10" fill="#FBBF24" />

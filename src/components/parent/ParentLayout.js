@@ -44,7 +44,7 @@ export default function ParentLayout({ title, children }) {
 
   return (
     <AppShell
-      title={title || "Parent"}
+      title={title ? `Parent - ${title}` : "Parent"}
       userName={session?.user?.name || session?.user?.email}
       userLabel={session?.user?.email}
       userImageUrl={session?.user?.pictureUrl}

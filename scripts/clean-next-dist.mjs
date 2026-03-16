@@ -2,7 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 
 const projectRoot = process.cwd();
-const targets = [".next-build", ".next"].map((p) => path.join(projectRoot, p));
+const targets = [".next-build", ".next-dev", ".next"].map((p) => path.join(projectRoot, p));
 
 function isRetriable(err) {
   const code = err?.code;
@@ -65,4 +65,3 @@ for (const r of results) {
     );
   }
 }
-

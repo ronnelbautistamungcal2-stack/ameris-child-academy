@@ -40,7 +40,7 @@ const DOMAIN_LABELS = {
 const LEVEL_NAMES = { 1: "Emerging", 2: "Developing", 3: "Proficient", 4: "Advanced" };
 const LEVEL_BADGE = {
   1: "bg-amber-100 text-amber-800", 2: "bg-sky-100 text-sky-800",
-  3: "bg-emerald-100 text-emerald-800", 4: "bg-violet-100 text-violet-800",
+  3: "bg-emerald-100 text-emerald-800", 4: "bg-blue-100 text-blue-900",
 };
 
 function extractDailyGrade(activity) {
@@ -603,6 +603,22 @@ export default function TeacherChildDetailPage() {
     () => reportActivities.filter((a) => ["MEAL", "SNACK", "BOTTLE"].includes(a.type)).slice(0, 5),
     [reportActivities],
   );
+  const attendanceSummary = useMemo(() => {
+    const sorted = [...arr(attendanceHistory)].sort((a, b) => new Date(b.day) - new Date(a.day));
+    const total = sorted.length;
+    const present = sorted.filter((r) => !!r.checkedInAt).length;
+    const rate = total ? Math.round((present / total) * 100) : null;
+    return { total, present, rate, lastDay: sorted[0]?.day || "" };
+  }, [attendanceHistory]);
+  const latestActivity = useMemo(() => reportActivities[0] || null, [reportActivities]);
+  const latestActivityLabel = useMemo(
+    () => (latestActivity ? teacherActivityTitle(latestActivity, 0) : ""),
+    [latestActivity],
+  );
+  const latestActivityTime = useMemo(
+    () => (latestActivity?.createdAt ? formatDateTime(latestActivity.createdAt) : ""),
+    [latestActivity],
+  );
 
   const childVisual = useMemo(() => {
     const seed = hashText(`${child?.id || ""}:${child?.firstName || ""}:${childAgeGroupKey}`);
@@ -626,6 +642,13 @@ export default function TeacherChildDetailPage() {
       ring: hexToRgba(theme.accent, 0.35),
     };
   }, [child?.firstName, child?.id, childAgeGroupKey, completedSteps.length, stepRows]);
+  const classroomLabel =
+    child?.classRoom?.name || child?.classRoomName || child?.classRoomId || "Unassigned";
+  const ageGroupLabel = AGE_GROUPS.find((g) => g.key === childAgeGroupKey)?.label || "Unknown";
+  const completionPct = stepRows.length ? pct(completedSteps.length, stepRows.length) : null;
+  const enrollmentLabel = child?.enrollmentStartDate
+    ? `${formatDate(child.enrollmentStartDate)} - ${child.enrollmentEndDate ? formatDate(child.enrollmentEndDate) : "Present"}`
+    : "Not set";
 
   if (loading) {
     return (
@@ -648,49 +671,94 @@ export default function TeacherChildDetailPage() {
   return (
     <TeacherLayout title={`Child: ${fullName(child)}`}>
       <div className="space-y-4">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Child Profile</div>
-              <h2 className="mt-1 text-xl font-extrabold text-gray-900">{fullName(child)}</h2>
-              <div className="mt-1 text-sm text-gray-600">
-                DOB: {formatDate(child.birthDate)} | Age group: {AGE_GROUPS.find((g) => g.key === childAgeGroupKey)?.label || "Unknown"}
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <div className="p-5" style={{ background: childVisual.gradient }}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <div
+                    className="flex h-14 w-14 items-center justify-center rounded-full text-lg font-extrabold"
+                    style={{ background: childVisual.soft, color: childVisual.accentDark, boxShadow: `0 0 0 3px ${childVisual.ring}` }}
+                  >
+                    {String(child.firstName || "?").slice(0, 1)}
+                  </div>
+                  <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-gray-600 shadow-sm">
+                    {ageGroupLabel}
+                  </span>
+                </div>
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Child Profile</div>
+                  <h2 className="mt-1 text-2xl font-extrabold text-gray-900">{fullName(child)}</h2>
+                  <div className="mt-1 text-sm text-gray-600">
+                    DOB: {formatDate(child.birthDate)} | Age group: {ageGroupLabel} | Classroom: {classroomLabel}
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link href="/teacher/classroom" className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-extrabold text-gray-800 hover:bg-gray-50">Back to classroom</Link>
+                <Link href={`/teacher/logs?centerId=${encodeURIComponent(child.centerId || "")}&childId=${encodeURIComponent(child.id)}`} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-extrabold text-white hover:bg-blue-700">Daily logging</Link>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Link href="/teacher/classroom" className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-extrabold text-gray-800 hover:bg-gray-50">Back to classroom</Link>
-              <Link href={`/teacher/logs?centerId=${encodeURIComponent(child.centerId || "")}&childId=${encodeURIComponent(child.id)}`} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-extrabold text-white hover:bg-blue-700">Daily logging</Link>
+            {error ? <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div> : null}
+          </div>
+          <div className="border-t border-gray-200 bg-white/90 p-4">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <ProfileStatCard
+                label="Milestones"
+                value={completionPct !== null ? `${completionPct}%` : "-"}
+                helper={stepRows.length ? `${completedSteps.length}/${stepRows.length} complete` : "No milestones assigned"}
+                accent={childVisual.accent}
+              />
+              <ProfileStatCard
+                label="Overdue steps"
+                value={String(overdueSteps.length)}
+                helper={overdueSteps.length ? "Needs attention" : "All caught up"}
+                accent="#ef4444"
+              />
+              <ProfileStatCard
+                label="Attendance"
+                value={attendanceSummary.rate !== null ? `${attendanceSummary.rate}%` : "-"}
+                helper={attendanceSummary.total ? `${attendanceSummary.present}/${attendanceSummary.total} days present` : "No attendance data"}
+                accent="#10b981"
+              />
+              <ProfileStatCard
+                label="Latest log"
+                value={latestActivityTime || "No logs"}
+                helper={latestActivityLabel || "Daily logging pending"}
+                accent="#6366f1"
+              />
             </div>
           </div>
-          {error ? <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div> : null}
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-2">
-            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Profile</div>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Profile</div>
+                <p className="mt-1 text-sm text-gray-600">Key details, care notes, and enrollment status.</p>
+              </div>
+              <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ backgroundColor: childVisual.soft, color: childVisual.accentDark }}>
+                {childVisual.name} theme
+              </span>
+            </div>
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <InfoCard label="Name" value={fullName(child)} />
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Picture</div>
-                <div className="mt-2 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-sm font-extrabold text-blue-800">{String(child.firstName || "?").slice(0, 1)}</div>
-                  <div className="text-sm text-gray-600">Child photos are tracked in daily logs.</div>
-                </div>
-              </div>
+              <InfoCard label="Classroom" value={classroomLabel} />
               <InfoCard label="DOB" value={formatDate(child.birthDate)} />
+              <InfoCard label="Age group" value={ageGroupLabel} />
               <InfoCard label="Parents" value={child.parent?.name || child.parent?.email || "No parent linked"} />
               <InfoCard label="Emergency contact" value={child.emergencyContact || "Not provided"} />
               <InfoCard label="Allergies" value={child.allergies || "None listed"} />
-              <InfoCard label="Enrollment" value={child.enrollmentStartDate ? `${formatDate(child.enrollmentStartDate)} — ${child.enrollmentEndDate ? formatDate(child.enrollmentEndDate) : "Present"}` : "Not set"} />
+              <InfoCard label="Enrollment" value={enrollmentLabel} />
             </div>
 
             <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Health assessment</div>
-              {docsHealth.length ? (
-                <ul className="mt-2 space-y-2">{docsHealth.map((doc, idx) => <li key={`${doc.url}-${idx}`}><a href={doc.url} target="_blank" rel="noreferrer" className="text-sm font-semibold text-blue-700 hover:underline">{doc.originalName || `Document ${idx + 1}`}</a></li>)}</ul>
-              ) : (
-                <div className="mt-2 text-sm text-gray-600">No health assessment documents uploaded.</div>
-              )}
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Picture</div>
+              <div className="mt-2 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-sm font-extrabold text-blue-800">{String(child.firstName || "?").slice(0, 1)}</div>
+                <div className="text-sm text-gray-600">Child photos are tracked in daily logs.</div>
+              </div>
             </div>
 
             {isInfant ? (
@@ -706,35 +774,50 @@ export default function TeacherChildDetailPage() {
             ) : null}
           </div>
 
-          <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Enrollment documents</div>
-            {docsEnrollment.length ? (
-              <ul className="mt-3 space-y-2">{docsEnrollment.map((doc, idx) => <li key={`${doc.url}-${idx}`}><a href={doc.url} target="_blank" rel="noreferrer" className="text-sm font-semibold text-blue-700 hover:underline">{doc.originalName || `Enrollment document ${idx + 1}`}</a></li>)}</ul>
-            ) : (
-              <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">No enrollment documents uploaded.</div>
-            )}
-          </div>
-
-          {childPermissions.length > 0 && (
-            <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Permissions</div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {childPermissions.map((p) => (
-                  <span
-                    key={p.id}
-                    className={[
-                      "rounded-full px-2 py-0.5 text-xs font-semibold",
-                      p.status === "GRANTED" ? "bg-green-100 text-green-800"
-                        : p.status === "DENIED" ? "bg-red-100 text-red-800"
-                        : "bg-gray-200 text-gray-600",
-                    ].join(" ")}
-                  >
-                    {p.permissionType.replace(/_/g, " ")} — {p.status}
-                  </span>
-                ))}
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Documents</div>
+              <div className="mt-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">Health assessment</div>
+                {docsHealth.length ? (
+                  <ul className="mt-2 space-y-2">{docsHealth.map((doc, idx) => <li key={`${doc.url}-${idx}`}><a href={doc.url} target="_blank" rel="noreferrer" className="text-sm font-semibold text-blue-700 hover:underline">{doc.originalName || `Document ${idx + 1}`}</a></li>)}</ul>
+                ) : (
+                  <div className="mt-2 text-sm text-gray-600">No health assessment documents uploaded.</div>
+                )}
+              </div>
+              <div className="mt-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">Enrollment documents</div>
+                {docsEnrollment.length ? (
+                  <ul className="mt-2 space-y-2">{docsEnrollment.map((doc, idx) => <li key={`${doc.url}-${idx}`}><a href={doc.url} target="_blank" rel="noreferrer" className="text-sm font-semibold text-blue-700 hover:underline">{doc.originalName || `Enrollment document ${idx + 1}`}</a></li>)}</ul>
+                ) : (
+                  <div className="mt-2 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">No enrollment documents uploaded.</div>
+                )}
               </div>
             </div>
-          )}
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Permissions</div>
+              {childPermissions.length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {childPermissions.map((p) => (
+                    <span
+                      key={p.id}
+                      className={[
+                        "rounded-full px-2 py-0.5 text-xs font-semibold",
+                        p.status === "GRANTED" ? "bg-green-100 text-green-800"
+                          : p.status === "DENIED" ? "bg-red-100 text-red-800"
+                          : "bg-gray-200 text-gray-600",
+                      ].join(" ")}
+                    >
+                      {p.permissionType.replace(/_/g, " ")} - {p.status}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-2 text-sm text-gray-600">No permissions recorded.</div>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="rounded-2xl border border-gray-200 bg-white p-5">
@@ -1486,7 +1569,7 @@ function TeacherProgressReportPanel({ progressRows, loading, childId, birthDate 
       { name: "Cognitive", barClass: "bg-sky-400" },
       { name: "Social-Emotional", barClass: "bg-emerald-400" },
       { name: "Physical", barClass: "bg-amber-400" },
-      { name: "Language & Literacy", barClass: "bg-pink-400" },
+      { name: "Language & Literacy", barClass: "bg-blue-400" },
     ];
     const byDomain = Object.fromEntries(
       config.map((item) => [item.name, { total: 0, complete: 0, barClass: item.barClass }]),
@@ -1907,10 +1990,10 @@ function TeacherGradesPanel({ activities, loading }) {
           <div className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">Total Assessments</div>
           <div className="mt-1 text-xl font-extrabold text-sky-900">{assessments.length}</div>
         </div>
-        <div className="rounded-xl border border-violet-200 bg-violet-50 p-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-violet-700">Overall Level</div>
-          <div className="mt-1 text-xl font-extrabold text-violet-900">
-            {overallAvg !== null ? LEVEL_NAMES[Math.round(overallAvg)] || `${overallAvg.toFixed(1)}/4` : "—"}
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-blue-700">Overall Level</div>
+          <div className="mt-1 text-xl font-extrabold text-blue-900">
+            {overallAvg !== null ? LEVEL_NAMES[Math.round(overallAvg)] || `${overallAvg.toFixed(1)}/4` : "---"}
           </div>
         </div>
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
@@ -1938,7 +2021,7 @@ function TeacherGradesPanel({ activities, loading }) {
               const barColor =
                 avg !== null
                   ? avg >= 3.5
-                    ? "bg-violet-500"
+                    ? "bg-blue-700"
                     : avg >= 2.5
                       ? "bg-emerald-500"
                       : avg >= 1.5
@@ -2368,3 +2451,16 @@ function VisualMetricCard({ title, value, helper, accent }) {
     </div>
   );
 }
+
+function ProfileStatCard({ label, value, helper, accent }) {
+  return (
+    <div className="rounded-xl border p-3" style={{ borderColor: hexToRgba(accent, 0.35), background: `linear-gradient(180deg, ${hexToRgba(accent, 0.08)} 0%, #ffffff 100%)` }}>
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{label}</div>
+      <div className="mt-2 text-lg font-extrabold text-gray-900">{value}</div>
+      <div className="mt-1 text-xs text-gray-600">{helper}</div>
+    </div>
+  );
+}
+
+
+

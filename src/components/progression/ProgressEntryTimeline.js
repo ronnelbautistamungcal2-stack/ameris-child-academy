@@ -18,7 +18,7 @@ const STATUS_LABEL = {
 };
 
 const ROLE_BADGE = {
-  ADMIN: "bg-violet-100 text-violet-700",
+  ADMIN: "bg-blue-100 text-blue-700",
   TEACHER: "bg-sky-100 text-sky-700",
   PARENT: "bg-emerald-100 text-emerald-700",
 };

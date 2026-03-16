@@ -1,15 +1,22 @@
 import ParentLayout from "@/components/parent/ParentLayout";
+import {
+  ParentEmpty,
+  ParentPageHeader,
+  ParentPill,
+  ParentSection,
+  ParentSurface,
+} from "@/components/parent/ParentUI";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const PERMISSION_TYPES = [
-  { value: "PHOTO_RELEASE", label: "Photo Release", description: "Allow photos/videos of your child to be taken and used" },
-  { value: "FIELD_TRIP", label: "Field Trip", description: "Allow your child to participate in field trips" },
-  { value: "MEDICAL_TREATMENT", label: "Medical Treatment", description: "Allow emergency medical treatment if needed" },
-  { value: "TRANSPORTATION", label: "Transportation", description: "Allow your child to be transported by the center" },
-  { value: "SUNSCREEN_APPLICATION", label: "Sunscreen Application", description: "Allow staff to apply sunscreen to your child" },
-  { value: "WATER_ACTIVITIES", label: "Water Activities", description: "Allow your child to participate in water activities" },
+  { value: "PHOTO_RELEASE", label: "Photo Release", description: "Allow photos and videos of your child for classroom updates and approved center use." },
+  { value: "FIELD_TRIP", label: "Field Trip", description: "Allow off-campus supervised field trips and educational visits." },
+  { value: "MEDICAL_TREATMENT", label: "Medical Treatment", description: "Allow staff to authorize emergency treatment if immediate care is required." },
+  { value: "TRANSPORTATION", label: "Transportation", description: "Allow transport arranged by the center for approved activities." },
+  { value: "SUNSCREEN_APPLICATION", label: "Sunscreen Application", description: "Allow staff to apply sunscreen during outdoor activities when appropriate." },
+  { value: "WATER_ACTIVITIES", label: "Water Activities", description: "Allow supervised participation in splash play and similar activities." },
 ];
 
 export default function ParentPermissions() {
@@ -58,10 +65,22 @@ export default function ParentPermissions() {
     if (selectedChildId) loadPermissions(selectedChildId);
   }, [selectedChildId, loadPermissions]);
 
+  const selectedChild = useMemo(
+    () => children.find((child) => child.id === selectedChildId) || null,
+    [children, selectedChildId],
+  );
+
   const permMap = useMemo(() => {
     const map = {};
-    for (const p of permissions) map[p.permissionType] = p;
+    for (const permission of permissions) map[permission.permissionType] = permission;
     return map;
+  }, [permissions]);
+
+  const stats = useMemo(() => {
+    const granted = permissions.filter((item) => item.status === "GRANTED").length;
+    const denied = permissions.filter((item) => item.status === "DENIED").length;
+    const pending = PERMISSION_TYPES.length - granted - denied;
+    return { granted, denied, pending };
   }, [permissions]);
 
   async function togglePermission(type, newStatus) {
@@ -74,8 +93,8 @@ export default function ParentPermissions() {
         body: JSON.stringify({ permissionType: type, status: newStatus }),
       });
       await loadPermissions(selectedChildId);
-      setSuccess(`Permission updated successfully`);
-      setTimeout(() => setSuccess(""), 3000);
+      setSuccess("Permission updated successfully.");
+      setTimeout(() => setSuccess(""), 2500);
     } catch (e) {
       setError(e.message || "Failed to update permission");
     } finally {
@@ -83,152 +102,147 @@ export default function ParentPermissions() {
     }
   }
 
-  const selectedChild = children.find((c) => c.id === selectedChildId);
-
   return (
     <ParentLayout title="Permissions">
       <div className="space-y-4">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-          <h2 className="text-lg font-extrabold text-gray-900">Child Permissions</h2>
-          <p className="mt-1 text-sm text-gray-600">
-            Manage permissions for your children. Grant or deny each permission type below.
-          </p>
+        <ParentPageHeader
+          eyebrow="Consent center"
+          title="Manage family permissions with confidence"
+          description="Switch between children, review what has already been approved, and make clear yes or no decisions without digging through paper forms."
+          accent="emerald"
+          layout="split"
+          stats={[
+            { label: "Children", value: children.length, hint: "Linked to this account", tone: "sky" },
+            { label: "Granted", value: stats.granted, hint: "Currently approved", tone: "emerald" },
+            { label: "Denied", value: stats.denied, hint: "Currently denied", tone: "rose" },
+            { label: "Pending", value: stats.pending, hint: "Need a decision", tone: stats.pending ? "amber" : "gray" },
+          ]}
+        />
 
-          {error ? (
-            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {error}
-            </div>
-          ) : null}
-          {success ? (
-            <div className="mt-3 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-              {success}
-            </div>
-          ) : null}
+        {error ? (
+          <ParentSurface className="border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+            {error}
+          </ParentSurface>
+        ) : null}
+        {success ? (
+          <ParentSurface className="border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+            {success}
+          </ParentSurface>
+        ) : null}
 
+        <ParentSection
+          title="Choose a child"
+          description="Permissions are tracked separately for each child."
+          className="bg-gradient-to-r from-white via-emerald-50/40 to-white"
+        >
           {loading ? (
-            <div className="mt-4"><Skeleton count={3} /></div>
+            <Skeleton count={2} />
           ) : children.length === 0 ? (
-            <div className="mt-4 text-sm text-gray-600">No children found.</div>
+            <ParentEmpty
+              title="No children found"
+              description="Your account is not linked to any children yet."
+            />
           ) : (
-            <>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {children.map((ch) => (
-                  <button
-                    key={ch.id}
-                    type="button"
-                    onClick={() => setSelectedChildId(ch.id)}
+            <div className="flex flex-wrap gap-2">
+              {children.map((child) => (
+                <ParentPill
+                  key={child.id}
+                  active={child.id === selectedChildId}
+                  onClick={() => setSelectedChildId(child.id)}
+                >
+                  {child.firstName} {child.lastName || ""}
+                </ParentPill>
+              ))}
+            </div>
+          )}
+        </ParentSection>
+
+        <ParentSection
+          title={selectedChild ? `Permissions for ${selectedChild.firstName}` : "Permissions"}
+          description="Each card shows the current decision and lets you change it immediately."
+          className="bg-gradient-to-br from-white via-white to-emerald-50/30"
+        >
+          {permLoading ? (
+            <Skeleton count={4} />
+          ) : !selectedChild ? (
+            <ParentEmpty
+              title="Select a child first"
+              description="Choose a child above to manage permissions."
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+              {PERMISSION_TYPES.map((item) => {
+                const permission = permMap[item.value];
+                const status = permission?.status || "PENDING";
+                const isGranted = status === "GRANTED";
+                const isDenied = status === "DENIED";
+                const isSaving = saving === item.value;
+                return (
+                  <div
+                    key={item.value}
                     className={[
-                      "rounded-xl border px-3 py-2 text-sm font-extrabold transition",
-                      ch.id === selectedChildId
-                        ? "border-sky-200 bg-sky-50 text-sky-800"
-                        : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                      "rounded-[28px] border p-5 transition-all shadow-sm",
+                      isGranted
+                        ? "border-emerald-200 bg-emerald-50/80 dark:border-emerald-800 dark:bg-emerald-900/20"
+                        : isDenied
+                          ? "border-rose-200 bg-rose-50/80 dark:border-rose-800 dark:bg-rose-900/20"
+                          : "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800",
                     ].join(" ")}
                   >
-                    {ch.firstName} {ch.lastName || ""}
-                  </button>
-                ))}
-              </div>
-
-              {selectedChild && (
-                <div className="mt-4">
-                  <h3 className="text-sm font-extrabold text-gray-800">
-                    Permissions for {selectedChild.firstName} {selectedChild.lastName || ""}
-                  </h3>
-
-                  {permLoading ? (
-                    <div className="mt-3 text-sm text-gray-600">Loading permissions...</div>
-                  ) : (
-                    <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-                      {PERMISSION_TYPES.map((pt) => {
-                        const perm = permMap[pt.value];
-                        const status = perm?.status || "PENDING";
-                        const isGranted = status === "GRANTED";
-                        const isDenied = status === "DENIED";
-                        const isSaving = saving === pt.value;
-
-                        return (
-                          <div
-                            key={pt.value}
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="text-base font-extrabold text-gray-900 dark:text-gray-100">
+                          {item.label}
+                        </div>
+                        <div className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                          {item.description}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <span
                             className={[
-                              "rounded-xl border p-4 transition",
+                              "rounded-full px-3 py-1 text-xs font-extrabold",
                               isGranted
-                                ? "border-green-200 bg-green-50"
+                                ? "border border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
                                 : isDenied
-                                  ? "border-red-200 bg-red-50"
-                                  : "border-gray-200 bg-gray-50",
+                                  ? "border border-rose-200 bg-rose-100 text-rose-800 dark:border-rose-800 dark:bg-rose-900/30 dark:text-rose-300"
+                                  : "border border-gray-200 bg-gray-100 text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300",
                             ].join(" ")}
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="text-sm font-extrabold text-gray-900">
-                                  {pt.label}
-                                </div>
-                                <div className="mt-1 text-xs text-gray-600">
-                                  {pt.description}
-                                </div>
-                                <div className="mt-2">
-                                  <span
-                                    className={[
-                                      "inline-block rounded-full px-2 py-0.5 text-xs font-semibold",
-                                      isGranted
-                                        ? "bg-green-100 text-green-800"
-                                        : isDenied
-                                          ? "bg-red-100 text-red-800"
-                                          : "bg-gray-200 text-gray-600",
-                                    ].join(" ")}
-                                  >
-                                    {status}
-                                  </span>
-                                  {perm?.grantedBy && (
-                                    <span className="ml-2 text-xs text-gray-500">
-                                      by {perm.grantedBy.name || perm.grantedBy.email}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  disabled={isSaving || isGranted}
-                                  onClick={() => togglePermission(pt.value, "GRANTED")}
-                                  className={[
-                                    "rounded-lg px-3 py-1.5 text-xs font-extrabold transition",
-                                    isGranted
-                                      ? "cursor-default bg-green-200 text-green-800"
-                                      : isSaving
-                                        ? "cursor-not-allowed bg-green-400 text-white opacity-60"
-                                        : "bg-green-600 text-white hover:bg-green-700",
-                                  ].join(" ")}
-                                >
-                                  {isSaving ? "..." : "Grant"}
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={isSaving || isDenied}
-                                  onClick={() => togglePermission(pt.value, "DENIED")}
-                                  className={[
-                                    "rounded-lg px-3 py-1.5 text-xs font-extrabold transition",
-                                    isDenied
-                                      ? "cursor-default bg-red-200 text-red-800"
-                                      : isSaving
-                                        ? "cursor-not-allowed bg-red-400 text-white opacity-60"
-                                        : "bg-red-600 text-white hover:bg-red-700",
-                                  ].join(" ")}
-                                >
-                                  {isSaving ? "..." : "Deny"}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                            {status}
+                          </span>
+                          {permission?.grantedBy ? (
+                            <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                              Updated by {permission.grantedBy.name || permission.grantedBy.email}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={isSaving || isGranted}
+                          onClick={() => togglePermission(item.value, "GRANTED")}
+                          className="rounded-2xl bg-emerald-600 px-4 py-2 text-xs font-extrabold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {isSaving ? "Saving..." : "Grant"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isSaving || isDenied}
+                          onClick={() => togglePermission(item.value, "DENIED")}
+                          className="rounded-2xl bg-rose-600 px-4 py-2 text-xs font-extrabold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {isSaving ? "Saving..." : "Deny"}
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </div>
-              )}
-            </>
+                  </div>
+                );
+              })}
+            </div>
           )}
-        </div>
+        </ParentSection>
       </div>
     </ParentLayout>
   );

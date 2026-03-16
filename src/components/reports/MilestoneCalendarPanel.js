@@ -235,12 +235,12 @@ export default function MilestoneCalendarPanel({
                   className={[
                     "min-h-[92px] border-r border-t border-gray-100 px-2 py-2 text-left dark:border-gray-700",
                     cell.inMonth ? "bg-white dark:bg-gray-900" : "bg-gray-50/60 dark:bg-gray-800/60",
-                    cell.isSelected ? "ring-2 ring-violet-300 ring-inset dark:ring-violet-600" : "",
+                    cell.isSelected ? "ring-2 ring-blue-300 ring-inset dark:ring-blue-600" : "",
                   ].join(" ")}
                 >
                   <div className={["text-xs font-semibold", cell.inMonth ? "text-gray-900 dark:text-gray-100" : "text-gray-400 dark:text-gray-600"].join(" ")}>
                     {cell.date.getDate()}
-                    {cell.isToday ? <span className="ml-1 text-[10px] font-bold text-violet-600 dark:text-violet-400">TODAY</span> : null}
+                    {cell.isToday ? <span className="ml-1 text-[10px] font-bold text-blue-700 dark:text-blue-400">TODAY</span> : null}
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1">
                     {cell.categories.map((category) => (

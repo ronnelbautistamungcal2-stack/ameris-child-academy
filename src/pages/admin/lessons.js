@@ -205,7 +205,7 @@ function categoryBadgeClass(category) {
   if (key.includes("cognitive"))
     return "bg-amber-50 text-amber-800 ring-amber-200";
   if (key.includes("spiritual"))
-    return "bg-violet-50 text-violet-800 ring-violet-200";
+    return "bg-blue-50 text-blue-900 ring-blue-200";
   if (key.includes("development"))
     return "bg-emerald-50 text-emerald-800 ring-emerald-200";
   if (key.includes("life skills")) return "bg-sky-50 text-sky-800 ring-sky-200";
@@ -265,6 +265,200 @@ function buildPageItems(current, total) {
   return pages;
 }
 
+function IconSearch(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M21 21l-4.35-4.35M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconBook(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconCalendar(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconLayers(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconTrash(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconEye(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function IconEdit(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconFilter(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconX(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconCheckCircle(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M22 4 12 14.01l-3-3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconAlertCircle(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+      <path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconClipboard(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="8" y="2" width="8" height="4" rx="1" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function Toast({ message, type, onClose }) {
+  useEffect(() => {
+    const t = setTimeout(onClose, 3500);
+    return () => clearTimeout(t);
+  }, [onClose]);
+
+  return (
+    <div className="fixed bottom-6 right-6 z-[100] animate-slide-up">
+      <div
+        className={[
+          "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold shadow-lg",
+          type === "success"
+            ? "bg-emerald-600 text-white"
+            : type === "error"
+              ? "bg-red-600 text-white"
+              : "bg-gray-800 text-white",
+        ].join(" ")}
+      >
+        {type === "success" ? (
+          <IconCheckCircle className="h-5 w-5 flex-shrink-0" />
+        ) : type === "error" ? (
+          <IconAlertCircle className="h-5 w-5 flex-shrink-0" />
+        ) : null}
+        <span>{message}</span>
+        <button type="button" onClick={onClose} className="ml-2 rounded-lg p-1 hover:bg-white/20">
+          <IconX className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmDeleteDialog({ title, message, onConfirm, onCancel, loading }) {
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={onCancel}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
+            <IconTrash className="h-6 w-6 text-red-600" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-base font-bold text-gray-900">{title}</h3>
+            <p className="mt-1 text-sm text-gray-600">{message}</p>
+          </div>
+        </div>
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            type="button"
+            className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+            onClick={onCancel}
+            disabled={loading}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+            onClick={onConfirm}
+            disabled={loading}
+          >
+            {loading ? "Deleting..." : "Delete"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SkeletonRow() {
+  return (
+    <tr className="animate-pulse">
+      <td className="border-t border-gray-100 px-4 py-4"><div className="h-4 w-20 rounded bg-gray-200" /></td>
+      <td className="border-t border-gray-100 px-4 py-4"><div className="h-4 w-40 rounded bg-gray-200" /></td>
+      <td className="border-t border-gray-100 px-4 py-4"><div className="h-4 w-28 rounded bg-gray-200" /></td>
+      <td className="border-t border-gray-100 px-4 py-4"><div className="h-5 w-16 rounded-full bg-gray-200" /></td>
+      <td className="border-t border-gray-100 px-4 py-4"><div className="h-4 w-14 rounded bg-gray-200" /></td>
+      <td className="border-t border-gray-100 px-4 py-4"><div className="h-5 w-20 rounded-full bg-gray-200" /></td>
+      <td className="border-t border-gray-100 px-4 py-4"><div className="h-4 w-32 rounded bg-gray-200" /></td>
+      <td className="border-t border-gray-100 px-4 py-4"><div className="h-4 w-24 rounded bg-gray-200" /></td>
+    </tr>
+  );
+}
+
 function IconDownload(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
@@ -314,47 +508,68 @@ function IconRefresh(props) {
   );
 }
 
-function StatCard({ label, value, sublabel }) {
+function StatCard({ label, value, sublabel, icon: Icon, color = "blue" }) {
+  const colorMap = {
+    blue: "bg-blue-50 text-blue-600 border-blue-100",
+    emerald: "bg-emerald-50 text-emerald-600 border-emerald-100",
+    amber: "bg-amber-50 text-amber-600 border-amber-100",
+    purple: "bg-purple-50 text-purple-600 border-purple-100",
+  };
+  const accent = colorMap[color] || colorMap.blue;
+
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-        {label}
+    <div className="group rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all duration-200 hover:shadow-md hover:border-gray-300">
+      <div className="flex items-start justify-between">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+            {label}
+          </div>
+          <div className="mt-2 text-2xl font-extrabold text-gray-900">{value}</div>
+          {sublabel ? (
+            <div className="mt-1 text-xs text-gray-500">{sublabel}</div>
+          ) : null}
+        </div>
+        {Icon ? (
+          <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border ${accent}`}>
+            <Icon className="h-5 w-5" />
+          </div>
+        ) : null}
       </div>
-      <div className="mt-2 text-2xl font-extrabold text-gray-900">{value}</div>
-      {sublabel ? (
-        <div className="mt-1 text-xs text-gray-500">{sublabel}</div>
-      ) : null}
     </div>
   );
 }
 
 function Modal({ title, children, onClose }) {
+  useEffect(() => {
+    const handler = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       onMouseDown={onClose}
     >
       <div
-        className="w-full max-w-4xl rounded-2xl border border-gray-200 bg-white p-5 shadow-xl"
+        className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-2xl animate-modal-in"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="truncate text-base font-extrabold text-gray-900">
-              {title}
-            </div>
-          </div>
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-gray-100 bg-white/95 backdrop-blur-sm px-6 py-4 rounded-t-2xl">
+          <h2 className="truncate text-lg font-bold text-gray-900">
+            {title}
+          </h2>
           <button
             type="button"
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50"
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
             onClick={onClose}
           >
-            Close
+            <IconX className="h-5 w-5" />
           </button>
         </div>
-        <div className="mt-4">{children}</div>
+        <div className="p-6">{children}</div>
       </div>
     </div>
   );
@@ -408,6 +623,10 @@ export default function AdminLessons() {
   const [editResource, setEditResource] = useState("");
   const [editAdditionalResources, setEditAdditionalResources] = useState("");
   const [editNotes, setEditNotes] = useState("");
+
+  const [toast, setToast] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [newLessonTitle, setNewLessonTitle] = useState("");
@@ -763,9 +982,11 @@ export default function AdminLessons() {
           }),
         });
         setCreateOpen(false);
+        setToast({ message: "Lesson created successfully", type: "success" });
         await refreshLessons();
       } catch (e2) {
         setError(e2.message || "Failed to create record");
+        setToast({ message: e2.message || "Failed to create", type: "error" });
       } finally {
         setSaving(false);
       }
@@ -824,9 +1045,11 @@ export default function AdminLessons() {
         );
         setEditOpen(false);
         setEditRecord(null);
+        setToast({ message: "Changes saved successfully", type: "success" });
         await refreshLessons();
       } catch (err) {
         setError(err.message || "Failed to save changes");
+        setToast({ message: err.message || "Failed to save", type: "error" });
       } finally {
         setSaving(false);
       }
@@ -869,29 +1092,58 @@ export default function AdminLessons() {
     [],
   );
 
+  const confirmDelete = useCallback(
+    async () => {
+      if (!deleteTarget?.id) return;
+      setDeleting(true);
+      setError("");
+      try {
+        await apiJson(
+          `/api/v1/curriculum/records/${encodeURIComponent(deleteTarget.id)}`,
+          { method: "DELETE" },
+        );
+        setDeleteTarget(null);
+        setToast({ message: "Record deleted successfully", type: "success" });
+        await refreshLessons();
+      } catch (err) {
+        setError(err.message || "Failed to delete record");
+        setToast({ message: err.message || "Failed to delete", type: "error" });
+      } finally {
+        setDeleting(false);
+      }
+    },
+    [deleteTarget?.id, refreshLessons],
+  );
+
+  const activeFilterCount = [age, category, term, subject].filter(Boolean).length;
+
   return (
     <AdminLayout title="Curriculum Lessons">
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-xl font-extrabold text-gray-900">
-              Curriculum Lessons
-            </h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Manage early childhood development modules and tracking.
-            </p>
-            <div className="mt-1 text-xs text-gray-500">
-              Center:{" "}
-              <span className="font-semibold text-gray-800">
-                {mainCenter?.name || "—"}
-              </span>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white">
+                <IconBook className="h-5 w-5" />
+              </div>
+              <div>
+                <h1 className="text-xl font-extrabold text-gray-900">
+                  Curriculum Lessons
+                </h1>
+                <p className="text-sm text-gray-500">
+                  Manage early childhood development modules and tracking
+                  {mainCenter?.name ? (
+                    <> &middot; <span className="font-medium text-gray-700">{mainCenter.name}</span></>
+                  ) : null}
+                </p>
+              </div>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 hover:shadow transition-all disabled:opacity-60"
               onClick={() =>
                 downloadCsv({
                   filename: "curriculum-lessons.csv",
@@ -927,100 +1179,143 @@ export default function AdminLessons() {
               }
               disabled={loading || filtered.length === 0}
             >
-              <IconDownload className="h-4 w-4 text-gray-600" />
-              Export CSV
+              <IconDownload className="h-4 w-4" />
+              Export
             </button>
 
             <button
               type="button"
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-              onClick={openCreate}
-              disabled={loading || !mainCenter?.id}
-            >
-              <IconPlus className="h-4 w-4" />
-              Create New Lesson
-            </button>
-
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 hover:shadow transition-all disabled:opacity-60"
               onClick={runImport}
               disabled={importing || loading || !mainCenter?.id}
               title="Import/refresh curriculum from public/uploads/StepsofProgressionLibrary.xlsx"
             >
-              <IconRefresh className="h-4 w-4 text-gray-600" />
-              {importing ? "Syncing..." : "Sync from Steps Library"}
+              <IconRefresh className={`h-4 w-4 ${importing ? "animate-spin" : ""}`} />
+              {importing ? "Syncing..." : "Sync Library"}
+            </button>
+
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 hover:shadow-md transition-all disabled:opacity-60"
+              onClick={openCreate}
+              disabled={loading || !mainCenter?.id}
+            >
+              <IconPlus className="h-4 w-4" />
+              New Lesson
             </button>
           </div>
         </div>
 
         {error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            {error}
+          <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
+            <IconAlertCircle className="h-5 w-5 flex-shrink-0 text-red-500 mt-0.5" />
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-red-800">Something went wrong</div>
+              <div className="mt-0.5 text-sm text-red-700">{error}</div>
+            </div>
+            <button type="button" className="ml-auto flex-shrink-0 rounded-lg p-1 text-red-400 hover:bg-red-100 hover:text-red-600" onClick={() => setError("")}>
+              <IconX className="h-4 w-4" />
+            </button>
           </div>
         ) : null}
 
         {importResult?.totals ? (
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
-            <div className="font-semibold">Sync complete</div>
-            <div className="mt-1 text-blue-800">
-              Centers: {importResult.totals.centers} • Rows imported:{" "}
-              {importResult.totals.rowsImported} • Categories created:{" "}
-              {importResult.totals.categoriesCreated} • Lessons created:{" "}
-              {importResult.totals.lessonsCreated} • Lessons updated:{" "}
-              {importResult.totals.lessonsUpdated} • Goals created:{" "}
-              {importResult.totals.goalsCreated}
+          <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+            <IconCheckCircle className="h-5 w-5 flex-shrink-0 text-emerald-500 mt-0.5" />
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-emerald-800">Sync completed successfully</div>
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-emerald-700">
+                <span><span className="font-semibold">{importResult.totals.rowsImported}</span> rows imported</span>
+                <span><span className="font-semibold">{importResult.totals.categoriesCreated}</span> categories created</span>
+                <span><span className="font-semibold">{importResult.totals.lessonsCreated}</span> lessons created</span>
+                <span><span className="font-semibold">{importResult.totals.lessonsUpdated}</span> lessons updated</span>
+                <span><span className="font-semibold">{importResult.totals.goalsCreated}</span> goals created</span>
+              </div>
             </div>
+            <button type="button" className="ml-auto flex-shrink-0 rounded-lg p-1 text-emerald-400 hover:bg-emerald-100 hover:text-emerald-600" onClick={() => setImportResult(null)}>
+              <IconX className="h-4 w-4" />
+            </button>
           </div>
         ) : null}
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             label="Total Lessons"
             value={stats.totalLessons.toLocaleString()}
             sublabel={`${stats.totalRecords.toLocaleString()} progression steps`}
+            icon={IconBook}
+            color="blue"
           />
           <StatCard
             label="Active Terms"
             value={stats.activeTerms.toLocaleString()}
             sublabel="Distinct terms found"
+            icon={IconCalendar}
+            color="emerald"
           />
           <StatCard
-            label={`${stats.secondary.label} Modules`}
+            label={`${stats.secondary.label}`}
             value={Number(stats.secondary.count || 0).toLocaleString()}
+            sublabel="Modules"
+            icon={IconLayers}
+            color="amber"
           />
           <StatCard
-            label={`${stats.tertiary.label} Modules`}
+            label={`${stats.tertiary.label}`}
             value={Number(stats.tertiary.count || 0).toLocaleString()}
+            sublabel="Modules"
+            icon={IconClipboard}
+            color="purple"
           />
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <IconFilter className="h-4 w-4 text-gray-400" />
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Filters</span>
+            {activeFilterCount > 0 ? (
+              <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-blue-600 px-1.5 text-[10px] font-bold text-white">
+                {activeFilterCount}
+              </span>
+            ) : null}
+          </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-7">
             <label className="block md:col-span-2">
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Search lesson title or ID...
+              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Search
               </div>
-              <input
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search..."
-                disabled={loading}
-              />
+              <div className="relative">
+                <IconSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <input
+                  className="w-full rounded-xl border border-gray-200 py-2 pl-9 pr-3 text-sm placeholder:text-gray-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-colors"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search by title, ref ID, subject..."
+                  disabled={loading}
+                />
+                {search ? (
+                  <button
+                    type="button"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:text-gray-600"
+                    onClick={() => setSearch("")}
+                  >
+                    <IconX className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
+              </div>
             </label>
 
             <label className="block">
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Child Age
               </div>
               <select
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                className={`w-full rounded-xl border px-3 py-2 text-sm focus:border-blue-300 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-colors ${age ? "border-blue-300 bg-blue-50/50 font-medium text-blue-900" : "border-gray-200"}`}
                 value={age}
                 onChange={(e) => setAge(e.target.value)}
                 disabled={loading}
               >
-                <option value="">All</option>
+                <option value="">All Ages</option>
                 {options.ages.map((a) => (
                   <option key={a} value={a}>
                     {a}
@@ -1030,16 +1325,16 @@ export default function AdminLessons() {
             </label>
 
             <label className="block">
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Category
               </div>
               <select
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                className={`w-full rounded-xl border px-3 py-2 text-sm focus:border-blue-300 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-colors ${category ? "border-blue-300 bg-blue-50/50 font-medium text-blue-900" : "border-gray-200"}`}
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 disabled={loading}
               >
-                <option value="">All</option>
+                <option value="">All Categories</option>
                 {options.categories.map((c) => (
                   <option key={c} value={c}>
                     {c}
@@ -1049,16 +1344,16 @@ export default function AdminLessons() {
             </label>
 
             <label className="block">
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Term
               </div>
               <select
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                className={`w-full rounded-xl border px-3 py-2 text-sm focus:border-blue-300 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-colors ${term ? "border-blue-300 bg-blue-50/50 font-medium text-blue-900" : "border-gray-200"}`}
                 value={term}
                 onChange={(e) => setTerm(e.target.value)}
                 disabled={loading}
               >
-                <option value="">All</option>
+                <option value="">All Terms</option>
                 {options.terms.map((t) => (
                   <option key={t} value={t}>
                     {t}
@@ -1068,16 +1363,16 @@ export default function AdminLessons() {
             </label>
 
             <label className="block">
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Subject
               </div>
               <select
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                className={`w-full rounded-xl border px-3 py-2 text-sm focus:border-blue-300 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-colors ${subject ? "border-blue-300 bg-blue-50/50 font-medium text-blue-900" : "border-gray-200"}`}
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 disabled={loading}
               >
-                <option value="">All</option>
+                <option value="">All Subjects</option>
                 {subjectOptions.map((s) => (
                   <option key={s} value={s}>
                     {s}
@@ -1089,40 +1384,38 @@ export default function AdminLessons() {
             <div className="flex items-end md:col-span-1">
               <button
                 type="button"
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-60"
+                className={`w-full rounded-xl border px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-60 ${activeFilterCount > 0 ? "border-red-200 bg-red-50 text-red-700 hover:bg-red-100" : "border-gray-200 bg-white text-gray-900 hover:bg-gray-50"}`}
                 onClick={resetFilters}
                 disabled={loading}
               >
-                Reset
+                {activeFilterCount > 0 ? `Clear (${activeFilterCount})` : "Reset"}
               </button>
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
-            <div className="text-xs text-gray-600">
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gray-50/50 px-5 py-3">
+            <div className="text-xs text-gray-500">
               Showing{" "}
-              <span className="font-semibold text-gray-900">
+              <span className="font-semibold text-gray-800">
                 {filtered.length ? (page - 1) * pageSize + 1 : 0}
-              </span>{" "}
-              to{" "}
-              <span className="font-semibold text-gray-900">
+              </span>
+              {" "}&ndash;{" "}
+              <span className="font-semibold text-gray-800">
                 {Math.min(page * pageSize, filtered.length)}
               </span>{" "}
               of{" "}
-              <span className="font-semibold text-gray-900">
+              <span className="font-semibold text-gray-800">
                 {filtered.length.toLocaleString()}
               </span>{" "}
               results
             </div>
 
-            <label className="flex items-center gap-2 text-xs text-gray-600">
-              <span className="font-semibold uppercase tracking-wide text-gray-500">
-                Page size
-              </span>
+            <label className="flex items-center gap-2 text-xs text-gray-500">
+              <span className="font-medium">Show</span>
               <select
-                className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs"
+                className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-medium focus:border-blue-300 focus:ring-1 focus:ring-blue-100 focus:outline-none"
                 value={pageSize}
                 onChange={(e) => setPageSize(Number(e.target.value || 10))}
                 disabled={loading}
@@ -1133,6 +1426,7 @@ export default function AdminLessons() {
                   </option>
                 ))}
               </select>
+              <span className="font-medium">per page</span>
             </label>
           </div>
 
@@ -1168,83 +1462,118 @@ export default function AdminLessons() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr>
-                    <td
-                      colSpan={8}
-                      className="px-4 py-8 text-center text-sm text-gray-600"
-                    >
-                      Loading...
-                    </td>
-                  </tr>
+                  <>
+                    <SkeletonRow />
+                    <SkeletonRow />
+                    <SkeletonRow />
+                    <SkeletonRow />
+                    <SkeletonRow />
+                  </>
                 ) : paged.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={8}
-                      className="px-4 py-10 text-center text-sm text-gray-600"
-                    >
-                      No curriculum items found. Try syncing from the Steps
-                      Library or adjusting filters.
+                    <td colSpan={8} className="px-4 py-16 text-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
+                          <IconBook className="h-8 w-8 text-gray-400" />
+                        </div>
+                        <div className="text-sm font-semibold text-gray-700">
+                          No curriculum items found
+                        </div>
+                        <p className="max-w-sm text-xs text-gray-500">
+                          {activeFilterCount > 0 || search
+                            ? "Try adjusting your filters or search terms to find what you're looking for."
+                            : "Get started by syncing from the Steps Library or creating a new lesson."}
+                        </p>
+                        {activeFilterCount > 0 || search ? (
+                          <button
+                            type="button"
+                            className="mt-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                            onClick={() => { resetFilters(); setSearch(""); }}
+                          >
+                            Clear all filters
+                          </button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ) : (
                   paged.map((r) => (
-                    <tr key={r.id || `${r.refId}:${r.progressionStep}`}>
-                      <td className="border-t border-gray-100 px-4 py-4 align-top text-xs text-gray-500">
-                        <div className="font-semibold text-gray-700">
+                    <tr
+                      key={r.id || `${r.refId}:${r.progressionStep}`}
+                      className="group cursor-pointer transition-colors hover:bg-blue-50/40"
+                      onClick={() => openDetails(r)}
+                    >
+                      <td className="border-t border-gray-100 px-4 py-3.5 align-top text-xs text-gray-500">
+                        <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 font-mono text-[11px] font-semibold text-gray-700 group-hover:bg-blue-100 group-hover:text-blue-800 transition-colors">
                           {r.refId || "—"}
-                        </div>
+                        </span>
                       </td>
-                      <td className="border-t border-gray-100 px-4 py-4 align-top">
-                        <div className="text-sm font-extrabold text-gray-900">
+                      <td className="border-t border-gray-100 px-4 py-3.5 align-top">
+                        <div className="text-sm font-bold text-gray-900 group-hover:text-blue-900 transition-colors">
                           {r.lessonTitle || "—"}
                         </div>
                       </td>
-                      <td className="border-t border-gray-100 px-4 py-4 align-top text-sm text-gray-700">
+                      <td className="border-t border-gray-100 px-4 py-3.5 align-top text-sm text-gray-600">
                         {r.subject || "—"}
                       </td>
-                      <td className="border-t border-gray-100 px-4 py-4 align-top">
+                      <td className="border-t border-gray-100 px-4 py-3.5 align-top">
                         <span
                           className={[
-                            "inline-flex max-w-[140px] items-center truncate whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold leading-tight ring-1 ring-inset",
+                            "inline-flex max-w-[140px] items-center truncate whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold leading-tight ring-1 ring-inset",
                             ageBadgeClass(r.childAge),
                           ].join(" ")}
-                          title={r.category || ""}
+                          title={r.childAge || ""}
                         >
                           {r.childAge || "—"}
                         </span>
                       </td>
-                      <td className="border-t border-gray-100 px-4 py-4 align-top text-sm text-gray-700">
-                        {r.term || "—"}
+                      <td className="border-t border-gray-100 px-4 py-3.5 align-top">
+                        <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-700 ring-1 ring-inset ring-gray-200">
+                          {r.term || "—"}
+                        </span>
                       </td>
-                      <td className="border-t border-gray-100 px-4 py-4 align-top">
+                      <td className="border-t border-gray-100 px-4 py-3.5 align-top">
                         <span
                           className={[
-                            "inline-flex max-w-[160px] items-center truncate whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold leading-tight ring-1 ring-inset",
+                            "inline-flex max-w-[160px] items-center truncate whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold leading-tight ring-1 ring-inset",
                             categoryBadgeClass(r.category),
                           ].join(" ")}
                         >
                           {displayCategory(r.category) || "—"}
                         </span>
                       </td>
-                      <td className="border-t border-gray-100 px-4 py-4 align-top text-sm text-gray-700">
-                        {r.progressionStep || "—"}
+                      <td className="border-t border-gray-100 px-4 py-3.5 align-top text-sm text-gray-700">
+                        <div className="max-w-[200px] truncate" title={r.progressionStep}>
+                          {r.progressionStep || "—"}
+                        </div>
                       </td>
-                      <td className="border-t border-gray-100 px-4 py-4 align-top text-right">
-                        <div className="flex items-center space-x-2">
+                      <td className="border-t border-gray-100 px-4 py-3.5 align-top text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             type="button"
-                            className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-60"
-                            onClick={() => openEdit(r)}
-                            disabled={saving || !r.id}
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-60 transition-colors"
+                            onClick={() => openDetails(r)}
+                            title="View details"
                           >
-                            Edit
+                            <IconEye className="h-3.5 w-3.5" />
                           </button>
                           <button
                             type="button"
-                            className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
-                            onClick={() => openDetails(r)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs font-semibold text-blue-700 shadow-sm hover:bg-blue-50 disabled:opacity-60 transition-colors"
+                            onClick={() => openEdit(r)}
+                            disabled={saving || !r.id}
+                            title="Edit"
                           >
-                            View Details
+                            <IconEdit className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs font-semibold text-red-600 shadow-sm hover:bg-red-50 disabled:opacity-60 transition-colors"
+                            onClick={() => setDeleteTarget(r)}
+                            disabled={!r.id}
+                            title="Delete"
+                          >
+                            <IconTrash className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       </td>
@@ -1256,39 +1585,39 @@ export default function AdminLessons() {
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-4 py-3">
-            <div className="text-xs text-gray-600">
-              Page <span className="font-semibold text-gray-900">{page}</span>{" "}
+            <div className="text-xs text-gray-500">
+              Page <span className="font-semibold text-gray-800">{page}</span>{" "}
               of{" "}
-              <span className="font-semibold text-gray-900">{totalPages}</span>
+              <span className="font-semibold text-gray-800">{totalPages}</span>
             </div>
 
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-60"
+                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 transition-colors"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={loading || page <= 1}
               >
-                Prev
+                &larr; Prev
               </button>
 
               {buildPageItems(page, totalPages).map((it, idx) =>
                 it.type === "dots" ? (
                   <span
                     key={`dots-${idx}`}
-                    className="px-2 text-xs text-gray-400"
+                    className="px-1.5 text-xs text-gray-400"
                   >
-                    …
+                    &hellip;
                   </span>
                 ) : (
                   <button
                     key={`p-${it.value}`}
                     type="button"
                     className={[
-                      "rounded-lg px-2 py-1 text-xs font-semibold",
+                      "rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors",
                       it.value === page
-                        ? "bg-blue-600 text-white"
-                        : "border border-gray-200 bg-white text-gray-800 hover:bg-gray-50",
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-gray-600 hover:bg-gray-100",
                     ].join(" ")}
                     onClick={() => setPage(it.value)}
                     disabled={loading}
@@ -1300,11 +1629,11 @@ export default function AdminLessons() {
 
               <button
                 type="button"
-                className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-60"
+                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 transition-colors"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={loading || page >= totalPages}
               >
-                Next
+                Next &rarr;
               </button>
             </div>
           </div>
@@ -1315,76 +1644,98 @@ export default function AdminLessons() {
         <Modal
           title={
             detailsRecord?.progressionStep
-              ? `Details — ${detailsRecord.progressionStep}`
-              : "Details"
+              ? `${detailsRecord.progressionStep}`
+              : "Lesson Details"
           }
           onClose={closeDetails}
         >
-          <div className="flex flex-wrap justify-end gap-2">
-            <button
-              type="button"
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-60"
-              onClick={() => {
-                closeDetails();
-                openEdit(detailsRecord);
-              }}
-              disabled={saving || !detailsRecord?.id}
-            >
-              Edit
-            </button>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div className="flex flex-wrap items-center gap-2">
+              {detailsRecord?.refId ? (
+                <span className="inline-flex items-center rounded-lg bg-gray-100 px-2.5 py-1 font-mono text-xs font-semibold text-gray-700">
+                  {detailsRecord.refId}
+                </span>
+              ) : null}
+              {detailsRecord?.childAge ? (
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold ring-1 ring-inset ${ageBadgeClass(detailsRecord.childAge)}`}>
+                  {detailsRecord.childAge}
+                </span>
+              ) : null}
+              {detailsRecord?.category ? (
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold ring-1 ring-inset ${categoryBadgeClass(detailsRecord.category)}`}>
+                  {displayCategory(detailsRecord.category)}
+                </span>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 transition-colors"
+                onClick={() => {
+                  closeDetails();
+                  openEdit(detailsRecord);
+                }}
+                disabled={saving || !detailsRecord?.id}
+              >
+                <IconEdit className="h-3.5 w-3.5" />
+                Edit
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60 transition-colors"
+                onClick={() => {
+                  closeDetails();
+                  setDeleteTarget(detailsRecord);
+                }}
+                disabled={!detailsRecord?.id}
+              >
+                <IconTrash className="h-3.5 w-3.5" />
+                Delete
+              </button>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Lesson
-              </div>
-              <div className="mt-1 text-sm font-extrabold text-gray-900">
-                {detailsRecord?.lessonTitle || "—"}
-              </div>
-              <div className="mt-2 text-sm text-gray-700">
-                <div>
-                  <span className="font-semibold text-gray-900">Ref ID:</span>{" "}
-                  {detailsRecord?.refId || "—"}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-4">
+              <div className="rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-5">
+                <div className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
+                  Lesson Info
                 </div>
-                <div className="mt-1">
-                  <span className="font-semibold text-gray-900">
-                    Child Age:
-                  </span>{" "}
-                  {detailsRecord?.childAge || "—"}
+                <div className="text-base font-bold text-gray-900">
+                  {detailsRecord?.lessonTitle || "—"}
                 </div>
-                <div className="mt-1">
-                  <span className="font-semibold text-gray-900">Term:</span>{" "}
-                  {detailsRecord?.term || "—"}
-                </div>
-                <div className="mt-1">
-                  <span className="font-semibold text-gray-900">Category:</span>{" "}
-                  {detailsRecord?.category || "—"}
-                </div>
-                <div className="mt-1">
-                  <span className="font-semibold text-gray-900">Subject:</span>{" "}
-                  {detailsRecord?.subject || "—"}
-                </div>
-                <div className="mt-1">
-                  <span className="font-semibold text-gray-900">Sheet:</span>{" "}
-                  {detailsRecord?.sheet || "—"}
+                <div className="mt-3 space-y-2.5">
+                  {[
+                    { label: "Subject", value: detailsRecord?.subject },
+                    { label: "Term", value: detailsRecord?.term },
+                    { label: "Sheet", value: detailsRecord?.sheet },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="flex items-baseline gap-2 text-sm">
+                      <span className="flex-shrink-0 text-xs font-semibold text-gray-500 w-16">{label}</span>
+                      <span className="text-gray-800">{value || "—"}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
 
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Testing Question
-              </div>
-              <div className="mt-2 whitespace-pre-wrap text-sm text-gray-800">
-                {detailsRecord?.testingQuestion || "—"}
+            <div className="space-y-4">
+              <div className="rounded-xl border border-gray-200 bg-white p-5">
+                <div className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
+                  Testing Question
+                </div>
+                <div className="whitespace-pre-wrap text-sm text-gray-800 leading-relaxed">
+                  {detailsRecord?.testingQuestion || <span className="italic text-gray-400">No testing question</span>}
+                </div>
               </div>
 
-              <div className="mt-4 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Notes
-              </div>
-              <div className="mt-2 whitespace-pre-wrap text-sm text-gray-800">
-                {detailsRecord?.notes || "—"}
+              <div className="rounded-xl border border-gray-200 bg-white p-5">
+                <div className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
+                  Notes
+                </div>
+                <div className="whitespace-pre-wrap text-sm text-gray-800 leading-relaxed">
+                  {detailsRecord?.notes || <span className="italic text-gray-400">No notes</span>}
+                </div>
               </div>
             </div>
           </div>
@@ -1796,6 +2147,23 @@ export default function AdminLessons() {
             </div>
           </form>
         </Modal>
+      ) : null}
+      {deleteTarget ? (
+        <ConfirmDeleteDialog
+          title="Delete Curriculum Record"
+          message={`Are you sure you want to delete "${deleteTarget.progressionStep || deleteTarget.lessonTitle || "this record"}"? This action cannot be undone.`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+          loading={deleting}
+        />
+      ) : null}
+
+      {toast ? (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       ) : null}
     </AdminLayout>
   );

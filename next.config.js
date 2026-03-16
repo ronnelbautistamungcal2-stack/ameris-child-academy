@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
+const isDev = process.env.NODE_ENV !== "production";
+
 const nextConfig = {
   reactStrictMode: true,
-  distDir: ".next-build",
+  distDir: isDev ? ".next-dev" : ".next-build",
   outputFileTracing: false,
   webpack: (config, { dev }) => {
     if (dev) {

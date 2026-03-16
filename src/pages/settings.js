@@ -267,7 +267,7 @@ export default function SettingsPage() {
                 <button
                   type="submit"
                   disabled={changingPassword}
-                  className="rounded-xl bg-gradient-to-r from-violet-600 to-pink-500 px-4 py-2 text-sm font-extrabold text-white hover:from-violet-700 hover:to-pink-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-xl bg-gradient-to-r from-blue-800 to-sky-600 px-4 py-2 text-sm font-extrabold text-white hover:from-blue-900 hover:to-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {changingPassword ? "Changing..." : "Update Password"}
                 </button>
@@ -393,7 +393,7 @@ export default function SettingsPage() {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="submit"
-                className="rounded-xl bg-gradient-to-r from-violet-600 to-pink-500 px-4 py-2 text-sm font-extrabold text-white hover:from-violet-700 hover:to-pink-600 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl bg-gradient-to-r from-blue-800 to-sky-600 px-4 py-2 text-sm font-extrabold text-white hover:from-blue-900 hover:to-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={loadingProfile || saving || !!pictureUrlError}
               >
                 {saving ? "Saving…" : "Save Profile"}

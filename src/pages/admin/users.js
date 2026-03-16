@@ -6,14 +6,26 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const ROLES = ["ADMIN", "TEACHER", "PARENT", "COACH", "SUBSCRIBER"];
 
+const ROLE_CONFIG = {
+  ADMIN: { color: "#7c3aed", bg: "#f5f3ff", darkBg: "rgba(124,58,237,0.18)", label: "Admin", icon: "shield" },
+  TEACHER: { color: "#2563eb", bg: "#eff6ff", darkBg: "rgba(37,99,235,0.18)", label: "Teacher", icon: "book" },
+  PARENT: { color: "#059669", bg: "#ecfdf5", darkBg: "rgba(5,150,105,0.18)", label: "Parent", icon: "heart" },
+  COACH: { color: "#d97706", bg: "#fffbeb", darkBg: "rgba(217,119,6,0.18)", label: "Coach", icon: "star" },
+  SUBSCRIBER: { color: "#6b7280", bg: "#f9fafb", darkBg: "rgba(107,114,128,0.18)", label: "Subscriber", icon: "user" },
+};
+
+const PAGE_SIZE = 15;
+
 export default function AdminUsers() {
   const [users, setUsers] = useState([]);
   const [centers, setCenters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,6 +35,9 @@ export default function AdminUsers() {
   const [hireDate, setHireDate] = useState("");
   const [aboutMe, setAboutMe] = useState("");
   const [pictureUrl, setPictureUrl] = useState("");
+
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
 
   async function refresh() {
     setError("");
@@ -45,14 +60,35 @@ export default function AdminUsers() {
     refresh();
   }, []);
 
+  // Auto-dismiss success messages
+  useEffect(() => {
+    if (!success) return;
+    const t = setTimeout(() => setSuccess(""), 3000);
+    return () => clearTimeout(t);
+  }, [success]);
+
   const [roleTab, setRoleTab] = useState("ALL");
 
   const sorted = useMemo(() => {
-    const filtered = roleTab === "ALL" ? users : users.filter((u) => u.role === roleTab);
+    let filtered = roleTab === "ALL" ? users : users.filter((u) => u.role === roleTab);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(
+        (u) =>
+          (u.email || "").toLowerCase().includes(q) ||
+          (u.name || "").toLowerCase().includes(q),
+      );
+    }
     return [...filtered].sort((a, b) =>
-      (a.email || "").localeCompare(b.email || ""),
+      (a.name || a.email || "").localeCompare(b.name || b.email || ""),
     );
-  }, [users, roleTab]);
+  }, [users, roleTab, search]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const paged = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(0); }, [roleTab, search]);
 
   const roleCounts = useMemo(() => {
     const counts = { ALL: users.length };
@@ -129,6 +165,7 @@ export default function AdminUsers() {
   async function createUser(e) {
     e.preventDefault();
     setError("");
+    setSaving(true);
     try {
       await apiJson("/api/v1/users", {
         method: "POST",
@@ -146,9 +183,12 @@ export default function AdminUsers() {
       });
       resetForm();
       setModalOpen(false);
+      setSuccess("User created successfully");
       await refresh();
     } catch (e2) {
       setError(e2.message || "Failed to create user");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -156,6 +196,7 @@ export default function AdminUsers() {
     e.preventDefault();
     if (!editing) return;
     setError("");
+    setSaving(true);
     try {
       await apiJson(`/api/v1/users/${editing.id}`, {
         method: "PUT",
@@ -171,9 +212,12 @@ export default function AdminUsers() {
       });
       resetForm();
       setModalOpen(false);
+      setSuccess("User updated successfully");
       await refresh();
     } catch (e2) {
       setError(e2.message || "Failed to update user");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -182,6 +226,7 @@ export default function AdminUsers() {
     setError("");
     try {
       await apiJson(`/api/v1/users/${id}`, { method: "DELETE" });
+      setSuccess("User deleted");
       await refresh();
     } catch (e2) {
       setError(e2.message || "Failed to delete user");
@@ -190,163 +235,187 @@ export default function AdminUsers() {
 
   return (
     <AdminLayout title="Users & Roles">
+      {/* Success toast */}
+      {success && (
+        <div style={toastStyle}>
+          <span style={{ marginRight: 8, fontSize: 16 }}>&#10003;</span>
+          {success}
+        </div>
+      )}
+
+      {/* Stats cards */}
+      <div style={statsGrid}>
+        <StatCard label="Total Users" value={users.length} color="#2563eb" icon={IconUsers} />
+        <StatCard label="Teachers" value={roleCounts.TEACHER || 0} color="#2563eb" icon={IconBook} />
+        <StatCard label="Parents" value={roleCounts.PARENT || 0} color="#059669" icon={IconHeart} />
+        <StatCard label="Staff" value={(roleCounts.ADMIN || 0) + (roleCounts.COACH || 0)} color="#7c3aed" icon={IconShield} />
+      </div>
+
       <Panel>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "baseline",
-            justifyContent: "space-between",
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div>
-            <h2 style={{ marginTop: 0 }}>Users & Role-Based Access</h2>
-            <p style={{ color: "var(--admin-text-muted)", marginTop: 6 }}>
-              Create/modify/delete users and set roles (ADMIN/TEACHER/PARENT/etc).
+            <h2 style={{ marginTop: 0, marginBottom: 4, fontSize: 18, fontWeight: 800 }}>Users & Role-Based Access</h2>
+            <p style={{ color: "var(--admin-text-muted)", marginTop: 0, fontSize: 13 }}>
+              Manage user accounts, roles, and permissions.
             </p>
           </div>
           <button type="button" style={primaryButton} onClick={openCreate}>
-            + Add User
+            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Add User
           </button>
+        </div>
+
+        {/* Search bar */}
+        <div style={{ marginTop: 16, position: "relative" }}>
+          <div style={searchIconWrap}>
+            <SearchIcon />
+          </div>
+          <input
+            type="text"
+            placeholder="Search by name or email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={searchInputStyle}
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              style={searchClearBtn}
+              title="Clear search"
+            >
+              &#215;
+            </button>
+          )}
         </div>
 
         {error && !modalOpen ? <ErrorBanner message={error} /> : null}
 
         {modalOpen ? (
           <Modal
-            title={editing ? "Edit User" : "Add User"}
+            title={editing ? "Edit User" : "New User"}
             onClose={closeModal}
           >
             {error ? <ErrorBanner message={error} /> : null}
             <form onSubmit={editing ? saveEdit : createUser}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 10,
-            }}
-          >
-            <Field label="Name">
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                style={inputStyle}
-              />
-            </Field>
-            <Field label="Email">
-              <input
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                style={inputStyle}
-                required={!editing}
-                disabled={!!editing}
-              />
-            </Field>
-            <Field label={editing ? "New Password (optional)" : "Password"}>
-              <input
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                style={inputStyle}
-                type="password"
-                required={!editing}
-              />
-            </Field>
-          </div>
+              {/* Section: Account */}
+              <FormSection title="Account Information">
+                <div style={formGrid}>
+                  <Field label="Full Name">
+                    <input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      style={inputStyle}
+                      placeholder="e.g. Jane Doe"
+                    />
+                  </Field>
+                  <Field label="Email Address">
+                    <input
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      style={inputStyle}
+                      required={!editing}
+                      disabled={!!editing}
+                      placeholder="e.g. jane@example.com"
+                      type="email"
+                    />
+                  </Field>
+                  <Field label={editing ? "New Password (leave blank to keep)" : "Password"}>
+                    <input
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      style={inputStyle}
+                      type="password"
+                      required={!editing}
+                      placeholder={editing ? "••••••••" : "Min 6 characters"}
+                    />
+                  </Field>
+                </div>
+              </FormSection>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 10,
-              marginTop: 10,
-            }}
-          >
-            <Field label="DOB">
-              <input
-                value={dob}
-                onChange={(e) => setDob(e.target.value)}
-                style={inputStyle}
-                type="date"
-              />
-            </Field>
-            <Field label="DOH">
-              <input
-                value={hireDate}
-                onChange={(e) => setHireDate(e.target.value)}
-                style={inputStyle}
-                type="date"
-              />
-            </Field>
-            <Field label="Profile Picture">
-              <PictureUpload value={pictureUrl} onChange={setPictureUrl} />
-            </Field>
-          </div>
+              {/* Section: Profile */}
+              <FormSection title="Profile Details">
+                <div style={formGrid}>
+                  <Field label="Date of Birth">
+                    <input
+                      value={dob}
+                      onChange={(e) => setDob(e.target.value)}
+                      style={inputStyle}
+                      type="date"
+                    />
+                  </Field>
+                  <Field label="Date of Hire">
+                    <input
+                      value={hireDate}
+                      onChange={(e) => setHireDate(e.target.value)}
+                      style={inputStyle}
+                      type="date"
+                    />
+                  </Field>
+                  <Field label="Profile Picture">
+                    <PictureUpload value={pictureUrl} onChange={setPictureUrl} />
+                  </Field>
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  <Field label="About Me">
+                    <textarea
+                      value={aboutMe}
+                      onChange={(e) => setAboutMe(e.target.value)}
+                      style={{ ...inputStyle, minHeight: 80, resize: "vertical" }}
+                      placeholder="A short bio..."
+                    />
+                  </Field>
+                </div>
+              </FormSection>
 
-          <div style={{ marginTop: 10 }}>
-            <Field label="About Me">
-              <textarea
-                value={aboutMe}
-                onChange={(e) => setAboutMe(e.target.value)}
-                style={{ ...inputStyle, minHeight: 90, resize: "vertical" }}
-              />
-            </Field>
-          </div>
-          
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 10,
-              marginTop: 10,
-            }}
-          >
-            <Field label="Role">
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                style={inputStyle}
-              >
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field
-              label={editing ? "Assign Center (create only)" : "Assign Center"}
-            >
-              <select
-                value={centerId}
-                onChange={(e) => setCenterId(e.target.value)}
-                style={inputStyle}
-                disabled={!!editing}
-              >
-                <option value="">(none)</option>
-                {centers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <div style={{ display: "flex", alignItems: "end", gap: 8 }}>
-              <button type="button" style={secondaryButton} onClick={resetForm}>
-                Clear
-              </button>
-              <button type="button" style={secondaryButton} onClick={closeModal}>
-                Cancel
-              </button>
-              <button type="submit" style={primaryButton}>
-                {editing ? "Save" : "Create"}
-              </button>
-            </div>
-          </div>
+              {/* Section: Access */}
+              <FormSection title="Access & Assignment">
+                <div style={formGrid}>
+                  <Field label="Role">
+                    <select
+                      value={role}
+                      onChange={(e) => setRole(e.target.value)}
+                      style={inputStyle}
+                    >
+                      {ROLES.map((r) => (
+                        <option key={r} value={r}>
+                          {ROLE_CONFIG[r]?.label || r}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label={editing ? "Assign Center (create only)" : "Assign Center"}>
+                    <select
+                      value={centerId}
+                      onChange={(e) => setCenterId(e.target.value)}
+                      style={inputStyle}
+                      disabled={!!editing}
+                    >
+                      <option value="">(none)</option>
+                      {centers.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+              </FormSection>
+
+              {/* Actions */}
+              <div style={modalActions}>
+                <button type="button" style={secondaryButton} onClick={closeModal}>
+                  Cancel
+                </button>
+                <button type="submit" style={primaryButton} disabled={saving}>
+                  {saving ? "Saving..." : editing ? "Save Changes" : "Create User"}
+                </button>
+              </div>
             </form>
           </Modal>
         ) : null}
 
+        {/* Tabs */}
         <div style={{ marginTop: 16 }}>
           <div style={tabBarStyle}>
             {[
@@ -365,7 +434,14 @@ export default function AdminUsers() {
               >
                 {t.label}
                 {roleCounts[t.key] ? (
-                  <span style={tabCountStyle}>{roleCounts[t.key]}</span>
+                  <span
+                    style={{
+                      ...tabCountStyle,
+                      ...(roleTab === t.key ? tabCountActiveStyle : {}),
+                    }}
+                  >
+                    {roleCounts[t.key]}
+                  </span>
                 ) : null}
               </button>
             ))}
@@ -373,65 +449,226 @@ export default function AdminUsers() {
 
           {loading ? (
             <SkeletonTable rows={5} cols={4} />
+          ) : sorted.length === 0 ? (
+            <EmptyState search={search} roleTab={roleTab} onClear={() => { setSearch(""); setRoleTab("ALL"); }} />
           ) : (
-            <table style={tableStyle}>
-              <thead>
-                <tr>
-                  <th style={thStyle}>Email</th>
-                  <th style={thStyle}>Name</th>
-                  <th style={thStyle}>Role</th>
-                  <th style={thStyle}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map((u) => (
-                  <tr key={u.id}>
-                    <td style={tdStyle}>{u.email}</td>
-                    <td style={tdStyle}>
-                      {u.role === "TEACHER" ? (
-                        <Link href={`/admin/teachers/${encodeURIComponent(u.id)}`} style={teacherLink}>
-                          {u.name || "—"}
-                        </Link>
-                      ) : (
-                        u.name || "—"
-                      )}
-                    </td>
-                    <td style={tdStyle}>
-                      <code style={codePill}>{u.role}</code>
-                    </td>
-                    <td style={tdStyle}>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button
-                          type="button"
-                          style={secondaryButton}
-                          onClick={() => openEdit(u)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          style={dangerButton}
-                          onClick={() => deleteUser(u.id)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {sorted.length === 0 ? (
-                  <tr>
-                    <td style={tdStyle} colSpan={4}>
-                      No users found.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
+            <>
+              <div style={{ overflowX: "auto" }}>
+                <table style={tableStyle}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>User</th>
+                      <th style={thStyle}>Role</th>
+                      <th style={{ ...thStyle, display: "none", "@media(minWidth:768px)": { display: "table-cell" } }}>Joined</th>
+                      <th style={{ ...thStyle, textAlign: "right" }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paged.map((u) => (
+                      <UserRow
+                        key={u.id}
+                        user={u}
+                        onEdit={() => openEdit(u)}
+                        onDelete={() => deleteUser(u.id)}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div style={paginationWrap}>
+                  <span style={{ fontSize: 13, color: "var(--admin-text-muted)" }}>
+                    Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, sorted.length)} of {sorted.length}
+                  </span>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <button
+                      type="button"
+                      style={pageBtn}
+                      disabled={page === 0}
+                      onClick={() => setPage(page - 1)}
+                    >
+                      &#8592; Prev
+                    </button>
+                    {Array.from({ length: totalPages }, (_, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        style={i === page ? pageBtnActive : pageBtn}
+                        onClick={() => setPage(i)}
+                      >
+                        {i + 1}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      style={pageBtn}
+                      disabled={page >= totalPages - 1}
+                      onClick={() => setPage(page + 1)}
+                    >
+                      Next &#8594;
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </Panel>
     </AdminLayout>
+  );
+}
+
+/* ── Sub-components ── */
+
+function UserRow({ user, onEdit, onDelete }) {
+  const [hovered, setHovered] = useState(false);
+  const rc = ROLE_CONFIG[user.role] || ROLE_CONFIG.SUBSCRIBER;
+  const initials = getInitials(user.name || user.email);
+
+  return (
+    <tr
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        transition: "background 0.15s",
+        background: hovered ? "var(--admin-bg-secondary)" : "transparent",
+      }}
+    >
+      <td style={tdStyle}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {user.pictureUrl ? (
+            <img
+              src={user.pictureUrl}
+              alt=""
+              style={avatarStyle}
+            />
+          ) : (
+            <div
+              style={{
+                ...avatarStyle,
+                background: rc.bg,
+                color: rc.color,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: 700,
+                fontSize: 13,
+              }}
+            >
+              {initials}
+            </div>
+          )}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {user.role === "TEACHER" ? (
+                <Link href={`/admin/teachers/${encodeURIComponent(user.id)}`} style={teacherLink}>
+                  {user.name || "Unnamed"}
+                </Link>
+              ) : (
+                user.name || "Unnamed"
+              )}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--admin-text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {user.email}
+            </div>
+          </div>
+        </div>
+      </td>
+      <td style={tdStyle}>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "3px 10px",
+            borderRadius: 999,
+            fontSize: 12,
+            fontWeight: 700,
+            color: rc.color,
+            background: rc.bg,
+            border: `1px solid ${rc.color}22`,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {rc.label}
+        </span>
+      </td>
+      <td style={{ ...tdStyle, fontSize: 13, color: "var(--admin-text-muted)" }}>
+        {user.createdAt ? new Date(user.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+      </td>
+      <td style={{ ...tdStyle, textAlign: "right" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+          <button
+            type="button"
+            style={iconButton}
+            onClick={onEdit}
+            title="Edit user"
+          >
+            <EditIcon />
+          </button>
+          <button
+            type="button"
+            style={iconButtonDanger}
+            onClick={onDelete}
+            title="Delete user"
+          >
+            <TrashIcon />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function StatCard({ label, value, color, icon: Icon }) {
+  return (
+    <div style={statCardStyle}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 10,
+            background: `${color}14`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <Icon color={color} />
+        </div>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.1, color: "var(--admin-text)" }}>{value}</div>
+          <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginTop: 2 }}>{label}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ search, roleTab, onClear }) {
+  return (
+    <div style={{ textAlign: "center", padding: "48px 16px" }}>
+      <div style={{ fontSize: 40, marginBottom: 8, opacity: 0.3 }}>&#128100;</div>
+      <div style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)", marginBottom: 4 }}>
+        {search ? "No users match your search" : "No users found"}
+      </div>
+      <div style={{ fontSize: 13, color: "var(--admin-text-muted)", marginBottom: 16 }}>
+        {search
+          ? `Try a different search term or clear filters.`
+          : roleTab !== "ALL"
+            ? "No users with this role yet."
+            : "Get started by adding your first user."}
+      </div>
+      {(search || roleTab !== "ALL") && (
+        <button type="button" style={secondaryButton} onClick={onClear}>
+          Clear Filters
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -441,8 +678,9 @@ function Panel({ children }) {
       style={{
         background: "var(--admin-bg)",
         border: "1px solid var(--admin-border)",
-        borderRadius: 10,
-        padding: 16,
+        borderRadius: 12,
+        padding: 20,
+        marginTop: 16,
       }}
     >
       {children}
@@ -461,18 +699,15 @@ function Modal({ title, onClose, children }) {
       }}
     >
       <div style={modalCardStyle}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            marginBottom: 10,
-          }}
-        >
-          <div style={{ fontWeight: 800, fontSize: 16 }}>{title}</div>
-          <button type="button" style={secondaryButton} onClick={onClose}>
-            Close
+        <div style={modalHeader}>
+          <div style={{ fontWeight: 800, fontSize: 18 }}>{title}</div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={modalCloseBtn}
+            title="Close"
+          >
+            &#215;
           </button>
         </div>
         {children}
@@ -481,10 +716,21 @@ function Modal({ title, onClose, children }) {
   );
 }
 
+function FormSection({ title, children }) {
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 function Field({ label, children }) {
   return (
     <label style={{ display: "block" }}>
-      <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginBottom: 6 }}>
+      <div style={{ fontSize: 13, color: "var(--admin-text-secondary)", marginBottom: 6, fontWeight: 600 }}>
         {label}
       </div>
       {children}
@@ -502,8 +748,13 @@ function ErrorBanner({ message }) {
         borderRadius: 8,
         marginTop: 12,
         border: "1px solid var(--admin-error-border)",
+        fontSize: 13,
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
       }}
     >
+      <span style={{ fontSize: 16 }}>&#9888;</span>
       {message}
     </div>
   );
@@ -575,8 +826,8 @@ function PictureUpload({ value, onChange }) {
               src={value}
               alt="Profile"
               style={{
-                width: 56,
-                height: 56,
+                width: 48,
+                height: 48,
                 borderRadius: 10,
                 objectFit: "cover",
                 border: "1px solid var(--admin-border)",
@@ -594,9 +845,9 @@ function PictureUpload({ value, onChange }) {
               type="button"
               onClick={(e) => { e.stopPropagation(); onChange(""); }}
               style={{
-                background: "#ef4444",
-                color: "white",
-                border: "none",
+                background: "transparent",
+                color: "#ef4444",
+                border: "1px solid #fca5a5",
                 borderRadius: 6,
                 padding: "4px 10px",
                 fontSize: 11,
@@ -609,13 +860,13 @@ function PictureUpload({ value, onChange }) {
           </div>
         ) : (
           <div>
-            <div style={{ fontSize: 24, color: "var(--admin-text-muted)" }}>
-              {uploading ? "..." : "+"}
+            <div style={{ fontSize: 20, color: "var(--admin-text-muted)" }}>
+              {uploading ? "..." : "\u2191"}
             </div>
             <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginTop: 4 }}>
-              {uploading ? "Uploading..." : "Click or drag photo here"}
+              {uploading ? "Uploading..." : "Click or drag photo"}
             </div>
-            <div style={{ fontSize: 10, color: "var(--admin-text-muted)", marginTop: 2 }}>
+            <div style={{ fontSize: 10, color: "var(--admin-text-faint)", marginTop: 2 }}>
               JPG, PNG — max 5MB
             </div>
           </div>
@@ -632,41 +883,128 @@ function PictureUpload({ value, onChange }) {
   );
 }
 
+/* ── Icons ── */
+
+function SearchIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+  );
+}
+
+function EditIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18" />
+      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+    </svg>
+  );
+}
+
+function IconUsers({ color }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function IconBook({ color }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+    </svg>
+  );
+}
+
+function IconHeart({ color }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+    </svg>
+  );
+}
+
+function IconShield({ color }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
+    </svg>
+  );
+}
+
+/* ── Helpers ── */
+
+function getInitials(str) {
+  if (!str) return "?";
+  const parts = str.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return str.slice(0, 2).toUpperCase();
+}
+
+/* ── Styles ── */
+
 const inputStyle = {
   width: "100%",
-  padding: 10,
+  padding: "9px 12px",
   border: "1px solid var(--admin-border)",
   borderRadius: 8,
   boxSizing: "border-box",
+  fontSize: 14,
+  background: "var(--admin-bg)",
+  color: "var(--admin-text)",
+  transition: "border-color 0.15s",
+  outline: "none",
+};
+
+const formGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 12,
 };
 
 const tableStyle = {
   width: "100%",
   borderCollapse: "collapse",
-  border: "1px solid var(--admin-border)",
-  borderRadius: 10,
-  overflow: "hidden",
 };
 
 const thStyle = {
   textAlign: "left",
-  fontSize: 12,
+  fontSize: 11,
+  fontWeight: 700,
   color: "var(--admin-text-muted)",
-  padding: 10,
-  borderBottom: "1px solid var(--admin-border)",
-  background: "var(--admin-bg-secondary)",
+  padding: "10px 12px",
+  borderBottom: "2px solid var(--admin-border)",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
 };
 
 const tdStyle = {
-  padding: 10,
+  padding: "10px 12px",
   borderBottom: "1px solid var(--admin-border-light)",
-  verticalAlign: "top",
+  verticalAlign: "middle",
 };
 
-const codePill = {
-  background: "var(--admin-bg-tertiary)",
-  padding: "2px 8px",
-  borderRadius: 999,
+const avatarStyle = {
+  width: 36,
+  height: 36,
+  borderRadius: 10,
+  objectFit: "cover",
+  flexShrink: 0,
 };
 
 const modalOverlayStyle = {
@@ -678,48 +1016,98 @@ const modalOverlayStyle = {
   alignItems: "center",
   justifyContent: "center",
   padding: 16,
+  animation: "overlayIn 0.15s ease-out",
 };
 
 const modalCardStyle = {
-  width: "min(980px, 100%)",
-  maxHeight: "min(86vh, 900px)",
+  width: "min(640px, 100%)",
+  maxHeight: "min(88vh, 900px)",
   overflow: "auto",
   background: "var(--admin-bg)",
   border: "1px solid var(--admin-border)",
-  borderRadius: 12,
-  padding: 16,
-  boxShadow:
-    "0 20px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.12)",
+  borderRadius: 14,
+  padding: 24,
+  boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+  animation: "modalIn 0.2s ease-out",
+};
+
+const modalHeader = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  paddingBottom: 16,
+  borderBottom: "1px solid var(--admin-border)",
+};
+
+const modalCloseBtn = {
+  width: 32,
+  height: 32,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 20,
+  background: "var(--admin-bg-secondary)",
+  color: "var(--admin-text-muted)",
+  border: "1px solid var(--admin-border)",
+  borderRadius: 8,
+  cursor: "pointer",
+  lineHeight: 1,
+};
+
+const modalActions = {
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: 8,
+  marginTop: 20,
+  paddingTop: 16,
+  borderTop: "1px solid var(--admin-border)",
 };
 
 const primaryButton = {
-  padding: "10px 12px",
-  background: "#2563eb",
+  padding: "10px 18px",
+  background: "linear-gradient(135deg, #1e3a8a, #0284c7)",
   color: "white",
   border: "none",
-  borderRadius: 8,
+  borderRadius: 10,
   cursor: "pointer",
-  fontWeight: 600,
+  fontWeight: 700,
+  fontSize: 13,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  transition: "background 0.15s",
 };
 
 const secondaryButton = {
-  padding: "10px 12px",
+  padding: "9px 18px",
   background: "var(--admin-bg)",
   color: "var(--admin-text)",
   border: "1px solid var(--admin-border)",
   borderRadius: 8,
   cursor: "pointer",
   fontWeight: 600,
+  fontSize: 13,
 };
 
-const dangerButton = {
-  padding: "10px 12px",
-  background: "#ef4444",
-  color: "white",
-  border: "none",
+const iconButton = {
+  width: 32,
+  height: 32,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "var(--admin-bg)",
+  color: "var(--admin-text-muted)",
+  border: "1px solid var(--admin-border)",
   borderRadius: 8,
   cursor: "pointer",
-  fontWeight: 600,
+  transition: "all 0.15s",
+};
+
+const iconButtonDanger = {
+  ...iconButton,
+  color: "#ef4444",
+  borderColor: "#fecaca",
 };
 
 const teacherLink = {
@@ -775,4 +1163,108 @@ const tabCountStyle = {
   borderRadius: 999,
   fontSize: 11,
   fontWeight: 700,
+};
+
+const tabCountActiveStyle = {
+  background: "#2563eb18",
+  color: "#2563eb",
+};
+
+const statsGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: 12,
+};
+
+const statCardStyle = {
+  background: "var(--admin-bg)",
+  border: "1px solid var(--admin-border)",
+  borderRadius: 12,
+  padding: 16,
+};
+
+const searchInputStyle = {
+  width: "100%",
+  padding: "10px 12px 10px 40px",
+  border: "1px solid var(--admin-border)",
+  borderRadius: 10,
+  boxSizing: "border-box",
+  fontSize: 14,
+  background: "var(--admin-bg-secondary)",
+  color: "var(--admin-text)",
+  outline: "none",
+};
+
+const searchIconWrap = {
+  position: "absolute",
+  left: 12,
+  top: "50%",
+  transform: "translateY(-50%)",
+  color: "var(--admin-text-muted)",
+  pointerEvents: "none",
+  display: "flex",
+};
+
+const searchClearBtn = {
+  position: "absolute",
+  right: 8,
+  top: "50%",
+  transform: "translateY(-50%)",
+  width: 24,
+  height: 24,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "var(--admin-bg-tertiary)",
+  color: "var(--admin-text-muted)",
+  border: "none",
+  borderRadius: 6,
+  cursor: "pointer",
+  fontSize: 16,
+  lineHeight: 1,
+};
+
+const toastStyle = {
+  position: "fixed",
+  bottom: 24,
+  right: 24,
+  zIndex: 100,
+  background: "var(--admin-success-bg)",
+  color: "var(--admin-success-text)",
+  border: "1px solid var(--admin-success-border)",
+  borderRadius: 10,
+  padding: "10px 20px",
+  fontSize: 13,
+  fontWeight: 600,
+  display: "flex",
+  alignItems: "center",
+  boxShadow: "0 10px 25px -5px rgba(0,0,0,0.1)",
+  animation: "toastIn 0.3s ease-out",
+};
+
+const paginationWrap = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  marginTop: 16,
+  flexWrap: "wrap",
+  gap: 8,
+};
+
+const pageBtn = {
+  padding: "6px 12px",
+  fontSize: 13,
+  fontWeight: 600,
+  background: "var(--admin-bg)",
+  color: "var(--admin-text-muted)",
+  border: "1px solid var(--admin-border)",
+  borderRadius: 6,
+  cursor: "pointer",
+};
+
+const pageBtnActive = {
+  ...pageBtn,
+  background: "#2563eb",
+  color: "white",
+  borderColor: "#2563eb",
 };

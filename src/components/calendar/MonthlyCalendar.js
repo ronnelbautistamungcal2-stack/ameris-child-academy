@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -19,8 +19,15 @@ const TYPE_COLORS = {
 };
 
 const SOURCE_COLORS = {
-  event: "bg-indigo-100 text-indigo-700",
-  shift: "bg-violet-100 text-violet-700",
+  event: "bg-indigo-100 text-indigo-700 border-indigo-200",
+  shift: "bg-blue-100 text-blue-700 border-blue-200",
+  timeoff: "bg-emerald-100 text-emerald-700 border-emerald-200",
+};
+
+const SOURCE_DOT = {
+  event: "#6366f1",
+  shift: "#3b82f6",
+  timeoff: "#10b981",
 };
 
 function getEventColor(event) {
@@ -39,22 +46,30 @@ function normalizeDate(d) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-export default function MonthlyCalendar({ year, month, events = [], onMonthChange, onDayClick, legendItems }) {
+export default function MonthlyCalendar({ year, month, events = [], onMonthChange, onDayClick, selectedDay, legendItems }) {
   const today = new Date();
   const firstDay = new Date(year, month, 1);
   const startDow = firstDay.getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
+  // Previous month days for leading cells
+  const prevMonthDays = new Date(year, month, 0).getDate();
+
   const cells = useMemo(() => {
     const result = [];
-    for (let i = 0; i < startDow; i++) {
-      result.push({ day: null, key: `pad-${i}` });
+    for (let i = startDow - 1; i >= 0; i--) {
+      result.push({ day: prevMonthDays - i, key: `pad-${i}`, outside: true });
     }
     for (let d = 1; d <= daysInMonth; d++) {
-      result.push({ day: d, key: `day-${d}` });
+      result.push({ day: d, key: `day-${d}`, outside: false });
+    }
+    // Trailing cells to fill last row
+    const trailing = (7 - (result.length % 7)) % 7;
+    for (let i = 1; i <= trailing; i++) {
+      result.push({ day: i, key: `trail-${i}`, outside: true });
     }
     return result;
-  }, [startDow, daysInMonth]);
+  }, [startDow, daysInMonth, prevMonthDays]);
 
   const eventsByDay = useMemo(() => {
     const map = {};
@@ -82,6 +97,13 @@ export default function MonthlyCalendar({ year, month, events = [], onMonthChang
     else onMonthChange?.(year, month + 1);
   }
 
+  function goToday() {
+    const t = new Date();
+    onMonthChange?.(t.getFullYear(), t.getMonth());
+  }
+
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+
   const legendEntries = legendItems || Object.entries(TYPE_COLORS).map(([type, cls]) => ({
     label: type,
     cls: cls.split(" ")[0],
@@ -89,77 +111,179 @@ export default function MonthlyCalendar({ year, month, events = [], onMonthChang
 
   return (
     <div>
-      <div className="flex items-center justify-between py-2">
-        <button
-          type="button"
-          onClick={prevMonth}
-          className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-        >
-          &larr;
-        </button>
-        <div className="text-sm font-extrabold text-gray-900">
+      {/* Navigation header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            type="button"
+            onClick={prevMonth}
+            style={{
+              width: 36, height: 36, display: "inline-flex", alignItems: "center", justifyContent: "center",
+              border: "1px solid var(--admin-border)", borderRadius: 8, background: "var(--admin-bg)",
+              color: "var(--admin-text-secondary)", cursor: "pointer", fontSize: 16, fontWeight: 600,
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = "var(--admin-bg-tertiary)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "var(--admin-bg)"; }}
+            aria-label="Previous month"
+          >
+            &#8249;
+          </button>
+          <button
+            type="button"
+            onClick={nextMonth}
+            style={{
+              width: 36, height: 36, display: "inline-flex", alignItems: "center", justifyContent: "center",
+              border: "1px solid var(--admin-border)", borderRadius: 8, background: "var(--admin-bg)",
+              color: "var(--admin-text-secondary)", cursor: "pointer", fontSize: 16, fontWeight: 600,
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = "var(--admin-bg-tertiary)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "var(--admin-bg)"; }}
+            aria-label="Next month"
+          >
+            &#8250;
+          </button>
+        </div>
+
+        <div style={{ fontSize: 18, fontWeight: 800, color: "var(--admin-text)", letterSpacing: "-0.02em" }}>
           {MONTH_NAMES[month]} {year}
         </div>
+
         <button
           type="button"
-          onClick={nextMonth}
-          className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          onClick={goToday}
+          style={{
+            padding: "6px 14px", fontSize: 12, fontWeight: 700,
+            border: isCurrentMonth ? "1px solid #2563eb" : "1px solid var(--admin-border)",
+            borderRadius: 8,
+            background: isCurrentMonth ? "#2563eb" : "var(--admin-bg)",
+            color: isCurrentMonth ? "#fff" : "var(--admin-text-secondary)",
+            cursor: "pointer", transition: "all 0.15s ease",
+          }}
         >
-          &rarr;
+          Today
         </button>
       </div>
 
-      <div className="mt-2 grid grid-cols-7 border-b border-gray-200">
-        {DAY_LABELS.map((label) => (
-          <div key={label} className="py-2 text-center text-xs font-semibold text-gray-500">
+      {/* Day-of-week headers */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: "2px solid var(--admin-border)" }}>
+        {DAY_LABELS.map((label, i) => (
+          <div key={label} style={{
+            padding: "8px 0", textAlign: "center", fontSize: 11, fontWeight: 700,
+            textTransform: "uppercase", letterSpacing: "0.05em",
+            color: (i === 0 || i === 6) ? "var(--admin-text-faint)" : "var(--admin-text-muted)",
+          }}>
             {label}
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-7">
+      {/* Calendar grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
         {cells.map((cell) => {
-          if (cell.day === null) {
-            return <div key={cell.key} className="min-h-[72px] border border-gray-50 bg-gray-50/50" />;
+          if (cell.outside) {
+            return (
+              <div key={cell.key} style={{
+                minHeight: 88, padding: 4,
+                borderBottom: "1px solid var(--admin-border-light, #f3f4f6)",
+                borderRight: "1px solid var(--admin-border-light, #f3f4f6)",
+                background: "var(--admin-bg-secondary)",
+              }}>
+                <div style={{ textAlign: "right", fontSize: 12, color: "var(--admin-text-faint)", opacity: 0.5, padding: "2px 4px" }}>
+                  {cell.day}
+                </div>
+              </div>
+            );
           }
 
           const dayEvents = eventsByDay[cell.day] || [];
           const isToday = sameDay(new Date(year, month, cell.day), today);
+          const isSelected = selectedDay === cell.day;
+          const isWeekend = new Date(year, month, cell.day).getDay() % 6 === 0;
+
+          // Get unique source types for dot indicators
+          const sourceDots = [...new Set(dayEvents.map(e => e._source).filter(Boolean))];
 
           return (
             <div
               key={cell.key}
-              className={[
-                "min-h-[72px] border border-gray-100 p-1",
-                isToday ? "ring-2 ring-inset ring-sky-400 bg-sky-50/30" : "",
-                onDayClick ? "cursor-pointer hover:bg-gray-50" : "",
-              ].join(" ")}
               onClick={onDayClick ? () => onDayClick(cell.day) : undefined}
+              style={{
+                minHeight: 88, padding: 4, position: "relative",
+                borderBottom: "1px solid var(--admin-border-light, #f3f4f6)",
+                borderRight: "1px solid var(--admin-border-light, #f3f4f6)",
+                background: isSelected
+                  ? "var(--admin-accent-bg)"
+                  : isWeekend
+                    ? "var(--admin-bg-secondary)"
+                    : "var(--admin-bg)",
+                cursor: onDayClick ? "pointer" : "default",
+                transition: "background 0.12s ease",
+                ...(isSelected ? { boxShadow: "inset 0 0 0 2px #2563eb" } : {}),
+              }}
+              onMouseEnter={e => {
+                if (!isSelected) e.currentTarget.style.background = "var(--admin-bg-tertiary)";
+              }}
+              onMouseLeave={e => {
+                if (!isSelected) {
+                  e.currentTarget.style.background = isWeekend ? "var(--admin-bg-secondary)" : "var(--admin-bg)";
+                }
+              }}
             >
-              <div className={[
-                "text-right text-xs",
-                isToday ? "font-extrabold text-sky-700" : "text-gray-600",
-              ].join(" ")}>
-                {cell.day}
+              {/* Day number */}
+              <div style={{
+                display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 3,
+                padding: "1px 3px", marginBottom: 2,
+              }}>
+                {/* Source dot indicators */}
+                {sourceDots.length > 0 && (
+                  <div style={{ display: "flex", gap: 2, marginRight: "auto" }}>
+                    {sourceDots.map(src => (
+                      <span key={src} style={{
+                        width: 5, height: 5, borderRadius: "50%",
+                        background: SOURCE_DOT[src] || "#9ca3af",
+                      }} />
+                    ))}
+                  </div>
+                )}
+                <span style={{
+                  fontSize: 12, fontWeight: isToday ? 800 : 500,
+                  color: isToday ? "#fff" : isSelected ? "#2563eb" : "var(--admin-text-muted)",
+                  ...(isToday ? {
+                    background: "#2563eb", borderRadius: "50%",
+                    width: 24, height: 24, display: "inline-flex",
+                    alignItems: "center", justifyContent: "center", lineHeight: 1,
+                  } : {}),
+                }}>
+                  {cell.day}
+                </span>
               </div>
+
+              {/* Event pills */}
               {dayEvents.length > 0 && (
-                <div className="mt-0.5 space-y-0.5">
-                  {dayEvents.slice(0, 3).map((evt) => (
+                <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  {dayEvents.slice(0, 2).map((evt) => (
                     <div
                       key={evt.id}
-                      className={`truncate rounded-sm px-1 text-[10px] font-semibold leading-tight ${getEventColor(evt)}`}
+                      className={getEventColor(evt)}
+                      style={{
+                        fontSize: 10, fontWeight: 600, lineHeight: "14px",
+                        padding: "1px 4px", borderRadius: 3,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}
                       title={evt._source === "event"
                         ? `${evt.type || "Event"} - ${evt.label}`
                         : evt._source === "shift"
                           ? `Shift - ${evt.label}`
                           : `${evt.type || "Time Off"} - ${evt.user?.name || "Unknown"} (${evt.status})`}
                     >
-                      {evt.label || evt.user?.name || "—"}
+                      {evt.label || evt.user?.name || "\u2014"}
                     </div>
                   ))}
-                  {dayEvents.length > 3 && (
-                    <div className="px-1 text-[10px] text-gray-400">
-                      +{dayEvents.length - 3} more
+                  {dayEvents.length > 2 && (
+                    <div style={{ fontSize: 10, color: "var(--admin-text-faint)", paddingLeft: 4, fontWeight: 600 }}>
+                      +{dayEvents.length - 2} more
                     </div>
                   )}
                 </div>
@@ -169,11 +293,15 @@ export default function MonthlyCalendar({ year, month, events = [], onMonthChang
         })}
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-3">
+      {/* Legend */}
+      <div style={{
+        display: "flex", flexWrap: "wrap", gap: 16, marginTop: 14,
+        padding: "10px 0", borderTop: "1px solid var(--admin-border-light, #f3f4f6)",
+      }}>
         {legendEntries.map((item) => (
-          <div key={item.label} className="flex items-center gap-1.5">
-            <span className={`inline-block h-3 w-3 rounded-sm ${item.cls}`} />
-            <span className="text-xs text-gray-500">{item.label}</span>
+          <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span className={item.cls} style={{ width: 10, height: 10, borderRadius: 3, display: "inline-block" }} />
+            <span style={{ fontSize: 11, color: "var(--admin-text-muted)", fontWeight: 600 }}>{item.label}</span>
           </div>
         ))}
       </div>

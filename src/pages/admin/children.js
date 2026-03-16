@@ -38,9 +38,7 @@ export default function AdminChildren() {
   const [feedingBottlesPerDay, setFeedingBottlesPerDay] = useState("");
   const [feedingBottleNotes, setFeedingBottleNotes] = useState("");
 
-  const [healthAssessmentDocuments, setHealthAssessmentDocuments] = useState(
-    [],
-  );
+  const [healthAssessmentDocuments, setHealthAssessmentDocuments] = useState([]);
   const [enrollmentDocuments, setEnrollmentDocuments] = useState([]);
   const [healthAssessmentFiles, setHealthAssessmentFiles] = useState([]);
   const [enrollmentFiles, setEnrollmentFiles] = useState([]);
@@ -90,7 +88,6 @@ export default function AdminChildren() {
 
   const centerById = useMemo(() => Object.fromEntries(centers.map((c) => [c.id, c])), [centers]);
   const classById = useMemo(() => Object.fromEntries(classes.map((c) => [c.id, c])), [classes]);
-
 
   const filteredSorted = useMemo(() => {
     const query = (q || "").trim().toLowerCase();
@@ -525,48 +522,74 @@ export default function AdminChildren() {
     }
   }
 
+  /* ── Stats ── */
+  const stats = useMemo(() => {
+    const total = children.length;
+    const infants = children.filter((c) => { const ag = childAgeGroup(c); return ag === "0-1"; }).length;
+    const withAllergies = children.filter((c) => c.allergies).length;
+    const unassigned = children.filter((c) => !c.classRoomId).length;
+    return { total, infants, withAllergies, unassigned };
+  }, [children]);
+
+  function getInitials(ch) {
+    const f = (ch.firstName || "")[0] || "";
+    const l = (ch.lastName || "")[0] || "";
+    return (f + l).toUpperCase() || "?";
+  }
+
+  const AGE_COLORS = {
+    "0-1": { bg: "#FEF3C7", text: "#92400E", border: "#FDE68A" },
+    "2": { bg: "#DBEAFE", text: "#1E40AF", border: "#BFDBFE" },
+    "3": { bg: "#D1FAE5", text: "#065F46", border: "#A7F3D0" },
+    "4-5": { bg: "#EDE9FE", text: "#5B21B6", border: "#DDD6FE" },
+    "6-7": { bg: "#FCE7F3", text: "#9D174D", border: "#FBCFE8" },
+    "8-12": { bg: "#FEE2E2", text: "#991B1B", border: "#FECACA" },
+    "12+": { bg: "#F3F4F6", text: "#374151", border: "#E5E7EB" },
+    "Unknown": { bg: "#F3F4F6", text: "#6B7280", border: "#E5E7EB" },
+  };
+
   return (
     <AdminLayout title="Children">
-      <Panel>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "baseline",
-            justifyContent: "space-between",
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
+      {/* Stats Row */}
+      {!loading && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
+          <StatCard icon="👶" label="Total Children" value={stats.total} color="#2563eb" bg="#DBEAFE" />
+          <StatCard icon="🍼" label="Infants (0-1)" value={stats.infants} color="#D97706" bg="#FEF3C7" />
+          <StatCard icon="⚠️" label="With Allergies" value={stats.withAllergies} color="#DC2626" bg="#FEE2E2" />
+          <StatCard icon="📋" label="No Classroom" value={stats.unassigned} color="#7C3AED" bg="#EDE9FE" />
+        </div>
+      )}
+
+      <div style={panelStyle}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div>
-            <h2 style={{ marginTop: 0 }}>Children</h2>
-            <p style={{ color: "var(--admin-text-muted)", marginTop: 6 }}>
-              Student setup: create/modify/delete child records and assign to
-              center/class/parent.
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--admin-text)" }}>Children</h2>
+            <p style={{ color: "var(--admin-text-muted)", marginTop: 4, fontSize: 13 }}>
+              Manage child records, assignments, and enrollment details.
             </p>
           </div>
-          <button type="button" style={primaryButton} onClick={openCreate}>
-            + Add Child
+          <button type="button" style={primaryButtonStyle} onClick={openCreate}>
+            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Add Child
           </button>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 220px",
-            gap: 10,
-            marginTop: 12,
-            maxWidth: 760,
-          }}
-        >
-          <Field label="Search">
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              style={inputStyle}
-              placeholder="Search by name or ID"
-            />
-          </Field>
-          <Field label="Age">
+        {/* Search & Filter Bar */}
+        <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div style={{ flex: "1 1 280px", minWidth: 200 }}>
+            <div style={filterLabelStyle}>Search</div>
+            <div style={{ position: "relative" }}>
+              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--admin-text-muted)", fontSize: 14, pointerEvents: "none" }}>🔍</span>
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                style={{ ...inputStyle, paddingLeft: 36 }}
+                placeholder="Search by name or ID..."
+              />
+            </div>
+          </div>
+          <div style={{ flex: "0 0 200px" }}>
+            <div style={filterLabelStyle}>Age Group</div>
             <select
               value={ageFilter}
               onChange={(e) => setAgeFilter(e.target.value)}
@@ -582,576 +605,588 @@ export default function AdminChildren() {
               <option value="12+">12+ years</option>
               <option value="Unknown">Unknown</option>
             </select>
-          </Field>
+          </div>
+          {(q || ageFilter) && (
+            <button
+              type="button"
+              onClick={() => { setQ(""); setAgeFilter(""); }}
+              style={{ ...secondaryButtonStyle, alignSelf: "flex-end", fontSize: 12, padding: "10px 14px" }}
+            >
+              Clear Filters
+            </button>
+          )}
         </div>
+
+        {/* Result count */}
+        {!loading && (
+          <div style={{ marginTop: 12, fontSize: 12, color: "var(--admin-text-muted)", fontWeight: 600 }}>
+            Showing {filteredSorted.length} of {children.length} children
+            {q && <> matching &quot;{q}&quot;</>}
+          </div>
+        )}
 
         {error && !modalOpen ? <ErrorBanner message={error} /> : null}
 
-        {modalOpen ? (
-          <Modal
-            title={editing ? "Edit Child" : "Add Child"}
-            onClose={closeModal}
-          >
-            {error ? <ErrorBanner message={error} /> : null}
+        {/* Children List */}
+        <div style={{ marginTop: 16 }}>
+          {loading ? (
+            <SkeletonTable rows={5} cols={7} />
+          ) : filteredSorted.length === 0 ? (
+            <EmptyState
+              title="No children found"
+              description={q || ageFilter ? "Try adjusting your search or filters." : "Get started by adding your first child record."}
+              actionLabel={!q && !ageFilter ? "+ Add Child" : undefined}
+              onAction={!q && !ageFilter ? openCreate : undefined}
+              className="py-8"
+            />
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8 }}>
+              {filteredSorted.map((ch) => {
+                const fullName = `${ch.firstName || ""} ${ch.lastName || ""}`.trim();
+                const age = childAgeGroup(ch);
+                const ageColor = AGE_COLORS[age] || AGE_COLORS["Unknown"];
+                const centerName = centerById[ch.centerId]?.name || "—";
+                const className = ch.classRoomId ? (classById[ch.classRoomId]?.name || ch.classRoomId) : null;
+                const parentEmail = ch.parentId ? (userById[ch.parentId]?.email || ch.parentId) : null;
 
-            <form onSubmit={editing ? saveEdit : createChild}>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                  gap: 10,
-                }}
-              >
-                <Field label="First Name">
-                  <input
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    style={inputStyle}
-                    required
-                  />
-                </Field>
-                <Field label="Last Name">
-                  <input
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    style={inputStyle}
-                  />
-                </Field>
-                <Field label="Birth Date">
-                  <input
-                    value={birthDate}
-                    onChange={(e) => setBirthDate(e.target.value)}
-                    style={inputStyle}
-                    type="date"
-                  />
-                </Field>
-                <Field label="Enrollment Start">
-                  <input
-                    value={enrollmentStartDate}
-                    onChange={(e) => setEnrollmentStartDate(e.target.value)}
-                    style={inputStyle}
-                    type="date"
-                  />
-                </Field>
-                <Field label="Enrollment End">
-                  <input
-                    value={enrollmentEndDate}
-                    onChange={(e) => setEnrollmentEndDate(e.target.value)}
-                    style={inputStyle}
-                    type="date"
-                  />
-                </Field>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                  gap: 10,
-                  marginTop: 10,
-                }}
-              >
-                <Field label={editing ? "Center (create only)" : "Center"}>
-                  <select
-                    value={centerId}
-                    onChange={(e) => setCenterId(e.target.value)}
-                    style={inputStyle}
-                    required={!editing}
-                    disabled={!!editing}
-                  >
-                    <option value="">
-                      {editing ? "(unchanged)" : "Select a center"}
-                    </option>
-                    {centers.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Class">
-                  <select
-                    value={classRoomId}
-                    onChange={(e) => setClassRoomId(e.target.value)}
-                    style={inputStyle}
-                  >
-                    <option value="">(none)</option>
-                    {classes
-                      .filter((cl) => !centerId || cl.centerId === centerId)
-                      .map((cl) => (
-                        <option key={cl.id} value={cl.id}>
-                          {cl.name}
-                        </option>
-                      ))}
-                  </select>
-                </Field>
-                <Field label={editing ? "Parent (create only)" : "Parent"}>
-                  <select
-                    value={parentId}
-                    onChange={(e) => setParentId(e.target.value)}
-                    style={inputStyle}
-                    disabled={!!editing}
-                  >
-                    <option value="">
-                      {editing ? "(unchanged)" : "(none)"}
-                    </option>
-                    {parents.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.email}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                  gap: 10,
-                  marginTop: 10,
-                }}
-              >
-                <Field label="Emergency Contact">
-                  <input
-                    value={emergencyContact}
-                    onChange={(e) => setEmergencyContact(e.target.value)}
-                    style={inputStyle}
-                    placeholder="Name + phone"
-                  />
-                </Field>
-                <Field label="Allergies">
-                  <input
-                    value={allergies}
-                    onChange={(e) => setAllergies(e.target.value)}
-                    style={inputStyle}
-                    placeholder="e.g. peanuts, dairy"
-                  />
-                </Field>
-              </div>
-
-              {isInfant ? (
-                <div style={{ marginTop: 14 }}>
-                  <div style={{ fontWeight: 800, marginBottom: 8 }}>
-                    Feeding (0-1 years)
-                  </div>
+                return (
                   <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns:
-                        "repeat(auto-fit, minmax(220px, 1fr))",
-                      gap: 10,
-                    }}
+                    key={ch.id}
+                    style={childCardStyle}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#93C5FD"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(37,99,235,0.08)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--admin-border)"; e.currentTarget.style.boxShadow = "none"; }}
                   >
-                    <Field label="What they eat">
-                      <input
-                        value={feedingFoods}
-                        onChange={(e) => setFeedingFoods(e.target.value)}
-                        style={inputStyle}
-                        placeholder="e.g. purees, solids"
-                      />
-                    </Field>
-                    <Field label="Formula">
-                      <input
-                        value={feedingFormula}
-                        onChange={(e) => setFeedingFormula(e.target.value)}
-                        style={inputStyle}
-                      />
-                    </Field>
-                    <Field label="# Bottles / day">
-                      <input
-                        value={feedingBottlesPerDay}
-                        onChange={(e) =>
-                          setFeedingBottlesPerDay(e.target.value)
-                        }
-                        style={inputStyle}
-                        inputMode="numeric"
-                        placeholder="e.g. 4"
-                      />
-                    </Field>
-                    <Field label="Bottle notes (optional)">
-                      <input
-                        value={feedingBottleNotes}
-                        onChange={(e) =>
-                          setFeedingBottleNotes(e.target.value)
-                        }
-                        style={inputStyle}
-                      />
-                    </Field>
+                    {/* Avatar */}
+                    <div style={avatarStyle}>
+                      {getInitials(ch)}
+                    </div>
+
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: 700, fontSize: 14, color: "var(--admin-text)" }}>
+                          {fullName || "Unnamed"}
+                        </span>
+                        <span style={{ ...ageBadgeStyle, background: ageColor.bg, color: ageColor.text, borderColor: ageColor.border }}>
+                          {age === "Unknown" ? "Age unknown" : `${age} yr`}
+                        </span>
+                        {ch.allergies && (
+                          <span style={{ ...tagStyle, background: "#FEE2E2", color: "#991B1B", borderColor: "#FECACA" }}>
+                            ⚠ Allergies
+                          </span>
+                        )}
+                        {!ch.classRoomId && (
+                          <span style={{ ...tagStyle, background: "#FEF3C7", color: "#92400E", borderColor: "#FDE68A" }}>
+                            No class
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 6, flexWrap: "wrap", fontSize: 12, color: "var(--admin-text-muted)" }}>
+                        {ch.birthDate && (
+                          <span>Born {new Date(ch.birthDate).toLocaleDateString()}</span>
+                        )}
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2563eb", display: "inline-block" }} />
+                          {centerName}
+                        </span>
+                        {className && (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", display: "inline-block" }} />
+                            {className}
+                          </span>
+                        )}
+                        {parentEmail && (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            👤 {parentEmail}
+                          </span>
+                        )}
+                      </div>
+
+                      {(ch.enrollmentStartDate || ch.enrollmentEndDate) && (
+                        <div style={{ marginTop: 4, fontSize: 11, color: "var(--admin-text-muted)" }}>
+                          Enrolled: {ch.enrollmentStartDate ? new Date(ch.enrollmentStartDate).toLocaleDateString() : "—"} — {ch.enrollmentEndDate ? new Date(ch.enrollmentEndDate).toLocaleDateString() : "Present"}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        style={cardActionButton}
+                        onClick={() => openEdit(ch)}
+                        title="Edit"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        style={cardDangerButton}
+                        onClick={() => setDeleteConfirmId(ch.id)}
+                        title="Delete"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ) : null}
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
 
-              <div style={{ marginTop: 14 }}>
-                <div style={{ fontWeight: 800, marginBottom: 8 }}>
-                  Documents
-                </div>
+      {/* Modal */}
+      {modalOpen ? (
+        <Modal
+          title={editing ? `Edit — ${editing.firstName} ${editing.lastName || ""}` : "Add New Child"}
+          onClose={closeModal}
+        >
+          {error ? <ErrorBanner message={error} /> : null}
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-                    gap: 10,
-                  }}
+          <form onSubmit={editing ? saveEdit : createChild}>
+            {/* Section: Basic Info */}
+            <SectionHeader icon="👤" title="Basic Information" />
+            <div style={formGridStyle}>
+              <Field label="First Name">
+                <input
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  style={inputStyle}
+                  required
+                  placeholder="First name"
+                />
+              </Field>
+              <Field label="Last Name">
+                <input
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  style={inputStyle}
+                  placeholder="Last name"
+                />
+              </Field>
+              <Field label="Birth Date">
+                <input
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                  style={inputStyle}
+                  type="date"
+                />
+              </Field>
+              <Field label="Enrollment Start">
+                <input
+                  value={enrollmentStartDate}
+                  onChange={(e) => setEnrollmentStartDate(e.target.value)}
+                  style={inputStyle}
+                  type="date"
+                />
+              </Field>
+              <Field label="Enrollment End">
+                <input
+                  value={enrollmentEndDate}
+                  onChange={(e) => setEnrollmentEndDate(e.target.value)}
+                  style={inputStyle}
+                  type="date"
+                />
+              </Field>
+            </div>
+
+            {/* Section: Placement */}
+            <SectionHeader icon="🏫" title="Placement" style={{ marginTop: 20 }} />
+            <div style={formGridStyle}>
+              <Field label={editing ? "Center (set at creation)" : "Center"}>
+                <select
+                  value={centerId}
+                  onChange={(e) => setCenterId(e.target.value)}
+                  style={inputStyle}
+                  required={!editing}
+                  disabled={!!editing}
                 >
-                  <Field label="Health assessment (upload)">
-                    <input
-                      type="file"
-                      onChange={(e) =>
-                        setHealthAssessmentFiles(
-                          Array.from(e.target.files || []),
-                        )
-                      }
-                      style={inputStyle}
-                    />
-                    {healthAssessmentDocuments.length ? (
-                      <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
-                        {healthAssessmentDocuments.map((d, idx) => (
-                          <div
-                            key={`${d?.url || "doc"}-${idx}`}
-                            style={docRowStyle}
-                          >
-                            <a
-                              href={d.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              style={docLinkStyle}
-                            >
-                              {d.originalName || d.url}
-                            </a>
-                            <button
-                              type="button"
-                              style={miniDangerButton}
-                              onClick={() =>
-                                setHealthAssessmentDocuments((cur) =>
-                                  cur.filter((_, i) => i !== idx),
-                                )
-                              }
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                  </Field>
+                  <option value="">
+                    {editing ? "(unchanged)" : "Select a center"}
+                  </option>
+                  {centers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Classroom">
+                <select
+                  value={classRoomId}
+                  onChange={(e) => setClassRoomId(e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="">(none)</option>
+                  {classes
+                    .filter((cl) => !centerId || cl.centerId === centerId)
+                    .map((cl) => (
+                      <option key={cl.id} value={cl.id}>
+                        {cl.name}
+                      </option>
+                    ))}
+                </select>
+              </Field>
+              <Field label={editing ? "Parent (set at creation)" : "Parent"}>
+                <select
+                  value={parentId}
+                  onChange={(e) => setParentId(e.target.value)}
+                  style={inputStyle}
+                  disabled={!!editing}
+                >
+                  <option value="">
+                    {editing ? "(unchanged)" : "(none)"}
+                  </option>
+                  {parents.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.email}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
 
-                  <Field label="Enrollment documents (upload)">
+            {/* Section: Health & Safety */}
+            <SectionHeader icon="🏥" title="Health & Safety" style={{ marginTop: 20 }} />
+            <div style={formGridStyle}>
+              <Field label="Emergency Contact">
+                <input
+                  value={emergencyContact}
+                  onChange={(e) => setEmergencyContact(e.target.value)}
+                  style={inputStyle}
+                  placeholder="Name + phone"
+                />
+              </Field>
+              <Field label="Allergies">
+                <input
+                  value={allergies}
+                  onChange={(e) => setAllergies(e.target.value)}
+                  style={inputStyle}
+                  placeholder="e.g. peanuts, dairy"
+                />
+              </Field>
+            </div>
+
+            {/* Feeding Plan (infants only) */}
+            {isInfant ? (
+              <>
+                <SectionHeader icon="🍼" title="Feeding Plan (0-1 years)" style={{ marginTop: 20 }} />
+                <div style={formGridStyle}>
+                  <Field label="What they eat">
                     <input
-                      type="file"
-                      multiple
-                      onChange={(e) =>
-                        setEnrollmentFiles(Array.from(e.target.files || []))
-                      }
+                      value={feedingFoods}
+                      onChange={(e) => setFeedingFoods(e.target.value)}
+                      style={inputStyle}
+                      placeholder="e.g. purees, solids"
+                    />
+                  </Field>
+                  <Field label="Formula">
+                    <input
+                      value={feedingFormula}
+                      onChange={(e) => setFeedingFormula(e.target.value)}
                       style={inputStyle}
                     />
-                    {enrollmentDocuments.length ? (
-                      <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
-                        {enrollmentDocuments.map((d, idx) => (
-                          <div
-                            key={`${d?.url || "doc"}-${idx}`}
-                            style={docRowStyle}
-                          >
-                            <a
-                              href={d.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              style={docLinkStyle}
-                            >
-                              {d.originalName || d.url}
-                            </a>
-                            <button
-                              type="button"
-                              style={miniDangerButton}
-                              onClick={() =>
-                                setEnrollmentDocuments((cur) =>
-                                  cur.filter((_, i) => i !== idx),
-                                )
-                              }
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
+                  </Field>
+                  <Field label="# Bottles / day">
+                    <input
+                      value={feedingBottlesPerDay}
+                      onChange={(e) => setFeedingBottlesPerDay(e.target.value)}
+                      style={inputStyle}
+                      inputMode="numeric"
+                      placeholder="e.g. 4"
+                    />
+                  </Field>
+                  <Field label="Bottle notes">
+                    <input
+                      value={feedingBottleNotes}
+                      onChange={(e) => setFeedingBottleNotes(e.target.value)}
+                      style={inputStyle}
+                    />
                   </Field>
                 </div>
-              </div>
+              </>
+            ) : null}
 
-              {editing ? (
-                <div style={{ marginTop: 14 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "baseline",
-                      justifyContent: "space-between",
-                      gap: 10,
-                      flexWrap: "wrap",
-                      marginBottom: 8,
-                    }}
-                  >
-                    <div style={{ fontWeight: 800 }}>Steps of Progression</div>
-                    <label style={{ display: "block" }}>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: "var(--admin-text-muted)",
-                          marginBottom: 6,
-                        }}
-                      >
-                        Filter by Domain
-                      </div>
-                      <select
-                        value={stepsDomain}
-                        onChange={(e) => setStepsDomain(e.target.value)}
-                        style={inputStyle}
-                      >
-                        <option value="">All domains</option>
-                        {stepDomains.map((d) => (
-                          <option key={d} value={d}>
-                            {d}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+            {/* Section: Documents */}
+            <SectionHeader icon="📄" title="Documents" style={{ marginTop: 20 }} />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+              <Field label="Health Assessment">
+                <input
+                  type="file"
+                  onChange={(e) =>
+                    setHealthAssessmentFiles(Array.from(e.target.files || []))
+                  }
+                  style={inputStyle}
+                />
+                {healthAssessmentDocuments.length > 0 && (
+                  <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
+                    {healthAssessmentDocuments.map((d, idx) => (
+                      <DocRow
+                        key={`${d?.url || "doc"}-${idx}`}
+                        doc={d}
+                        onRemove={() =>
+                          setHealthAssessmentDocuments((cur) =>
+                            cur.filter((_, i) => i !== idx),
+                          )
+                        }
+                      />
+                    ))}
                   </div>
+                )}
+              </Field>
 
-                  {stepsError ? (
-                    <div style={stepsErrorStyle}>{stepsError}</div>
-                  ) : null}
+              <Field label="Enrollment Documents">
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) =>
+                    setEnrollmentFiles(Array.from(e.target.files || []))
+                  }
+                  style={inputStyle}
+                />
+                {enrollmentDocuments.length > 0 && (
+                  <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
+                    {enrollmentDocuments.map((d, idx) => (
+                      <DocRow
+                        key={`${d?.url || "doc"}-${idx}`}
+                        doc={d}
+                        onRemove={() =>
+                          setEnrollmentDocuments((cur) =>
+                            cur.filter((_, i) => i !== idx),
+                          )
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+              </Field>
+            </div>
 
-                  {stepsLoading ? (
-                    <div style={{ color: "var(--admin-text-muted)", fontSize: 13 }}>
-                      Loading stepsâ€¦
-                    </div>
-                  ) : (
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
-                      <StepsGroup
-                        title="Catch-up plan (overdue)"
-                        rows={catchupRows}
-                        onToggle={setChecklistItemCompleted}
-                      />
-                      <StepsGroup
-                        title="Current steps working on"
-                        rows={currentRows}
-                        onToggle={setChecklistItemCompleted}
-                      />
-                      <StepsGroup
-                        title="Upcoming steps"
-                        rows={upcomingRows}
-                        onToggle={setChecklistItemCompleted}
-                      />
-                    </div>
-                  )}
+            {/* Steps of Progression (edit only) */}
+            {editing ? (
+              <>
+                <SectionHeader icon="📈" title="Steps of Progression" style={{ marginTop: 20 }} />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, marginBottom: 10 }}>
+                  <div style={filterLabelStyle}>Domain:</div>
+                  <select
+                    value={stepsDomain}
+                    onChange={(e) => setStepsDomain(e.target.value)}
+                    style={{ ...inputStyle, width: "auto", minWidth: 160 }}
+                  >
+                    <option value="">All domains</option>
+                    {stepDomains.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
                 </div>
-              ) : null}
 
-              {editing && (
-                <div style={{ marginTop: 16, padding: 12, border: "1px solid var(--admin-border)", borderRadius: 10, background: "var(--admin-bg-secondary)" }}>
-                  <div style={{ fontWeight: 800, fontSize: 14 }}>Transfer Record</div>
-                  <p style={{ color: "var(--admin-text-muted)", fontSize: 12, marginTop: 4 }}>
+                {stepsError ? <ErrorBanner message={stepsError} /> : null}
+
+                {stepsLoading ? (
+                  <div style={{ color: "var(--admin-text-muted)", fontSize: 13 }}>Loading steps...</div>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
+                    <StepsGroup
+                      title="Catch-up (Overdue)"
+                      rows={catchupRows}
+                      onToggle={setChecklistItemCompleted}
+                      variant="danger"
+                    />
+                    <StepsGroup
+                      title="Currently Working On"
+                      rows={currentRows}
+                      onToggle={setChecklistItemCompleted}
+                      variant="info"
+                    />
+                    <StepsGroup
+                      title="Upcoming"
+                      rows={upcomingRows}
+                      onToggle={setChecklistItemCompleted}
+                      variant="muted"
+                    />
+                  </div>
+                )}
+              </>
+            ) : null}
+
+            {/* Transfer Record (edit only) */}
+            {editing && (
+              <>
+                <SectionHeader icon="📦" title="Transfer Record" style={{ marginTop: 20 }} />
+                <div style={infoBoxStyle}>
+                  <p style={{ color: "var(--admin-text-muted)", fontSize: 12, margin: 0 }}>
                     Download a comprehensive record package for child transfer.
                   </p>
-                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                    <button type="button" style={secondaryButton} onClick={() => window.open(`/api/v1/children/${editing.id}/transfer-record?format=json`, "_blank")}>
+                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                    <button type="button" style={secondaryButtonStyle} onClick={() => window.open(`/api/v1/children/${editing.id}/transfer-record?format=json`, "_blank")}>
                       Export JSON
                     </button>
-                    <button type="button" style={secondaryButton} onClick={() => window.open(`/api/v1/children/${editing.id}/transfer-record?format=csv`, "_blank")}>
+                    <button type="button" style={secondaryButtonStyle} onClick={() => window.open(`/api/v1/children/${editing.id}/transfer-record?format=csv`, "_blank")}>
                       Export CSV
                     </button>
                   </div>
                 </div>
-              )}
+              </>
+            )}
 
-              {editing && (
-                <div style={{ marginTop: 16, padding: 12, border: "1px solid var(--admin-border)", borderRadius: 10, background: "var(--admin-bg-secondary)" }}>
-                  <div style={{ fontWeight: 800, fontSize: 14 }}>Permissions</div>
-                  <p style={{ color: "var(--admin-text-muted)", fontSize: 12, marginTop: 4 }}>
-                    Manage photo release, field trip, medical treatment, and other permissions.
-                  </p>
-                  {permissionsLoading ? (
-                    <div style={{ color: "var(--admin-text-muted)", fontSize: 13, marginTop: 8 }}>Loading permissions…</div>
-                  ) : (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8, marginTop: 8 }}>
-                      {[
-                        { value: "PHOTO_RELEASE", label: "Photo Release" },
-                        { value: "FIELD_TRIP", label: "Field Trip" },
-                        { value: "MEDICAL_TREATMENT", label: "Medical Treatment" },
-                        { value: "TRANSPORTATION", label: "Transportation" },
-                        { value: "SUNSCREEN_APPLICATION", label: "Sunscreen" },
-                        { value: "WATER_ACTIVITIES", label: "Water Activities" },
-                      ].map((pt) => {
-                        const perm = childPermissions.find((p) => p.permissionType === pt.value);
-                        const status = perm?.status || "PENDING";
-                        return (
-                          <div key={pt.value} style={{ padding: 8, border: "1px solid var(--admin-border)", borderRadius: 8, background: status === "GRANTED" ? "var(--admin-success-bg)" : status === "DENIED" ? "var(--admin-error-bg)" : "var(--admin-bg)" }}>
-                            <div style={{ fontSize: 12, fontWeight: 700 }}>{pt.label}</div>
-                            <div style={{ fontSize: 11, color: "var(--admin-text-muted)", marginTop: 2 }}>{status}</div>
-                            <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
-                              <button type="button" disabled={status === "GRANTED"} style={{ ...secondaryButton, fontSize: 10, padding: "2px 8px", background: status === "GRANTED" ? "var(--admin-success-border)" : undefined }} onClick={async () => {
-                                try {
-                                  await apiJson(`/api/v1/children/${editing.id}/permissions`, { method: "POST", body: JSON.stringify({ permissionType: pt.value, status: "GRANTED" }) });
-                                  const perms = await apiJson(`/api/v1/children/${editing.id}/permissions`);
-                                  setChildPermissions(Array.isArray(perms) ? perms : []);
-                                } catch (e3) { setError(e3.message); }
-                              }}>Grant</button>
-                              <button type="button" disabled={status === "DENIED"} style={{ ...secondaryButton, fontSize: 10, padding: "2px 8px", background: status === "DENIED" ? "var(--admin-error-border)" : undefined }} onClick={async () => {
-                                try {
-                                  await apiJson(`/api/v1/children/${editing.id}/permissions`, { method: "POST", body: JSON.stringify({ permissionType: pt.value, status: "DENIED" }) });
-                                  const perms = await apiJson(`/api/v1/children/${editing.id}/permissions`);
-                                  setChildPermissions(Array.isArray(perms) ? perms : []);
-                                } catch (e3) { setError(e3.message); }
-                              }}>Deny</button>
-                              {status !== "PENDING" && (
-                                <button type="button" style={{ ...secondaryButton, fontSize: 10, padding: "2px 8px" }} onClick={async () => {
-                                  try {
-                                    await apiJson(`/api/v1/children/${editing.id}/permissions`, { method: "POST", body: JSON.stringify({ permissionType: pt.value, status: "REVOKED" }) });
-                                    const perms = await apiJson(`/api/v1/children/${editing.id}/permissions`);
-                                    setChildPermissions(Array.isArray(perms) ? perms : []);
-                                  } catch (e3) { setError(e3.message); }
-                                }}>Revoke</button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
+            {/* Permissions (edit only) */}
+            {editing && (
+              <>
+                <SectionHeader icon="🔒" title="Permissions" style={{ marginTop: 20 }} />
+                <p style={{ color: "var(--admin-text-muted)", fontSize: 12, margin: "0 0 10px" }}>
+                  Manage photo release, field trip, medical treatment, and other permissions.
+                </p>
+                {permissionsLoading ? (
+                  <div style={{ color: "var(--admin-text-muted)", fontSize: 13 }}>Loading permissions...</div>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8 }}>
+                    {[
+                      { value: "PHOTO_RELEASE", label: "Photo Release", icon: "📷" },
+                      { value: "FIELD_TRIP", label: "Field Trip", icon: "🚌" },
+                      { value: "MEDICAL_TREATMENT", label: "Medical Treatment", icon: "🏥" },
+                      { value: "TRANSPORTATION", label: "Transportation", icon: "🚗" },
+                      { value: "SUNSCREEN_APPLICATION", label: "Sunscreen", icon: "☀️" },
+                      { value: "WATER_ACTIVITIES", label: "Water Activities", icon: "💧" },
+                    ].map((pt) => {
+                      const perm = childPermissions.find((p) => p.permissionType === pt.value);
+                      const status = perm?.status || "PENDING";
+                      return (
+                        <PermissionCard
+                          key={pt.value}
+                          pt={pt}
+                          status={status}
+                          editingId={editing.id}
+                          setChildPermissions={setChildPermissions}
+                          setError={setError}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
 
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: 8,
-                  marginTop: 16,
-                }}
-              >
-                <button
-                  type="button"
-                  style={secondaryButton}
-                  onClick={resetForm}
-                >
-                  Clear
-                </button>
-                <button
-                  type="button"
-                  style={secondaryButton}
-                  onClick={closeModal}
-                >
-                  Cancel
-                </button>
-                <button type="submit" style={primaryButton}>
-                  {editing ? "Save" : "Create"}
-                </button>
-              </div>
-            </form>
-          </Modal>
-        ) : null}
+            {/* Form Actions */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--admin-border)" }}>
+              <button type="button" style={secondaryButtonStyle} onClick={closeModal}>
+                Cancel
+              </button>
+              <button type="submit" style={primaryButtonStyle}>
+                {editing ? "Save Changes" : "Create Child"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
 
-        <ConfirmDialog
-          open={!!deleteConfirmId}
-          title="Delete Child"
-          message="Are you sure you want to delete this child record? This action cannot be undone."
-          confirmLabel="Delete"
-          variant="danger"
-          onConfirm={() => deleteChild(deleteConfirmId)}
-          onCancel={() => setDeleteConfirmId(null)}
-        />
-
-        <div style={{ marginTop: 16 }}>
-          {loading ? (
-            <SkeletonTable rows={5} cols={7} />
-          ) : (
-            <table style={tableStyle}>
-              <thead>
-                <tr>
-                  <th style={thStyle}>Name</th>
-                  <th style={thStyle}>Age</th>
-                  <th style={thStyle}>Center</th>
-                  <th style={thStyle}>Class</th>
-                  <th style={thStyle}>Parent</th>
-                  <th style={thStyle}>Enrollment</th>
-                  <th style={thStyle}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSorted.map((ch) => (
-                  <tr key={ch.id}>
-                    <td style={tdStyle}>
-                      <div style={{ fontWeight: 700 }}>
-                        {ch.firstName} {ch.lastName || ""}
-                      </div>
-                      <div style={{ color: "var(--admin-text-muted)", fontSize: 12 }}>
-                        {ch.birthDate ? `Born ${new Date(ch.birthDate).toLocaleDateString()}` : "—"}
-                      </div>
-                      <div style={{ color: "var(--admin-text-muted)", fontSize: 12 }}>
-                        <code style={codePill}>{ch.id}</code>
-                      </div>
-                    </td>
-                    <td style={tdStyle}>{childAgeGroup(ch)}</td>
-                    <td style={tdStyle}>{centerById[ch.centerId]?.name || ch.centerId || "—"}</td>
-                    <td style={tdStyle}>
-                      {ch.classRoomId
-                        ? classById[ch.classRoomId]?.name || ch.classRoomId
-                        : "—"}
-                    </td>
-                    <td style={tdStyle}>
-                      {ch.parentId
-                        ? userById[ch.parentId]?.email || ch.parentId
-                        : "—"}
-                    </td>
-                    <td style={tdStyle}>
-                      <div style={{ fontSize: 12 }}>
-                        {ch.enrollmentStartDate
-                          ? new Date(ch.enrollmentStartDate).toLocaleDateString()
-                          : "—"}
-                        {" — "}
-                        {ch.enrollmentEndDate
-                          ? new Date(ch.enrollmentEndDate).toLocaleDateString()
-                          : "Present"}
-                      </div>
-                    </td>
-                    <td style={tdStyle}>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button type="button" style={secondaryButton} onClick={() => openEdit(ch)}>
-                          Edit
-                        </button>
-                        <button type="button" style={dangerButton} onClick={() => setDeleteConfirmId(ch.id)}>
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {filteredSorted.length === 0 ? (
-                  <tr>
-                    <td style={tdStyle} colSpan={7}>
-                      <EmptyState
-                        title="No children found"
-                        description={q ? "Try adjusting your search or filters." : "Get started by adding your first child record."}
-                        actionLabel={!q ? "+ Add Child" : undefined}
-                        onAction={!q ? openCreate : undefined}
-                        className="py-8"
-                      />
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </Panel>
+      <ConfirmDialog
+        open={!!deleteConfirmId}
+        title="Delete Child"
+        message="Are you sure you want to delete this child record? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => deleteChild(deleteConfirmId)}
+        onCancel={() => setDeleteConfirmId(null)}
+      />
     </AdminLayout>
   );
 }
 
-function Panel({ children }) {
+/* ── Sub-components ── */
+
+function StatCard({ icon, label, value, color, bg }) {
   return (
-    <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: 16 }}>
-      {children}
+    <div style={{
+      display: "flex", alignItems: "center", gap: 14,
+      padding: 16, borderRadius: 14,
+      background: "var(--admin-bg)",
+      border: "1px solid var(--admin-border)",
+    }}>
+      <div style={{
+        width: 48, height: 48, borderRadius: 12,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        background: bg, fontSize: 22,
+      }}>
+        {icon}
+      </div>
+      <div>
+        <div style={{ fontSize: 24, fontWeight: 800, color }}>{value}</div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--admin-text-muted)" }}>{label}</div>
+      </div>
+    </div>
+  );
+}
+
+function SectionHeader({ icon, title, style: extraStyle }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, ...extraStyle }}>
+      <span style={{ fontSize: 16 }}>{icon}</span>
+      <span style={{ fontWeight: 800, fontSize: 14, color: "var(--admin-text)" }}>{title}</span>
+    </div>
+  );
+}
+
+function DocRow({ doc, onRemove }) {
+  return (
+    <div style={docRowStyle}>
+      <a href={doc.url} target="_blank" rel="noreferrer" style={docLinkStyle}>
+        📎 {doc.originalName || doc.url}
+      </a>
+      <button type="button" style={miniDangerButtonStyle} onClick={onRemove}>
+        Remove
+      </button>
+    </div>
+  );
+}
+
+function PermissionCard({ pt, status, editingId, setChildPermissions, setError }) {
+  const statusColors = {
+    GRANTED: { bg: "var(--admin-success-bg, #D1FAE5)", border: "var(--admin-success-border, #A7F3D0)", text: "#065F46", label: "Granted" },
+    DENIED: { bg: "var(--admin-error-bg, #FEE2E2)", border: "var(--admin-error-border, #FECACA)", text: "#991B1B", label: "Denied" },
+    PENDING: { bg: "var(--admin-bg-secondary, #F9FAFB)", border: "var(--admin-border)", text: "var(--admin-text-muted)", label: "Pending" },
+    REVOKED: { bg: "#F3F4F6", border: "#E5E7EB", text: "#6B7280", label: "Revoked" },
+  };
+  const sc = statusColors[status] || statusColors.PENDING;
+
+  async function setStatus(newStatus) {
+    try {
+      await apiJson(`/api/v1/children/${editingId}/permissions`, { method: "POST", body: JSON.stringify({ permissionType: pt.value, status: newStatus }) });
+      const perms = await apiJson(`/api/v1/children/${editingId}/permissions`);
+      setChildPermissions(Array.isArray(perms) ? perms : []);
+    } catch (e3) { setError(e3.message); }
+  }
+
+  return (
+    <div style={{ padding: 12, border: `1px solid ${sc.border}`, borderRadius: 12, background: sc.bg }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span>{pt.icon}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>{pt.label}</span>
+      </div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: sc.text, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+        {sc.label}
+      </div>
+      <div style={{ display: "flex", gap: 4, marginTop: 8 }}>
+        <button type="button" disabled={status === "GRANTED"} style={{ ...permBtnStyle, opacity: status === "GRANTED" ? 0.5 : 1, background: status === "GRANTED" ? "#A7F3D0" : undefined }} onClick={() => setStatus("GRANTED")}>
+          Grant
+        </button>
+        <button type="button" disabled={status === "DENIED"} style={{ ...permBtnStyle, opacity: status === "DENIED" ? 0.5 : 1, background: status === "DENIED" ? "#FECACA" : undefined }} onClick={() => setStatus("DENIED")}>
+          Deny
+        </button>
+        {status !== "PENDING" && (
+          <button type="button" style={permBtnStyle} onClick={() => setStatus("REVOKED")}>
+            Revoke
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -1167,18 +1202,14 @@ function Modal({ title, onClose, children }) {
       }}
     >
       <div style={modalCardStyle}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            marginBottom: 10,
-          }}
-        >
-          <div style={{ fontWeight: 800, fontSize: 16 }}>{title}</div>
-          <button type="button" style={secondaryButton} onClick={onClose}>
-            Close
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid var(--admin-border)" }}>
+          <div style={{ fontWeight: 800, fontSize: 18, color: "var(--admin-text)" }}>{title}</div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--admin-border)", background: "var(--admin-bg)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--admin-text-muted)" }}
+          >
+            ✕
           </button>
         </div>
         {children}
@@ -1187,27 +1218,30 @@ function Modal({ title, onClose, children }) {
   );
 }
 
-function StepsGroup({ title, rows, onToggle }) {
+function StepsGroup({ title, rows, onToggle, variant }) {
   const list = Array.isArray(rows) ? rows : [];
+  const colors = {
+    danger: { bg: "#FEF2F2", border: "#FECACA", headerColor: "#991B1B" },
+    info: { bg: "#EFF6FF", border: "#BFDBFE", headerColor: "#1E40AF" },
+    muted: { bg: "var(--admin-bg-secondary)", border: "var(--admin-border)", headerColor: "var(--admin-text-muted)" },
+  };
+  const c = colors[variant] || colors.muted;
+
   return (
-    <div style={stepsPanelStyle}>
-      <div style={{ fontWeight: 800, marginBottom: 8 }}>{title}</div>
+    <div style={{ border: `1px solid ${c.border}`, borderRadius: 12, padding: 14, background: c.bg }}>
+      <div style={{ fontWeight: 800, marginBottom: 8, fontSize: 13, color: c.headerColor, display: "flex", alignItems: "center", gap: 6 }}>
+        {title}
+        <span style={{ fontWeight: 600, fontSize: 11, opacity: 0.7 }}>({list.length})</span>
+      </div>
       {list.length === 0 ? (
-        <div style={{ color: "var(--admin-text-muted)", fontSize: 13 }}>No items.</div>
+        <div style={{ color: "var(--admin-text-muted)", fontSize: 12 }}>No items.</div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 6 }}>
           {list.slice(0, 30).map((r) => {
             const due = r.end instanceof Date && !Number.isNaN(r.end.getTime())
               ? r.end
               : new Date(r.plan.periodStart);
             const dueLabel = `Due ${due.toLocaleDateString()}`;
-            const status =
-              r.isOverdue ? "Overdue" : r.isCurrent ? "Current" : "Upcoming";
-            const statusStyle = r.isOverdue
-              ? stepTag("danger")
-              : r.isCurrent
-                ? stepTag("info")
-                : stepTag("muted");
 
             return (
               <label key={r.item.id} style={stepRowStyle}>
@@ -1215,18 +1249,16 @@ function StepsGroup({ title, rows, onToggle }) {
                   type="checkbox"
                   checked={!!r.isCompleted}
                   onChange={(e) => onToggle(r.item.id, e.target.checked)}
+                  style={{ marginTop: 2 }}
                 />
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 800 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>
                     {r.item.title || "Step"}
                   </div>
-                  <div style={{ marginTop: 4, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <span style={statusStyle}>{status}</span>
-                    <span style={stepTag("muted")}>{r.domain}</span>
-                    <span style={stepTag("muted")}>{dueLabel}</span>
-                    <span style={stepTag("muted")}>
-                      {r.plan.title || "Plan"}
-                    </span>
+                  <div style={{ marginTop: 4, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <span style={stepTagStyle}>{r.domain}</span>
+                    <span style={stepTagStyle}>{dueLabel}</span>
+                    <span style={stepTagStyle}>{r.plan.title || "Plan"}</span>
                   </div>
                 </div>
               </label>
@@ -1241,7 +1273,7 @@ function StepsGroup({ title, rows, onToggle }) {
 function Field({ label, children, htmlFor }) {
   return (
     <label style={{ display: "block" }} htmlFor={htmlFor}>
-      <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginBottom: 6 }}>{label}</div>
+      <div style={fieldLabelStyle}>{label}</div>
       {children}
     </label>
   );
@@ -1249,65 +1281,168 @@ function Field({ label, children, htmlFor }) {
 
 function ErrorBanner({ message }) {
   return (
-    <div
-      style={{
-        padding: 12,
-        background: "var(--admin-error-bg)",
-        color: "var(--admin-error-text)",
-        borderRadius: 8,
-        marginTop: 12,
-        border: "1px solid var(--admin-error-border)",
-      }}
-    >
+    <div style={{
+      padding: 12, background: "var(--admin-error-bg)", color: "var(--admin-error-text)",
+      borderRadius: 10, marginTop: 12, border: "1px solid var(--admin-error-border)", fontSize: 13, fontWeight: 600,
+    }}>
       {message}
     </div>
   );
 }
 
+/* ── Styles ── */
+
+const panelStyle = {
+  background: "var(--admin-bg)",
+  border: "1px solid var(--admin-border)",
+  borderRadius: 14,
+  padding: 20,
+};
+
 const inputStyle = {
   width: "100%",
-  padding: 10,
+  padding: "10px 12px",
   border: "1px solid var(--admin-border)",
-  borderRadius: 8,
+  borderRadius: 10,
   boxSizing: "border-box",
   background: "var(--admin-bg)",
   color: "var(--admin-text)",
+  fontSize: 13,
+  transition: "border-color 0.15s",
 };
 
-const tableStyle = {
-  width: "100%",
-  borderCollapse: "collapse",
-  border: "1px solid var(--admin-border)",
-  borderRadius: 10,
-  overflow: "hidden",
-};
-
-const thStyle = {
-  textAlign: "left",
-  fontSize: 12,
+const filterLabelStyle = {
+  fontSize: 11,
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
   color: "var(--admin-text-muted)",
-  padding: 10,
-  borderBottom: "1px solid var(--admin-border)",
-  background: "var(--admin-bg-secondary)",
+  marginBottom: 6,
 };
 
-const tdStyle = {
-  padding: 10,
-  borderBottom: "1px solid var(--admin-border-light)",
-  verticalAlign: "top",
+const fieldLabelStyle = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "var(--admin-text-muted)",
+  marginBottom: 6,
 };
 
-const codePill = {
-  background: "var(--admin-bg-tertiary)",
+const formGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 12,
+};
+
+const childCardStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 14,
+  padding: 14,
+  borderRadius: 12,
+  border: "1px solid var(--admin-border)",
+  background: "var(--admin-bg)",
+  transition: "border-color 0.15s, box-shadow 0.15s",
+};
+
+const avatarStyle = {
+  width: 44,
+  height: 44,
+  borderRadius: "50%",
+  background: "linear-gradient(135deg, #1e3a8a, #0ea5e9)",
+  color: "white",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: 700,
+  fontSize: 14,
+  flexShrink: 0,
+};
+
+const ageBadgeStyle = {
+  fontSize: 10,
+  fontWeight: 700,
   padding: "2px 8px",
   borderRadius: 999,
+  border: "1px solid",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
+
+const tagStyle = {
+  fontSize: 10,
+  fontWeight: 700,
+  padding: "2px 8px",
+  borderRadius: 999,
+  border: "1px solid",
+};
+
+const cardActionButton = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 4,
+  padding: "7px 12px",
+  border: "1px solid var(--admin-border)",
+  borderRadius: 8,
+  background: "var(--admin-bg)",
+  color: "var(--admin-text)",
+  cursor: "pointer",
+  fontWeight: 600,
+  fontSize: 12,
+};
+
+const cardDangerButton = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 7,
+  border: "1px solid #FECACA",
+  borderRadius: 8,
+  background: "#FEF2F2",
+  color: "#DC2626",
+  cursor: "pointer",
+};
+
+const primaryButtonStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "10px 18px",
+  background: "linear-gradient(135deg, #1e3a8a, #0284c7)",
+  color: "white",
+  border: "none",
+  borderRadius: 10,
+  cursor: "pointer",
+  fontWeight: 700,
+  fontSize: 13,
+};
+
+const secondaryButtonStyle = {
+  padding: "10px 16px",
+  background: "var(--admin-bg)",
+  color: "var(--admin-text)",
+  border: "1px solid var(--admin-border)",
+  borderRadius: 10,
+  cursor: "pointer",
+  fontWeight: 600,
+  fontSize: 13,
+};
+
+const permBtnStyle = {
+  padding: "4px 10px",
+  fontSize: 11,
+  fontWeight: 700,
+  border: "1px solid var(--admin-border)",
+  borderRadius: 6,
+  background: "var(--admin-bg)",
+  color: "var(--admin-text)",
+  cursor: "pointer",
 };
 
 const modalOverlayStyle = {
   position: "fixed",
   inset: 0,
   zIndex: 80,
-  background: "var(--admin-modal-overlay)",
+  background: "var(--admin-modal-overlay, rgba(0,0,0,0.5))",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -1316,14 +1451,13 @@ const modalOverlayStyle = {
 
 const modalCardStyle = {
   width: "min(1100px, 100%)",
-  maxHeight: "min(86vh, 900px)",
+  maxHeight: "min(88vh, 920px)",
   overflow: "auto",
   background: "var(--admin-bg)",
   border: "1px solid var(--admin-border)",
-  borderRadius: 12,
-  padding: 16,
-  boxShadow:
-    "0 20px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.12)",
+  borderRadius: 16,
+  padding: 24,
+  boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
 };
 
 const docRowStyle = {
@@ -1331,7 +1465,7 @@ const docRowStyle = {
   alignItems: "center",
   justifyContent: "space-between",
   gap: 10,
-  padding: "8px 10px",
+  padding: "8px 12px",
   border: "1px solid var(--admin-border)",
   borderRadius: 10,
   background: "var(--admin-bg-secondary)",
@@ -1341,27 +1475,22 @@ const docLinkStyle = {
   color: "#2563eb",
   textDecoration: "none",
   fontWeight: 700,
+  fontSize: 12,
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
   maxWidth: "100%",
 };
 
-const stepsErrorStyle = {
-  padding: 10,
-  borderRadius: 10,
-  background: "var(--admin-error-bg)",
-  color: "var(--admin-error-text)",
-  border: "1px solid var(--admin-error-border)",
-  marginBottom: 10,
-  fontSize: 13,
-};
-
-const stepsPanelStyle = {
-  border: "1px solid var(--admin-border)",
-  borderRadius: 12,
-  padding: 12,
-  background: "var(--admin-bg)",
+const miniDangerButtonStyle = {
+  padding: "4px 10px",
+  background: "#FEE2E2",
+  color: "#DC2626",
+  border: "1px solid #FECACA",
+  borderRadius: 8,
+  cursor: "pointer",
+  fontWeight: 700,
+  fontSize: 11,
 };
 
 const stepRowStyle = {
@@ -1371,68 +1500,25 @@ const stepRowStyle = {
   gap: 10,
   padding: "10px 12px",
   border: "1px solid var(--admin-border)",
+  borderRadius: 10,
+  background: "var(--admin-bg)",
+  cursor: "pointer",
+};
+
+const stepTagStyle = {
+  fontSize: 11,
+  padding: "2px 8px",
+  borderRadius: 999,
+  border: "1px solid var(--admin-border)",
+  background: "var(--admin-bg-tertiary, #F3F4F6)",
+  color: "var(--admin-text-secondary, #6B7280)",
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+};
+
+const infoBoxStyle = {
+  padding: 14,
+  border: "1px solid var(--admin-border)",
   borderRadius: 12,
   background: "var(--admin-bg-secondary)",
-  cursor: "pointer",
-};
-
-function stepTag(kind) {
-  const base = {
-    fontSize: 12,
-    padding: "2px 8px",
-    borderRadius: 999,
-    border: "1px solid var(--admin-border)",
-    background: "var(--admin-bg-tertiary)",
-    color: "var(--admin-text-secondary)",
-    fontWeight: 800,
-    whiteSpace: "nowrap",
-  };
-  if (kind === "danger") {
-    return { ...base, border: "1px solid var(--admin-error-border)", background: "var(--admin-error-bg)", color: "var(--admin-error-text)" };
-  }
-  if (kind === "info") {
-    return { ...base, border: "1px solid var(--admin-info-border)", background: "var(--admin-info-bg)", color: "var(--admin-info-text)" };
-  }
-  return base;
-}
-
-const primaryButton = {
-  padding: "10px 12px",
-  background: "#2563eb",
-  color: "white",
-  border: "none",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontWeight: 600,
-};
-
-const secondaryButton = {
-  padding: "10px 12px",
-  background: "var(--admin-bg)",
-  color: "var(--admin-text)",
-  border: "1px solid var(--admin-border)",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontWeight: 600,
-};
-
-const dangerButton = {
-  padding: "10px 12px",
-  background: "#ef4444",
-  color: "white",
-  border: "none",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontWeight: 600,
-};
-
-const miniDangerButton = {
-  padding: "6px 8px",
-  background: "#ef4444",
-  color: "white",
-  border: "none",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontWeight: 700,
-  fontSize: 12,
 };

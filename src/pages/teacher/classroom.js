@@ -27,6 +27,105 @@ function formatTime(value) {
   return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
+function IconUsers({ className }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className={className} aria-hidden="true">
+      <path d="M7 8a3 3 0 1 1 6 0 3 3 0 0 1-6 0Z" />
+      <path d="M3.5 16.5c.7-2.7 3.2-4 6.5-4s5.8 1.3 6.5 4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconCheck({ className }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className={className} aria-hidden="true">
+      <path d="m5 10 3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconClock({ className }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className={className} aria-hidden="true">
+      <circle cx="10" cy="10" r="7" />
+      <path d="M10 6v4l3 2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconAlert({ className }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className={className} aria-hidden="true">
+      <path d="M10 3.5 17 16H3l7-12.5Z" strokeLinejoin="round" />
+      <path d="M10 7.5v4" strokeLinecap="round" />
+      <circle cx="10" cy="13.5" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function IconRefresh({ className }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className={className} aria-hidden="true">
+      <path d="M16 10a6 6 0 1 1-1.5-4" strokeLinecap="round" />
+      <path d="M16 4v4h-4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconClipboard({ className }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className={className} aria-hidden="true">
+      <rect x="5" y="4.5" width="10" height="12" rx="2" />
+      <path d="M8 4.5h4a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1Z" />
+    </svg>
+  );
+}
+
+function IconNote({ className }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className={className} aria-hidden="true">
+      <path d="M5 3.5h7l3 3V16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z" />
+      <path d="M12 3.5V7h3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconSearch({ className }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className={className} aria-hidden="true">
+      <circle cx="9" cy="9" r="5.5" />
+      <path d="m14.5 14.5 3 3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconX({ className }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className={className} aria-hidden="true">
+      <path d="M5 5l10 10M15 5 5 15" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconChart({ className }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className={className} aria-hidden="true">
+      <path d="M4 15.5h12" strokeLinecap="round" />
+      <path d="M6 14V9" strokeLinecap="round" />
+      <path d="M10 14V6" strokeLinecap="round" />
+      <path d="M14 14v-4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconChevronRight({ className }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className={className} aria-hidden="true">
+      <path d="m8 5 5 5-5 5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 
 function flagsForChild(ch) {
   const flags = [];
@@ -46,6 +145,7 @@ export default function TeacherClassroom() {
 
   const [children, setChildren] = useState([]);
   const [attendance, setAttendance] = useState(null);
+  const [lastRefreshAt, setLastRefreshAt] = useState(null);
 
   const [selectedAttendanceChildIds, setSelectedAttendanceChildIds] = useState([]);
 
@@ -79,11 +179,13 @@ export default function TeacherClassroom() {
   async function refreshAttendance(id = centerId) {
     if (!id) {
       setAttendance(null);
+      setLastRefreshAt(null);
       return;
     }
     try {
       const att = await apiJson(`/api/v1/attendance/today?centerId=${encodeURIComponent(id)}`);
       setAttendance(att);
+      setLastRefreshAt(new Date());
     } catch {
       setAttendance(null);
     }
@@ -96,6 +198,7 @@ export default function TeacherClassroom() {
       setClassId("");
       setAttendance(null);
       setSelectedAttendanceChildIds([]);
+      setLastRefreshAt(null);
       return;
     }
 
@@ -141,6 +244,11 @@ export default function TeacherClassroom() {
   const classNameById = useMemo(() => {
     return Object.fromEntries((classes || []).map((c) => [c.id, c.name]));
   }, [classes]);
+  const centerNameById = useMemo(() => {
+    return Object.fromEntries((centers || []).map((c) => [c.id, c.name]));
+  }, [centers]);
+  const selectedCenterName = centerNameById[centerId] || "";
+  const selectedClassName = classNameById[classId] || "";
 
   const attendanceByChildId = useMemo(() => {
     const map = new Map();
@@ -171,6 +279,17 @@ export default function TeacherClassroom() {
   const selectedAttendanceSet = useMemo(() => {
     return new Set(selectedAttendanceChildIds);
   }, [selectedAttendanceChildIds]);
+
+  const bulkEligible = useMemo(() => {
+    let canCheckIn = 0;
+    let canCheckOut = 0;
+    for (const id of selectedAttendanceChildIds) {
+      const att = attendanceByChildId.get(id) || null;
+      if (att?.checkedIn) canCheckOut += 1;
+      else canCheckIn += 1;
+    }
+    return { canCheckIn, canCheckOut };
+  }, [selectedAttendanceChildIds, attendanceByChildId]);
 
   const allVisibleIds = useMemo(() => filteredChildren.map((c) => c.id), [filteredChildren]);
 
@@ -296,58 +415,117 @@ export default function TeacherClassroom() {
 
   return (
     <TeacherLayout title="My Classroom">
-      <div className="space-y-4">
+      <div className="space-y-5">
         {/* Header */}
-        <div className="rounded-2xl border border-gray-200 bg-gradient-to-r from-sky-50 to-cyan-50 p-5">
-          <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-extrabold text-gray-900">My Classroom</h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-extrabold text-gray-900">My Classroom</h2>
+                {selectedCenterName && (
+                  <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+                    {selectedCenterName}
+                  </span>
+                )}
+                {selectedClassName && (
+                  <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
+                    {selectedClassName}
+                  </span>
+                )}
+              </div>
               <p className="mt-1 text-sm text-gray-600">
-                Manage attendance, view roster, and monitor red flags.
+                Manage attendance, view the roster, and monitor red flags at a glance.
               </p>
+              {lastRefreshAt ? (
+                <p className="mt-1 text-xs text-gray-400">
+                  Last updated {formatTime(lastRefreshAt.toISOString())}
+                </p>
+              ) : null}
             </div>
 
-            <div className="flex flex-wrap items-end gap-3">
-              <label className="block">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Center
-                </div>
-                <select
-                  value={centerId}
-                  onChange={(e) => setCenterId(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm sm:w-52"
-                >
-                  <option value="">Select a center</option>
-                  {centers.map((c) => (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => refreshAttendance()}
+                className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                <IconRefresh className="h-4 w-4 text-gray-500" />
+                Refresh
+              </button>
+              <Link
+                href="/teacher/logs"
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-xs font-extrabold text-white hover:bg-blue-700"
+              >
+                <IconNote className="h-4 w-4 text-white/90" />
+                Log Activity
+              </Link>
+              <Link
+                href="/teacher/checklists"
+                className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50"
+              >
+                <IconClipboard className="h-4 w-4 text-gray-600" />
+                Checklists
+              </Link>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-end gap-3">
+            <label className="block">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Center
+              </div>
+              <select
+                value={centerId}
+                onChange={(e) => setCenterId(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm sm:w-56"
+              >
+                <option value="">Select a center</option>
+                {centers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Classroom
+              </div>
+              <select
+                value={classId}
+                onChange={(e) => setClassId(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm sm:w-56"
+                disabled={!centerId}
+              >
+                <option value="">All classrooms</option>
+                {classes
+                  .slice()
+                  .sort((a, b) => byString(a.name, b.name))
+                  .map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
                   ))}
-                </select>
-              </label>
+              </select>
+            </label>
 
-              <label className="block">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Classroom
-                </div>
-                <select
-                  value={classId}
-                  onChange={(e) => setClassId(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm sm:w-52"
+            <label className="block flex-1">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Search
+              </div>
+              <div className="relative mt-1 sm:max-w-sm">
+                <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={centerId ? "Search by name..." : "Select a center to search"}
                   disabled={!centerId}
-                >
-                  <option value="">All classrooms</option>
-                  {classes
-                    .slice()
-                    .sort((a, b) => byString(a.name, b.name))
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                </select>
-              </label>
-            </div>
+                  className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm focus:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-300 disabled:bg-gray-50"
+                />
+              </div>
+            </label>
           </div>
         </div>
 
@@ -366,20 +544,23 @@ export default function TeacherClassroom() {
         ) : (
           <>
             {/* Stats */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatCard label="Total Children" value={stats.total} color="sky" />
-              <StatCard label="Checked In" value={stats.checkedIn} color="emerald" />
-              <StatCard label="Not Checked In" value={stats.checkedOut} color="gray" />
-              <StatCard label="Red Flagged" value={stats.flagged} color="rose" />
+            <div className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-4 sm:gap-4">
+              <StatCard label="Total Children" value={stats.total} color="sky" icon={<IconUsers className="h-4 w-4" />} />
+              <StatCard label="Checked In" value={stats.checkedIn} color="emerald" icon={<IconCheck className="h-4 w-4" />} />
+              <StatCard label="Not Checked In" value={stats.checkedOut} color="gray" icon={<IconClock className="h-4 w-4" />} />
+              <StatCard label="Red Flagged" value={stats.flagged} color="rose" icon={<IconAlert className="h-4 w-4" />} />
             </div>
 
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_340px]">
+            <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-[1fr_340px]">
               {/* Main content */}
               <div className="min-w-0 space-y-4">
                 {/* Class list */}
                 <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-3">
                     <div className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+                        <IconUsers className="h-4 w-4" />
+                      </span>
                       <h3 className="text-sm font-extrabold text-gray-900">
                         Class Roster
                       </h3>
@@ -387,63 +568,53 @@ export default function TeacherClassroom() {
                         {filteredChildren.length}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => refreshAttendance()}
-                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                      >
-                        Refresh
-                      </button>
-                      <Link
-                        href="/teacher/logs"
-                        className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-extrabold text-white hover:bg-blue-700"
-                      >
-                        Log Activity
-                      </Link>
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        {stats.checkedIn} in
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2 py-0.5 font-semibold text-gray-600">
+                        <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+                        {stats.checkedOut} out
+                      </span>
                     </div>
-                  </div>
-
-                  {/* Search */}
-                  <div className="mt-3">
-                    <input
-                      type="text"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Search by name..."
-                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-blue-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-300 sm:max-w-xs"
-                    />
                   </div>
 
                   {/* Bulk action bar */}
                   {selectAllState.selectedCount > 0 && (
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2">
+                    <div className="sticky top-2 z-10 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 shadow-sm">
                       <span className="text-xs font-semibold text-blue-800">
                         {selectAllState.selectedCount} selected
+                        <span className="ml-2 text-[11px] font-medium text-blue-700/80">
+                          ({bulkEligible.canCheckIn} can check in • {bulkEligible.canCheckOut} can check out)
+                        </span>
                       </span>
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
                           onClick={() => bulkAttendance("CHECK_IN")}
-                          disabled={!attendance || bulkBusy}
-                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-extrabold text-white hover:bg-emerald-700 disabled:opacity-60"
+                          disabled={!attendance || bulkBusy || bulkEligible.canCheckIn === 0}
+                          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-extrabold text-white hover:bg-emerald-700 disabled:opacity-60"
                         >
-                          {bulkBusy ? "Saving..." : "Check In All"}
+                          <IconCheck className="h-4 w-4 text-white/90" />
+                          {bulkBusy ? "Saving..." : `Check In (${bulkEligible.canCheckIn})`}
                         </button>
                         <button
                           type="button"
                           onClick={() => bulkAttendance("CHECK_OUT")}
-                          disabled={!attendance || bulkBusy}
-                          className="rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-extrabold text-white hover:bg-gray-800 disabled:opacity-60"
+                          disabled={!attendance || bulkBusy || bulkEligible.canCheckOut === 0}
+                          className="inline-flex items-center gap-2 rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-extrabold text-white hover:bg-gray-800 disabled:opacity-60"
                         >
-                          {bulkBusy ? "Saving..." : "Check Out All"}
+                          <IconClock className="h-4 w-4 text-white/90" />
+                          {bulkBusy ? "Saving..." : `Check Out (${bulkEligible.canCheckOut})`}
                         </button>
                         <button
                           type="button"
                           onClick={() => setSelectedAttendanceChildIds([])}
                           disabled={bulkBusy}
-                          className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
                         >
+                          <IconX className="h-4 w-4 text-gray-500" />
                           Clear
                         </button>
                       </div>
@@ -453,7 +624,7 @@ export default function TeacherClassroom() {
                   {/* Children list */}
                   <div className="mt-3 space-y-2">
                     {/* Select all header */}
-                    <div className="flex items-center gap-3 px-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    <div className="flex items-center gap-3 rounded-lg bg-slate-50 px-2 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
                       <input
                         ref={selectAllRef}
                         type="checkbox"
@@ -464,126 +635,34 @@ export default function TeacherClassroom() {
                       />
                       <span className="flex-1">Child</span>
                       <span className="hidden w-24 text-center sm:block">Class</span>
-                      <span className="w-20 text-center">Status</span>
-                      <span className="w-24 text-right">Action</span>
+                      <span className="w-28 text-right">Attendance</span>
                     </div>
 
                     {filteredChildren.length === 0 ? (
                       <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-center text-sm text-gray-600">
-                        No children found.
+                        No children found for the current filters.
                       </div>
-                    ) : filteredChildren.map((ch) => {
-                      const att = attendanceByChildId.get(ch.id) || null;
-                      const checkedIn = !!att?.checkedIn;
-                      const busy = busyChildId === ch.id;
-                      const selected = selectedAttendanceSet.has(ch.id);
-                      const flags = flagsForChild(ch);
-                      const age = formatAge(ch.birthDate);
-
-                      return (
-                        <div
-                          key={ch.id}
-                          className={[
-                            "flex items-center gap-3 rounded-xl border p-3 transition",
-                            checkedIn
-                              ? "border-emerald-200 bg-emerald-50/40"
-                              : selected
-                                ? "border-blue-200 bg-blue-50/30"
-                                : "border-gray-200 bg-white hover:bg-gray-50",
-                          ].join(" ")}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selected}
-                            onChange={() => toggleAttendanceSelected(ch.id)}
-                            disabled={bulkBusy}
-                            className="h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-600 disabled:opacity-60"
-                          />
-
-                          {/* Avatar */}
-                          <div className={[
-                            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-extrabold",
-                            checkedIn
-                              ? "bg-emerald-100 text-emerald-700"
-                              : "bg-gray-100 text-gray-600",
-                          ].join(" ")}>
-                            {initials(ch)}
-                          </div>
-
-                          {/* Name + flags */}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <Link
-                                href={`/teacher/children/${encodeURIComponent(ch.id)}`}
-                                className="truncate text-sm font-extrabold text-gray-900 hover:text-blue-700 hover:underline"
-                              >
-                                {fullName(ch)}
-                              </Link>
-                              {age && (
-                                <span className="hidden shrink-0 text-[10px] text-gray-400 sm:inline">
-                                  {age}
-                                </span>
-                              )}
-                            </div>
-                            {flags.length > 0 && (
-                              <div className="mt-1 flex flex-wrap gap-1">
-                                {flags.map((f) => (
-                                  <span key={f.label} className={["rounded-md border px-1.5 py-0.5 text-[10px] font-semibold", f.color].join(" ")}>
-                                    {f.label}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Class */}
-                          <div className="hidden w-24 shrink-0 text-center text-xs text-gray-500 sm:block">
-                            {classNameById[ch.classRoomId] || "Unassigned"}
-                          </div>
-
-                          {/* Status */}
-                          <div className="w-20 shrink-0 text-center">
-                            {attendance ? (
-                              checkedIn ? (
-                                <div className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
-                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                  In
-                                </div>
-                              ) : (
-                                <div className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600">
-                                  <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
-                                  Out
-                                </div>
-                              )
-                            ) : (
-                              <span className="text-xs text-gray-400">--</span>
-                            )}
-                          </div>
-
-                          {/* Action */}
-                          <div className="w-24 shrink-0 text-right">
-                            <button
-                              type="button"
-                              onClick={() => (checkedIn ? checkOut(ch.id) : checkIn(ch.id))}
-                              disabled={!attendance || busy}
-                              className={[
-                                "rounded-lg px-3 py-1.5 text-xs font-extrabold text-white disabled:opacity-60",
-                                checkedIn ? "bg-gray-600 hover:bg-gray-700" : "bg-emerald-600 hover:bg-emerald-700",
-                              ].join(" ")}
-                            >
-                              {busy ? "..." : checkedIn ? "Check Out" : "Check In"}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
+                    ) : (
+                      <RosterGroups
+                        items={filteredChildren}
+                        hasAttendance={!!attendance}
+                        attendanceByChildId={attendanceByChildId}
+                        selectedAttendanceSet={selectedAttendanceSet}
+                        busyChildId={busyChildId}
+                        bulkBusy={bulkBusy}
+                        classNameById={classNameById}
+                        onToggleSelect={toggleAttendanceSelected}
+                        onCheckIn={checkIn}
+                        onCheckOut={checkOut}
+                      />
+                    )}
                   </div>
                 </div>
 
                 {/* Red flags */}
                 {redFlagged.length > 0 && (
                   <div className="rounded-2xl border border-rose-200 bg-rose-50/50 p-4">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 border-b border-rose-200/60 pb-3">
                       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-rose-100 text-xs font-bold text-rose-600">!</span>
                       <h3 className="text-sm font-extrabold text-rose-900">
                         Red Flags ({redFlagged.length})
@@ -633,20 +712,28 @@ export default function TeacherClassroom() {
               <aside className="min-w-0 space-y-4">
                 {/* Checked-in list */}
                 <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                     <h3 className="text-sm font-extrabold text-gray-900">
                       Checked In Today
                     </h3>
-                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-extrabold text-emerald-800">
-                      {stats.checkedIn}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-extrabold text-emerald-800">
+                        {stats.checkedIn}
+                      </span>
+                      <Link
+                        href="/teacher/logs"
+                        className="text-xs font-semibold text-gray-500 hover:text-blue-700"
+                      >
+                        View logs
+                      </Link>
+                    </div>
                   </div>
                   {attendance?.checkedInChildren?.length ? (
-                    <div className="mt-3 space-y-1.5">
+                    <div className="mt-3 divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-100 bg-white/70">
                       {attendance.checkedInChildren.slice(0, 15).map((row) => (
                         <div
                           key={row.child?.id}
-                          className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-gray-50"
+                          className="flex items-center gap-2.5 px-2 py-2 hover:bg-gray-50"
                         >
                           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-extrabold text-emerald-700">
                             {initials(row.child)}
@@ -680,25 +767,52 @@ export default function TeacherClassroom() {
 
                 {/* Quick links */}
                 <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                  <h3 className="text-sm font-extrabold text-gray-900">Quick Actions</h3>
+                  <h3 className="text-sm font-extrabold text-gray-900 border-b border-gray-100 pb-3">Quick Actions</h3>
                   <div className="mt-3 grid grid-cols-1 gap-2">
                     <Link
                       href="/teacher/logs"
-                      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+                      className="group flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gradient-to-r from-white via-white to-slate-50 px-3 py-2.5 text-sm font-semibold text-gray-800 hover:border-blue-200 hover:bg-blue-50/40"
                     >
-                      Log Activity
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                          <IconNote className="h-4 w-4" />
+                        </span>
+                        <div className="leading-tight">
+                          <div className="text-sm font-semibold text-gray-900">Log Activity</div>
+                          <div className="text-xs font-medium text-gray-500">Record learning moments</div>
+                        </div>
+                      </div>
+                      <IconChevronRight className="h-4 w-4 text-gray-400 group-hover:text-blue-600" />
                     </Link>
                     <Link
                       href="/teacher/checklists"
-                      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+                      className="group flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gradient-to-r from-white via-white to-slate-50 px-3 py-2.5 text-sm font-semibold text-gray-800 hover:border-emerald-200 hover:bg-emerald-50/40"
                     >
-                      Checklists
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                          <IconClipboard className="h-4 w-4" />
+                        </span>
+                        <div className="leading-tight">
+                          <div className="text-sm font-semibold text-gray-900">Checklists</div>
+                          <div className="text-xs font-medium text-gray-500">Daily classroom flow</div>
+                        </div>
+                      </div>
+                      <IconChevronRight className="h-4 w-4 text-gray-400 group-hover:text-emerald-600" />
                     </Link>
                     <Link
                       href="/teacher/reports"
-                      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+                      className="group flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gradient-to-r from-white via-white to-slate-50 px-3 py-2.5 text-sm font-semibold text-gray-800 hover:border-indigo-200 hover:bg-indigo-50/40"
                     >
-                      Reports
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+                          <IconChart className="h-4 w-4" />
+                        </span>
+                        <div className="leading-tight">
+                          <div className="text-sm font-semibold text-gray-900">Reports</div>
+                          <div className="text-xs font-medium text-gray-500">Attendance and progress</div>
+                        </div>
+                      </div>
+                      <IconChevronRight className="h-4 w-4 text-gray-400 group-hover:text-indigo-600" />
                     </Link>
                   </div>
                 </div>
@@ -775,9 +889,14 @@ function AttendanceSummaryPanel({ history, loading, children, attendanceByChildI
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-3">
         <div>
-          <h3 className="text-sm font-extrabold text-gray-900">Attendance Summary</h3>
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+              <IconChart className="h-4 w-4" />
+            </span>
+            <h3 className="text-sm font-extrabold text-gray-900">Attendance Summary</h3>
+          </div>
           <p className="mt-0.5 text-xs text-gray-500">{monthLabel} - all children in selected class/center</p>
         </div>
         {overallStats.total > 0 && (
@@ -859,7 +978,166 @@ function AttendanceSummaryPanel({ history, loading, children, attendanceByChildI
   );
 }
 
-function StatCard({ label, value, color }) {
+function RosterGroups({
+  items,
+  hasAttendance,
+  attendanceByChildId,
+  selectedAttendanceSet,
+  busyChildId,
+  bulkBusy,
+  classNameById,
+  onToggleSelect,
+  onCheckIn,
+  onCheckOut,
+}) {
+  if (!items?.length) {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-center text-sm text-gray-600">
+        No children in this list.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {items.map((ch) => (
+        <RosterRow
+          key={ch.id}
+          child={ch}
+          hasAttendance={hasAttendance}
+          attendanceByChildId={attendanceByChildId}
+          selectedAttendanceSet={selectedAttendanceSet}
+          busyChildId={busyChildId}
+          bulkBusy={bulkBusy}
+          classNameById={classNameById}
+          onToggleSelect={onToggleSelect}
+          onCheckIn={onCheckIn}
+          onCheckOut={onCheckOut}
+        />
+      ))}
+    </div>
+  );
+}
+
+function RosterRow({
+  child,
+  hasAttendance,
+  attendanceByChildId,
+  selectedAttendanceSet,
+  busyChildId,
+  bulkBusy,
+  classNameById,
+  onToggleSelect,
+  onCheckIn,
+  onCheckOut,
+}) {
+  const att = attendanceByChildId.get(child.id) || null;
+  const checkedIn = !!att?.checkedIn;
+  const checkedInAt = att?.checkedInAt ? formatTime(att.checkedInAt) : "";
+  const busy = busyChildId === child.id;
+  const selected = selectedAttendanceSet.has(child.id);
+  const flags = flagsForChild(child);
+  const age = formatAge(child.birthDate);
+
+  return (
+    <div
+      className={[
+        "flex items-center gap-3 rounded-xl border p-3 shadow-sm transition hover:shadow-md",
+        checkedIn
+          ? "border-emerald-200 bg-emerald-50/40"
+          : selected
+            ? "border-blue-200 bg-blue-50/30"
+            : "border-gray-200 bg-white hover:bg-gray-50",
+      ].join(" ")}
+    >
+      <input
+        type="checkbox"
+        checked={selected}
+        onChange={() => onToggleSelect(child.id)}
+        disabled={bulkBusy}
+        className="h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-600 disabled:opacity-60"
+      />
+
+      {/* Avatar */}
+      <div className={[
+        "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-extrabold ring-1 ring-inset",
+        checkedIn
+          ? "bg-emerald-100 text-emerald-700 ring-emerald-200"
+          : "bg-gray-100 text-gray-600 ring-gray-200",
+      ].join(" ")}>
+        {initials(child)}
+      </div>
+
+      {/* Name + flags */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/teacher/children/${encodeURIComponent(child.id)}`}
+            className="truncate text-sm font-extrabold text-gray-900 hover:text-blue-700 hover:underline"
+          >
+            {fullName(child)}
+          </Link>
+          {age && (
+            <span className="hidden shrink-0 text-[10px] text-gray-400 sm:inline">
+              {age}
+            </span>
+          )}
+        </div>
+        {checkedIn && checkedInAt ? (
+          <div className="mt-0.5 text-[11px] font-semibold text-emerald-700">
+            Checked in at {checkedInAt}
+          </div>
+        ) : null}
+        {flags.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {flags.map((f) => (
+              <span key={f.label} className={["rounded-md border px-1.5 py-0.5 text-[10px] font-semibold", f.color].join(" ")}>
+                {f.label}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Class */}
+      <div className="hidden w-24 shrink-0 text-center text-xs text-gray-500 sm:block">
+        {classNameById[child.classRoomId] || "Unassigned"}
+      </div>
+
+      {/* Attendance */}
+      <div className="w-28 shrink-0 text-right">
+        <button
+          type="button"
+          onClick={() => (checkedIn ? onCheckOut(child.id) : onCheckIn(child.id))}
+          disabled={!hasAttendance || busy}
+          className={[
+            "inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-xs font-extrabold text-white shadow-sm disabled:opacity-60",
+            checkedIn ? "bg-gray-700 hover:bg-gray-800" : "bg-emerald-600 hover:bg-emerald-700",
+          ].join(" ")}
+        >
+          {busy ? (
+            <span className="inline-flex items-center gap-2">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-white/80" />
+              Saving
+            </span>
+          ) : checkedIn ? (
+            <>
+              <IconClock className="h-3.5 w-3.5 text-white/90" />
+              Check Out
+            </>
+          ) : (
+            <>
+              <IconCheck className="h-3.5 w-3.5 text-white/90" />
+              Check In
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, color, icon }) {
   const colors = {
     sky: "border-sky-200 bg-sky-50 text-sky-700",
     emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -873,8 +1151,13 @@ function StatCard({ label, value, color }) {
     rose: "text-rose-900",
   };
   return (
-    <div className={["rounded-xl border p-3", colors[color] || colors.gray].join(" ")}>
-      <div className="text-[11px] font-semibold uppercase tracking-wide">{label}</div>
+    <div className={["flex h-full flex-col justify-between rounded-xl border p-3 shadow-sm", colors[color] || colors.gray].join(" ")}>
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] font-semibold uppercase tracking-wide">{label}</div>
+        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/70 text-gray-600">
+          {icon}
+        </div>
+      </div>
       <div className={["mt-1 text-2xl font-extrabold", valueColors[color] || "text-gray-900"].join(" ")}>{value}</div>
     </div>
   );

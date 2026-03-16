@@ -34,7 +34,7 @@ const ASSESSMENT_DOMAINS = [
     label: "Cognitive Development",
     description: "Problem-solving, curiosity, focus & memory",
     emoji: "\uD83E\uDDE0",
-    color: "bg-violet-100 text-violet-700",
+    color: "bg-blue-100 text-blue-800",
   },
   {
     key: "social",
@@ -70,8 +70,95 @@ const RUBRIC_LEVELS = [
   { value: 1, label: "Emerging", activeClass: "bg-amber-100 text-amber-800 border border-amber-300" },
   { value: 2, label: "Developing", activeClass: "bg-sky-100 text-sky-800 border border-sky-300" },
   { value: 3, label: "Proficient", activeClass: "bg-emerald-100 text-emerald-800 border border-emerald-300" },
-  { value: 4, label: "Advanced", activeClass: "bg-violet-100 text-violet-800 border border-violet-300" },
+  { value: 4, label: "Advanced", activeClass: "bg-blue-100 text-blue-900 border border-blue-200" },
 ];
+const Icon = ({ className, children, viewBox = "0 0 24 24" }) => (
+  <svg
+    viewBox={viewBox}
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    {children}
+  </svg>
+);
+const Icons = {
+  users: (props) => (
+    <Icon {...props}>
+      <path d="M16 11a4 4 0 1 0-8 0" />
+      <path d="M12 13c-4 0-7 2-7 5v1h14v-1c0-3-3-5-7-5Z" />
+    </Icon>
+  ),
+  building: (props) => (
+    <Icon {...props}>
+      <path d="M4 20h16" />
+      <path d="M6 20V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v14" />
+      <path d="M9 8h2m-2 4h2m-2 4h2m4-8h2m-2 4h2m-2 4h2" />
+    </Icon>
+  ),
+  filter: (props) => (
+    <Icon {...props}>
+      <path d="M4 5h16" />
+      <path d="M7 12h10" />
+      <path d="M10 19h4" />
+    </Icon>
+  ),
+  search: (props) => (
+    <Icon {...props}>
+      <circle cx="11" cy="11" r="6" />
+      <path d="M20 20l-3.5-3.5" />
+    </Icon>
+  ),
+  list: (props) => (
+    <Icon {...props}>
+      <path d="M9 6h11" />
+      <path d="M9 12h11" />
+      <path d="M9 18h11" />
+      <path d="M4 6h.01M4 12h.01M4 18h.01" />
+    </Icon>
+  ),
+  note: (props) => (
+    <Icon {...props}>
+      <path d="M5 4h10l4 4v12H5z" />
+      <path d="M15 4v4h4" />
+    </Icon>
+  ),
+  sparkles: (props) => (
+    <Icon {...props}>
+      <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3Z" />
+      <path d="M5 18l.8 2.2L8 21l-2.2.8L5 24l-.8-2.2L2 21l2.2-.8L5 18Z" />
+    </Icon>
+  ),
+  camera: (props) => (
+    <Icon {...props}>
+      <path d="M4 8h4l2-2h4l2 2h4v10H4z" />
+      <circle cx="12" cy="13" r="3.2" />
+    </Icon>
+  ),
+  upload: (props) => (
+    <Icon {...props}>
+      <path d="M12 16V6" />
+      <path d="M8 10l4-4 4 4" />
+      <path d="M4 18h16" />
+    </Icon>
+  ),
+  check: (props) => (
+    <Icon {...props}>
+      <path d="M5 12l4 4L19 6" />
+    </Icon>
+  ),
+  info: (props) => (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 10v6" />
+      <path d="M12 7h.01" />
+    </Icon>
+  ),
+};
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024; // keep in sync with /api/v1/uploads
 const JPEG_QUALITIES = [0.88, 0.8, 0.72, 0.64, 0.56, 0.48];
 
@@ -91,6 +178,7 @@ export default function TeacherLogs() {
   const [showClockedInOnly, setShowClockedInOnly] = useState(false);
   const [centerId, setCenterId] = useState(initialCenterId);
   const [childId, setChildId] = useState(initialChildId);
+  const [childSearch, setChildSearch] = useState("");
 
   const [mode, setMode] = useState("single"); // single | bulk
   const [bulkChildIds, setBulkChildIds] = useState([]);
@@ -177,6 +265,7 @@ export default function TeacherLogs() {
     setSuccess("");
     setClassId("");
     setShowClockedInOnly(false);
+    setChildSearch("");
     loadChildren(centerId);
   }, [centerId]);
 
@@ -239,14 +328,26 @@ export default function TeacherLogs() {
     if (showClockedInOnly) {
       list = list.filter((c) => clockedInChildIds.has(c.id));
     }
+    const query = String(childSearch || "").trim().toLowerCase();
+    if (query) {
+      list = list.filter((c) => {
+        const full = `${c.firstName || ""} ${c.lastName || ""}`.trim().toLowerCase();
+        return full.includes(query);
+      });
+    }
     return list.sort((a, b) => (a.firstName || "").localeCompare(b.firstName || ""));
-  }, [children, classId, showClockedInOnly, clockedInChildIds]);
+  }, [children, classId, showClockedInOnly, clockedInChildIds, childSearch]);
 
   const childLabel = useMemo(() => {
     const ch = children.find((c) => c.id === childId);
     if (!ch) return "";
     return `${ch.firstName}${ch.lastName ? ` ${ch.lastName}` : ""}`;
   }, [children, childId]);
+
+  const centerLabel = useMemo(() => {
+    const center = centers.find((c) => c.id === centerId);
+    return center ? center.name : "";
+  }, [centers, centerId]);
 
   const bulkSelectedSet = useMemo(
     () => new Set(bulkChildIds || []),
@@ -600,7 +701,7 @@ export default function TeacherLogs() {
         setError(
           `Bulk logging completed with errors (${ok}/${ids.length} succeeded): ${failures
             .slice(0, 3)
-            .join(" • ")}`,
+            .join(" - ")}`,
         );
       } else {
         toast.success(
@@ -618,20 +719,55 @@ export default function TeacherLogs() {
 
   return (
     <TeacherLayout title="Activity Logging">
-      <div className="rounded-xl border border-gray-200 bg-white p-5">
-        <h2 className="text-lg font-extrabold">Daily Activity Logging</h2>
-        <p className="mt-1 text-sm text-gray-600">
-          Teachers cannot backdate activity logs. Bulk logging is supported.
-        </p>
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-gray-100 pb-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h2 className="text-lg font-extrabold text-gray-900">Daily Activity Logging</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Teachers cannot backdate activity logs. Bulk logging is supported.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-700">
+              <Icons.list className="h-3.5 w-3.5" />
+              Mode: {mode === "bulk" ? "Bulk" : "Single"}
+            </span>
+            {centerLabel ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">
+                <Icons.building className="h-3.5 w-3.5" />
+                Center: {centerLabel}
+              </span>
+            ) : null}
+            {mode === "single" && childLabel ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
+                <Icons.users className="h-3.5 w-3.5" />
+                Child: {childLabel}
+              </span>
+            ) : null}
+            {saving ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+                <Icons.info className="h-3.5 w-3.5" />
+                Saving...
+              </span>
+            ) : null}
+          </div>
+        </div>
 
         {error ? (
           <div className="mt-3 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            <span>{error}</span>
+            <span className="flex items-center gap-2">
+              <Icons.info className="h-4 w-4 text-red-500" />
+              {error}
+            </span>
             <button type="button" onClick={() => setError("")} className="ml-2 text-lg font-bold text-red-600 hover:text-red-800">&times;</button>
           </div>
         ) : null}
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+            <Icons.list className="h-4 w-4 text-gray-400" />
+            Logging mode
+          </span>
           <button
             type="button"
             onClick={() => {
@@ -640,13 +776,16 @@ export default function TeacherLogs() {
               setError("");
             }}
             className={[
-              "rounded-xl px-3 py-2 text-sm font-extrabold",
+              "rounded-xl px-3 py-2 text-sm font-extrabold transition",
               mode === "single"
-                ? "bg-sky-100 text-sky-900"
+                ? "bg-sky-100 text-sky-900 shadow-sm"
                 : "border border-gray-200 bg-white text-gray-800 hover:bg-gray-50",
-            ].join(" ")}
+          ].join(" ")}
           >
-            Single child
+            <span className="inline-flex items-center gap-2">
+              <Icons.users className="h-4 w-4" />
+              Single child
+            </span>
           </button>
           <button
             type="button"
@@ -657,13 +796,16 @@ export default function TeacherLogs() {
               setChildId("");
             }}
             className={[
-              "rounded-xl px-3 py-2 text-sm font-extrabold",
+              "rounded-xl px-3 py-2 text-sm font-extrabold transition",
               mode === "bulk"
-                ? "bg-sky-100 text-sky-900"
+                ? "bg-sky-100 text-sky-900 shadow-sm"
                 : "border border-gray-200 bg-white text-gray-800 hover:bg-gray-50",
-            ].join(" ")}
+          ].join(" ")}
           >
-            Bulk logging
+            <span className="inline-flex items-center gap-2">
+              <Icons.users className="h-4 w-4" />
+              Bulk logging
+            </span>
           </button>
         </div>
 
@@ -671,183 +813,295 @@ export default function TeacherLogs() {
           onSubmit={mode === "bulk" ? submitBulk : submitSingle}
           className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2"
         >
-          <label className="block">
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Center
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 md:col-span-2">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
+                  <Icons.users className="h-4 w-4" />
+                </span>
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Step 1 - Select classroom and child
+                  </div>
+                  <div className="mt-1 text-xs text-gray-500">
+                    Use filters and search to find the right child quickly.
+                  </div>
+                </div>
+              </div>
+              {centerId ? (
+                <div className="flex items-center gap-2 text-xs text-gray-600">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2 py-1">
+                    <Icons.users className="h-3.5 w-3.5 text-gray-500" />
+                    Showing: {sortedChildren.length}/{children.length || 0}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-700">
+                    <Icons.check className="h-3.5 w-3.5" />
+                    Clocked in: {clockedInChildIds.size}
+                  </span>
+                </div>
+              ) : null}
             </div>
-            <select
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-              value={centerId}
-              onChange={(e) => setCenterId(e.target.value)}
-              disabled={loading}
-            >
-              <option value="">Select a center…</option>
-              {centers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
 
-          <div className="flex items-end gap-3">
-            <label className="block flex-1">
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Classroom
-              </div>
-              <select
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                value={classId}
-                onChange={(e) => {
-                  setClassId(e.target.value);
-                  setChildId("");
-                  setBulkChildIds([]);
-                }}
-                disabled={!centerId || loading}
-              >
-                <option value="">All classrooms</option>
-                {classes.slice().sort((a, b) => (a.name || "").localeCompare(b.name || "")).map((cls) => (
-                  <option key={cls.id} value={cls.id}>
-                    {cls.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex shrink-0 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
-              <input
-                type="checkbox"
-                checked={showClockedInOnly}
-                onChange={(e) => {
-                  setShowClockedInOnly(e.target.checked);
-                  setChildId("");
-                  setBulkChildIds([]);
-                }}
-              />
-              <span className="text-xs font-semibold text-gray-700">Clocked in only</span>
-            </label>
-          </div>
-
-          {mode === "single" ? (
-            <label className="block">
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Child
-              </div>
-              <select
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                value={childId}
-                onChange={(e) => setChildId(e.target.value)}
-                disabled={!centerId || loading}
-                required
-              >
-                <option value="">Select a child…</option>
-                {sortedChildren.map((ch) => {
-                  const isIn = clockedInChildIds.has(ch.id);
-                  return (
-                    <option key={ch.id} value={ch.id}>
-                      {isIn ? "\u2705 " : ""}{ch.firstName} {ch.lastName || ""}
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label className="block">
+                <div className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <Icons.building className="h-3.5 w-3.5" />
+                  Center
+                </div>
+                <select
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  value={centerId}
+                  onChange={(e) => setCenterId(e.target.value)}
+                  disabled={loading}
+                >
+                  <option value="">Select a center...</option>
+                  {centers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
                     </option>
-                  );
-                })}
-              </select>
-            </label>
-          ) : (
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 md:row-span-2">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Children (bulk)
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={selectAllBulk}
-                    disabled={!centerId || loading || saving || sortedChildren.length === 0}
-                    className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-extrabold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Select all
-                  </button>
-                  <button
-                    type="button"
-                    onClick={clearBulk}
-                    disabled={saving || bulkChildIds.length === 0}
-                    className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-extrabold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Clear
-                  </button>
-                </div>
-              </div>
+                  ))}
+                </select>
+              </label>
 
-              {!centerId ? (
-                <div className="mt-2 text-sm text-gray-600">Select a center first.</div>
-              ) : sortedChildren.length === 0 ? (
-                <div className="mt-2 text-sm text-gray-600">No children found.</div>
+              <div className="flex flex-col gap-3 md:flex-row md:items-end">
+                <label className="block flex-1">
+                  <div className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    <Icons.filter className="h-3.5 w-3.5" />
+                    Classroom
+                  </div>
+                  <select
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    value={classId}
+                    onChange={(e) => {
+                      setClassId(e.target.value);
+                      setChildId("");
+                      setBulkChildIds([]);
+                    }}
+                    disabled={!centerId || loading}
+                  >
+                    <option value="">All classrooms</option>
+                    {classes
+                      .slice()
+                      .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+                      .map((cls) => (
+                        <option key={cls.id} value={cls.id}>
+                          {cls.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label className="flex shrink-0 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={showClockedInOnly}
+                    onChange={(e) => {
+                      setShowClockedInOnly(e.target.checked);
+                      setChildId("");
+                      setBulkChildIds([]);
+                    }}
+                  />
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-700">
+                    <Icons.check className="h-3.5 w-3.5 text-emerald-600" />
+                    Clocked in only
+                  </span>
+                </label>
+              </div>
+              <label className="block md:col-span-2">
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Search child
+                </div>
+                <div className="relative">
+                  <Icons.search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={childSearch}
+                    onChange={(e) => setChildSearch(e.target.value)}
+                    placeholder="Type a name to filter the list"
+                    className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-16 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    disabled={!centerId || loading}
+                  />
+                  {childSearch ? (
+                    <button
+                      type="button"
+                      onClick={() => setChildSearch("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600 hover:bg-gray-50"
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
+              </label>
+            </div>
+
+            <div className="mt-3">
+              {mode === "single" ? (
+                <label className="block">
+                  <div className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    <Icons.users className="h-3.5 w-3.5" />
+                    Child
+                  </div>
+                  <select
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    value={childId}
+                    onChange={(e) => setChildId(e.target.value)}
+                    disabled={!centerId || loading}
+                    required
+                  >
+                    <option value="">Select a child...</option>
+                    {sortedChildren.map((ch) => {
+                      const isIn = clockedInChildIds.has(ch.id);
+                      return (
+                        <option key={ch.id} value={ch.id}>
+                          {isIn ? "✓ " : ""}{ch.firstName} {ch.lastName || ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  {centerId && !loading && sortedChildren.length === 0 ? (
+                    <div className="mt-2 text-xs text-amber-700">No children match the current filters.</div>
+                  ) : null}
+                </label>
               ) : (
-                <div className="mt-2 max-h-56 space-y-1 overflow-auto pr-1">
-                  {sortedChildren.map((ch) => {
-                    const checked = bulkSelectedSet.has(ch.id);
-                    const isIn = clockedInChildIds.has(ch.id);
-                    return (
-                      <label
-                        key={ch.id}
-                        className={[
-                          "flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm",
-                          isIn ? "border-emerald-200 bg-emerald-50/40" : "border-gray-200 bg-white",
-                        ].join(" ")}
+                <div className="rounded-xl border border-gray-200 bg-white p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Children (bulk)
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={selectAllBulk}
+                        disabled={!centerId || loading || saving || sortedChildren.length === 0}
+                        className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-extrabold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        <span className="flex min-w-0 items-center gap-2">
-                          {isIn && <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />}
-                          <span className="truncate font-semibold text-gray-900">
-                            {ch.firstName} {ch.lastName || ""}
-                          </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <Icons.check className="h-3.5 w-3.5" />
+                          Select all
                         </span>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) => toggleBulkChild(ch.id, e.target.checked)}
-                          disabled={saving}
-                        />
-                      </label>
-                    );
-                  })}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearBulk}
+                        disabled={saving || bulkChildIds.length === 0}
+                        className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-extrabold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Icons.info className="h-3.5 w-3.5" />
+                          Clear
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {!centerId ? (
+                    <div className="mt-2 text-sm text-gray-600">Select a center first.</div>
+                  ) : sortedChildren.length === 0 ? (
+                    <div className="mt-2 text-sm text-gray-600">No children match the filters.</div>
+                  ) : (
+                    <div className="mt-2 max-h-56 space-y-1 overflow-auto pr-1">
+                      {sortedChildren.map((ch) => {
+                        const checked = bulkSelectedSet.has(ch.id);
+                        const isIn = clockedInChildIds.has(ch.id);
+                        return (
+                          <label
+                            key={ch.id}
+                            className={[
+                              "flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm",
+                              isIn ? "border-emerald-200 bg-emerald-50/40" : "border-gray-200 bg-white",
+                            ].join(" ")}
+                          >
+                            <span className="flex min-w-0 items-center gap-2">
+                              {isIn && <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />}
+                              <span className="truncate font-semibold text-gray-900">
+                                {ch.firstName} {ch.lastName || ""}
+                              </span>
+                            </span>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => toggleBulkChild(ch.id, e.target.checked)}
+                              disabled={saving}
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-700">
+                    <Icons.check className="h-3.5 w-3.5" />
+                    Selected: {bulkChildIds.length}
+                  </div>
                 </div>
               )}
-
-              <div className="mt-2 text-xs text-gray-600">
-                Selected: {bulkChildIds.length}
+            </div>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 md:col-span-2">
+            <div className="flex items-start gap-3">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700">
+                <Icons.note className="h-4 w-4" />
+              </span>
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Step 2 - Log details
+                </div>
+                <div className="mt-1 text-xs text-gray-500">
+                  Choose an activity type and add a short note if needed.
+                </div>
               </div>
             </div>
-          )}
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label className="block">
+                <div className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <Icons.list className="h-3.5 w-3.5" />
+                  Type
+                </div>
+                <select
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  value={type}
+                  onChange={(e) => setType(e.target.value)}
+                >
+                  {TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {TYPE_LABELS[t] || t}
+                    </option>
+                  ))}
+                </select>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {["MEAL", "NAP", "DIAPER_CHANGE", "ACTIVITY", "BEHAVIOR", "OTHER"].map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setType(t)}
+                      className={[
+                        "rounded-full border px-3 py-1 text-xs font-semibold transition",
+                        type === t
+                          ? "border-blue-200 bg-blue-50 text-blue-800"
+                          : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+                      ].join(" ")}
+                    >
+                      {TYPE_LABELS[t] || t}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-2 text-xs text-gray-600">
+                  Daily grade uses type <span className="font-semibold">OTHER</span> automatically.
+                </div>
+              </label>
 
-          <label className="block">
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Type
+              <label className="block">
+                <div className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <Icons.note className="h-3.5 w-3.5" />
+                  Notes (optional)
+                </div>
+                <textarea
+                  className="min-h-[96px] w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Short note about the activity"
+                />
+              </label>
             </div>
-            <select
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-            >
-              {TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {TYPE_LABELS[t] || t}
-                </option>
-              ))}
-            </select>
-            <div className="mt-2 text-xs text-gray-600">
-              Daily grade uses type <span className="font-semibold">OTHER</span> automatically.
-            </div>
-          </label>
-
-          <label className="block">
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Notes (optional)
-            </div>
-            <input
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Short note"
-            />
-          </label>
+          </div>
 
           {/* Developmental Assessment Panel */}
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 md:col-span-2">
@@ -856,14 +1110,19 @@ export default function TeacherLogs() {
               onClick={() => setAssessmentOpen((v) => !v)}
               className="flex w-full items-center justify-between text-left"
             >
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Developmental Assessment (optional)
-                </div>
-                <div className="mt-0.5 text-xs text-gray-500">
-                  {Object.keys(domainScores).length > 0
-                    ? `${Object.keys(domainScores).length} domain(s) rated`
-                    : "Rate child across developmental domains"}
+              <div className="flex items-start gap-3">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
+                  <Icons.sparkles className="h-4 w-4" />
+                </span>
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Step 3 - Developmental Assessment (optional)
+                  </div>
+                  <div className="mt-0.5 text-xs text-gray-500">
+                    {Object.keys(domainScores).length > 0
+                      ? `${Object.keys(domainScores).length} domain(s) rated`
+                      : "Rate child across developmental domains"}
+                  </div>
                 </div>
               </div>
               <svg
@@ -951,12 +1210,23 @@ export default function TeacherLogs() {
           </div>
 
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 md:col-span-2">
-            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Child photos (upload or take picture)
+            <div className="flex items-start gap-3">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+                <Icons.camera className="h-4 w-4" />
+              </span>
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Step 4 - Child photos (optional)
+                </div>
+                <div className="mt-1 text-xs text-gray-500">
+                  Upload or capture photos. Large files will be optimized automatically.
+                </div>
+              </div>
             </div>
             <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
               <label className="block">
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <div className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <Icons.upload className="h-3.5 w-3.5" />
                   Upload photos
                 </div>
                 <input
@@ -971,7 +1241,8 @@ export default function TeacherLogs() {
               </label>
 
               <label className="block">
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <div className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <Icons.camera className="h-3.5 w-3.5" />
                   Take picture
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -981,11 +1252,14 @@ export default function TeacherLogs() {
                     disabled={saving || cameraStarting || cameraOpen}
                     className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {cameraStarting
-                      ? "Starting..."
-                      : cameraOpen
-                        ? "Camera open"
-                        : "Open camera"}
+                    <span className="inline-flex items-center gap-2">
+                      <Icons.camera className="h-4 w-4" />
+                      {cameraStarting
+                        ? "Starting..."
+                        : cameraOpen
+                          ? "Camera open"
+                          : "Open camera"}
+                    </span>
                   </button>
                   <input
                     ref={cameraInputRef}
@@ -1002,7 +1276,10 @@ export default function TeacherLogs() {
                     disabled={saving}
                     className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Fallback picker
+                    <span className="inline-flex items-center gap-2">
+                      <Icons.upload className="h-4 w-4" />
+                      Fallback picker
+                    </span>
                   </button>
                 </div>
               </label>
@@ -1020,7 +1297,10 @@ export default function TeacherLogs() {
                 disabled={saving || photoFiles.length === 0}
                 className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-extrabold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Clear photos
+                <span className="inline-flex items-center gap-1.5">
+                  <Icons.info className="h-3.5 w-3.5" />
+                  Clear photos
+                </span>
               </button>
             </div>
             {cameraOpen ? (
@@ -1039,7 +1319,10 @@ export default function TeacherLogs() {
                     disabled={saving}
                     className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-extrabold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Capture photo
+                    <span className="inline-flex items-center gap-2">
+                      <Icons.camera className="h-4 w-4" />
+                      Capture photo
+                    </span>
                   </button>
                   <button
                     type="button"
@@ -1047,7 +1330,10 @@ export default function TeacherLogs() {
                     disabled={saving}
                     className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-extrabold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Stop camera
+                    <span className="inline-flex items-center gap-2">
+                      <Icons.info className="h-4 w-4" />
+                      Stop camera
+                    </span>
                   </button>
                 </div>
               </div>
@@ -1083,18 +1369,34 @@ export default function TeacherLogs() {
             ) : null}
           </div>
 
-          <div className="md:col-span-2">
-            <button
-              type="submit"
-              disabled={
-                saving ||
-                !centerId ||
-                (mode === "single" ? !childId : bulkChildIds.length === 0)
-              }
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {saving ? "Saving…" : mode === "bulk" ? "Bulk Log Activity" : "Log Activity"}
-            </button>
+          <div className="rounded-xl border border-gray-200 bg-white p-3 md:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-xs text-gray-600">
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-gray-50 text-gray-600">
+                  <Icons.check className="h-4 w-4" />
+                </span>
+                {mode === "bulk"
+                  ? `Bulk logging ${bulkChildIds.length} child${bulkChildIds.length === 1 ? "" : "ren"}`
+                  : childLabel
+                    ? `Logging for ${childLabel}`
+                    : "Select a child to continue"}
+                {photoFiles.length ? ` - ${photoFiles.length} photo(s)` : ""}
+              </div>
+              <button
+                type="submit"
+                disabled={
+                  saving ||
+                  !centerId ||
+                  (mode === "single" ? !childId : bulkChildIds.length === 0)
+                }
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Icons.check className="h-4 w-4" />
+                  {saving ? "Saving..." : mode === "bulk" ? "Bulk Log Activity" : "Log Activity"}
+                </span>
+              </button>
+            </div>
           </div>
         </form>
       </div>

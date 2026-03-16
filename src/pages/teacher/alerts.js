@@ -12,6 +12,8 @@ export default function TeacherAlerts() {
   const [activeThreadId, setActiveThreadId] = useState("");
   const [activeThread, setActiveThread] = useState(null);
   const [message, setMessage] = useState("");
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all");
 
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -68,7 +70,11 @@ export default function TeacherAlerts() {
       };
     });
 
-    return rows.sort((a, b) => byString(a.title, b.title));
+    return rows.sort((a, b) => {
+      const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      return bTime - aTime || byString(a.title, b.title);
+    });
   }, [threads]);
 
   const newParentMessagesCount = useMemo(() => {
@@ -79,6 +85,19 @@ export default function TeacherAlerts() {
     }
     return count;
   }, [threads]);
+
+  const filteredThreads = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return (threadPreview || []).filter((t) => {
+      if (filter === "parent" && t.lastSenderRole !== "PARENT") return false;
+      if (!term) return true;
+      return (
+        String(t.title || "").toLowerCase().includes(term) ||
+        String(t.lastLine || "").toLowerCase().includes(term) ||
+        String(t.centerName || "").toLowerCase().includes(term)
+      );
+    });
+  }, [filter, search, threadPreview]);
 
   async function send(e) {
     e.preventDefault();
@@ -112,8 +131,13 @@ export default function TeacherAlerts() {
             </p>
           </div>
 
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
-            New parent message threads: {newParentMessagesCount}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700">
+              Total threads: {threadPreview.length}
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+              Last message from parent: {newParentMessagesCount}
+            </div>
           </div>
         </div>
 
@@ -138,13 +162,52 @@ export default function TeacherAlerts() {
               </button>
             </div>
 
+            <div className="mt-3 space-y-2">
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                placeholder="Search threads, centers, or messages..."
+              />
+              <div className="flex items-center gap-2 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setFilter("all")}
+                  className={[
+                    "rounded-full border px-3 py-1",
+                    filter === "all"
+                      ? "border-blue-200 bg-blue-50 text-blue-700"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilter("parent")}
+                  className={[
+                    "rounded-full border px-3 py-1",
+                    filter === "parent"
+                      ? "border-amber-200 bg-amber-50 text-amber-800"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  Parent last
+                </button>
+              </div>
+            </div>
+
             {loading ? (
-              <div className="mt-3"><Skeleton count={3} /></div>
-            ) : threadPreview.length === 0 ? (
-              <div className="mt-3 text-sm text-gray-600">No threads yet.</div>
+              <div className="mt-3">
+                <Skeleton count={3} />
+              </div>
+            ) : filteredThreads.length === 0 ? (
+              <div className="mt-3 rounded-xl border border-dashed border-gray-200 bg-white p-3 text-sm text-gray-600">
+                No threads match your filters.
+              </div>
             ) : (
               <div className="mt-2 space-y-2">
-                {threadPreview.map((t) => (
+                {filteredThreads.map((t) => (
                   <button
                     key={t.id}
                     type="button"
@@ -164,17 +227,28 @@ export default function TeacherAlerts() {
                         <div className="mt-1 line-clamp-2 text-xs text-gray-600">
                           {t.lastLine}
                         </div>
-                        {t.centerName ? (
-                          <div className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                            {t.centerName}
-                          </div>
-                        ) : null}
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+                          {t.centerName ? (
+                            <span className="font-semibold uppercase tracking-wide text-gray-400">
+                              {t.centerName}
+                            </span>
+                          ) : null}
+                          {t.updatedAt ? (
+                            <span>
+                              Updated {new Date(t.updatedAt).toLocaleString()}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                       {t.lastSenderRole === "PARENT" ? (
                         <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-extrabold text-amber-900">
                           Parent
                         </span>
-                      ) : null}
+                      ) : (
+                        <span className="shrink-0 rounded-full border border-gray-200 bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600">
+                          Staff
+                        </span>
+                      )}
                     </div>
                   </button>
                 ))}
@@ -192,47 +266,77 @@ export default function TeacherAlerts() {
               </div>
             ) : (
               <>
-                <div className="mt-2 max-h-[440px] space-y-2 overflow-auto rounded-xl border border-gray-200 bg-gray-50 p-3">
-                  {(activeThread.messages || []).map((m) => (
-                    <div
-                      key={m.id}
-                      className="rounded-xl border border-gray-200 bg-white p-3"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-xs font-semibold text-gray-600">
-                          {m.sender?.email || "User"}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {new Date(m.createdAt).toLocaleString()}
-                        </div>
+                <div className="mt-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-extrabold text-gray-900">
+                        {activeThread?.title ||
+                          activeThread?.center?.name ||
+                          "Conversation"}
                       </div>
-                      <div className="mt-1 text-sm text-gray-900">{m.body}</div>
+                      <div className="text-xs text-gray-500">
+                        {activeThread?.center?.name
+                          ? `Center: ${activeThread.center.name}`
+                          : "No center assigned"}
+                      </div>
                     </div>
-                  ))}
+                    <div className="text-xs text-gray-500">
+                      {activeThread?.updatedAt
+                        ? `Updated ${new Date(activeThread.updatedAt).toLocaleString()}`
+                        : null}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 max-h-[420px] space-y-2 overflow-auto rounded-xl border border-gray-200 bg-gray-50 p-3">
+                  {(activeThread.messages || []).map((m) => {
+                    const isParent = m.sender?.role === "PARENT";
+                    return (
+                      <div
+                        key={m.id}
+                        className={[
+                          "rounded-xl border p-3",
+                          isParent
+                            ? "border-amber-200 bg-amber-50"
+                            : "border-blue-200 bg-white",
+                        ].join(" ")}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-xs font-semibold text-gray-700">
+                            {m.sender?.email || "User"}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {new Date(m.createdAt).toLocaleString()}
+                          </div>
+                        </div>
+                        <div className="mt-1 text-sm text-gray-900">{m.body}</div>
+                      </div>
+                    );
+                  })}
                   {(activeThread.messages || []).length === 0 ? (
                     <div className="text-sm text-gray-600">No messages yet.</div>
                   ) : null}
                 </div>
 
-                <form onSubmit={send} className="mt-3 flex gap-2">
+                <form onSubmit={send} className="mt-3 flex flex-wrap gap-2">
                   <input
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
-                    placeholder="Type a message…"
+                    className="min-w-[220px] flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                    placeholder="Type a message..."
                   />
                   <button
                     type="submit"
                     disabled={sending || !message.trim()}
                     className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Send
+                    {sending ? "Sending..." : "Send"}
                   </button>
                 </form>
               </>
             )}
           </div>
-        </div>
+          </div>
 
         <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
           Tip: For classroom-wide announcements, create a new thread with the admin (or request an admin to add the right participants).
@@ -241,4 +345,3 @@ export default function TeacherAlerts() {
     </TeacherLayout>
   );
 }
-

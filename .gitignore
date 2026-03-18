@@ -25,7 +25,6 @@ cookies.txt
 admin_cookies.txt
 ameris_backup.sql
 .tmp-homepage*.png
-public/home-video.mp4
 .prisma/
 test-results/
 playwright-report/

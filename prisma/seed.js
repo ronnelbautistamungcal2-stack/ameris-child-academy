@@ -6,8 +6,23 @@ const prisma = new PrismaClient();
 async function main() {
   const adminEmail = process.env.SEED_ADMIN_EMAIL || "admin@demo.com";
   const adminPassword = process.env.SEED_ADMIN_PASSWORD || "adminpass";
-  if (process.env.NODE_ENV === "production" && !process.env.SEED_ADMIN_PASSWORD) {
-    throw new Error("Refusing to seed default admin password in production. Set SEED_ADMIN_PASSWORD.");
+  const teacherEmail = process.env.SEED_TEACHER_EMAIL || "teacher@demo.com";
+  const teacherPassword = process.env.SEED_TEACHER_PASSWORD || "teacherpass";
+  const parentEmail = process.env.SEED_PARENT_EMAIL || "parent@demo.com";
+  const parentPassword = process.env.SEED_PARENT_PASSWORD || "parentpass";
+
+  if (process.env.NODE_ENV === "production") {
+    const missingPasswords = [
+      !process.env.SEED_ADMIN_PASSWORD && "SEED_ADMIN_PASSWORD",
+      !process.env.SEED_TEACHER_PASSWORD && "SEED_TEACHER_PASSWORD",
+      !process.env.SEED_PARENT_PASSWORD && "SEED_PARENT_PASSWORD",
+    ].filter(Boolean);
+
+    if (missingPasswords.length) {
+      throw new Error(
+        `Refusing to seed default passwords in production. Set ${missingPasswords.join(", ")}.`,
+      );
+    }
   }
 
   const passwordHash = await bcrypt.hash(adminPassword, 10);
@@ -39,11 +54,6 @@ async function main() {
   }
 
   // Demo teacher + parent + child
-  const teacherEmail = process.env.SEED_TEACHER_EMAIL || "teacher@demo.com";
-  const teacherPassword = process.env.SEED_TEACHER_PASSWORD || "teacherpass";
-  const parentEmail = process.env.SEED_PARENT_EMAIL || "parent@demo.com";
-  const parentPassword = process.env.SEED_PARENT_PASSWORD || "parentpass";
-
   const teacherHash = await bcrypt.hash(teacherPassword, 10);
   const parentHash = await bcrypt.hash(parentPassword, 10);
 

@@ -1,13 +1,26 @@
-import CoachLayout from "@/components/coach/CoachLayout";
-import { SkeletonTable } from "@/components/ui/Skeleton";
-import { apiJson } from "@/lib/api";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
+import CoachLayout from "@/components/coach/CoachLayout";
+import {
+  CoachBadge,
+  CoachChipButton,
+  CoachEmptyPanel,
+  CoachMetricCard,
+  CoachPageHero,
+  CoachPanel,
+  coachDangerButtonClass,
+  coachInputClass,
+  coachPrimaryButtonClass,
+  coachSecondaryButtonClass,
+  coachTextareaClass,
+} from "@/components/coach/CoachPage";
+import { SkeletonTable } from "@/components/ui/Skeleton";
+import { apiJson } from "@/lib/api";
 
 const TYPES = [
-  { value: "PARENT", label: "Parent" },
-  { value: "CAMERA_OBSERVATION", label: "Camera Observation" },
-  { value: "GENERAL", label: "General" },
+  { value: "PARENT", label: "Parent", tone: "amber" },
+  { value: "CAMERA_OBSERVATION", label: "Camera", tone: "sky" },
+  { value: "GENERAL", label: "General", tone: "slate" },
 ];
 
 const PRIORITIES = [
@@ -18,15 +31,25 @@ const PRIORITIES = [
 ];
 
 const STATUSES = [
-  { value: "OPEN", label: "Open" },
-  { value: "IN_PROGRESS", label: "In Progress" },
-  { value: "COMPLETED", label: "Completed" },
-  { value: "CANCELLED", label: "Cancelled" },
+  { value: "OPEN", label: "Open", tone: "sky" },
+  { value: "IN_PROGRESS", label: "In Progress", tone: "amber" },
+  { value: "COMPLETED", label: "Completed", tone: "emerald" },
+  { value: "CANCELLED", label: "Cancelled", tone: "slate" },
 ];
+
+const INITIAL_FORM = {
+  type: "PARENT",
+  priority: "MEDIUM",
+  title: "",
+  description: "",
+  dueDate: "",
+  assignedToId: "",
+  notes: "",
+};
 
 export default function CoachFollowUps() {
   const router = useRouter();
-  const { centerId: qCenterId } = router.query;
+  const { centerId: qCenterId, assignedToId: qAssignedToId } = router.query;
 
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
@@ -37,277 +60,666 @@ export default function CoachFollowUps() {
   const [showForm, setShowForm] = useState(false);
   const [filterType, setFilterType] = useState("ALL");
   const [filterStatus, setFilterStatus] = useState("OPEN");
-
-  const [form, setForm] = useState({
-    type: "PARENT", priority: "MEDIUM", title: "", description: "",
-    dueDate: "", assignedToId: "", notes: "",
-  });
+  const [assigneeFilter, setAssigneeFilter] = useState("");
+  const [form, setForm] = useState(INITIAL_FORM);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
-        const c = await apiJson("/api/v1/centers");
-        const arr = Array.isArray(c) ? c : [];
-        setCenters(arr);
-        setCenterId(qCenterId || (arr.length === 1 ? arr[0].id : ""));
-      } catch {}
+        const response = await apiJson("/api/v1/centers");
+        const nextCenters = Array.isArray(response) ? response : [];
+        setCenters(nextCenters);
+        setCenterId(String(qCenterId || (nextCenters.length === 1 ? nextCenters[0].id : "")));
+      } catch {
+        // ignore; subsequent calls surface real errors
+      }
     })();
   }, [qCenterId]);
 
-  const fetchFollowUps = async () => {
+  useEffect(() => {
+    if (!qAssignedToId) return;
+    setAssigneeFilter(String(qAssignedToId));
+    setShowForm(true);
+    setForm((current) => ({ ...current, assignedToId: String(qAssignedToId) }));
+  }, [qAssignedToId]);
+
+  useEffect(() => {
     if (!centerId) return;
-    setLoading(true);
-    setError("");
-    try {
-      let url = `/api/v1/coach/follow-ups?centerId=${encodeURIComponent(centerId)}`;
-      if (filterStatus !== "ALL") url += `&status=${filterStatus}`;
-      if (filterType !== "ALL") url += `&type=${filterType}`;
-      const [data, dashData] = await Promise.all([
-        apiJson(url),
-        apiJson(`/api/v1/coach/dashboard?centerId=${encodeURIComponent(centerId)}`),
-      ]);
-      setFollowUps(Array.isArray(data) ? data : []);
-      setTeachers(dashData?.teachers || []);
-    } catch (e) {
-      setError(e.message || "Failed to load follow-ups");
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  useEffect(() => { fetchFollowUps(); }, [centerId, filterType, filterStatus]);
+    (async () => {
+      setLoading(true);
+      setError("");
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+      try {
+        const params = new URLSearchParams({ centerId });
+        if (filterStatus !== "ALL") params.set("status", filterStatus);
+        if (filterType !== "ALL") params.set("type", filterType);
+
+        const [followUpResponse, dashboardResponse] = await Promise.all([
+          apiJson(`/api/v1/coach/follow-ups?${params.toString()}`),
+          apiJson(`/api/v1/coach/dashboard?centerId=${encodeURIComponent(centerId)}`),
+        ]);
+
+        setFollowUps(Array.isArray(followUpResponse) ? followUpResponse : []);
+        setTeachers(dashboardResponse?.teachers || []);
+      } catch (err) {
+        setError(err.message || "Failed to load follow-ups");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [centerId, filterStatus, filterType]);
+
+  const visibleFollowUps = assigneeFilter
+    ? followUps.filter((followUp) => followUp.assignedTo?.id === assigneeFilter)
+    : followUps;
+
+  const openCount = visibleFollowUps.filter((item) => item.status === "OPEN").length;
+  const inProgressCount = visibleFollowUps.filter((item) => item.status === "IN_PROGRESS").length;
+  const completedCount = visibleFollowUps.filter((item) => item.status === "COMPLETED").length;
+  const overdueCount = visibleFollowUps.filter((item) => isOverdue(item)).length;
+  const highPriorityCount = visibleFollowUps.filter(
+    (item) => item.priority === "HIGH" || item.priority === "CRITICAL",
+  ).length;
+
+  async function handleSubmit(event) {
+    event.preventDefault();
     if (!form.title || !centerId) return;
+
     setSaving(true);
+    setError("");
+
     try {
       const created = await apiJson("/api/v1/coach/follow-ups", {
         method: "POST",
         body: JSON.stringify({ ...form, centerId }),
       });
-      setFollowUps((prev) => [created, ...prev]);
+
+      const matchesAssignee = !assigneeFilter || created.assignedTo?.id === assigneeFilter;
+      if (matchesAssignee) {
+        setFollowUps((current) => [created, ...current]);
+      }
+
       setShowForm(false);
-      setForm({ type: "PARENT", priority: "MEDIUM", title: "", description: "", dueDate: "", assignedToId: "", notes: "" });
-    } catch (e) {
-      setError(e.message || "Failed to save");
+      setForm({
+        ...INITIAL_FORM,
+        assignedToId: assigneeFilter || "",
+      });
+    } catch (err) {
+      setError(err.message || "Failed to save follow-up");
     } finally {
       setSaving(false);
     }
-  };
+  }
 
-  const handleStatusChange = async (id, status) => {
+  async function handleStatusChange(id, status) {
     try {
       const updated = await apiJson("/api/v1/coach/follow-ups", {
         method: "PUT",
         body: JSON.stringify({ id, status }),
       });
-      setFollowUps((prev) => prev.map((f) => (f.id === id ? updated : f)));
-    } catch (e) {
-      setError(e.message || "Failed to update");
+      setFollowUps((current) => current.map((item) => (item.id === id ? updated : item)));
+    } catch (err) {
+      setError(err.message || "Failed to update follow-up");
     }
-  };
+  }
 
-  const handleDelete = async (id) => {
+  async function handleDelete(id) {
     if (!confirm("Delete this follow-up?")) return;
+
     try {
-      await apiJson(`/api/v1/coach/follow-ups?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-      setFollowUps((prev) => prev.filter((f) => f.id !== id));
-    } catch (e) {
-      setError(e.message || "Failed to delete");
+      await apiJson(`/api/v1/coach/follow-ups?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      setFollowUps((current) => current.filter((item) => item.id !== id));
+    } catch (err) {
+      setError(err.message || "Failed to delete follow-up");
     }
-  };
+  }
+
+  const centerName = centers.find((center) => center.id === centerId)?.name || "";
+  const selectedTeacher = teachers.find((teacher) => teacher.id === assigneeFilter);
 
   return (
     <CoachLayout title="Follow-ups">
-      <div className="space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white p-5">
-          <div>
-            <h2 className="text-lg font-extrabold text-gray-900">Follow-ups</h2>
-            <p className="mt-1 text-sm text-gray-600">
-              Track parent follow-ups, camera observation follow-ups, and general tasks.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            {centers.length > 1 && (
-              <select value={centerId} onChange={(e) => setCenterId(e.target.value)} className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
-                <option value="">Select center...</option>
-                {centers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            )}
-            <button type="button" onClick={() => setShowForm(!showForm)} disabled={!centerId} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-indigo-700 disabled:opacity-50">
-              {showForm ? "Cancel" : "+ New Follow-up"}
-            </button>
-          </div>
-        </div>
-
-        {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
-
-        {/* New Form */}
-        {showForm && centerId && (
-          <form onSubmit={handleSubmit} className="rounded-2xl border border-gray-200 bg-white p-5 space-y-4">
-            <h3 className="font-extrabold text-gray-900">New Follow-up</h3>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600">Type</label>
-                <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm">
-                  {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+      <div className="space-y-5">
+        <CoachPageHero
+          eyebrow="Follow-through"
+          title="Turn coaching notes into accountable next steps."
+          description="Track parent communication, camera review actions, and general coaching tasks with clear ownership and due dates."
+          meta={
+            <>
+              {centerName ? <CoachBadge tone="sky">{centerName}</CoachBadge> : null}
+              {selectedTeacher ? (
+                <CoachBadge tone="amber">
+                  Assigned focus: {selectedTeacher.name || selectedTeacher.email}
+                </CoachBadge>
+              ) : null}
+              <CoachBadge tone="slate">{visibleFollowUps.length} visible items</CoachBadge>
+            </>
+          }
+          controls={
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="block">
+                <div className="mb-1.5 text-xs font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                  Center
+                </div>
+                <select
+                  value={centerId}
+                  onChange={(event) => setCenterId(event.target.value)}
+                  className={coachInputClass}
+                >
+                  <option value="">Select a center...</option>
+                  {centers.map((center) => (
+                    <option key={center.id} value={center.id}>
+                      {center.name}
+                    </option>
+                  ))}
                 </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600">Priority</label>
-                <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm">
-                  {PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600">Assign to Teacher</label>
-                <select value={form.assignedToId} onChange={(e) => setForm({ ...form, assignedToId: e.target.value })} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm">
-                  <option value="">Unassigned</option>
-                  {teachers.map((t) => <option key={t.id} value={t.id}>{t.name || t.email}</option>)}
-                </select>
-              </div>
-              <div className="sm:col-span-2 lg:col-span-1">
-                <label className="block text-xs font-semibold text-gray-600">Due Date</label>
-                <input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-600">Title</label>
-              <input type="text" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" placeholder="Follow-up title..." required />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-600">Description</label>
-              <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" rows={3} />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-600">Notes</label>
-              <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" rows={2} />
-            </div>
-            <button type="submit" disabled={saving} className="rounded-xl bg-indigo-600 px-6 py-2 text-sm font-extrabold text-white hover:bg-indigo-700 disabled:opacity-50">
-              {saving ? "Saving..." : "Create Follow-up"}
-            </button>
-          </form>
-        )}
+              </label>
 
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-1">
-            {[{ value: "ALL", label: "All Types" }, ...TYPES].map((t) => (
-              <button key={t.value} type="button" onClick={() => setFilterType(t.value)} className={[
-                "rounded-full px-3 py-1.5 text-xs font-extrabold transition",
-                filterType === t.value ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200",
-              ].join(" ")}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-1">
-            {[{ value: "ALL", label: "Any Status" }, ...STATUSES].map((s) => (
-              <button key={s.value} type="button" onClick={() => setFilterStatus(s.value)} className={[
-                "rounded-full px-3 py-1.5 text-xs font-extrabold transition",
-                filterStatus === s.value ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200",
-              ].join(" ")}>
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
+              <label className="block">
+                <div className="mb-1.5 text-xs font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                  Assigned Teacher
+                </div>
+                <select
+                  value={assigneeFilter}
+                  onChange={(event) => {
+                    setAssigneeFilter(event.target.value);
+                    setForm((current) => ({
+                      ...current,
+                      assignedToId: event.target.value || current.assignedToId,
+                    }));
+                  }}
+                  className={coachInputClass}
+                  disabled={!centerId}
+                >
+                  <option value="">All assignees</option>
+                  {teachers.map((teacher) => (
+                    <option key={teacher.id} value={teacher.id}>
+                      {teacher.name || teacher.email}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          }
+          actions={
+            centerId ? (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                <button
+                  type="button"
+                  onClick={() => setShowForm((current) => !current)}
+                  className={showForm ? coachSecondaryButtonClass : coachPrimaryButtonClass}
+                >
+                  {showForm ? "Close Form" : "New Follow-up"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssigneeFilter("");
+                    setFilterStatus("OPEN");
+                    setFilterType("ALL");
+                  }}
+                  className={coachSecondaryButtonClass}
+                >
+                  Reset Filters
+                </button>
+              </div>
+            ) : null
+          }
+          stats={
+            centerId ? (
+              <>
+                <CoachMetricCard
+                  label="Open"
+                  value={String(openCount)}
+                  hint="Awaiting action"
+                  tone="sky"
+                  icon={<OpenIcon />}
+                />
+                <CoachMetricCard
+                  label="In Progress"
+                  value={String(inProgressCount)}
+                  hint="Actively being handled"
+                  tone="amber"
+                  icon={<ProgressIcon />}
+                />
+                <CoachMetricCard
+                  label="Overdue"
+                  value={String(overdueCount)}
+                  hint="Past due and still active"
+                  tone={overdueCount ? "rose" : "emerald"}
+                  icon={<AlertIcon />}
+                />
+                <CoachMetricCard
+                  label="High Priority"
+                  value={String(highPriorityCount)}
+                  hint={`${completedCount} completed in view`}
+                  tone="rose"
+                  icon={<FlagIcon />}
+                />
+              </>
+            ) : null
+          }
+        />
 
-        {/* Follow-ups List */}
-        {loading ? (
-          <div className="rounded-2xl border border-gray-200 bg-white p-5"><SkeletonTable rows={5} cols={4} /></div>
-        ) : followUps.length === 0 ? (
-          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-600">
-            No follow-ups found.
+        {error ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+            {error}
           </div>
-        ) : (
-          <div className="space-y-3">
-            {followUps.map((fu) => (
-              <div key={fu.id} className={[
-                "rounded-2xl border p-5",
-                fu.status === "COMPLETED" ? "border-green-200 bg-green-50/50" :
-                fu.status === "CANCELLED" ? "border-gray-200 bg-gray-50 opacity-60" :
-                fu.priority === "CRITICAL" ? "border-red-200 bg-white" :
-                fu.priority === "HIGH" ? "border-orange-200 bg-white" :
-                "border-gray-200 bg-white",
-              ].join(" ")}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-extrabold text-gray-900">{fu.title}</span>
-                      <TypeBadge type={fu.type} />
-                      <PriorityBadge priority={fu.priority} />
-                      <StatusBadge status={fu.status} />
-                    </div>
-                    {fu.description && <div className="mt-1 text-sm text-gray-600">{fu.description}</div>}
-                    <div className="mt-2 flex flex-wrap gap-3 text-xs text-gray-500">
-                      {fu.assignedTo && <span>Assigned: {fu.assignedTo.name || fu.assignedTo.email}</span>}
-                      {fu.dueDate && <span>Due: {fmtDate(fu.dueDate)}</span>}
-                      <span>Created: {fmtDate(fu.createdAt)}</span>
-                      {fu.createdBy && <span>By: {fu.createdBy.name || fu.createdBy.email}</span>}
-                    </div>
-                    {fu.notes && <div className="mt-2 rounded-xl bg-gray-50 p-2 text-sm text-gray-700">{fu.notes}</div>}
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    {fu.status === "OPEN" && (
-                      <button type="button" onClick={() => handleStatusChange(fu.id, "IN_PROGRESS")} className="rounded-lg bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100">
-                        Start
-                      </button>
-                    )}
-                    {(fu.status === "OPEN" || fu.status === "IN_PROGRESS") && (
-                      <button type="button" onClick={() => handleStatusChange(fu.id, "COMPLETED")} className="rounded-lg bg-green-50 px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-100">
-                        Complete
-                      </button>
-                    )}
-                    <button type="button" onClick={() => handleDelete(fu.id)} className="rounded-lg bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">
-                      Delete
-                    </button>
-                  </div>
+        ) : null}
+
+        {!centerId ? (
+          <CoachEmptyPanel
+            title="Select a center to load follow-ups."
+            description="Follow-up work is scoped per center so assignment, context, and due dates stay aligned to the right team."
+          />
+        ) : null}
+
+        {centerId && showForm ? (
+          <CoachPanel
+            title="New Follow-up"
+            description="Create a clear next step with a due date, owner, and context."
+          >
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+                <Field label="Type">
+                  <select
+                    value={form.type}
+                    onChange={(event) => setForm({ ...form, type: event.target.value })}
+                    className={coachInputClass}
+                  >
+                    {TYPES.map((type) => (
+                      <option key={type.value} value={type.value}>
+                        {type.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Priority">
+                  <select
+                    value={form.priority}
+                    onChange={(event) => setForm({ ...form, priority: event.target.value })}
+                    className={coachInputClass}
+                  >
+                    {PRIORITIES.map((priority) => (
+                      <option key={priority.value} value={priority.value}>
+                        {priority.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Assigned Teacher">
+                  <select
+                    value={form.assignedToId}
+                    onChange={(event) => setForm({ ...form, assignedToId: event.target.value })}
+                    className={coachInputClass}
+                  >
+                    <option value="">Unassigned</option>
+                    {teachers.map((teacher) => (
+                      <option key={teacher.id} value={teacher.id}>
+                        {teacher.name || teacher.email}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Due Date">
+                  <input
+                    type="date"
+                    value={form.dueDate}
+                    onChange={(event) => setForm({ ...form, dueDate: event.target.value })}
+                    className={coachInputClass}
+                  />
+                </Field>
+              </div>
+
+              <Field label="Title">
+                <input
+                  type="text"
+                  value={form.title}
+                  onChange={(event) => setForm({ ...form, title: event.target.value })}
+                  className={coachInputClass}
+                  placeholder="Parent callback about behavior transition"
+                  required
+                />
+              </Field>
+
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <Field label="Description" hint="Why this follow-up matters and what it should cover.">
+                  <textarea
+                    value={form.description}
+                    onChange={(event) => setForm({ ...form, description: event.target.value })}
+                    className={coachTextareaClass}
+                    rows={4}
+                  />
+                </Field>
+
+                <Field label="Notes" hint="Anything the assignee should keep in mind.">
+                  <textarea
+                    value={form.notes}
+                    onChange={(event) => setForm({ ...form, notes: event.target.value })}
+                    className={coachTextareaClass}
+                    rows={4}
+                  />
+                </Field>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <button type="submit" disabled={saving} className={coachPrimaryButtonClass}>
+                  {saving ? "Saving..." : "Create Follow-up"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className={coachSecondaryButtonClass}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </CoachPanel>
+        ) : null}
+
+        {centerId ? (
+          <CoachPanel
+            title="Follow-up Queue"
+            description="Filter by type or status to see the coaching queue from different angles."
+          >
+            <div className="space-y-4">
+              <div>
+                <div className="mb-2 text-xs font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                  Type
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <CoachChipButton
+                    active={filterType === "ALL"}
+                    onClick={() => setFilterType("ALL")}
+                    tone="slate"
+                  >
+                    All Types
+                  </CoachChipButton>
+                  {TYPES.map((type) => (
+                    <CoachChipButton
+                      key={type.value}
+                      active={filterType === type.value}
+                      onClick={() => setFilterType(type.value)}
+                      tone={type.tone}
+                    >
+                      {type.label}
+                    </CoachChipButton>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+
+              <div>
+                <div className="mb-2 text-xs font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                  Status
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <CoachChipButton
+                    active={filterStatus === "ALL"}
+                    onClick={() => setFilterStatus("ALL")}
+                    tone="slate"
+                  >
+                    Any Status
+                  </CoachChipButton>
+                  {STATUSES.map((status) => (
+                    <CoachChipButton
+                      key={status.value}
+                      active={filterStatus === status.value}
+                      onClick={() => setFilterStatus(status.value)}
+                      tone={status.tone}
+                    >
+                      {status.label}
+                    </CoachChipButton>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="mt-4">
+                <SkeletonTable rows={5} cols={4} />
+              </div>
+            ) : visibleFollowUps.length === 0 ? (
+              <div className="mt-4">
+                <CoachEmptyPanel
+                  title="No follow-ups match this view."
+                  description="Adjust the filters or create a new follow-up to start tracking coaching work."
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => setShowForm(true)}
+                      className={coachPrimaryButtonClass}
+                    >
+                      New Follow-up
+                    </button>
+                  }
+                  icon={<ChecklistIcon />}
+                />
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {visibleFollowUps.map((followUp) => (
+                  <FollowUpCard
+                    key={followUp.id}
+                    followUp={followUp}
+                    onStatusChange={handleStatusChange}
+                    onDelete={handleDelete}
+                  />
+                ))}
+              </div>
+            )}
+          </CoachPanel>
+        ) : null}
       </div>
     </CoachLayout>
   );
 }
 
-function TypeBadge({ type }) {
-  const cls = {
-    PARENT: "bg-amber-50 text-amber-700",
-    CAMERA_OBSERVATION: "bg-purple-50 text-purple-700",
-    GENERAL: "bg-gray-100 text-gray-700",
-  }[type] || "bg-gray-100 text-gray-700";
-  const label = { PARENT: "Parent", CAMERA_OBSERVATION: "Camera Obs.", GENERAL: "General" }[type] || type;
-  return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${cls}`}>{label}</span>;
+function FollowUpCard({ followUp, onStatusChange, onDelete }) {
+  const overdue = isOverdue(followUp);
+  const cardTone =
+    followUp.status === "COMPLETED"
+      ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/60 dark:bg-emerald-950/20"
+      : followUp.status === "CANCELLED"
+        ? "border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/50"
+        : overdue
+          ? "border-rose-200 bg-rose-50/70 dark:border-rose-900/60 dark:bg-rose-950/20"
+          : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/80";
+
+  return (
+    <div className={`rounded-[1.6rem] border p-5 shadow-sm ${cardTone}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-base font-black text-gray-900 dark:text-gray-100">
+              {followUp.title}
+            </div>
+            <CoachBadge tone={typeTone(followUp.type)}>{typeLabel(followUp.type)}</CoachBadge>
+            <CoachBadge tone={priorityTone(followUp.priority)}>{followUp.priority}</CoachBadge>
+            <CoachBadge tone={statusTone(followUp.status)}>{statusLabel(followUp.status)}</CoachBadge>
+            {overdue ? <CoachBadge tone="rose">Overdue</CoachBadge> : null}
+          </div>
+
+          {followUp.description ? (
+            <p className="mt-3 text-sm leading-6 text-gray-600 dark:text-gray-400">
+              {followUp.description}
+            </p>
+          ) : null}
+
+          <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
+            {followUp.assignedTo ? (
+              <span>Assigned to {followUp.assignedTo.name || followUp.assignedTo.email}</span>
+            ) : (
+              <span>Unassigned</span>
+            )}
+            {followUp.dueDate ? <span>Due {formatDate(followUp.dueDate)}</span> : null}
+            <span>Created {formatDate(followUp.createdAt)}</span>
+            {followUp.createdBy ? (
+              <span>By {followUp.createdBy.name || followUp.createdBy.email}</span>
+            ) : null}
+            {followUp.completedAt ? <span>Completed {formatDate(followUp.completedAt)}</span> : null}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {followUp.status === "OPEN" ? (
+            <button
+              type="button"
+              onClick={() => onStatusChange(followUp.id, "IN_PROGRESS")}
+              className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-sky-700 transition hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300"
+            >
+              Start
+            </button>
+          ) : null}
+
+          {(followUp.status === "OPEN" || followUp.status === "IN_PROGRESS") ? (
+            <button
+              type="button"
+              onClick={() => onStatusChange(followUp.id, "COMPLETED")}
+              className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
+            >
+              Complete
+            </button>
+          ) : null}
+
+          {followUp.status === "IN_PROGRESS" ? (
+            <button
+              type="button"
+              onClick={() => onStatusChange(followUp.id, "OPEN")}
+              className={coachSecondaryButtonClass}
+            >
+              Reopen
+            </button>
+          ) : null}
+
+          {(followUp.status === "OPEN" || followUp.status === "IN_PROGRESS") ? (
+            <button
+              type="button"
+              onClick={() => onStatusChange(followUp.id, "CANCELLED")}
+              className={coachSecondaryButtonClass}
+            >
+              Cancel
+            </button>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={() => onDelete(followUp.id)}
+            className={coachDangerButtonClass}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+
+      {followUp.notes ? (
+        <div className="mt-4 rounded-[1.35rem] border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+          <div className="text-[11px] font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+            Notes
+          </div>
+          <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-700 dark:text-gray-300">
+            {followUp.notes}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
-function PriorityBadge({ priority }) {
-  const cls = {
-    CRITICAL: "bg-red-100 text-red-700",
-    HIGH: "bg-orange-100 text-orange-700",
-    MEDIUM: "bg-yellow-100 text-yellow-700",
-    LOW: "bg-gray-100 text-gray-600",
-  }[priority] || "bg-gray-100 text-gray-600";
-  return <span className={`rounded-full px-2 py-0.5 text-xs font-extrabold ${cls}`}>{priority}</span>;
+function Field({ label, hint, children }) {
+  return (
+    <label className="block">
+      <div className="mb-1.5 text-xs font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+        {label}
+      </div>
+      {children}
+      {hint ? <div className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">{hint}</div> : null}
+    </label>
+  );
 }
 
-function StatusBadge({ status }) {
-  const cls = {
-    OPEN: "bg-blue-50 text-blue-700",
-    IN_PROGRESS: "bg-indigo-50 text-indigo-700",
-    COMPLETED: "bg-green-50 text-green-700",
-    CANCELLED: "bg-gray-100 text-gray-500",
-  }[status] || "bg-gray-100 text-gray-600";
-  const label = { OPEN: "Open", IN_PROGRESS: "In Progress", COMPLETED: "Completed", CANCELLED: "Cancelled" }[status] || status;
-  return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${cls}`}>{label}</span>;
+function isOverdue(item) {
+  if (!item?.dueDate) return false;
+  if (item.status === "COMPLETED" || item.status === "CANCELLED") return false;
+  return new Date(item.dueDate) < new Date(new Date().toDateString());
 }
 
-function fmtDate(d) {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+function typeLabel(type) {
+  return TYPES.find((item) => item.value === type)?.label || type;
+}
+
+function typeTone(type) {
+  return TYPES.find((item) => item.value === type)?.tone || "slate";
+}
+
+function priorityTone(priority) {
+  if (priority === "CRITICAL") return "rose";
+  if (priority === "HIGH") return "amber";
+  if (priority === "MEDIUM") return "sky";
+  return "slate";
+}
+
+function statusLabel(status) {
+  return STATUSES.find((item) => item.value === status)?.label || status;
+}
+
+function statusTone(status) {
+  return STATUSES.find((item) => item.value === status)?.tone || "slate";
+}
+
+function formatDate(value) {
+  if (!value) return "No date";
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function OpenIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m6-6H6" />
+    </svg>
+  );
+}
+
+function ProgressIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function AlertIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m0 3.75h.008v.008H12V16.5zm8.25-4.86c0 5.027-3.94 9.11-8.85 9.11S2.55 16.667 2.55 11.64 6.49 2.53 11.4 2.53s8.85 4.083 8.85 9.11z" />
+    </svg>
+  );
+}
+
+function FlagIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 21V4.5m0 0c1.5-1.5 3.75-1.5 5.25 0s3.75 1.5 5.25 0 3.75-1.5 5.25 0V15c-1.5-1.5-3.75-1.5-5.25 0s-3.75 1.5-5.25 0-3.75-1.5-5.25 0" />
+    </svg>
+  );
+}
+
+function ChecklistIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75h11.25M9 12h11.25M9 17.25h11.25M3.75 7.5l1.5 1.5 3-3M3.75 12.75l1.5 1.5 3-3M3.75 18l1.5 1.5 3-3" />
+    </svg>
+  );
 }

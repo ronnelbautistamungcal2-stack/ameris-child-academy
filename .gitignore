@@ -1,5 +1,6 @@
 node_modules/
 .next/
+.next-dev/
 .next-build/
 .next-build.old-*/
 build/
@@ -15,10 +16,15 @@ out/
 Thumbs.db
 .vscode/
 .idea/
+.claude/
 .vercel/
 coverage/
 .eslintcache
 .turbo/
+cookies.txt
+admin_cookies.txt
+ameris_backup.sql
+.tmp-homepage*.png
 public/home-video.mp4
 .prisma/
 test-results/

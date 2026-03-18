@@ -33,6 +33,7 @@ export const COACH_NAV_ITEMS = [
     children: [
       { href: "/coach/reports", label: "Reports" },
       { href: "/coach/policies", label: "Policies" },
+      { href: "/coach/training", label: "Training" },
     ],
   },
   {

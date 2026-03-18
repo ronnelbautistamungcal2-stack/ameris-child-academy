@@ -1,33 +1,39 @@
-import CoachLayout from "@/components/coach/CoachLayout";
-import { SkeletonTable } from "@/components/ui/Skeleton";
-import { apiJson } from "@/lib/api";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
+import CoachLayout from "@/components/coach/CoachLayout";
+import {
+  CoachBadge,
+  CoachChipButton,
+  CoachEmptyPanel,
+  CoachMetricCard,
+  CoachPageHero,
+  CoachPanel,
+  coachInputClass,
+  coachSecondaryButtonClass,
+} from "@/components/coach/CoachPage";
+import { SkeletonTable } from "@/components/ui/Skeleton";
+import { apiJson } from "@/lib/api";
 
 const CATEGORIES = [
-  { key: "ALL", label: "All", icon: "M4 6h16M4 12h16M4 18h16" },
-  { key: "OPENING", label: "Opening", icon: "M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" },
-  { key: "CLOSING", label: "Closing", icon: "M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" },
-  { key: "HEALTH_SAFETY", label: "Health & Safety", icon: "M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" },
-  { key: "CLEANING", label: "Cleaning", icon: "M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" },
-  { key: "MEALS", label: "Meals", icon: "M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" },
-  { key: "CLASSROOM", label: "Classroom", icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" },
+  { key: "ALL", label: "All" },
+  { key: "OPENING", label: "Opening" },
+  { key: "CLOSING", label: "Closing" },
+  { key: "HEALTH_SAFETY", label: "Health & Safety" },
+  { key: "CLEANING", label: "Cleaning" },
+  { key: "MEALS", label: "Meals" },
+  { key: "CLASSROOM", label: "Classroom" },
 ];
 
 const FREQ_LABELS = { DAILY: "Daily", WEEKLY: "Weekly", MONTHLY: "Monthly" };
-const FREQ_COLORS = {
-  DAILY: "bg-blue-50 text-blue-700",
-  WEEKLY: "bg-purple-50 text-purple-700",
-  MONTHLY: "bg-amber-50 text-amber-700",
-};
-const CAT_COLORS = {
-  OPENING: "border-l-amber-400",
-  CLOSING: "border-l-indigo-400",
-  HEALTH_SAFETY: "border-l-red-400",
-  CLEANING: "border-l-emerald-400",
-  MEALS: "border-l-orange-400",
-  CLASSROOM: "border-l-sky-400",
-  OTHER: "border-l-gray-400",
+const FREQ_TONES = { DAILY: "sky", WEEKLY: "amber", MONTHLY: "rose" };
+const CATEGORY_TONES = {
+  OPENING: "amber",
+  CLOSING: "sky",
+  HEALTH_SAFETY: "rose",
+  CLEANING: "emerald",
+  MEALS: "amber",
+  CLASSROOM: "sky",
+  OTHER: "slate",
 };
 
 export default function CoachChecklists() {
@@ -46,25 +52,29 @@ export default function CoachChecklists() {
   useEffect(() => {
     (async () => {
       try {
-        const c = await apiJson("/api/v1/centers");
-        const arr = Array.isArray(c) ? c : [];
-        setCenters(arr);
-        setCenterId(qCenterId || (arr.length === 1 ? arr[0].id : ""));
-      } catch {}
+        const response = await apiJson("/api/v1/centers");
+        const nextCenters = Array.isArray(response) ? response : [];
+        setCenters(nextCenters);
+        setCenterId(String(qCenterId || (nextCenters.length === 1 ? nextCenters[0].id : "")));
+      } catch {
+        // ignore, page fetch will surface errors
+      }
     })();
   }, [qCenterId]);
 
   async function loadChecklists() {
     if (!centerId) return;
+
     setLoading(true);
     setError("");
+
     try {
-      const data = await apiJson(
-        `/api/v1/daily-checklists?centerId=${encodeURIComponent(centerId)}&date=${encodeURIComponent(selectedDate)}`
+      const response = await apiJson(
+        `/api/v1/daily-checklists?centerId=${encodeURIComponent(centerId)}&date=${encodeURIComponent(selectedDate)}`,
       );
-      setChecklists(Array.isArray(data) ? data : []);
-    } catch (e) {
-      setError(e.message || "Failed to load checklists");
+      setChecklists(Array.isArray(response) ? response : []);
+    } catch (err) {
+      setError(err.message || "Failed to load checklists");
     } finally {
       setLoading(false);
     }
@@ -76,6 +86,7 @@ export default function CoachChecklists() {
 
   async function toggleItem(itemId, isCompleted) {
     setCompleting(itemId);
+
     try {
       await apiJson("/api/v1/daily-checklists/complete", {
         method: "POST",
@@ -86,8 +97,8 @@ export default function CoachChecklists() {
         }),
       });
       await loadChecklists();
-    } catch (e) {
-      setError(e.message || "Failed to update");
+    } catch (err) {
+      setError(err.message || "Failed to update checklist");
     } finally {
       setCompleting("");
     }
@@ -95,200 +106,264 @@ export default function CoachChecklists() {
 
   const filtered = useMemo(() => {
     if (activeCategory === "ALL") return checklists;
-    return checklists.filter((cl) => cl.category === activeCategory);
+    return checklists.filter((list) => list.category === activeCategory);
   }, [checklists, activeCategory]);
 
-  // Group by category
   const grouped = useMemo(() => {
     const groups = {};
-    for (const cl of filtered) {
-      if (!groups[cl.category]) groups[cl.category] = [];
-      groups[cl.category].push(cl);
+    for (const checklist of filtered) {
+      if (!groups[checklist.category]) groups[checklist.category] = [];
+      groups[checklist.category].push(checklist);
     }
     return groups;
   }, [filtered]);
 
-  // Overall stats
   const stats = useMemo(() => {
     let total = 0;
     let completed = 0;
-    for (const cl of checklists) {
-      for (const item of cl.items || []) {
-        total++;
-        if ((item.completions || []).length > 0) completed++;
+
+    for (const checklist of checklists) {
+      for (const item of checklist.items || []) {
+        total += 1;
+        if ((item.completions || []).length > 0) completed += 1;
       }
     }
-    return { total, completed, pct: total > 0 ? Math.round((completed / total) * 100) : 0 };
+
+    return {
+      total,
+      completed,
+      remaining: Math.max(total - completed, 0),
+      pct: total > 0 ? Math.round((completed / total) * 100) : 0,
+    };
   }, [checklists]);
 
-  // Category stats
   const categoryStats = useMemo(() => {
     const map = {};
-    for (const cl of checklists) {
-      if (!map[cl.category]) map[cl.category] = { total: 0, completed: 0 };
-      for (const item of cl.items || []) {
-        map[cl.category].total++;
-        if ((item.completions || []).length > 0) map[cl.category].completed++;
+
+    for (const checklist of checklists) {
+      if (!map[checklist.category]) map[checklist.category] = { total: 0, completed: 0 };
+
+      for (const item of checklist.items || []) {
+        map[checklist.category].total += 1;
+        if ((item.completions || []).length > 0) map[checklist.category].completed += 1;
       }
     }
+
     return map;
   }, [checklists]);
 
+  const activeCenterName = centers.find((center) => center.id === centerId)?.name || "";
+  const completedCategories = Object.values(categoryStats).filter(
+    (category) => category.total > 0 && category.total === category.completed,
+  ).length;
+
   return (
     <CoachLayout title="Daily Checklists">
-      <div className="space-y-4">
-        {/* Header */}
-        <div className="flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-extrabold text-gray-900">Daily Operations Checklists</h2>
-            <p className="mt-1 text-sm text-gray-600">
-              Track daily opening, closing, health & safety, cleaning, and classroom tasks.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            {centers.length > 1 && (
-              <select
-                value={centerId}
-                onChange={(e) => setCenterId(e.target.value)}
-                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-              >
-                <option value="">Select center...</option>
-                {centers.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            )}
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-            />
-            <button
-              type="button"
-              onClick={() => setSelectedDate(todayStr())}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-            >
-              Today
-            </button>
-          </div>
-        </div>
-
-        {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>
-        )}
-
-        {!centerId && (
-          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-600">
-            Select a center to view checklists.
-          </div>
-        )}
-
-        {centerId && (
-          <>
-            {/* Overall progress bar */}
-            <div className="rounded-2xl border border-gray-200 bg-white p-5">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-gray-700">
-                  Today&apos;s Progress
+      <div className="space-y-5">
+        <CoachPageHero
+          eyebrow="Operations Checklists"
+          title="Watch execution quality across the daily operating rhythm."
+          description="Review opening, closing, safety, cleaning, and classroom tasks in one place, then spot where routines are slipping."
+          meta={
+            <>
+              {activeCenterName ? <CoachBadge tone="sky">{activeCenterName}</CoachBadge> : null}
+              <CoachBadge tone="amber">{new Date(selectedDate).toLocaleDateString("en-US")}</CoachBadge>
+              {checklists.length ? (
+                <CoachBadge tone="slate">{checklists.length} checklist groups loaded</CoachBadge>
+              ) : null}
+            </>
+          }
+          controls={
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label className="block sm:col-span-2">
+                <div className="mb-1.5 text-xs font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                  Center
                 </div>
-                <div className="text-sm font-extrabold text-gray-900">
-                  {stats.completed}/{stats.total} tasks ({stats.pct}%)
+                <select
+                  value={centerId}
+                  onChange={(event) => setCenterId(event.target.value)}
+                  className={coachInputClass}
+                >
+                  <option value="">Select a center...</option>
+                  {centers.map((center) => (
+                    <option key={center.id} value={center.id}>
+                      {center.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <div className="mb-1.5 text-xs font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                  Date
                 </div>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(event) => setSelectedDate(event.target.value)}
+                  className={coachInputClass}
+                />
+              </label>
+            </div>
+          }
+          actions={
+            centerId ? (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate(todayStr())}
+                  className={coachSecondaryButtonClass}
+                >
+                  Jump to Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveCategory("ALL")}
+                  className={coachSecondaryButtonClass}
+                >
+                  Show All Categories
+                </button>
               </div>
-              <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-gray-100">
+            ) : null
+          }
+          stats={
+            centerId ? (
+              <>
+                <CoachMetricCard
+                  label="Completed"
+                  value={String(stats.completed)}
+                  hint={`${stats.total} total tasks`}
+                  tone="emerald"
+                  icon={<CheckIcon />}
+                />
+                <CoachMetricCard
+                  label="Remaining"
+                  value={String(stats.remaining)}
+                  hint="Items still open"
+                  tone={stats.remaining ? "amber" : "emerald"}
+                  icon={<ListIcon />}
+                />
+                <CoachMetricCard
+                  label="Completion Rate"
+                  value={`${stats.pct}%`}
+                  hint="Across this date"
+                  tone="sky"
+                  icon={<ProgressIcon />}
+                />
+                <CoachMetricCard
+                  label="Finished Categories"
+                  value={String(completedCategories)}
+                  hint={`${Object.keys(categoryStats).length} categories active`}
+                  tone="amber"
+                  icon={<GridIcon />}
+                />
+              </>
+            ) : null
+          }
+        />
+
+        {error ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+            {error}
+          </div>
+        ) : null}
+
+        {!centerId ? (
+          <CoachEmptyPanel
+            title="Select a center to review operations."
+            description="Daily checklists are scoped by center and date so coaches can see exactly where routines are complete or slipping."
+          />
+        ) : null}
+
+        {centerId ? (
+          <CoachPanel
+            title="Checklist Progress"
+            description="Filter by category to isolate one operational lane, or keep the full view to scan the entire day."
+          >
+            <div className="space-y-4">
+              <div className="h-4 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                 <div
-                  className={`h-full rounded-full transition-all duration-500 ${
+                  className={`h-full rounded-full transition-all ${
                     stats.pct === 100
                       ? "bg-emerald-500"
-                      : stats.pct >= 50
+                      : stats.pct >= 60
                         ? "bg-sky-500"
                         : stats.pct > 0
                           ? "bg-amber-500"
-                          : "bg-gray-200"
+                          : "bg-slate-300 dark:bg-slate-700"
                   }`}
                   style={{ width: `${stats.pct}%` }}
                 />
               </div>
-              {/* Category mini-stats */}
-              <div className="mt-3 flex flex-wrap gap-2">
-                {Object.entries(categoryStats).map(([cat, s]) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setActiveCategory(activeCategory === cat ? "ALL" : cat)}
-                    className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                      activeCategory === cat
-                        ? "bg-gray-900 text-white"
-                        : s.completed === s.total
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
-                  >
-                    {catLabel(cat)} {s.completed}/{s.total}
-                    {s.completed === s.total && s.total > 0 && " \u2713"}
-                  </button>
-                ))}
+
+              <div className="flex flex-wrap gap-2">
+                {CATEGORIES.map((category) => {
+                  const summary =
+                    category.key === "ALL"
+                      ? { completed: stats.completed, total: stats.total }
+                      : categoryStats[category.key] || { completed: 0, total: 0 };
+
+                  return (
+                    <CoachChipButton
+                      key={category.key}
+                      active={activeCategory === category.key}
+                      onClick={() => setActiveCategory(category.key)}
+                      tone={category.key === "ALL" ? "slate" : CATEGORY_TONES[category.key] || "slate"}
+                    >
+                      {category.label} {summary.total ? `${summary.completed}/${summary.total}` : ""}
+                    </CoachChipButton>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Category filter tabs */}
-            <div className="flex flex-wrap gap-1.5">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat.key}
-                  type="button"
-                  onClick={() => setActiveCategory(cat.key)}
-                  className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition ${
-                    activeCategory === cat.key
-                      ? "bg-gray-900 text-white"
-                      : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d={cat.icon} />
-                  </svg>
-                  {cat.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Checklists */}
             {loading ? (
-              <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="mt-4">
                 <SkeletonTable rows={5} cols={3} />
               </div>
             ) : filtered.length === 0 ? (
-              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-600">
-                {checklists.length === 0
-                  ? "No daily checklists created yet. Ask an admin to create checklists."
-                  : "No checklists in this category."}
+              <div className="mt-4">
+                <CoachEmptyPanel
+                  title={
+                    checklists.length === 0
+                      ? "No checklists are available for this date."
+                      : "No checklists match the selected category."
+                  }
+                  description={
+                    checklists.length === 0
+                      ? "Ask an admin to create operational checklists if the center should be tracking them."
+                      : "Switch categories or return to the full view to continue reviewing task completion."
+                  }
+                  icon={<ListIcon />}
+                />
               </div>
             ) : (
-              Object.entries(grouped).map(([category, lists]) => (
-                <div key={category} className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-extrabold uppercase tracking-wide text-gray-500">
-                      {catLabel(category)}
-                    </h3>
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
-                      {lists.reduce((a, cl) => a + (cl.items?.length || 0), 0)} tasks
-                    </span>
-                  </div>
+              <div className="mt-4 space-y-5">
+                {Object.entries(grouped).map(([category, lists]) => (
+                  <div key={category} className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                        {catLabel(category)}
+                      </div>
+                      <CoachBadge tone={CATEGORY_TONES[category] || "slate"}>
+                        {lists.reduce((sum, list) => sum + (list.items?.length || 0), 0)} tasks
+                      </CoachBadge>
+                    </div>
 
-                  {lists.map((cl) => (
-                    <ChecklistCard
-                      key={cl.id}
-                      checklist={cl}
-                      onToggle={toggleItem}
-                      completing={completing}
-                    />
-                  ))}
-                </div>
-              ))
+                    {lists.map((checklist) => (
+                      <ChecklistCard
+                        key={checklist.id}
+                        checklist={checklist}
+                        onToggle={toggleItem}
+                        completing={completing}
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
             )}
-          </>
-        )}
+          </CoachPanel>
+        ) : null}
       </div>
     </CoachLayout>
   );
@@ -296,65 +371,81 @@ export default function CoachChecklists() {
 
 function ChecklistCard({ checklist, onToggle, completing }) {
   const [expanded, setExpanded] = useState(true);
+
   const items = checklist.items || [];
-  const completedCount = items.filter((it) => (it.completions || []).length > 0).length;
-  const allDone = completedCount === items.length && items.length > 0;
-  const pct = items.length > 0 ? Math.round((completedCount / items.length) * 100) : 0;
+  const completedCount = items.filter((item) => (item.completions || []).length > 0).length;
+  const percent = items.length > 0 ? Math.round((completedCount / items.length) * 100) : 0;
+  const allDone = items.length > 0 && completedCount === items.length;
+  const tone = CATEGORY_TONES[checklist.category] || "slate";
 
   return (
-    <div className={`rounded-2xl border-l-4 border border-gray-200 bg-white ${CAT_COLORS[checklist.category] || "border-l-gray-400"} ${allDone ? "opacity-75" : ""}`}>
-      <button
-        type="button"
-        onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center justify-between gap-4 p-4 text-left"
-      >
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className={`text-sm font-extrabold ${allDone ? "text-gray-500" : "text-gray-900"}`}>
-              {checklist.title}
-            </span>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${FREQ_COLORS[checklist.frequency] || "bg-gray-100 text-gray-600"}`}>
-              {FREQ_LABELS[checklist.frequency] || checklist.frequency}
-            </span>
-            {checklist.classRoom && (
-              <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
-                {checklist.classRoom.name}
-              </span>
-            )}
-            {allDone && (
-              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                Complete
-              </span>
-            )}
-          </div>
-          {checklist.description && (
-            <p className="mt-0.5 text-xs text-gray-500">{checklist.description}</p>
-          )}
-          <div className="mt-1.5 flex items-center gap-2">
-            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-gray-100">
-              <div
-                className={`h-full rounded-full transition-all ${allDone ? "bg-emerald-500" : "bg-sky-500"}`}
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-            <span className="text-[10px] font-semibold text-gray-500">
-              {completedCount}/{items.length}
-            </span>
-          </div>
-        </div>
-        <svg
-          className={`h-5 w-5 shrink-0 text-gray-400 transition ${expanded ? "rotate-180" : ""}`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
+    <div
+      className={`rounded-[1.75rem] border p-1 shadow-sm ${
+        tone === "rose"
+          ? "border-rose-200 bg-rose-50/60 dark:border-rose-900/60 dark:bg-rose-950/20"
+          : tone === "emerald"
+            ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/60 dark:bg-emerald-950/20"
+            : tone === "amber"
+              ? "border-amber-200 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20"
+              : "border-sky-200 bg-sky-50/60 dark:border-sky-900/60 dark:bg-sky-950/20"
+      }`}
+    >
+      <div className="rounded-[1.5rem] bg-white/90 p-4 dark:bg-slate-900/80">
+        <button
+          type="button"
+          onClick={() => setExpanded((current) => !current)}
+          className="flex w-full items-start justify-between gap-4 text-left"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="text-base font-black text-gray-900 dark:text-gray-100">
+                {checklist.title}
+              </div>
+              <CoachBadge tone={FREQ_TONES[checklist.frequency] || "slate"}>
+                {FREQ_LABELS[checklist.frequency] || checklist.frequency}
+              </CoachBadge>
+              {checklist.classRoom ? (
+                <CoachBadge tone="sky">{checklist.classRoom.name}</CoachBadge>
+              ) : null}
+              {allDone ? <CoachBadge tone="emerald">Complete</CoachBadge> : null}
+            </div>
 
-      {expanded && items.length > 0 && (
-        <div className="border-t border-gray-100 px-4 pb-4">
-          <div className="divide-y divide-gray-50">
+            {checklist.description ? (
+              <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-400">
+                {checklist.description}
+              </p>
+            ) : null}
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <div className="h-3 min-w-[160px] flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    allDone ? "bg-emerald-500" : "bg-sky-500"
+                  }`}
+                  style={{ width: `${Math.max(percent, 4)}%` }}
+                />
+              </div>
+              <CoachBadge tone={allDone ? "emerald" : "slate"}>
+                {completedCount}/{items.length} complete
+              </CoachBadge>
+            </div>
+          </div>
+
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            className={`mt-1 h-5 w-5 shrink-0 text-gray-400 transition-transform ${
+              expanded ? "rotate-180" : ""
+            }`}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25L12 15.75 4.5 8.25" />
+          </svg>
+        </button>
+
+        {expanded ? (
+          <div className="mt-4 space-y-3 border-t border-slate-200 pt-4 dark:border-slate-700">
             {items.map((item) => {
               const done = (item.completions || []).length > 0;
               const completion = (item.completions || [])[0];
@@ -363,80 +454,94 @@ function ChecklistCard({ checklist, onToggle, completing }) {
               return (
                 <div
                   key={item.id}
-                  className={`flex items-start gap-3 py-3 ${done ? "opacity-60" : ""}`}
+                  className={`rounded-[1.35rem] border p-4 ${
+                    done
+                      ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/60 dark:bg-emerald-950/20"
+                      : "border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/50"
+                  }`}
                 >
-                  <button
-                    type="button"
-                    onClick={() => onToggle(item.id, done)}
-                    disabled={isCompleting}
-                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition ${
-                      done
-                        ? "border-emerald-500 bg-emerald-500 text-white"
-                        : "border-gray-300 bg-white hover:border-sky-400"
-                    } ${isCompleting ? "animate-pulse" : ""}`}
-                  >
-                    {done && (
-                      <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                        <path
-                          fillRule="evenodd"
-                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    )}
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <div className={`text-sm font-medium ${done ? "text-gray-400 line-through" : "text-gray-900"}`}>
-                      {item.title}
-                    </div>
-                    {item.description && (
-                      <p className="mt-0.5 text-xs text-gray-500">{item.description}</p>
-                    )}
-                    <div className="mt-1 flex flex-wrap gap-1.5">
-                      {item.policyLink && (
-                        <a
-                          href={item.policyLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 hover:bg-blue-100"
-                        >
-                          Policy
-                        </a>
-                      )}
-                      {item.mediaLink && (
-                        <a
-                          href={item.mediaLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 hover:bg-blue-100"
-                        >
-                          Video
-                        </a>
-                      )}
-                    </div>
-                    {done && completion && (
-                      <div className="mt-1 text-[10px] text-emerald-600">
-                        Completed by {completion.completedBy?.name || completion.completedBy?.email || "Staff"}{" "}
-                        at {new Date(completion.completedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                  <div className="flex items-start gap-3">
+                    <button
+                      type="button"
+                      onClick={() => onToggle(item.id, done)}
+                      disabled={isCompleting}
+                      className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-xl border-2 transition ${
+                        done
+                          ? "border-emerald-500 bg-emerald-500 text-white"
+                          : "border-slate-300 bg-white hover:border-sky-400 dark:border-slate-600 dark:bg-slate-900"
+                      } ${isCompleting ? "animate-pulse" : ""}`}
+                    >
+                      {done ? (
+                        <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                          <path
+                            fillRule="evenodd"
+                            d="M16.704 5.29a1 1 0 010 1.414L8.818 14.59a1 1 0 01-1.414 0L3.296 10.48a1 1 0 011.414-1.414l3.401 3.4 7.179-7.178a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      ) : null}
+                    </button>
+
+                    <div className="min-w-0 flex-1">
+                      <div className={`text-sm font-bold ${done ? "text-emerald-800 dark:text-emerald-200" : "text-gray-900 dark:text-gray-100"}`}>
+                        {item.title}
                       </div>
-                    )}
+                      {item.description ? (
+                        <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">
+                          {item.description}
+                        </p>
+                      ) : null}
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {item.policyLink ? (
+                          <a
+                            href={item.policyLink}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-sky-700 transition hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-300"
+                          >
+                            Policy
+                          </a>
+                        ) : null}
+                        {item.mediaLink ? (
+                          <a
+                            href={item.mediaLink}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-amber-700 transition hover:bg-amber-100 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-300"
+                          >
+                            Video
+                          </a>
+                        ) : null}
+                      </div>
+
+                      {done && completion ? (
+                        <div className="mt-3 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                          Completed by {completion.completedBy?.name || completion.completedBy?.email || "Staff"} at{" "}
+                          {new Date(completion.completedAt).toLocaleTimeString("en-US", {
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
-        </div>
-      )}
+        ) : null}
+      </div>
     </div>
   );
 }
 
 function todayStr() {
-  const d = new Date();
-  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function catLabel(cat) {
+function catLabel(category) {
   const map = {
     OPENING: "Opening",
     CLOSING: "Closing",
@@ -446,5 +551,39 @@ function catLabel(cat) {
     CLASSROOM: "Classroom",
     OTHER: "Other",
   };
-  return map[cat] || cat;
+
+  return map[category] || category;
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+    </svg>
+  );
+}
+
+function ListIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12M8.25 17.25h12M3.75 7.5h.008v.008H3.75V7.5zm0 5.25h.008v.008H3.75v-.008zm0 5.25h.008v.008H3.75V18z" />
+    </svg>
+  );
+}
+
+function ProgressIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function GridIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75h6.5v6.5h-6.5zm10 0h6.5v6.5h-6.5zm-10 10h6.5v6.5h-6.5zm10 0h6.5v6.5h-6.5z" />
+    </svg>
+  );
 }

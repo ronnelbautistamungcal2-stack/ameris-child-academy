@@ -36,7 +36,6 @@ export default function MessageInbox({ centerId, isAdmin }) {
   const { data: session } = useSession();
   const router = useRouter();
   const userId = session?.user?.id;
-  const userRole = session?.user?.role;
 
   const [threads, setThreads] = useState([]);
   const [activeThreadId, setActiveThreadId] = useState(router.query.threadId || "");
@@ -57,6 +56,7 @@ export default function MessageInbox({ centerId, isAdmin }) {
   const [creating, setCreating] = useState(false);
   const [threadQuery, setThreadQuery] = useState("");
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState("list");
 
   const messagesEndRef = useRef(null);
   const socket = useUserSocket(userId);
@@ -93,6 +93,7 @@ export default function MessageInbox({ centerId, isAdmin }) {
     const qThread = router.query.threadId;
     if (qThread && qThread !== activeThreadId) {
       setActiveThreadId(qThread);
+      setMobilePanel("thread");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router.query.threadId]);
@@ -100,12 +101,18 @@ export default function MessageInbox({ centerId, isAdmin }) {
   useEffect(() => {
     if (!activeThreadId) {
       setActiveThread(null);
+      setMobilePanel("list");
       return;
     }
     (async () => {
       try {
         const t = await apiJson(`/api/v1/messages/threads/${activeThreadId}`);
         setActiveThread(t);
+        setThreads((prev) =>
+          prev.map((thread) =>
+            thread.id === activeThreadId ? { ...thread, unreadCount: 0 } : thread,
+          ),
+        );
       } catch (e) {
         setError(e.message || "Failed to load thread");
       }
@@ -209,11 +216,17 @@ export default function MessageInbox({ centerId, isAdmin }) {
       setSearchQuery("");
       await refreshThreads();
       setActiveThreadId(thread.id);
+      setMobilePanel("thread");
     } catch (e2) {
       setError(e2.message || "Failed to create conversation");
     } finally {
       setCreating(false);
     }
+  }
+
+  function selectThread(threadId) {
+    setActiveThreadId(threadId);
+    setMobilePanel("thread");
   }
 
   const preview = useMemo(() => {
@@ -411,9 +424,42 @@ export default function MessageInbox({ centerId, isAdmin }) {
         </div>
       )}
 
+      <div className="mt-4 flex gap-2 lg:hidden">
+        <button
+          type="button"
+          onClick={() => setMobilePanel("list")}
+          className={[
+            "flex-1 rounded-2xl border px-4 py-2.5 text-sm font-bold transition",
+            mobilePanel === "list"
+              ? "border-sky-200 bg-sky-50 text-sky-800"
+              : "border-gray-200 bg-white text-gray-600",
+          ].join(" ")}
+        >
+          Conversations
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobilePanel("thread")}
+          disabled={!activeThread}
+          className={[
+            "flex-1 rounded-2xl border px-4 py-2.5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50",
+            mobilePanel === "thread"
+              ? "border-sky-200 bg-sky-50 text-sky-800"
+              : "border-gray-200 bg-white text-gray-600",
+          ].join(" ")}
+        >
+          Current thread
+        </button>
+      </div>
+
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
         {/* Thread list */}
-        <div className="rounded-3xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/50">
+        <div
+          className={[
+            "rounded-3xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/50",
+            mobilePanel === "thread" ? "hidden lg:block" : "",
+          ].join(" ")}
+        >
           <div className="flex items-center justify-between gap-3">
             <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
               Conversations
@@ -460,7 +506,7 @@ export default function MessageInbox({ centerId, isAdmin }) {
                 <button
                   key={t.id}
                   type="button"
-                  onClick={() => setActiveThreadId(t.id)}
+                  onClick={() => selectThread(t.id)}
                   className={[
                     "w-full rounded-2xl border px-3 py-3 text-left transition",
                     activeThreadId === t.id
@@ -480,8 +526,15 @@ export default function MessageInbox({ centerId, isAdmin }) {
                           </span>
                         )}
                       </div>
-                      <div className="mt-1 line-clamp-1 text-xs text-gray-600 dark:text-gray-400">
-                        {t.last}
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        {t.lastSenderRole ? (
+                          <span className={["rounded-full px-1.5 py-0.5 text-[9px] font-extrabold", roleBadgeColor(t.lastSenderRole)].join(" ")}>
+                            {t.lastSenderRole}
+                          </span>
+                        ) : null}
+                        <div className="line-clamp-1 text-xs text-gray-600 dark:text-gray-400">
+                          {t.last}
+                        </div>
                       </div>
                     </div>
                     <span className="shrink-0 text-[11px] text-gray-400">{t.time}</span>
@@ -493,7 +546,12 @@ export default function MessageInbox({ centerId, isAdmin }) {
         </div>
 
         {/* Conversation panel */}
-        <div className="rounded-3xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
+        <div
+          className={[
+            "rounded-3xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800",
+            mobilePanel === "list" ? "hidden lg:block" : "",
+          ].join(" ")}
+        >
           {!activeThread ? (
             <div className="flex h-full items-center justify-center py-16 text-sm text-gray-500 dark:text-gray-400">
               Select a conversation to view messages
@@ -503,6 +561,16 @@ export default function MessageInbox({ centerId, isAdmin }) {
               {/* Thread header */}
               <div className="flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-700">
                 <div>
+                  <button
+                    type="button"
+                    onClick={() => setMobilePanel("list")}
+                    className="mb-2 inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.14em] text-gray-500 lg:hidden"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Back
+                  </button>
                   <h3 className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
                     {activeThread.title ||
                       participantLabel(activeThread.participants, userId)}

@@ -1,8 +1,19 @@
-import CoachLayout from "@/components/coach/CoachLayout";
-import { SkeletonTable } from "@/components/ui/Skeleton";
-import { apiJson } from "@/lib/api";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import CoachLayout from "@/components/coach/CoachLayout";
+import {
+  CoachActionCard,
+  CoachBadge,
+  CoachEmptyPanel,
+  CoachMetricCard,
+  CoachPageHero,
+  CoachPanel,
+  coachInputClass,
+  coachPrimaryButtonClass,
+  coachSecondaryButtonClass,
+} from "@/components/coach/CoachPage";
+import { SkeletonCard, SkeletonTable } from "@/components/ui/Skeleton";
+import { apiJson } from "@/lib/api";
 
 export default function CoachDashboard() {
   const [data, setData] = useState(null);
@@ -14,13 +25,18 @@ export default function CoachDashboard() {
   useEffect(() => {
     (async () => {
       try {
-        const c = await apiJson("/api/v1/centers");
-        const arr = Array.isArray(c) ? c : [];
-        setCenters(arr);
-        if (arr.length === 1) setCenterId(arr[0].id);
-        else setLoading(false);
-      } catch (e) {
-        setError(e.message || "Failed to load centers");
+        const response = await apiJson("/api/v1/centers");
+        const nextCenters = Array.isArray(response) ? response : [];
+        setCenters(nextCenters);
+
+        if (nextCenters.length === 1) {
+          setCenterId(nextCenters[0].id);
+          return;
+        }
+
+        setLoading(false);
+      } catch (err) {
+        setError(err.message || "Failed to load centers");
         setLoading(false);
       }
     })();
@@ -28,388 +44,605 @@ export default function CoachDashboard() {
 
   useEffect(() => {
     if (!centerId) return;
-    setLoading(true);
-    setError("");
+
     (async () => {
+      setLoading(true);
+      setError("");
+
       try {
-        const res = await apiJson(`/api/v1/coach/dashboard?centerId=${encodeURIComponent(centerId)}`);
-        setData(res);
-      } catch (e) {
-        setError(e.message || "Failed to load dashboard");
+        const response = await apiJson(
+          `/api/v1/coach/dashboard?centerId=${encodeURIComponent(centerId)}`,
+        );
+        setData(response);
+      } catch (err) {
+        setError(err.message || "Failed to load dashboard");
       } finally {
         setLoading(false);
       }
     })();
   }, [centerId]);
 
-  const overdueAlarms = data?.overdueAlarms || [];
+  const centerName = centers.find((center) => center.id === centerId)?.name || "";
   const teachers = data?.teachers || [];
   const checklistSummary = data?.checklistSummary || [];
+  const overdueAlarms = data?.overdueAlarms || [];
   const followUpCounts = data?.followUpCounts || {};
   const recentObservations = data?.recentObservations || [];
 
+  const openFollowUps =
+    Number(followUpCounts.PARENT || 0) +
+    Number(followUpCounts.CAMERA_OBSERVATION || 0) +
+    Number(followUpCounts.GENERAL || 0);
+  const criticalChecklistItems = checklistSummary.reduce(
+    (count, plan) =>
+      count +
+      (plan.items || []).filter((item) => item.priority === "CRITICAL" || item.priority === "HIGH")
+        .length,
+    0,
+  );
+
+  const scoredObservations = recentObservations.filter((item) => item.score != null);
+  const averageScore = scoredObservations.length
+    ? (
+        scoredObservations.reduce((sum, item) => sum + Number(item.score || 0), 0) /
+        scoredObservations.length
+      ).toFixed(1)
+    : "-";
+
   return (
     <CoachLayout title="Coach Dashboard">
-      <div className="space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-gradient-to-r from-indigo-50 to-sky-50 p-6 dark:border-gray-700 dark:from-indigo-950/50 dark:to-sky-950/50">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-indigo-700/70 dark:text-indigo-400/70">
-              Coach Dashboard
-            </div>
-            <h2 className="mt-1 text-2xl font-extrabold text-gray-900 dark:text-gray-100">
-              Teacher Oversight
-            </h2>
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-              {" · "}Teachers, checklists & follow-ups
-            </p>
+      <div className="space-y-5">
+        <CoachPageHero
+          eyebrow="Coach Command"
+          title="See where coaching attention is needed before issues pile up."
+          description="Track teacher coverage, open follow-through, checklist drift, and recent observations from one focused workspace."
+          meta={
+            <>
+              <CoachBadge tone="amber">{formatHeaderDate(new Date())}</CoachBadge>
+              {centerName ? <CoachBadge tone="sky">{centerName}</CoachBadge> : null}
+              {!centerId && centers.length > 1 ? (
+                <CoachBadge tone="slate">Select a center to load live oversight data</CoachBadge>
+              ) : null}
+            </>
+          }
+          controls={
+            centers.length > 0 ? (
+              <label className="block">
+                <div className="mb-1.5 text-xs font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                  Center
+                </div>
+                <select
+                  value={centerId}
+                  onChange={(event) => setCenterId(event.target.value)}
+                  className={coachInputClass}
+                >
+                  <option value="">Select a center...</option>
+                  {centers.map((center) => (
+                    <option key={center.id} value={center.id}>
+                      {center.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null
+          }
+          actions={
+            centerId ? (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                <Link
+                  href={`/coach/observations?centerId=${centerId}`}
+                  className={coachPrimaryButtonClass}
+                >
+                  New Observation
+                </Link>
+                <Link
+                  href={`/coach/follow-ups?centerId=${centerId}`}
+                  className={coachSecondaryButtonClass}
+                >
+                  Create Follow-up
+                </Link>
+              </div>
+            ) : null
+          }
+          stats={
+            centerId ? (
+              loading ? (
+                Array.from({ length: 4 }, (_, index) => <SkeletonCard key={index} />)
+              ) : (
+                <>
+                  <CoachMetricCard
+                    label="Teachers"
+                    value={String(teachers.length)}
+                    hint="Assigned to this center"
+                    tone="sky"
+                    href="/coach/messages"
+                    icon={<TeamIcon />}
+                  />
+                  <CoachMetricCard
+                    label="Open Follow-ups"
+                    value={String(openFollowUps)}
+                    hint="Parent, camera, and general"
+                    tone="amber"
+                    href={`/coach/follow-ups?centerId=${centerId}`}
+                    icon={<ChecklistIcon />}
+                  />
+                  <CoachMetricCard
+                    label="Overdue Alarms"
+                    value={String(overdueAlarms.length)}
+                    hint="Checklist items past due"
+                    tone={overdueAlarms.length ? "rose" : "emerald"}
+                    href={`/coach/checklists?centerId=${centerId}`}
+                    icon={<AlertIcon />}
+                  />
+                  <CoachMetricCard
+                    label="Recent Avg Score"
+                    value={String(averageScore)}
+                    hint={`${recentObservations.length} recent observations`}
+                    tone="emerald"
+                    href={`/coach/observations?centerId=${centerId}`}
+                    icon={<SparkIcon />}
+                  />
+                </>
+              )
+            ) : null
+          }
+        />
+
+        {error ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+            {error}
           </div>
-          {centers.length > 0 && (
-            <div className="w-full max-w-xs">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Center</div>
-              <select
-                value={centerId}
-                onChange={(e) => setCenterId(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+        ) : null}
+
+        {!centerId ? (
+          <CoachEmptyPanel
+            title="Choose a center to start your review."
+            description="The coach dashboard is organized by center so observations, checklist risks, and follow-ups stay scoped to the right team."
+          />
+        ) : null}
+
+        {centerId && loading ? (
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+            <div className="space-y-5">
+              <CoachPanel title="Teacher Coverage" description="Loading teacher assignments.">
+                <SkeletonTable rows={5} cols={3} />
+              </CoachPanel>
+              <CoachPanel title="Checklist Plans" description="Loading active plans.">
+                <SkeletonTable rows={4} cols={3} />
+              </CoachPanel>
+            </div>
+            <div className="space-y-5">
+              <CoachPanel title="Action Queue" description="Loading current risks.">
+                <SkeletonTable rows={4} cols={1} />
+              </CoachPanel>
+            </div>
+          </div>
+        ) : null}
+
+        {centerId && !loading && data ? (
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.18fr_0.82fr]">
+            <div className="space-y-5">
+              <CoachPanel
+                title="Teacher Coverage"
+                description="See who is assigned where and jump directly into coaching actions."
+                action={
+                  <Link
+                    href="/coach/messages"
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-black uppercase tracking-[0.14em] text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    Message Teachers
+                  </Link>
+                }
               >
-                <option value="">Select a center...</option>
-                {centers.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-
-        {!centerId && (
-          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
-            Select a center to view the dashboard.
-          </div>
-        )}
-
-        {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>
-        )}
-
-        {centerId && loading && (
-          <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <SkeletonTable rows={5} cols={4} />
-          </div>
-        )}
-
-        {centerId && !loading && data && (
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_340px]">
-            <div className="space-y-4">
-              {/* Overdue Alarms */}
-              {overdueAlarms.length > 0 && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 p-5">
-                  <h3 className="text-base font-extrabold text-red-900">
-                    Overdue Checklist Alarms ({overdueAlarms.length})
-                  </h3>
-                  <p className="mt-1 text-sm text-red-700">
-                    These items have passed their due date without completion.
-                  </p>
-                  <div className="mt-3 space-y-2">
-                    {overdueAlarms.map((alarm) => (
-                      <div key={alarm.id} className="rounded-xl border border-red-200 bg-white p-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="font-extrabold text-gray-900">{alarm.title}</div>
-                          <PriorityBadge priority={alarm.priority} />
-                        </div>
-                        <div className="mt-1 text-xs text-gray-600">
-                          Plan: {alarm.plan?.title || "—"} | Due: {fmtDate(alarm.dueAt)}
-                        </div>
-                        {alarm.assignedTo && (
-                          <div className="mt-1 text-xs text-gray-500">
-                            Assigned to: {alarm.assignedTo.name || alarm.assignedTo.email}
+                {teachers.length === 0 ? (
+                  <CoachEmptyPanel
+                    title="No teachers assigned here yet."
+                    description="Once teachers are assigned to this center, coaching actions and classroom coverage will appear here."
+                  />
+                ) : (
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {teachers.map((teacher) => (
+                      <div
+                        key={teacher.id}
+                        className="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sm font-black text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+                            {initials(teacher.name || teacher.email)}
                           </div>
-                        )}
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-black text-gray-900 dark:text-gray-100">
+                              {teacher.name || teacher.email}
+                            </div>
+                            <div className="truncate text-xs text-gray-500 dark:text-gray-400">
+                              {teacher.email}
+                            </div>
+                          </div>
+                          <CoachBadge tone={teacher.classrooms?.length ? "sky" : "slate"}>
+                            {teacher.classrooms?.length || 0} rooms
+                          </CoachBadge>
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {teacher.classrooms?.length ? (
+                            teacher.classrooms.map((classroom) => (
+                              <CoachBadge key={classroom.id} tone="sky">
+                                {classroom.name}
+                              </CoachBadge>
+                            ))
+                          ) : (
+                            <CoachBadge tone="slate">No classroom assignment</CoachBadge>
+                          )}
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-2 gap-2">
+                          <Link
+                            href={`/coach/observations?teacherId=${teacher.id}&centerId=${centerId}`}
+                            className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2 text-center text-xs font-black uppercase tracking-[0.12em] text-sky-700 transition hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300"
+                          >
+                            Observe
+                          </Link>
+                          <Link
+                            href={`/coach/follow-ups?assignedToId=${teacher.id}&centerId=${centerId}`}
+                            className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-black uppercase tracking-[0.12em] text-amber-700 transition hover:bg-amber-100 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"
+                          >
+                            Follow-up
+                          </Link>
+                        </div>
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
-
-              {/* Teachers & Classrooms */}
-              <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-900">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-base font-extrabold text-gray-900 dark:text-gray-100">
-                      Teachers & Classrooms
-                    </h3>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                      Who is in what classroom.
-                    </p>
-                  </div>
-                  <Link
-                    href="/coach/messages"
-                    className="text-sm font-semibold text-indigo-600 hover:text-indigo-700"
-                  >
-                    Message
-                  </Link>
-                </div>
-
-                {teachers.length === 0 ? (
-                  <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-                    No teachers found for this center.
-                  </div>
-                ) : (
-                  <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700">
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-800 dark:text-gray-400">
-                        <tr>
-                          <th className="px-4 py-3">Teacher</th>
-                          <th className="px-4 py-3">Classrooms</th>
-                          <th className="px-4 py-3">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                        {teachers.map((t) => (
-                          <tr key={t.id}>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-3">
-                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-xs font-extrabold text-indigo-700">
-                                  {initials(t.name)}
-                                </div>
-                                <div>
-                                  <div className="font-extrabold text-gray-900 dark:text-gray-100">{t.name || t.email}</div>
-                                  <div className="text-xs text-gray-500 dark:text-gray-400">{t.email}</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3">
-                              {t.classrooms?.length ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {t.classrooms.map((cr) => (
-                                    <span key={cr.id} className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700">
-                                      {cr.name}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span className="text-xs text-gray-400">No classroom</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex gap-2">
-                                <Link
-                                  href={`/coach/observations?teacherId=${t.id}&centerId=${centerId}`}
-                                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
-                                >
-                                  Observe
-                                </Link>
-                                <Link
-                                  href={`/coach/follow-ups?assignedToId=${t.id}&centerId=${centerId}`}
-                                  className="text-xs font-semibold text-emerald-600 hover:text-emerald-700"
-                                >
-                                  Follow-up
-                                </Link>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
                 )}
-              </div>
+              </CoachPanel>
 
-              {/* Checklist Status */}
-              <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-900">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-base font-extrabold text-gray-900 dark:text-gray-100">Checklist Status</h3>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                      Items done for each active checklist plan.
-                    </p>
-                  </div>
+              <CoachPanel
+                title="Checklist Plans"
+                description="Monitor active plans and spotlight the highest-risk checklist items."
+                action={
                   <Link
                     href={`/coach/checklists?centerId=${centerId}`}
-                    className="text-sm font-semibold text-indigo-600 hover:text-indigo-700"
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-black uppercase tracking-[0.14em] text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
                   >
-                    Manage
+                    Open Checklists
                   </Link>
-                </div>
-
+                }
+              >
                 {checklistSummary.length === 0 ? (
-                  <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-                    No active checklist plans.
-                  </div>
+                  <CoachEmptyPanel
+                    title="No active checklist plans."
+                    description="When checklist plans are active for this center, completion and priority hotspots will show here."
+                  />
                 ) : (
-                  <div className="mt-4 space-y-3">
+                  <div className="space-y-3">
                     {checklistSummary.map((plan) => {
-                      const pct = plan.totalItems ? Math.round((plan.completedItems / plan.totalItems) * 100) : 0;
+                      const percent = plan.totalItems
+                        ? Math.round((plan.completedItems / plan.totalItems) * 100)
+                        : 0;
+                      const priorityCount = (plan.items || []).filter(
+                        (item) => item.priority === "CRITICAL" || item.priority === "HIGH",
+                      ).length;
+
                       return (
-                        <div key={plan.id} className="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
-                          <div className="flex items-center justify-between">
-                            <div className="font-extrabold text-gray-900 dark:text-gray-100">{plan.title}</div>
-                            <span className="text-xs font-semibold text-gray-500">{plan.period}</span>
-                          </div>
-                          <div className="mt-2 flex items-center gap-3">
-                            <div className="h-2 flex-1 rounded-full bg-gray-200">
-                              <div
-                                className="h-2 rounded-full bg-indigo-500 transition-all"
-                                style={{ width: `${pct}%` }}
-                              />
+                        <div
+                          key={plan.id}
+                          className="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-black text-gray-900 dark:text-gray-100">
+                                {plan.title}
+                              </div>
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Period: {plan.period || "Not set"}
+                              </div>
                             </div>
-                            <span className="text-xs font-extrabold text-gray-700">
-                              {plan.completedItems}/{plan.totalItems}
-                            </span>
+                            <div className="flex flex-wrap gap-2">
+                              <CoachBadge tone="emerald">
+                                {plan.completedItems}/{plan.totalItems} complete
+                              </CoachBadge>
+                              {priorityCount ? (
+                                <CoachBadge tone="amber">{priorityCount} high priority</CoachBadge>
+                              ) : null}
+                            </div>
                           </div>
-                          {plan.items.filter((it) => it.priority === "CRITICAL" || it.priority === "HIGH").length > 0 && (
-                            <div className="mt-2 flex flex-wrap gap-1">
+
+                          <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                percent === 100
+                                  ? "bg-emerald-500"
+                                  : percent >= 60
+                                    ? "bg-sky-500"
+                                    : "bg-amber-500"
+                              }`}
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+
+                          {(plan.items || []).some(
+                            (item) => item.priority === "CRITICAL" || item.priority === "HIGH",
+                          ) ? (
+                            <div className="mt-4 flex flex-wrap gap-2">
                               {plan.items
-                                .filter((it) => it.priority === "CRITICAL" || it.priority === "HIGH")
-                                .map((it) => (
-                                  <span key={it.id} className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                                    <PriorityDot priority={it.priority} /> {it.title}
-                                  </span>
+                                .filter(
+                                  (item) =>
+                                    item.priority === "CRITICAL" || item.priority === "HIGH",
+                                )
+                                .slice(0, 4)
+                                .map((item) => (
+                                  <CoachBadge
+                                    key={item.id}
+                                    tone={item.priority === "CRITICAL" ? "rose" : "amber"}
+                                  >
+                                    {item.title}
+                                  </CoachBadge>
                                 ))}
                             </div>
-                          )}
+                          ) : null}
                         </div>
                       );
                     })}
                   </div>
                 )}
-              </div>
+              </CoachPanel>
             </div>
 
-            {/* Sidebar */}
-            <aside className="space-y-4">
-              {/* Quick Stats */}
-              <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-900">
-                <h3 className="text-base font-extrabold text-gray-900 dark:text-gray-100">Quick Stats</h3>
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  <StatCard label="Teachers" value={teachers.length} color="text-indigo-600" />
-                  <StatCard label="Alarms" value={overdueAlarms.length} color={overdueAlarms.length > 0 ? "text-red-600" : "text-gray-600"} />
-                  <StatCard label="Parent F/U" value={followUpCounts.PARENT || 0} color="text-amber-600" />
-                  <StatCard label="Observations" value={recentObservations.length} color="text-emerald-600" />
-                </div>
-              </div>
-
-              {/* Quick Actions */}
-              <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-900">
-                <h3 className="text-base font-extrabold text-gray-900 dark:text-gray-100">Quick Actions</h3>
-                <div className="mt-3 grid grid-cols-1 gap-2">
-                  <Link
-                    href={`/coach/observations?centerId=${centerId}`}
-                    className="flex items-center gap-2.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-sm font-semibold text-indigo-800 transition hover:bg-indigo-100"
-                  >
-                    <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0 text-indigo-500">
-                      <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
-                      <path fillRule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-                    </svg>
-                    New Observation
-                  </Link>
-                  <Link
-                    href={`/coach/follow-ups?centerId=${centerId}`}
-                    className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100"
-                  >
-                    <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0 text-emerald-500">
-                      <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-                    </svg>
-                    New Follow-up
-                  </Link>
-                  <Link
-                    href="/coach/compliance"
-                    className="flex items-center gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"
-                  >
-                    <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0 text-amber-500">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
-                    </svg>
-                    Compliance Check
-                  </Link>
-                  <Link
-                    href="/coach/messages"
-                    className="flex items-center gap-2.5 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm font-semibold text-sky-800 transition hover:bg-sky-100"
-                  >
-                    <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0 text-sky-500">
-                      <path fillRule="evenodd" d="M10 2c-2.236 0-4.43.18-6.57.524C1.993 2.755 1 4.014 1 5.426v5.148c0 1.413.993 2.67 2.43 2.902.848.137 1.705.248 2.57.331v3.443a.75.75 0 001.28.53l3.58-3.579a.78.78 0 01.527-.224 41.202 41.202 0 005.183-.5c1.437-.232 2.43-1.49 2.43-2.903V5.426c0-1.413-.993-2.67-2.43-2.902A41.289 41.289 0 0010 2zm0 7a1 1 0 100-2 1 1 0 000 2zM8 8a1 1 0 11-2 0 1 1 0 012 0zm5 1a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                    </svg>
-                    Message Teachers
-                  </Link>
-                </div>
-              </div>
-
-              {/* Recent Observations */}
-              <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-900">
-                <h3 className="text-base font-extrabold text-gray-900 dark:text-gray-100">Recent Observations</h3>
-                {recentObservations.length === 0 ? (
-                  <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                    No observations yet.
-                  </div>
+            <aside className="space-y-5">
+              <CoachPanel
+                title="Priority Queue"
+                description="Overdue items and operational risk that need attention now."
+              >
+                {overdueAlarms.length === 0 ? (
+                  <CoachEmptyPanel
+                    title="No overdue alarms."
+                    description="All active checklist items are on time right now."
+                    className="py-8"
+                    icon={<CheckIcon />}
+                  />
                 ) : (
-                  <div className="mt-3 space-y-2">
-                    {recentObservations.map((obs) => (
-                      <div key={obs.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
-                            {obs.teacher?.name || obs.teacher?.email}
-                          </span>
-                          <span className={[
-                            "rounded-full px-2 py-0.5 text-xs font-semibold",
-                            obs.type === "CAMERA" ? "bg-purple-50 text-purple-700" : "bg-blue-50 text-blue-700",
-                          ].join(" ")}>
-                            {obs.type === "CAMERA" ? "Camera" : "In-class"}
-                          </span>
+                  <div className="space-y-3">
+                    {overdueAlarms.map((alarm) => (
+                      <div
+                        key={alarm.id}
+                        className="rounded-[1.5rem] border border-rose-200 bg-rose-50/80 p-4 dark:border-rose-900/60 dark:bg-rose-950/20"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-sm font-black text-rose-900 dark:text-rose-200">
+                              {alarm.title}
+                            </div>
+                            <div className="mt-1 text-xs text-rose-700 dark:text-rose-300">
+                              Due {formatDate(alarm.dueAt)}
+                            </div>
+                          </div>
+                          <CoachBadge
+                            tone={alarm.priority === "CRITICAL" ? "rose" : "amber"}
+                          >
+                            {alarm.priority || "OPEN"}
+                          </CoachBadge>
                         </div>
-                        <div className="mt-1 text-xs text-gray-500">
-                          {fmtDate(obs.date)}
-                          {obs.classRoom ? ` — ${obs.classRoom.name}` : ""}
-                          {obs.score != null ? ` — Score: ${obs.score}` : ""}
+
+                        <div className="mt-3 space-y-1 text-xs text-rose-800 dark:text-rose-200">
+                          <div>Plan: {alarm.plan?.title || "Unassigned plan"}</div>
+                          <div>
+                            Owner: {alarm.assignedTo?.name || alarm.assignedTo?.email || "Not assigned"}
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
-              </div>
+              </CoachPanel>
+
+              <CoachPanel
+                title="Coach Actions"
+                description="Fast paths to the workflows a coach uses most."
+              >
+                <div className="grid grid-cols-1 gap-3">
+                  <CoachActionCard
+                    href={`/coach/observations?centerId=${centerId}`}
+                    title="Observation Log"
+                    description="Capture in-class and camera observations with notes and scoring."
+                    tone="sky"
+                    icon={<EyeIcon />}
+                  />
+                  <CoachActionCard
+                    href={`/coach/follow-ups?centerId=${centerId}`}
+                    title="Follow-ups"
+                    description="Track open parent, classroom, and general coaching actions."
+                    tone="amber"
+                    icon={<ChecklistIcon />}
+                  />
+                  <CoachActionCard
+                    href={`/coach/compliance?centerId=${centerId}`}
+                    title="Compliance Review"
+                    description="See which teachers are logging consistently and who needs a nudge."
+                    tone="emerald"
+                    icon={<CheckIcon />}
+                  />
+                  <CoachActionCard
+                    href={`/coach/messages?centerId=${centerId}`}
+                    title="Team Messaging"
+                    description="Jump directly into center-specific conversations."
+                    tone="slate"
+                    icon={<MessageIcon />}
+                  />
+                </div>
+              </CoachPanel>
+
+              <CoachPanel
+                title="Recent Observations"
+                description="Most recent observation entries for this center."
+              >
+                {recentObservations.length === 0 ? (
+                  <CoachEmptyPanel
+                    title="No observations logged yet."
+                    description="The most recent observation notes will surface here once coaches start recording visits."
+                    className="py-8"
+                    icon={<EyeIcon />}
+                  />
+                ) : (
+                  <div className="space-y-3">
+                    {recentObservations.map((observation) => (
+                      <div
+                        key={observation.id}
+                        className="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-sm font-black text-gray-900 dark:text-gray-100">
+                              {observation.teacher?.name || observation.teacher?.email || "Teacher"}
+                            </div>
+                            <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                              {formatDate(observation.date)}
+                              {observation.classRoom?.name ? ` - ${observation.classRoom.name}` : ""}
+                            </div>
+                          </div>
+                          <CoachBadge tone={observation.type === "CAMERA" ? "amber" : "sky"}>
+                            {observation.type === "CAMERA" ? "Camera" : "In class"}
+                          </CoachBadge>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {observation.score != null ? (
+                            <CoachBadge tone="emerald">Score {observation.score}</CoachBadge>
+                          ) : null}
+                          <CoachBadge tone="slate">Observation</CoachBadge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CoachPanel>
+
+              <CoachPanel title="Operational Snapshot" description="A quick read on today’s current coaching posture.">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                  <SnapshotRow
+                    label="Open follow-ups"
+                    value={String(openFollowUps)}
+                    tone="amber"
+                    detail={`${followUpCounts.PARENT || 0} parent, ${followUpCounts.CAMERA_OBSERVATION || 0} camera`}
+                  />
+                  <SnapshotRow
+                    label="Priority checklist items"
+                    value={String(criticalChecklistItems)}
+                    tone="rose"
+                    detail="High and critical items across active plans"
+                  />
+                  <SnapshotRow
+                    label="Recent observations"
+                    value={String(recentObservations.length)}
+                    tone="sky"
+                    detail="Newest 5 entries shown"
+                  />
+                </div>
+              </CoachPanel>
             </aside>
           </div>
-        )}
+        ) : null}
       </div>
     </CoachLayout>
   );
 }
 
-function initials(name) {
-  if (!name) return "T";
-  return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2) || "T";
-}
+function SnapshotRow({ label, value, detail, tone }) {
+  const toneClasses = {
+    amber: "border-amber-200 bg-amber-50/80 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200",
+    rose: "border-rose-200 bg-rose-50/80 text-rose-900 dark:border-rose-900/60 dark:bg-rose-950/20 dark:text-rose-200",
+    sky: "border-sky-200 bg-sky-50/80 text-sky-900 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-200",
+  };
 
-function fmtDate(d) {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function PriorityBadge({ priority }) {
-  const cls = {
-    CRITICAL: "bg-red-100 text-red-700",
-    HIGH: "bg-orange-100 text-orange-700",
-    MEDIUM: "bg-yellow-100 text-yellow-700",
-    LOW: "bg-gray-100 text-gray-600",
-  }[priority] || "bg-gray-100 text-gray-600";
   return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-extrabold ${cls}`}>
-      {priority || "—"}
-    </span>
+    <div
+      className={`rounded-[1.4rem] border p-4 ${toneClasses[tone] || toneClasses.sky}`}
+    >
+      <div className="text-[11px] font-black uppercase tracking-[0.16em] opacity-75">{label}</div>
+      <div className="mt-2 text-3xl font-black">{value}</div>
+      <div className="mt-1 text-sm opacity-80">{detail}</div>
+    </div>
   );
 }
 
-function PriorityDot({ priority }) {
-  const cls = {
-    CRITICAL: "bg-red-500",
-    HIGH: "bg-orange-500",
-  }[priority] || "bg-gray-400";
-  return <span className={`inline-block h-1.5 w-1.5 rounded-full ${cls}`} />;
+function initials(value) {
+  return String(value || "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "T";
 }
 
-function StatCard({ label, value, color }) {
+function formatHeaderDate(date) {
+  return new Date(date).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+function formatDate(value) {
+  if (!value) return "No due date";
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function TeamIcon() {
   return (
-    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-center dark:border-gray-700 dark:bg-gray-800">
-      <div className={`text-xl font-extrabold ${color}`}>{value}</div>
-      <div className="mt-0.5 text-xs font-semibold text-gray-500 dark:text-gray-400">{label}</div>
-    </div>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 00-12 0M14.25 9.75a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zM20.25 14.25a2.25 2.25 0 10-4.5 0M8.25 14.25a2.25 2.25 0 10-4.5 0" />
+    </svg>
+  );
+}
+
+function ChecklistIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75h11.25M9 12h11.25M9 17.25h11.25M3.75 7.5l1.5 1.5 3-3M3.75 12.75l1.5 1.5 3-3M3.75 18l1.5 1.5 3-3" />
+    </svg>
+  );
+}
+
+function AlertIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m0 3.75h.008v.008H12V16.5zm8.25-4.86c0 5.027-3.94 9.11-8.85 9.11S2.55 16.667 2.55 11.64 6.49 2.53 11.4 2.53s8.85 4.083 8.85 9.11z" />
+    </svg>
+  );
+}
+
+function SparkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18l-1.147-2.096L5.757 15l2.096-1.147L9 11.757l.813 2.096L11.91 15l-2.097.904zM18 9l-.822 2.178L15 12l2.178.822L18 15l.822-2.178L21 12l-2.178-.822L18 9zM12 3l1.178 3.072L16 7.25l-2.822 1.178L12 11.5l-1.178-3.072L8 7.25l2.822-1.178L12 3z" />
+    </svg>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12 18 18.75 12 18.75 2.25 12 2.25 12z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 14.25A2.25 2.25 0 1012 9.75a2.25 2.25 0 000 4.5z" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+    </svg>
+  );
+}
+
+function MessageIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 9.75h9m-9 3h5.25m-8.25 7.5l3.07-3.07a1.5 1.5 0 011.06-.44H18a2.25 2.25 0 002.25-2.25V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v8.25A2.25 2.25 0 006 16.5h.94a1.5 1.5 0 011.06.44l.75.75" />
+    </svg>
   );
 }

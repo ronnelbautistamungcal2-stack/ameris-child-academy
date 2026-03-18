@@ -1,6 +1,15 @@
 import ParentLayout from "@/components/parent/ParentLayout";
+import {
+  ParentButton,
+  ParentEmpty,
+  ParentPageHeader,
+  ParentPill,
+  ParentSection,
+  ParentSurface,
+} from "@/components/parent/ParentUI";
 import ProgressEntryTimeline from "@/components/progression/ProgressEntryTimeline";
 import { apiJson } from "@/lib/api";
+import { formatAge } from "@/lib/ageUtils";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 
@@ -70,6 +79,22 @@ export default function ParentProgress() {
       }
     })();
   }, [childIdFromQuery]);
+
+  useEffect(() => {
+    if (!router.isReady) return;
+    const currentChild =
+      typeof router.query.childId === "string" ? router.query.childId : "";
+    if (currentChild === selectedChildId) return;
+
+    const nextQuery = { ...router.query };
+    if (selectedChildId) nextQuery.childId = selectedChildId;
+    else delete nextQuery.childId;
+
+    router.replace({ pathname: router.pathname, query: nextQuery }, undefined, {
+      shallow: true,
+      scroll: false,
+    });
+  }, [router, selectedChildId]);
 
   useEffect(() => {
     if (!selectedChildId) {
@@ -176,33 +201,57 @@ export default function ParentProgress() {
 
   return (
     <ParentLayout title="Progress & Goals">
-      <div className="space-y-5">
-        <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br from-violet-50 via-white to-indigo-50 p-6">
-          <div className="absolute -right-8 -top-8 h-36 w-36 rounded-full bg-violet-100/40 blur-2xl" />
-          <div className="absolute -bottom-10 -left-10 h-28 w-28 rounded-full bg-indigo-100/40 blur-2xl" />
-          <div className="relative">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-600 shadow-lg shadow-violet-200">
-                <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-xl font-extrabold text-gray-900">Progression Tracking</h1>
-                <p className="text-sm text-gray-500">Review goals, monitor status changes, and add notes for teacher coordination.</p>
-              </div>
+      <div className="space-y-4">
+        <ParentPageHeader
+          eyebrow="Progress center"
+          title={
+            selectedChild
+              ? `${selectedChild.firstName}'s goals, status changes, and teacher notes`
+              : "Progress and goals"
+          }
+          description="Track the lessons your child is working through, spot where support is still needed, and leave notes for teacher coordination without losing context."
+          accent="emerald"
+          layout="split"
+          stats={[
+            { label: "Children", value: children.length, hint: "Linked to this account", tone: "sky" },
+            { label: "Total goals", value: stats.total, hint: "Across the selected child", tone: "gray" },
+            { label: "Completed", value: stats.completed, hint: "Passed or completed", tone: "emerald" },
+            { label: "Support", value: stats.failed, hint: "Need attention", tone: stats.failed ? "rose" : "gray" },
+          ]}
+          actions={
+            selectedChildId ? (
+              <ParentButton href={`/parent/children?childId=${encodeURIComponent(selectedChildId)}`} variant="secondary">
+                Open daily reports
+              </ParentButton>
+            ) : null
+          }
+        />
+
+        {error ? (
+          <ParentSurface className="border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+            {error}
+          </ParentSurface>
+        ) : null}
+
+        <ParentSection
+          title="Choose child and focus"
+          description="Use the child switcher and filters to stay focused on the goals that matter right now."
+          className="bg-gradient-to-br from-white via-emerald-50/35 to-white"
+        >
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {children.slice().sort((a, b) => byString(a.firstName, b.firstName)).map((child) => (
+                <ParentPill
+                  key={child.id}
+                  active={selectedChildId === child.id}
+                  onClick={() => setSelectedChildId(child.id)}
+                >
+                  {child.firstName} {child.lastName || ""}
+                </ParentPill>
+              ))}
             </div>
 
-            {error && (
-              <div className="mt-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                <svg className="h-4 w-4 shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                {error}
-              </div>
-            )}
-
-            <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
               <FilterSelect
                 label="Child"
                 value={selectedChildId}
@@ -236,7 +285,7 @@ export default function ParentProgress() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                   <input
-                    className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm font-medium text-gray-800 shadow-sm transition hover:border-violet-300 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                    className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm font-medium text-gray-800 shadow-sm transition hover:border-sky-300 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"
                     placeholder="Search lesson title, category, status..."
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
@@ -246,9 +295,9 @@ export default function ParentProgress() {
               </div>
             </div>
 
-            <div className="mt-3">
+            <div>
               <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">Stage</div>
-              <div className="flex flex-wrap gap-1 rounded-xl border border-gray-200 bg-gray-100/80 p-1">
+              <div className="flex flex-wrap gap-2">
                 {STAGE_FILTERS.map((item) => {
                   const Icon = item.icon;
                   const active = stage === item.value;
@@ -256,7 +305,12 @@ export default function ParentProgress() {
                     <button
                       key={item.value}
                       type="button"
-                      className={`flex items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all ${active ? "bg-white text-violet-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                      className={[
+                        "inline-flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-sm font-bold transition-all",
+                        active
+                          ? "border-sky-300 bg-sky-50 text-sky-900 shadow-sm ring-2 ring-sky-100"
+                          : "border-gray-200 bg-white text-gray-600 hover:border-sky-200 hover:bg-sky-50/60",
+                      ].join(" ")}
                       onClick={() => setStage(item.value)}
                     >
                       <Icon />
@@ -267,11 +321,11 @@ export default function ParentProgress() {
               </div>
             </div>
           </div>
-        </div>
+        </ParentSection>
 
         {selectedChild && (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-            <OverviewCard label="Total Goals" count={stats.total} color="violet" icon={<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} sub={`${selectedChild.firstName} ${selectedChild.lastName || ""}`.trim()} />
+            <OverviewCard label="Total Goals" count={stats.total} color="sky" icon={<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} sub={`${selectedChild.firstName} ${selectedChild.lastName || ""}${formatAge(selectedChild.birthDate) ? ` · ${formatAge(selectedChild.birthDate)}` : ""}`.trim()} />
             <OverviewCard label="In Progress" count={stats.inProgress} color="amber" icon={<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
             <OverviewCard label="Completed" count={stats.completed} color="emerald" icon={<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>} />
             <OverviewCard label="Failed" count={stats.failed} color="red" icon={<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>} />
@@ -303,7 +357,7 @@ export default function ParentProgress() {
         <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
             <h2 className="flex items-center gap-2 text-sm font-extrabold text-gray-900">
-              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-violet-100 text-violet-600">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-100 text-sky-600">
                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                 </svg>
@@ -321,14 +375,12 @@ export default function ParentProgress() {
 
           <div className="p-5">
             {!selectedChild && !loading ? (
-              <EmptyState
-                icon={<svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
+              <ParentEmpty
                 title="Select a child to view progress"
                 description="Choose a child from the filter above to review lessons, statuses, and notes."
               />
             ) : !loading && filteredProgress.length === 0 ? (
-              <EmptyState
-                icon={<svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>}
+              <ParentEmpty
                 title="No goals match this view"
                 description="Try changing the child, stage, category, or search filters."
               />
@@ -347,7 +399,7 @@ export default function ParentProgress() {
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2.5">
-                            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white ${isFailed ? "bg-red-500" : row.status === "COMPLETED" || row.status === "PASSED" ? "bg-emerald-500" : "bg-violet-500"}`}>
+                            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white ${isFailed ? "bg-red-500" : row.status === "COMPLETED" || row.status === "PASSED" ? "bg-emerald-500" : "bg-sky-500"}`}>
                               {row.goalIndex || "--"}
                             </div>
                             <div className="min-w-0">
@@ -397,7 +449,7 @@ export default function ParentProgress() {
                         <div className="flex shrink-0 flex-col items-start gap-2 lg:w-40 lg:items-end">
                           <button
                             type="button"
-                            className="inline-flex items-center gap-1 rounded-xl bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-violet-700 active:scale-[0.98]"
+                            className="inline-flex items-center gap-1 rounded-xl bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 active:scale-[0.98]"
                             onClick={() => setExpanded((prev) => ({ ...prev, [row.id]: prev[row.id] ? null : Date.now() }))}
                           >
                             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
@@ -415,7 +467,7 @@ export default function ParentProgress() {
                             <div className="flex flex-col gap-2 sm:flex-row">
                               <input
                                 type="text"
-                                className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                                className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"
                                 placeholder="Share a note with the teacher..."
                                 value={noteForm[row.id] || ""}
                                 onChange={(e) => setNoteForm((prev) => ({ ...prev, [row.id]: e.target.value }))}
@@ -423,7 +475,7 @@ export default function ParentProgress() {
                               />
                               <button
                                 type="button"
-                                className="shrink-0 rounded-lg bg-violet-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:opacity-60"
+                                className="shrink-0 rounded-lg bg-sky-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-sky-700 disabled:opacity-60"
                                 onClick={() => submitNote(row.id)}
                                 disabled={savingNote === row.id || !(noteForm[row.id] || "").trim()}
                               >
@@ -452,7 +504,7 @@ function FilterSelect({ label, value, onChange, disabled, placeholder, icon, chi
       <div className="relative">
         <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">{icon}</div>
         <select
-          className="w-full appearance-none rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-10 text-sm font-medium text-gray-800 shadow-sm transition hover:border-violet-300 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 disabled:opacity-50"
+          className="w-full appearance-none rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-10 text-sm font-medium text-gray-800 shadow-sm transition hover:border-sky-300 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 disabled:opacity-50"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
@@ -468,19 +520,8 @@ function FilterSelect({ label, value, onChange, disabled, placeholder, icon, chi
   );
 }
 
-function EmptyState({ icon, title, description }) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 py-16">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100">{icon}</div>
-      <p className="mt-4 text-sm font-semibold text-gray-600">{title}</p>
-      <p className="mt-1 max-w-sm text-center text-xs text-gray-400">{description}</p>
-    </div>
-  );
-}
-
 function OverviewCard({ label, count, color, icon, sub }) {
   const colors = {
-    violet: "from-violet-50 to-violet-100/50 text-violet-600 border-violet-200/60",
     sky: "from-sky-50 to-sky-100/50 text-sky-600 border-sky-200/60",
     amber: "from-amber-50 to-amber-100/50 text-amber-600 border-amber-200/60",
     emerald: "from-emerald-50 to-emerald-100/50 text-emerald-600 border-emerald-200/60",

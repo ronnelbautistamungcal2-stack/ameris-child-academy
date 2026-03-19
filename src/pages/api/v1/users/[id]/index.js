@@ -9,6 +9,12 @@ function parseDateOrNull(value) {
   return d;
 }
 
+function sanitizeUser(user) {
+  if (!user) return user;
+  const { password, ...safeUser } = user;
+  return safeUser;
+}
+
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
@@ -27,7 +33,7 @@ export default async function handler(req, res) {
     });
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    return res.status(200).json(user);
+    return res.status(200).json(sanitizeUser(user));
   }
 
   if (req.method === "PUT") {
@@ -79,7 +85,7 @@ export default async function handler(req, res) {
       include: { centers: true },
     });
 
-    return res.status(200).json(user);
+    return res.status(200).json(sanitizeUser(user));
   }
 
   if (req.method === "DELETE") {

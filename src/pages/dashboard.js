@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "@/lib/api";
+import { buildParentMessageComposeHref } from "@/lib/parentSupport";
 import AppShell from "@/components/shell/AppShell";
 import { ADMIN_NAV_ITEMS } from "@/components/admin/adminNav";
 import { TEACHER_NAV_ITEMS } from "@/components/teacher/teacherNav";
@@ -13,7 +14,6 @@ import { SUBSCRIBER_NAV_ITEMS } from "@/components/subscriber/subscriberNav";
 import {
   ParentButton,
   ParentPageHeader,
-  ParentQuickAction,
   ParentSection,
 } from "@/components/parent/ParentUI";
 
@@ -31,6 +31,7 @@ export default function Dashboard() {
   const [children, setChildren] = useState([]);
   const [childId, setChildId] = useState("");
   const [activities, setActivities] = useState([]);
+  const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -67,16 +68,22 @@ export default function Dashboard() {
       setLoading(true);
       setError("");
       try {
-        const c = await apiJson("/api/v1/centers");
-        const centersArr = Array.isArray(c) ? c : [];
-        setCenters(centersArr);
-
         if (role === "PARENT") {
-          const kids = await apiJson("/api/v1/children");
+          const [c, kids, formSubmissions] = await Promise.all([
+            apiJson("/api/v1/centers"),
+            apiJson("/api/v1/children"),
+            apiJson("/api/v1/forms/submissions"),
+          ]);
+          const centersArr = Array.isArray(c) ? c : [];
           const kidsArr = Array.isArray(kids) ? kids : [];
+          setCenters(centersArr);
           setChildren(kidsArr);
           setChildId(kidsArr[0]?.id || "");
+          setSubmissions(Array.isArray(formSubmissions) ? formSubmissions : []);
         } else {
+          const c = await apiJson("/api/v1/centers");
+          const centersArr = Array.isArray(c) ? c : [];
+          setCenters(centersArr);
           const defaultCenterId =
             typeof router.query.centerId === "string"
               ? router.query.centerId
@@ -176,9 +183,11 @@ export default function Dashboard() {
         <ParentDashboard
           name={name}
           children={children}
+          selectedChild={selectedChild}
           loading={loading}
           error={error}
           activities={activities}
+          submissions={submissions}
           subscriptionSummary={subscriptionSummary}
         />
       ) : (
@@ -470,13 +479,15 @@ export default function Dashboard() {
                             : "—"}
                         </span>
                       </div>
-                      <button
-                        type="button"
-                        className="mt-3 w-full rounded-xl bg-blue-600 px-3 py-2 text-sm font-extrabold text-white hover:bg-blue-700"
-                        onClick={() => alert("Billing flow not implemented yet")}
+                      <Link
+                        href={buildParentMessageComposeHref({
+                          subject: `Billing support for ${subscriptionSummary.centerName}`,
+                          message: `Hello, I need help with billing for ${subscriptionSummary.centerName}. Please share the next steps or a payment link when available.`,
+                        })}
+                        className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-3 py-2 text-sm font-extrabold text-white hover:bg-blue-700"
                       >
-                        Pay Now
-                      </button>
+                        Request payment link
+                      </Link>
                     </div>
                   ) : (
                     <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
@@ -707,12 +718,382 @@ function computeChildGWA(activities, progressRows) {
   };
 }
 
+function formatDashboardTimestamp(value) {
+  if (!value) return "";
+  return new Date(value).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function DashboardIcon({ tone = "sky", children, className = "" }) {
+  const tones = {
+    sky: "bg-sky-100 text-sky-700",
+    emerald: "bg-emerald-100 text-emerald-700",
+    amber: "bg-amber-100 text-amber-700",
+    rose: "bg-rose-100 text-rose-700",
+    gray: "bg-gray-100 text-gray-600",
+  };
+
+  return (
+    <div
+      className={[
+        "flex h-11 w-11 items-center justify-center rounded-2xl",
+        tones[tone] || tones.sky,
+        className,
+      ].join(" ")}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ParentDashboardPanel({
+  eyebrow,
+  title,
+  description,
+  accent = "sky",
+  children,
+  className = "",
+}) {
+  const accents = {
+    sky: {
+      line: "from-sky-500 via-cyan-500 to-blue-500",
+      pill: "border-sky-200 bg-sky-50 text-sky-700",
+      bloom: "bg-sky-100/80",
+    },
+    emerald: {
+      line: "from-emerald-500 via-teal-500 to-cyan-500",
+      pill: "border-emerald-200 bg-emerald-50 text-emerald-700",
+      bloom: "bg-emerald-100/80",
+    },
+    amber: {
+      line: "from-amber-500 via-orange-500 to-rose-500",
+      pill: "border-amber-200 bg-amber-50 text-amber-700",
+      bloom: "bg-amber-100/80",
+    },
+    rose: {
+      line: "from-rose-500 via-pink-500 to-orange-500",
+      pill: "border-rose-200 bg-rose-50 text-rose-700",
+      bloom: "bg-rose-100/80",
+    },
+  };
+  const accentClasses = accents[accent] || accents.sky;
+
+  return (
+    <section
+      className={[
+        "relative overflow-hidden rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm",
+        className,
+      ].join(" ")}
+    >
+      <div
+        className={[
+          "absolute inset-x-0 top-0 h-1 bg-gradient-to-r",
+          accentClasses.line,
+        ].join(" ")}
+      />
+      <div
+        className={[
+          "pointer-events-none absolute right-0 top-0 h-24 w-24 rounded-full blur-3xl",
+          accentClasses.bloom,
+        ].join(" ")}
+      />
+      <div className="relative">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            {eyebrow ? (
+              <div
+                className={[
+                  "inline-flex rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.18em]",
+                  accentClasses.pill,
+                ].join(" ")}
+              >
+                {eyebrow}
+              </div>
+            ) : null}
+            <h3 className="mt-3 text-lg font-black tracking-tight text-gray-900">
+              {title}
+            </h3>
+            {description ? (
+              <p className="mt-1 text-sm leading-6 text-gray-600">{description}</p>
+            ) : null}
+          </div>
+        </div>
+        <div className="mt-4">{children}</div>
+      </div>
+    </section>
+  );
+}
+
+function ParentMiniStat({ label, value, tone = "sky" }) {
+  const tones = {
+    sky: "border-sky-200 bg-sky-50 text-sky-900",
+    emerald: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    amber: "border-amber-200 bg-amber-50 text-amber-900",
+    rose: "border-rose-200 bg-rose-50 text-rose-900",
+    gray: "border-gray-200 bg-gray-50 text-gray-900",
+  };
+
+  return (
+    <div className={["rounded-2xl border p-3", tones[tone] || tones.sky].join(" ")}>
+      <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-gray-500">
+        {label}
+      </div>
+      <div className="mt-2 text-xl font-black tracking-tight">{value}</div>
+    </div>
+  );
+}
+
+function ParentDashboardActionCard({
+  href,
+  eyebrow,
+  title,
+  description,
+  meta,
+  tone = "sky",
+  icon,
+  className = "",
+}) {
+  const tones = {
+    sky: {
+      card: "border-sky-100 bg-white hover:border-sky-200 hover:bg-sky-50/70",
+      icon: "bg-sky-100 text-sky-700",
+      meta: "border-sky-200 bg-sky-50 text-sky-700",
+      glow: "bg-sky-100/70",
+    },
+    emerald: {
+      card: "border-emerald-100 bg-white hover:border-emerald-200 hover:bg-emerald-50/70",
+      icon: "bg-emerald-100 text-emerald-700",
+      meta: "border-emerald-200 bg-emerald-50 text-emerald-700",
+      glow: "bg-emerald-100/70",
+    },
+    amber: {
+      card: "border-amber-100 bg-white hover:border-amber-200 hover:bg-amber-50/70",
+      icon: "bg-amber-100 text-amber-700",
+      meta: "border-amber-200 bg-amber-50 text-amber-700",
+      glow: "bg-amber-100/70",
+    },
+    rose: {
+      card: "border-rose-100 bg-white hover:border-rose-200 hover:bg-rose-50/70",
+      icon: "bg-rose-100 text-rose-700",
+      meta: "border-rose-200 bg-rose-50 text-rose-700",
+      glow: "bg-rose-100/70",
+    },
+  };
+  const toneClasses = tones[tone] || tones.sky;
+
+  return (
+    <Link
+      href={href}
+      className={[
+        "group relative overflow-hidden rounded-[26px] border p-4 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg sm:p-5",
+        toneClasses.card,
+        className,
+      ].join(" ")}
+    >
+      <div
+        className={[
+          "pointer-events-none absolute right-0 top-0 h-20 w-20 rounded-full blur-3xl",
+          toneClasses.glow,
+        ].join(" ")}
+      />
+      <div className="relative flex h-full flex-col">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <DashboardIcon tone={tone} className={toneClasses.icon}>
+              {icon}
+            </DashboardIcon>
+            <div
+              className={[
+                "inline-flex rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.18em]",
+                toneClasses.meta,
+              ].join(" ")}
+            >
+              {eyebrow}
+            </div>
+          </div>
+          <svg
+            className="h-5 w-5 shrink-0 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-gray-500"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+        <div className="mt-5">
+          <div className="text-xl font-black leading-tight tracking-tight text-gray-900">
+            {title}
+          </div>
+          <p className="mt-2 max-w-[34ch] text-sm leading-6 text-gray-600">
+            {description}
+          </p>
+        </div>
+        <div className="mt-5 flex items-center justify-between gap-3 border-t border-gray-100 pt-4">
+          <span className="text-sm font-semibold text-gray-600">
+            {meta}
+          </span>
+          <span className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-sm font-extrabold text-gray-900 shadow-sm">
+            Open
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function ParentChildCard({ child, index, gwa }) {
+  const progression = assessProgression(child.birthDate, gwa?.progressStats);
+  const ageLabel = formatAge(child.birthDate);
+  const tone =
+    progression?.status === "ahead"
+      ? "emerald"
+      : progression?.status === "behind"
+        ? "amber"
+        : "sky";
+  const tones = {
+    sky: {
+      card: "border-sky-100 bg-white hover:border-sky-200 hover:bg-sky-50/70",
+      icon: "bg-sky-100 text-sky-700",
+      pill: "border-sky-200 bg-sky-50 text-sky-700",
+      progress: "from-sky-500 to-cyan-500",
+      glow: "bg-sky-100/80",
+    },
+    emerald: {
+      card: "border-emerald-100 bg-white hover:border-emerald-200 hover:bg-emerald-50/70",
+      icon: "bg-emerald-100 text-emerald-700",
+      pill: "border-emerald-200 bg-emerald-50 text-emerald-700",
+      progress: "from-emerald-500 to-teal-500",
+      glow: "bg-emerald-100/80",
+    },
+    amber: {
+      card: "border-amber-100 bg-white hover:border-amber-200 hover:bg-amber-50/70",
+      icon: "bg-amber-100 text-amber-700",
+      pill: "border-amber-200 bg-amber-50 text-amber-700",
+      progress: "from-amber-500 to-orange-500",
+      glow: "bg-amber-100/80",
+    },
+  };
+  const toneClasses = tones[tone] || tones.sky;
+  const progressWidth = Math.max(8, Math.min(Number(gwa?.overall || 0), 100));
+
+  return (
+    <Link
+      href={`/parent/children?childId=${encodeURIComponent(child.id)}`}
+      className={[
+        "group relative overflow-hidden rounded-[28px] border p-5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg",
+        toneClasses.card,
+      ].join(" ")}
+    >
+      <div
+        className={[
+          "pointer-events-none absolute right-0 top-0 h-24 w-24 rounded-full blur-3xl",
+          toneClasses.glow,
+        ].join(" ")}
+      />
+      <div className="relative">
+        <div className="flex items-start justify-between gap-3">
+          <DashboardIcon tone={tone} className={toneClasses.icon}>
+            <span className="text-sm font-black">{initials(child.firstName, child.lastName)}</span>
+          </DashboardIcon>
+          <span
+            className={[
+              "rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.18em]",
+              progression
+                ? toneClasses.pill
+                : "border-gray-200 bg-gray-50 text-gray-600",
+            ].join(" ")}
+          >
+            {progression?.label || "Profile"}
+          </span>
+        </div>
+
+        <div className="mt-5">
+          <div className="text-lg font-black tracking-tight text-gray-900">
+            {child.firstName} {child.lastName || ""}
+          </div>
+          <div className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+            Child {index + 1}
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {ageLabel ? (
+            <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-700">
+              Age {ageLabel}
+            </span>
+          ) : null}
+          <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-700">
+            {child.classRoomId ? "Classroom assigned" : "Classroom pending"}
+          </span>
+        </div>
+
+        {gwa ? (
+          <div className="mt-5 rounded-[22px] border border-gray-200 bg-white/90 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-gray-500">
+                  Overall progress
+                </div>
+                <div className="mt-2 text-2xl font-black tracking-tight text-gray-900">
+                  {gwa.overall}%
+                </div>
+              </div>
+              <div className="text-right text-xs text-gray-500">
+                {gwa.progressStats?.total ? (
+                  <>
+                    <div className="font-semibold text-gray-900">
+                      {gwa.progressStats.completed}/{gwa.progressStats.total}
+                    </div>
+                    <div>steps complete</div>
+                  </>
+                ) : (
+                  <div>Progress syncing</div>
+                )}
+              </div>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-100">
+              <div
+                className={[
+                  "h-full rounded-full bg-gradient-to-r",
+                  toneClasses.progress,
+                ].join(" ")}
+                style={{ width: `${progressWidth}%` }}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="mt-5 rounded-[22px] border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
+            Progress data is still syncing for this child.
+          </div>
+        )}
+
+        <div className="mt-5 inline-flex items-center gap-2 text-sm font-extrabold text-gray-900 transition group-hover:translate-x-0.5">
+          Open full profile
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 function ParentDashboard({
   name,
   children,
+  selectedChild,
   loading,
   error,
   activities,
+  submissions,
   subscriptionSummary,
 }) {
   const visibleChildren = (children || []).slice(0, 10);
@@ -744,15 +1125,56 @@ function ParentDashboard({
     return () => { cancelled = true; };
   }, [childIds]);
 
-  const reminders = [
-    "Admission agreement renewal due this month.",
-    "Health assessment renewal due soon.",
-    "Income eligibility review coming up.",
-  ];
+  const billingHref = buildParentMessageComposeHref({
+    subject: "Billing support request",
+    message:
+      "Hello, I need help with tuition or account billing. Please share the next steps or a payment link when available.",
+  });
+
+  const reminders = useMemo(() => {
+    const reminderItems = (submissions || [])
+      .filter((submission) => submission?.expiresAt)
+      .sort((a, b) => new Date(a.expiresAt) - new Date(b.expiresAt))
+      .slice(0, 3)
+      .map((submission) => {
+        const expiresAt = new Date(submission.expiresAt);
+        const isExpired = expiresAt < new Date();
+        const childLabel = submission.child
+          ? `${submission.child.firstName} ${submission.child.lastName || ""}`.trim()
+          : "Family account";
+
+        return {
+          id: submission.id,
+          title: submission.template?.title || "Form renewal",
+          detail: childLabel,
+          statusLabel: isExpired
+            ? "Expired"
+            : `Due ${expiresAt.toLocaleDateString()}`,
+          tone: isExpired ? "rose" : "amber",
+        };
+      });
+
+    return reminderItems.length
+      ? reminderItems
+      : [
+          {
+            id: "clear",
+            title: "All set for now",
+            detail: "No urgent renewals right now.",
+            statusLabel: "Up to date",
+            tone: "emerald",
+          },
+        ];
+  }, [submissions]);
+
+  const recentActivities = (activities || []).slice(0, 3);
+  const childrenWithProgress = visibleChildren.filter((child) => childGWAs[child.id]).length;
+  const urgentReminderCount = reminders.filter((item) => item.tone !== "emerald").length;
+  const billingTone = subscriptionSummary?.active ? "emerald" : subscriptionSummary ? "amber" : "rose";
 
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_340px]">
-      <section className="min-w-0 space-y-4">
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.45fr)_360px]">
+      <section className="min-w-0 space-y-5">
         <ParentPageHeader
           eyebrow="Family overview"
           title={`Welcome back, ${name}`}
@@ -760,10 +1182,50 @@ function ParentDashboard({
           accent="amber"
           layout="split"
           stats={[
-            { label: "Children", value: visibleChildren.length, hint: "On this account", tone: "sky" },
-            { label: "New alerts", value: (activities || []).length, hint: "Recent visible updates", tone: (activities || []).length ? "amber" : "gray" },
-            { label: "Billing", value: subscriptionSummary?.active ? "Active" : "Review", hint: subscriptionSummary?.centerName || "Center plan", tone: subscriptionSummary?.active ? "emerald" : "amber" },
-            { label: "Next stop", value: "Forms", hint: "Most common parent task", tone: "gray" },
+            {
+              label: "Children",
+              value: visibleChildren.length,
+              hint: "Linked to this account",
+              tone: "sky",
+              icon: (
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                </svg>
+              ),
+            },
+            {
+              label: "Recent updates",
+              value: recentActivities.length,
+              hint: selectedChild ? `Latest feed from ${selectedChild.firstName}` : "Recent visible updates",
+              tone: recentActivities.length ? "amber" : "gray",
+              icon: (
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022 23.848 23.848 0 005.454 1.31m5.715 0a24.255 24.255 0 01-5.715 0m5.715 0a3 3 0 11-5.715 0" />
+                </svg>
+              ),
+            },
+            {
+              label: "Renewals",
+              value: urgentReminderCount ? urgentReminderCount : "Clear",
+              hint: urgentReminderCount ? "Forms needing attention" : "No urgent renewals",
+              tone: urgentReminderCount ? "amber" : "emerald",
+              icon: (
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0119 9.414V19a2 2 0 01-2 2z" />
+                </svg>
+              ),
+            },
+            {
+              label: "Billing",
+              value: subscriptionSummary?.active ? "Active" : "Review",
+              hint: subscriptionSummary?.centerName || "Center plan",
+              tone: subscriptionSummary?.active ? "emerald" : "amber",
+              icon: (
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M3 10.5h18A1.5 1.5 0 0122.5 12v6A1.5 1.5 0 0121 19.5H3A1.5 1.5 0 011.5 18v-6A1.5 1.5 0 013 10.5z" />
+                </svg>
+              ),
+            },
           ]}
           actions={
             <>
@@ -774,42 +1236,76 @@ function ParentDashboard({
         />
 
         <ParentSection
-          title="Quick access"
-          description="The most important parent actions are grouped here instead of being spread across multiple sections."
+          title="Jump back in"
+          description="Each card takes you straight to a common parent task without making you hunt through the portal."
+          className="overflow-hidden border-sky-100 bg-gradient-to-br from-sky-50 via-white to-amber-50/70 shadow-[0_22px_70px_-52px_rgba(14,116,144,0.55)]"
         >
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[1.1fr_1.1fr_0.9fr_0.9fr]">
-            <ParentQuickAction
-              href="/parent/children"
-              title="My children"
-              description="Open daily reports, milestones, meals, and care updates."
-            />
-            <ParentQuickAction
-              href="/parent/progress"
-              title="Progress & goals"
-              description="See completed steps and where support is still needed."
-              tone="emerald"
-            />
-            <ParentQuickAction
-              href="/parent/forms"
-              title="Forms & renewals"
-              description="Review paperwork status and renew expiring records."
-              tone="amber"
-            />
-            <ParentQuickAction
-              href="/parent/policies"
-              title="Policies"
-              description="Quick handbook access for pickup, illness, and procedures."
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <ParentDashboardActionCard
+              href="/parent/messages"
+              eyebrow="Communication"
+              title="Messages & updates"
+              description="See recent teacher notes and jump straight into the parent inbox."
+              meta={
+                recentActivities.length
+                  ? `${recentActivities.length} recent updates`
+                  : "Quiet right now"
+              }
               tone="sky"
+              icon={
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.76l2.904-2.482a2.25 2.25 0 012.927 0l2.904 2.482m0 0l2.904-2.482a2.25 2.25 0 012.927 0l2.904 2.482M6.75 19.5h10.5A2.25 2.25 0 0019.5 17.25v-8.379a2.25 2.25 0 00-.786-1.706l-4.5-3.938a2.25 2.25 0 00-2.928 0l-4.5 3.938A2.25 2.25 0 004.5 8.871v8.379A2.25 2.25 0 006.75 19.5z" />
+                </svg>
+              }
+            />
+            <ParentDashboardActionCard
+              href="/parent/children"
+              eyebrow="Profiles"
+              title="My children"
+              description="Open daily reports, milestones, meals, and classroom information for each child."
+              meta={`${visibleChildren.length} linked profiles`}
+              tone="emerald"
+              icon={
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-1.052 4.5 4.5 0 00-7.482-3.09m.259 3.008A8.958 8.958 0 0112 18c-2.21 0-4.233-.798-5.797-2.121m8.056 1.129A8.966 8.966 0 0112 18c-2.21 0-4.233-.798-5.797-2.121m0 0A5.969 5.969 0 016 12.75a5.969 5.969 0 01.203-1.543m0 0a3.75 3.75 0 117.594 0m-7.594 0a5.969 5.969 0 00-.203 1.543m7.797-1.543a3.75 3.75 0 117.594 0m-7.594 0a5.969 5.969 0 01.203 1.543" />
+                </svg>
+              }
+            />
+            <ParentDashboardActionCard
+              href="/parent/progress"
+              eyebrow="Growth"
+              title="Progress & goals"
+              description="Check completed steps and see where support is still needed across your family."
+              meta={`${childrenWithProgress} summaries ready`}
+              tone="amber"
+              icon={
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18M7.5 14.25l3-3 2.25 2.25L16.5 9" />
+                </svg>
+              }
+            />
+            <ParentDashboardActionCard
+              href="/parent/billing"
+              eyebrow="Account"
+              title="Billing & support"
+              description="Review plan status, expiry dates, and support options without leaving the dashboard."
+              meta={subscriptionSummary?.active ? "Account in good standing" : "Needs review"}
+              tone={billingTone}
+              icon={
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M3 10.5h18A1.5 1.5 0 0122.5 12v6A1.5 1.5 0 0121 19.5H3A1.5 1.5 0 011.5 18v-6A1.5 1.5 0 013 10.5zM16.5 15h.008v.008H16.5V15z" />
+                </svg>
+              }
             />
           </div>
         </ParentSection>
 
         <ParentSection
-          title="My children"
-          description="Open each child to view their activity feed, progression, milestones, and classroom details."
-          action={<ParentButton href="/parent/children" variant="soft">View all</ParentButton>}
+          title="Children at a glance"
+          description="Each profile card gives you a fast read on progress, age, and what to open next."
+          action={<ParentButton href="/parent/children" variant="soft">View all children</ParentButton>}
+          className="overflow-hidden border-amber-100 bg-gradient-to-br from-white via-white to-amber-50/70 shadow-[0_24px_70px_-52px_rgba(217,119,6,0.45)]"
         >
-
           {error ? (
             <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
               {error}
@@ -823,24 +1319,14 @@ function ParentDashboard({
               No children found for this account.
             </div>
           ) : (
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
               {visibleChildren.map((ch, index) => (
-                <Link
+                <ParentChildCard
                   key={ch.id}
-                  href={`/parent/children?childId=${encodeURIComponent(ch.id)}`}
-                  className="rounded-[24px] border border-gray-200 bg-white p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-200 hover:bg-sky-50/70 hover:shadow-md"
-                >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sm font-extrabold text-sky-700">
-                    {initials(ch.firstName, ch.lastName)}
-                  </div>
-                  <div className="mt-3 truncate text-sm font-extrabold text-gray-900">
-                    {ch.firstName} {ch.lastName || ""}
-                  </div>
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Child {index + 1}</div>
-                  {childGWAs[ch.id] != null ? (
-                    <ChildGWACard gwa={childGWAs[ch.id]} birthDate={ch.birthDate} />
-                  ) : null}
-                </Link>
+                  child={ch}
+                  index={index}
+                  gwa={childGWAs[ch.id]}
+                />
               ))}
             </div>
           )}
@@ -848,94 +1334,194 @@ function ParentDashboard({
       </section>
 
       <aside className="space-y-4">
-        <div className="rounded-[24px] border border-gray-200 bg-white p-5">
-          <h3 className="text-base font-extrabold text-gray-900">
-            New messages and alerts
-          </h3>
-          <p className="mt-1 text-sm text-gray-600">
-            A short stream of recent activity that may need your attention.
-          </p>
-          <div className="mt-3 space-y-2">
-            {(activities || []).slice(0, 3).map((a) => (
-              <div key={a.id} className="rounded-2xl border border-gray-200 bg-gradient-to-r from-white to-sky-50/70 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-sm font-semibold text-gray-900">{a.type}</div>
-                  <div className="rounded-full bg-sky-100 px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide text-sky-700">
-                    Update
+        <ParentDashboardPanel
+          eyebrow="Family pulse"
+          title="Today at a glance"
+          description="A quick snapshot of what is ready, what is urgent, and where to look next."
+          accent="sky"
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <ParentMiniStat
+              label="Profiles ready"
+              value={`${childrenWithProgress}/${visibleChildren.length || 0}`}
+              tone="sky"
+            />
+            <ParentMiniStat
+              label="Forms due"
+              value={urgentReminderCount}
+              tone={urgentReminderCount ? "amber" : "emerald"}
+            />
+            <ParentMiniStat
+              label="Recent alerts"
+              value={recentActivities.length}
+              tone={recentActivities.length ? "sky" : "gray"}
+            />
+            <ParentMiniStat
+              label="Billing"
+              value={subscriptionSummary?.active ? "Good" : "Check"}
+              tone={subscriptionSummary?.active ? "emerald" : "amber"}
+            />
+          </div>
+
+          {selectedChild ? (
+            <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+              Latest updates are currently loaded for <span className="font-extrabold">{selectedChild.firstName}</span>.
+            </div>
+          ) : null}
+        </ParentDashboardPanel>
+
+        <ParentDashboardPanel
+          eyebrow="Alerts"
+          title="Recent updates"
+          description="Short, readable updates so you can scan what changed before opening the full conversation."
+          accent="amber"
+        >
+          <div className="space-y-3">
+            {recentActivities.length ? (
+              recentActivities.map((activity) => (
+                <div
+                  key={activity.id}
+                  className="rounded-[22px] border border-gray-200 bg-gradient-to-r from-white to-sky-50/70 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-extrabold text-gray-900">
+                        {activity.type}
+                      </div>
+                      <div className="mt-1 line-clamp-2 text-sm leading-6 text-gray-600">
+                        {activity.notes || "No extra details were added to this update."}
+                      </div>
+                    </div>
+                    <span
+                      className={[
+                        "rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em]",
+                        activity.isBackdated
+                          ? "border-amber-200 bg-amber-50 text-amber-700"
+                          : "border-sky-200 bg-sky-50 text-sky-700",
+                      ].join(" ")}
+                    >
+                      {activity.isBackdated ? "Backdated" : "Update"}
+                    </span>
+                  </div>
+                  <div className="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                    {formatDashboardTimestamp(activity.createdAt)}
                   </div>
                 </div>
-                <div className="mt-1 text-xs text-gray-600">{a.notes || "-"}</div>
-              </div>
-            ))}
-            {(activities || []).length === 0 ? (
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+              ))
+            ) : (
+              <div className="rounded-[22px] border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
                 No new alerts right now.
               </div>
-            ) : null}
+            )}
           </div>
-          <ParentButton href="/parent/messages" variant="secondary" className="mt-3 w-full">
-            Go to messages
-          </ParentButton>
-        </div>
 
-        <div className="rounded-[24px] border border-gray-200 bg-white p-5">
-          <h3 className="text-base font-extrabold text-gray-900">
-            Renewal reminders
-          </h3>
-          <div className="mt-3 space-y-2">
+          <ParentButton href="/parent/messages" variant="secondary" className="mt-4 w-full">
+            Open messages
+          </ParentButton>
+        </ParentDashboardPanel>
+
+        <ParentDashboardPanel
+          eyebrow="Forms"
+          title="Renewal reminders"
+          description="These items are pulled forward so paperwork does not get buried behind other dashboard content."
+          accent={urgentReminderCount ? "amber" : "emerald"}
+        >
+          <div className="space-y-3">
             {reminders.map((item) => (
               <div
-                key={item}
-                className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
+                key={item.id}
+                className={[
+                  "rounded-[22px] border p-4",
+                  item.tone === "emerald"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                    : item.tone === "rose"
+                      ? "border-rose-200 bg-rose-50 text-rose-900"
+                      : "border-amber-200 bg-amber-50 text-amber-900",
+                ].join(" ")}
               >
-                {item}
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-extrabold">{item.title}</div>
+                    <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] opacity-80">
+                      {item.detail}
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-white/70 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em]">
+                    {item.statusLabel}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
-        </div>
 
-        <div className="rounded-[24px] border border-gray-200 bg-white p-5">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-extrabold text-gray-900">Billing snapshot</h3>
-            {subscriptionSummary ? (
-              <span className="text-xs font-semibold text-gray-500">
-                {subscriptionSummary.tier}
-              </span>
-            ) : null}
-          </div>
+          <ParentButton href="/parent/forms" variant="secondary" className="mt-4 w-full">
+            Review forms
+          </ParentButton>
+        </ParentDashboardPanel>
+
+        <ParentDashboardPanel
+          eyebrow="Billing"
+          title="Billing snapshot"
+          description="One place to confirm plan status and request support without leaving the dashboard."
+          accent={billingTone}
+        >
           {subscriptionSummary ? (
-            <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
-              <div className="font-semibold text-gray-900">
-                {subscriptionSummary.centerName}
-              </div>
-              <div className="mt-1">
-                Status:{" "}
-                <span className="font-semibold">
-                  {subscriptionSummary.active ? "Active" : "Inactive"}
-                </span>
-              </div>
-              <div className="mt-1">
-                Expires:{" "}
-                <span className="font-semibold">
-                  {subscriptionSummary.expiresAt
-                    ? subscriptionSummary.expiresAt.toLocaleDateString()
-                    : "-"}
-                </span>
-              </div>
-                      <button
-                        type="button"
-                        className="mt-3 w-full rounded-xl bg-blue-600 px-3 py-2 text-sm font-extrabold text-white hover:bg-blue-700"
-                        onClick={() => alert("Billing flow not implemented yet")}
-                      >
-                        Request payment link
-                      </button>
+            <>
+              <div className="rounded-[22px] border border-gray-200 bg-gray-50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-extrabold text-gray-900">
+                      {subscriptionSummary.centerName}
                     </div>
-                  ) : (
-                    <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                      Billing details not available yet.
+                    <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                      {subscriptionSummary.tier}
+                    </div>
+                  </div>
+                  <span
+                    className={[
+                      "rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em]",
+                      subscriptionSummary.active
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border-amber-200 bg-amber-50 text-amber-700",
+                    ].join(" ")}
+                  >
+                    {subscriptionSummary.active ? "Active" : "Needs review"}
+                  </span>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <ParentMiniStat
+                    label="Status"
+                    value={subscriptionSummary.active ? "Active" : "Inactive"}
+                    tone={subscriptionSummary.active ? "emerald" : "amber"}
+                  />
+                  <ParentMiniStat
+                    label="Expires"
+                    value={
+                      subscriptionSummary.expiresAt
+                        ? subscriptionSummary.expiresAt.toLocaleDateString()
+                        : "-"
+                    }
+                    tone="gray"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <ParentButton href="/parent/billing" variant="secondary" className="w-full">
+                  Open billing
+                </ParentButton>
+                <ParentButton href={billingHref} className="w-full">
+                  Request support
+                </ParentButton>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-[22px] border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
+              Billing details are not available yet.
             </div>
           )}
-        </div>
+        </ParentDashboardPanel>
       </aside>
     </div>
   );
@@ -968,57 +1554,6 @@ function QuickTile({ title, subtitle, href, disabled = false }) {
       <div className="font-extrabold text-gray-900">{title}</div>
       <div className="mt-1 text-sm text-gray-600">{subtitle}</div>
     </Link>
-  );
-}
-
-function ChildGWACard({ gwa, birthDate }) {
-  if (!gwa) return null;
-
-  const progression = assessProgression(birthDate, gwa.progressStats);
-  const ageLabel = formatAge(birthDate);
-
-  return (
-    <div className="mt-2 space-y-1">
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] font-semibold text-gray-600">GWA</span>
-        <span
-          className={[
-            "text-xs font-extrabold",
-            gwa.overall >= 75
-              ? "text-emerald-600"
-              : gwa.overall >= 50
-                ? "text-amber-600"
-                : "text-rose-600",
-          ].join(" ")}
-        >
-          {gwa.overall}%
-        </span>
-      </div>
-      {ageLabel && (
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] text-gray-500">Age</span>
-          <span className="text-[10px] font-semibold text-gray-700">{ageLabel}</span>
-        </div>
-      )}
-      {gwa.progressStats && gwa.progressStats.total > 0 && (
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] text-gray-500">Steps</span>
-          <span className="text-[10px] font-semibold text-gray-700">
-            {gwa.progressStats.completed}/{gwa.progressStats.total} ({gwa.progressStats.completionRate}%)
-          </span>
-        </div>
-      )}
-      {progression && (
-        <div className={[
-          "mt-1 rounded-lg border px-2 py-1 text-center text-[10px] font-extrabold",
-          progression.bg,
-          progression.border,
-          progression.color,
-        ].join(" ")}>
-          {progression.label}
-        </div>
-      )}
-    </div>
   );
 }
 

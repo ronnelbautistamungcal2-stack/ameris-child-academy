@@ -9,6 +9,7 @@ import {
 } from "@/components/parent/ParentUI";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
+import { buildParentMessageComposeHref } from "@/lib/parentSupport";
 import { useEffect, useMemo, useState } from "react";
 
 function formatDate(value) {
@@ -69,6 +70,12 @@ export default function ParentBilling() {
     };
   }, [centers, children]);
 
+  const generalBillingHref = buildParentMessageComposeHref({
+    subject: "Billing support request",
+    message:
+      "Hello, I need help with tuition or account billing. Please share the next steps or a payment link when available.",
+  });
+
   return (
     <ParentLayout title="Billing">
       <div className="space-y-4">
@@ -84,7 +91,7 @@ export default function ParentBilling() {
             { label: "Active plans", value: summary.activeCount, hint: "Currently in good standing", tone: summary.activeCount ? "emerald" : "amber" },
             { label: "Renewals soon", value: summary.upcomingRenewals, hint: "Next 45 days", tone: summary.upcomingRenewals ? "amber" : "gray" },
           ]}
-          actions={<ParentButton variant="secondary" onClick={() => alert("Online billing is not implemented yet.")}>Request payment link</ParentButton>}
+          actions={<ParentButton href={generalBillingHref} variant="secondary">Request payment link</ParentButton>}
         />
 
         {error ? (
@@ -151,9 +158,15 @@ export default function ParentBilling() {
                       </div>
 
                       <div className="mt-4 flex flex-wrap gap-2">
-                          <ParentButton variant="soft" onClick={() => alert("Online billing is not implemented yet.")}>
-                            Pay now
-                          </ParentButton>
+                        <ParentButton
+                          href={buildParentMessageComposeHref({
+                            subject: `Billing support for ${item.centerName}`,
+                            message: `Hello, I need help with billing for ${item.centerName}. Please share the next steps or a payment link when available.`,
+                          })}
+                          variant="soft"
+                        >
+                          Request payment link
+                        </ParentButton>
                         <ParentButton href="/parent/forms" variant="secondary">
                           Review forms
                         </ParentButton>
@@ -178,7 +191,7 @@ export default function ParentBilling() {
                   description="Many billing delays start with missing renewals or incomplete paperwork."
                 />
                 <ParentQuickAction
-                  href="/parent/messages"
+                  href={generalBillingHref}
                   title="Message the center"
                   description="Ask for a payment link, invoice clarification, or account correction."
                   tone="emerald"

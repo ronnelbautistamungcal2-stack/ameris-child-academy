@@ -5,7 +5,9 @@ function arr(v) {
 function formatDate(v) {
   if (!v) return "-";
   const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? "-" : d.toLocaleDateString();
+  return Number.isNaN(d.getTime())
+    ? "-"
+    : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(d);
 }
 
 const AGE_GROUPS = [
@@ -30,37 +32,39 @@ function ageInMonths(birthDate) {
 function getAgeGroup(birthDate) {
   const months = ageInMonths(birthDate);
   if (months === null) return null;
-  return AGE_GROUPS.find((g) => months >= g.min && months <= g.max) || null;
+  return AGE_GROUPS.find((group) => months >= group.min && months <= group.max) || null;
 }
 
 function formatAge(birthDate) {
   const months = ageInMonths(birthDate);
   if (months === null) return "";
   const years = Math.floor(months / 12);
-  const rem = months % 12;
-  if (years === 0) return `${rem} months`;
-  if (rem === 0) return `${years} year${years > 1 ? "s" : ""}`;
-  return `${years}y ${rem}mo`;
+  const remainingMonths = months % 12;
+  if (years === 0) return `${remainingMonths} months`;
+  if (remainingMonths === 0) return `${years} year${years > 1 ? "s" : ""}`;
+  return `${years}y ${remainingMonths}mo`;
 }
 
 function inferDomain(row) {
-  const cat = String(row?.lesson?.category?.name || "").toLowerCase();
+  const category = String(row?.lesson?.category?.name || "").toLowerCase();
   const title = String(row?.lesson?.title || "").toLowerCase();
-  const text = `${cat} ${title}`;
+  const text = `${category} ${title}`;
   if (text.includes("social") || text.includes("emotion") || text.includes("behavior")) return "Social-Emotional";
   if (text.includes("physical") || text.includes("motor") || text.includes("movement")) return "Physical";
-  if (text.includes("language") || text.includes("literacy") || text.includes("reading") || text.includes("phonics")) return "Language & Literacy";
+  if (text.includes("language") || text.includes("literacy") || text.includes("reading") || text.includes("phonics")) {
+    return "Language & Literacy";
+  }
   if (text.includes("creative") || text.includes("art") || text.includes("music")) return "Creative";
   return "Cognitive";
 }
 
 function isAgeRelevant(row, ageGroupKey) {
   if (!ageGroupKey) return true;
-  const catAge = String(row?.lesson?.category?.ageRange || "").toLowerCase().trim();
-  if (!catAge) return true;
-  const group = AGE_GROUPS.find((g) => g.key === ageGroupKey);
+  const categoryAge = String(row?.lesson?.category?.ageRange || "").toLowerCase().trim();
+  if (!categoryAge) return true;
+  const group = AGE_GROUPS.find((entry) => entry.key === ageGroupKey);
   if (!group) return true;
-  return catAge.includes(ageGroupKey) || catAge.includes(group.label.toLowerCase());
+  return categoryAge.includes(ageGroupKey) || categoryAge.includes(group.label.toLowerCase());
 }
 
 function recommendationForAge(status, months, domain) {
@@ -69,27 +73,25 @@ function recommendationForAge(status, months, domain) {
   const isPreK = months !== null && months >= 36 && months <= 59;
 
   if (status === "FAILED") {
-    if (isInfant) return `Break this ${domain} activity into sensory-based micro-steps. Use repetition with visual and tactile cues, then reassess in 1-2 weeks.`;
-    if (isToddler) return `Re-introduce this ${domain} lesson through play-based activities. Use shorter sessions (5-10 min) with hands-on materials, reassess in 1-2 weeks.`;
-    if (isPreK) return `Re-teach this ${domain} lesson in smaller steps using visual aids and group activities. Reassess within 2-3 sessions.`;
-    return `Review this ${domain} lesson with guided practice and one-on-one support. Reassess within 2-3 sessions.`;
+    if (isInfant) return `Break this ${domain} activity into sensory-based micro-steps and repeat it during routines for the next 1-2 weeks.`;
+    if (isToddler) return `Re-introduce this ${domain} goal through short play-based sessions with hands-on materials and check again next week.`;
+    if (isPreK) return `Re-teach this ${domain} lesson in smaller chunks with visual cues, then revisit it after 2-3 classroom sessions.`;
+    return `Review this ${domain} lesson with guided practice and extra one-on-one support before moving forward.`;
   }
 
   if (status === "IN_PROGRESS") {
-    if (isInfant) return `Continue daily ${domain} exposure through caregiver interactions. Track small wins and repeat activities during routine care.`;
-    if (isToddler) return `Add guided ${domain} practice during daily routines. Encourage parent follow-up with simple at-home activities this week.`;
-    if (isPreK) return `Reinforce this ${domain} skill with structured practice activities. Add parent follow-up and peer-learning opportunities this week.`;
-    return `Continue guided ${domain} practice with increasing independence. Add parent follow-up activities this week.`;
+    if (isInfant) return `Continue daily ${domain} exposure through caregiver interaction and note small wins during routine care.`;
+    if (isToddler) return `Add guided ${domain} practice into home routines and keep the activity short, playful, and repeatable this week.`;
+    if (isPreK) return `Reinforce this ${domain} skill with structured practice and simple follow-up activities at home this week.`;
+    return `Keep reinforcing this ${domain} skill with guided practice until the center logs a stronger level of independence.`;
   }
 
-  // NOT_STARTED
-  if (isInfant) return `Introduce this ${domain} activity through gentle sensory play and caregiver modeling during daily routines.`;
-  if (isToddler) return `Start this ${domain} lesson with short, engaging play-based sessions. Use songs, stories, or hands-on materials.`;
-  if (isPreK) return `Schedule focused ${domain} practice sessions. Begin with teacher-guided activities, then transition to independent practice.`;
-  return `Schedule focused ${domain} practice sessions and monitor progress checkpoints.`;
+  if (isInfant) return `Introduce this ${domain} activity through gentle sensory play and caregiver modeling during regular routines.`;
+  if (isToddler) return `Start this ${domain} lesson with short, engaging play sessions using songs, stories, or hands-on materials.`;
+  if (isPreK) return `Schedule focused ${domain} practice and start with teacher-guided or parent-guided activities before expecting independence.`;
+  return `Plan a focused ${domain} practice block and watch for the first progress checkpoint from the center.`;
 }
 
-// Priority: FAILED > IN_PROGRESS > NOT_STARTED, then age-relevant first
 function priorityScore(row, ageGroupKey) {
   let score = 0;
   if (row.status === "FAILED") score += 300;
@@ -98,11 +100,51 @@ function priorityScore(row, ageGroupKey) {
 
   if (isAgeRelevant(row, ageGroupKey)) score += 50;
 
-  // More recent updates get slight priority
   const updated = new Date(row.updatedAt || row.createdAt || 0).getTime();
-  score += updated / 1e15; // tiny tiebreaker
-
+  score += updated / 1e15;
   return score;
+}
+
+function statusMeta(status) {
+  if (status === "FAILED") {
+    return {
+      label: "Needs reteaching",
+      eyebrow: "Priority support",
+      badge: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/50 dark:text-rose-200",
+      card: "border-rose-200 dark:border-rose-900/70",
+    };
+  }
+  if (status === "IN_PROGRESS") {
+    return {
+      label: "In progress",
+      eyebrow: "Keep building",
+      badge: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/50 dark:text-amber-200",
+      card: "border-amber-200 dark:border-amber-900/70",
+    };
+  }
+  return {
+    label: "Not started",
+    eyebrow: "Ready to begin",
+    badge: "border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-slate-800 dark:text-gray-200",
+    card: "border-gray-200 dark:border-gray-700",
+  };
+}
+
+function SummaryStat({ label, value, hint, tone = "rose" }) {
+  const tones = {
+    rose: "border-rose-200 bg-white/80 text-rose-900 dark:border-rose-900/70 dark:bg-slate-900/80 dark:text-rose-100",
+    amber: "border-amber-200 bg-white/80 text-amber-900 dark:border-amber-900/70 dark:bg-slate-900/80 dark:text-amber-100",
+    emerald: "border-emerald-200 bg-white/80 text-emerald-900 dark:border-emerald-900/70 dark:bg-slate-900/80 dark:text-emerald-100",
+    sky: "border-sky-200 bg-white/80 text-sky-900 dark:border-sky-900/70 dark:bg-slate-900/80 dark:text-sky-100",
+  };
+
+  return (
+    <div className={`flex h-full min-h-[88px] flex-col rounded-[18px] border p-3 shadow-sm ${tones[tone] || tones.rose}`}>
+      <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] opacity-70">{label}</div>
+      <div className="mt-2 break-words text-[clamp(1.05rem,1.8vw,1.4rem)] font-black leading-tight tracking-tight">{value}</div>
+      <div className="mt-auto pt-2 text-[11px] leading-4 text-gray-600 dark:text-gray-300">{hint}</div>
+    </div>
+  );
 }
 
 export default function CatchupPlansPanel({ progressRows, childName, birthDate }) {
@@ -112,16 +154,15 @@ export default function CatchupPlansPanel({ progressRows, childName, birthDate }
   const allRows = arr(progressRows);
 
   const totalSteps = allRows.length;
-  const completedSteps = allRows.filter((r) => r?.status === "COMPLETED" || r?.status === "PASSED").length;
+  const completedSteps = allRows.filter((row) => row?.status === "COMPLETED" || row?.status === "PASSED").length;
   const completionRate = totalSteps ? Math.round((completedSteps / totalSteps) * 100) : 0;
 
   const pending = allRows
     .filter((row) => ["FAILED", "NOT_STARTED", "IN_PROGRESS"].includes(row?.status))
     .sort((a, b) => priorityScore(b, ageGroup?.key) - priorityScore(a, ageGroup?.key))
-    .slice(0, 12)
+    .slice(0, 8)
     .map((row, index) => {
       const domain = inferDomain(row);
-      const relevant = isAgeRelevant(row, ageGroup?.key);
       return {
         id: row.id || `catchup-${index}`,
         title: row.lesson?.title || `Goal ${row.goalIndex || 1}`,
@@ -129,97 +170,153 @@ export default function CatchupPlansPanel({ progressRows, childName, birthDate }
         domain,
         when: row.updatedAt || row.createdAt || null,
         recommendation: recommendationForAge(row.status, months, domain),
-        ageRelevant: relevant,
+        ageRelevant: isAgeRelevant(row, ageGroup?.key),
         category: row.lesson?.category?.name || "",
       };
     });
 
-  const failedCount = pending.filter((p) => p.status === "FAILED").length;
-  const inProgressCount = pending.filter((p) => p.status === "IN_PROGRESS").length;
-  const notStartedCount = pending.filter((p) => p.status === "NOT_STARTED").length;
-
-  const statusColors = {
-    FAILED: "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/30",
-    IN_PROGRESS: "border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/30",
-    NOT_STARTED: "border-gray-200 bg-gray-50 dark:border-gray-600 dark:bg-gray-800",
-  };
-  const statusTextColors = {
-    FAILED: "text-red-700 dark:text-red-400",
-    IN_PROGRESS: "text-amber-700 dark:text-amber-400",
-    NOT_STARTED: "text-gray-600 dark:text-gray-400",
-  };
+  const failedCount = pending.filter((item) => item.status === "FAILED").length;
+  const inProgressCount = pending.filter((item) => item.status === "IN_PROGRESS").length;
+  const notStartedCount = pending.filter((item) => item.status === "NOT_STARTED").length;
+  const ageAlignedCount = pending.filter((item) => item.ageRelevant).length;
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
-      <h4 className="text-base font-extrabold text-gray-900 dark:text-gray-100">Catch-up Plans</h4>
-      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-        {childName
-          ? `Auto-generated catch-up actions for ${childName}${ageLabel ? ` (${ageLabel}${ageGroup ? `, ${ageGroup.label} group` : ""})` : ""}.`
-          : "Auto-generated catch-up actions based on progress records."}
-      </p>
-
-      {totalSteps > 0 && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <span className="rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
-            {completedSteps}/{totalSteps} steps completed ({completionRate}%)
-          </span>
-          {failedCount > 0 && (
-            <span className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700">
-              {failedCount} needs reteaching
-            </span>
-          )}
-          {inProgressCount > 0 && (
-            <span className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
-              {inProgressCount} in progress
-            </span>
-          )}
-          {notStartedCount > 0 && (
-            <span className="rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-600">
-              {notStartedCount} not started
-            </span>
-          )}
+    <div className="space-y-3">
+      <div className="rounded-[24px] border border-rose-200 bg-gradient-to-br from-white via-rose-50/80 to-amber-50 p-4 shadow-sm dark:border-rose-900/60 dark:bg-gradient-to-br dark:from-slate-950 dark:via-rose-950/25 dark:to-amber-950/20">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-2xl">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-rose-600">Support plan</div>
+            <h4 className="mt-1.5 text-xl font-black tracking-tight text-gray-900 dark:text-gray-100">Catch-up plans</h4>
+            <p className="mt-1.5 text-[13px] leading-5 text-gray-700 dark:text-gray-300">
+              {childName
+                ? `Focused follow-up actions for ${childName}${ageLabel ? ` (${ageLabel}${ageGroup ? `, ${ageGroup.label}` : ""})` : ""}.`
+                : "Focused follow-up actions based on current progress records."}
+            </p>
+          </div>
+          <div className="rounded-full border border-white/70 bg-white/80 px-3 py-1.5 text-[13px] font-semibold text-gray-700 shadow-sm dark:border-gray-700 dark:bg-slate-900/90 dark:text-gray-200">
+            {pending.length ? `${pending.length} active plan${pending.length !== 1 ? "s" : ""}` : "All goals are on track"}
+          </div>
         </div>
-      )}
+
+        <div className="mt-4 grid grid-cols-2 gap-2.5 xl:grid-cols-4">
+          <SummaryStat
+            label="Plans ready"
+            value={pending.length}
+            hint="Current priorities surfaced for parent follow-up"
+            tone="rose"
+          />
+          <SummaryStat
+            label="Age-aligned"
+            value={ageAlignedCount}
+            hint="Plans matched to the child age group"
+            tone="amber"
+          />
+          <SummaryStat
+            label="Completed"
+            value={completedSteps}
+            hint="Goals already cleared by the center"
+            tone="emerald"
+          />
+          <SummaryStat
+            label="Coverage"
+            value={`${completionRate}%`}
+            hint="Share of tracked steps already completed"
+            tone="sky"
+          />
+        </div>
+      </div>
 
       {pending.length ? (
-        <div className="mt-3 space-y-2">
-          {pending.map((item) => (
-            <div
-              key={item.id}
-              className={[
-                "rounded-xl border p-3",
-                statusColors[item.status] || "border-gray-200 bg-gray-50",
-              ].join(" ")}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">{item.title}</div>
-                {item.ageRelevant && ageGroup ? (
-                  <span className="shrink-0 rounded-md border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                    Age-appropriate
-                  </span>
-                ) : null}
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_260px] 2xl:grid-cols-[minmax(0,1.05fr)_280px]">
+          <div className="space-y-2.5">
+            {pending.map((item) => {
+              const meta = statusMeta(item.status);
+              return (
+                <div key={item.id} className={`rounded-[22px] border bg-white p-4 shadow-sm dark:bg-slate-900 ${meta.card}`}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                        {meta.eyebrow}
+                      </div>
+                      <div className="mt-1 text-sm font-black tracking-tight text-gray-900 dark:text-gray-100">{item.title}</div>
+                    </div>
+                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-extrabold ${meta.badge}`}>
+                      {meta.label}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-semibold text-gray-700 dark:border-gray-700 dark:bg-slate-800 dark:text-gray-200">
+                      {item.domain}
+                    </span>
+                    {item.category ? (
+                      <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-semibold text-gray-700 dark:border-gray-700 dark:bg-slate-800 dark:text-gray-200">
+                        {item.category}
+                      </span>
+                    ) : null}
+                    <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-semibold text-gray-700 dark:border-gray-700 dark:bg-slate-800 dark:text-gray-200">
+                      Updated {formatDate(item.when)}
+                    </span>
+                    {item.ageRelevant ? (
+                      <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-200">
+                        Age-appropriate
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-3 rounded-[16px] border border-gray-200 bg-gray-50/80 p-3.5 dark:border-gray-700 dark:bg-slate-800/90">
+                    <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                      Suggested next move
+                    </div>
+                    <div className="mt-2 text-[13px] leading-5 text-gray-700 dark:text-gray-200">{item.recommendation}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="space-y-2.5">
+            <div className="rounded-[22px] border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-slate-900">
+              <div className="text-base font-black tracking-tight text-gray-900 dark:text-gray-100">How parents can use this</div>
+              <div className="mt-3 space-y-2.5 text-[13px] leading-5 text-gray-700 dark:text-gray-300">
+                <p>Start with plans marked "Needs reteaching" because those are the clearest signals that a skill needs extra repetition.</p>
+                <p>Use the domain labels to ask sharper questions during pickup, for example whether support is needed in language, behavior, or motor work.</p>
+                <p>Once the center marks a plan as completed or passed, it will drop out of this view and remain reflected in overall progress.</p>
               </div>
-              <div className="mt-1 flex flex-wrap gap-x-3 text-xs">
-                <span className={["font-semibold", statusTextColors[item.status] || "text-gray-600"].join(" ")}>
-                  {item.status.replace("_", " ")}
-                </span>
-                <span className="text-gray-500">
-                  {item.domain}
-                </span>
-                {item.category ? (
-                  <span className="text-gray-400">{item.category}</span>
-                ) : null}
-                <span className="text-gray-400">
-                  Updated: {formatDate(item.when)}
-                </span>
-              </div>
-              <div className="mt-2 text-xs text-gray-700 dark:text-gray-300">{item.recommendation}</div>
             </div>
-          ))}
+
+            <div className="rounded-[22px] border border-gray-200 bg-gray-50/90 p-4 shadow-sm dark:border-gray-800 dark:bg-slate-900">
+              <div className="text-base font-black tracking-tight text-gray-900 dark:text-gray-100">Priority snapshot</div>
+              <div className="mt-3 space-y-2.5">
+                {[
+                  { label: "Needs reteaching", value: failedCount, tone: "bg-rose-400" },
+                  { label: "In progress", value: inProgressCount, tone: "bg-amber-400" },
+                  { label: "Not started", value: notStartedCount, tone: "bg-gray-400" },
+                ].map((item) => {
+                  const width = pending.length ? Math.max((item.value / pending.length) * 100, item.value ? 10 : 0) : 0;
+                  return (
+                    <div key={item.label}>
+                      <div className="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-200">
+                        <span>{item.label}</span>
+                        <span>{item.value}</span>
+                      </div>
+                      <div className="mt-1.5 h-2 rounded-full bg-white dark:bg-slate-800">
+                        <div className={`h-full rounded-full ${item.tone}`} style={{ width: `${width}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
       ) : (
-        <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
-          No catch-up plans needed right now. All steps are on track!
+        <div className="rounded-[24px] border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5 shadow-sm dark:border-emerald-900/60 dark:bg-gradient-to-br dark:from-emerald-950/25 dark:to-slate-950">
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-emerald-700">Good standing</div>
+          <div className="mt-1.5 text-xl font-black tracking-tight text-gray-900 dark:text-gray-100">No catch-up plans needed right now</div>
+          <div className="mt-1.5 text-[13px] leading-5 text-gray-700 dark:text-gray-300">
+            Every tracked step is currently on pace or already completed. This tab will automatically surface new support items if progress changes.
+          </div>
         </div>
       )}
     </div>

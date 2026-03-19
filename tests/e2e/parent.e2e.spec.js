@@ -66,6 +66,22 @@ test.describe("Parent Workflows", () => {
     await expect(page.locator("main")).toBeVisible();
   });
 
+  test("billing request opens prefilled compose flow", async ({ page }) => {
+    await page.goto("/parent/billing");
+    await waitForLoadingDone(page);
+
+    await page.getByRole("link", { name: "Request payment link" }).first().click();
+
+    await expect(page).toHaveURL(/\/parent\/messages/, { timeout: 10000 });
+    await expect(page.getByRole("heading", { name: "New Conversation" })).toBeVisible();
+    await expect(
+      page.locator('input[placeholder="e.g. Regarding attendance..."]'),
+    ).toHaveValue("Billing support request");
+    await expect(
+      page.locator('textarea[placeholder="Type your message..."]'),
+    ).toHaveValue(/billing/i);
+  });
+
   test("sign out works from parent portal", async ({ page }) => {
     await page.click("text=Sign Out");
     await expect(page).toHaveURL(/\/login/, { timeout: 10000 });

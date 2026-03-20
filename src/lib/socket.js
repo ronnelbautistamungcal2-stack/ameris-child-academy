@@ -6,12 +6,32 @@ function getIoInstance() {
   return io;
 }
 
+function isAllowedSocketOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+
+  try {
+    const originUrl = new URL(origin);
+    const requestHost = String(
+      req.headers["x-forwarded-host"] || req.headers.host || "",
+    ).toLowerCase();
+
+    if (!requestHost) return true;
+    return originUrl.host.toLowerCase() === requestHost;
+  } catch {
+    return false;
+  }
+}
+
 function initializeSocket(server) {
   if (!io) {
     io = new Server(server, {
       cors: {
-        origin: process.env.NEXTAUTH_URL || "http://localhost:3000",
+        origin: true,
         credentials: true,
+      },
+      allowRequest: (req, callback) => {
+        callback(null, isAllowedSocketOrigin(req));
       },
     });
 

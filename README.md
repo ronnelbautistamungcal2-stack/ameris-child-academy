@@ -26,6 +26,10 @@ npm run prisma:seed
 npm run dev
 ```
 
+The custom server binds to `0.0.0.0` by default, so other devices on the same network can open the app at `http://<this-device-ip>:3000`. If Windows Firewall prompts for Node.js access, allow it on your private network.
+
+For local/LAN clones, leave `NEXTAUTH_URL` unset and keep `AUTH_TRUST_HOST=true` so authentication uses the current machine's host automatically. Only set `NEXTAUTH_URL` / `NEXT_PUBLIC_SITE_URL` when you want one fixed public URL or domain.
+
 ## What's Included
 
 ### Core Files

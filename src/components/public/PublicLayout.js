@@ -8,7 +8,8 @@ export default function PublicLayout({ title, description, children }) {
   const router = useRouter();
   const pageTitle = title ? `${title} | ${SITE_NAME}` : SITE_NAME;
   const metaDescription = description || SITE_TAGLINE;
-  const siteUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "";
   const canonicalPath = (router.asPath || "/").split("?")[0].split("#")[0];
   const canonicalUrl = `${siteUrl}${canonicalPath === "/" ? "" : canonicalPath}`;
   const socialImage = `${siteUrl}/icons/icon-512.png`;

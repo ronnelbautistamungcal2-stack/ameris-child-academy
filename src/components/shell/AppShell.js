@@ -314,7 +314,7 @@ export default function AppShell({
                 </div>
 
                 <div className="mt-10 border-t border-gray-200 pt-6 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                  © {new Date().getFullYear()} Ameris Childcare Management. All rights reserved.
+                  Copyright {new Date().getFullYear()} Ameris Childcare Management. All rights reserved.
                 </div>
               </div>
             </footer>
@@ -445,6 +445,16 @@ function MobileSidebar({ onClose, children }) {
         onClick={onClose}
       />
       <div ref={sidebarRef} className="absolute inset-y-0 left-0 w-80 max-w-[85vw] shadow-xl animate-[slideInLeft_0.25s_ease-out]">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close navigation"
+          className="absolute right-3 top-3 z-10 inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-700 shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+        >
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
         {children}
       </div>
     </div>

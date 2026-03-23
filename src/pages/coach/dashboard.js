@@ -155,7 +155,7 @@ export default function CoachDashboard() {
                     value={String(teachers.length)}
                     hint="Assigned to this center"
                     tone="sky"
-                    href="/coach/messages"
+                    href={`/coach/messages?centerId=${centerId}`}
                     icon={<TeamIcon />}
                   />
                   <CoachMetricCard
@@ -227,7 +227,7 @@ export default function CoachDashboard() {
                 description="See who is assigned where and jump directly into coaching actions."
                 action={
                   <Link
-                    href="/coach/messages"
+                    href={`/coach/messages?centerId=${centerId}`}
                     className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-black uppercase tracking-[0.14em] text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
                   >
                     Message Teachers
@@ -515,7 +515,7 @@ export default function CoachDashboard() {
                 )}
               </CoachPanel>
 
-              <CoachPanel title="Operational Snapshot" description="A quick read on today’s current coaching posture.">
+              <CoachPanel title="Operational Snapshot" description="A quick read on today's current coaching posture.">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
                   <SnapshotRow
                     label="Open follow-ups"

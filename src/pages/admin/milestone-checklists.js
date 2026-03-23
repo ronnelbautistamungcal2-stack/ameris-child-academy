@@ -573,7 +573,7 @@ export default function AdminMilestoneChecklists() {
               disabled={saving || !centerId}
               style={primaryButton}
             >
-              {saving ? "Savingâ€¦" : "Create Plan"}
+              {saving ? "Saving..." : "Create Plan"}
             </button>
           </div>
         </form>
@@ -583,7 +583,7 @@ export default function AdminMilestoneChecklists() {
             Existing plans for this period
           </h3>
           {loading ? (
-            <p>Loadingâ€¦</p>
+            <p>Loading...</p>
           ) : !centerId ? (
             <p style={{ color: "#6b7280" }}>Select a center.</p>
           ) : existingPlans.length === 0 ? (
@@ -606,12 +606,12 @@ export default function AdminMilestoneChecklists() {
                       <div
                         style={{ color: "#6b7280", marginTop: 4, fontSize: 13 }}
                       >
-                        {p.description || "â€”"}
+                        {p.description || "No description"}
                       </div>
                       <div
                         style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}
                       >
-                        {(p.items || []).length} items â€¢ {p.period} â€¢{" "}
+                        {(p.items || []).length} items | {p.period} |{" "}
                         {new Date(p.periodStart).toLocaleDateString()}
                       </div>
                     </div>

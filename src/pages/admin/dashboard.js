@@ -93,8 +93,12 @@ export default function AdminDashboard() {
             <div>
               <h2 className="text-lg font-extrabold text-gray-900">Dashboard</h2>
               <p className="mt-1 text-sm text-gray-600">
-                {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-                {" · "}Attendance, compliance & alerts
+                {new Date().toLocaleDateString("en-US", {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                })}
+                {" | "}Attendance, compliance & alerts
               </p>
             </div>
 
@@ -107,7 +111,7 @@ export default function AdminDashboard() {
                 onChange={(e) => setCenterId(e.target.value)}
                 className="mt-1 w-72 max-w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
               >
-                <option value="">Select a center…</option>
+                <option value="">Select a center...</option>
                 {centers.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -138,7 +142,7 @@ export default function AdminDashboard() {
                 value={
                   attendanceSummary
                     ? `${attendanceSummary.checkedIn} / ${attendanceSummary.total}`
-                    : "—"
+                    : "-"
                 }
                 subtitle="Children checked in today"
                 href={`/admin/children?centerId=${encodeURIComponent(centerId)}`}
@@ -222,7 +226,7 @@ export default function AdminDashboard() {
                           {t.name || t.email}
                         </div>
                         <div className="truncate text-xs text-amber-800">
-                          7 days: {t.logs?.last7Days || 0} • 24h:{" "}
+                          7 days: {t.logs?.last7Days || 0} | 24h:{" "}
                           {t.logs?.last24Hours || 0}
                         </div>
                       </div>

@@ -559,7 +559,7 @@ export default function TeacherMilestoneChecklists() {
 
         <div className="mt-4">
           {loading ? (
-            <div className="text-sm text-gray-600">Loadingâ€¦</div>
+            <div className="text-sm text-gray-600">Loading...</div>
           ) : !centerId ? (
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
               Select a center to view milestone plans.
@@ -612,10 +612,10 @@ function PlanList({
               {p.title}
             </div>
             <div className="text-sm text-gray-600">
-              {p.description || "â€”"}
+              {p.description || "No description"}
             </div>
             <div className="text-xs text-gray-500">
-              {p.period} â€¢ {new Date(p.periodStart).toLocaleDateString()}
+              {p.period} | {new Date(p.periodStart).toLocaleDateString()}
             </div>
           </div>
 
@@ -797,7 +797,7 @@ function CalendarMonth({
                 >
                   <div className="font-semibold text-gray-900">{p.title}</div>
                   <div className="mt-1 text-xs text-gray-600">
-                    {p.description || "â€”"}
+                    {p.description || "No description"}
                   </div>
                   <div className="mt-3">
                     {Array.isArray(p.items) && p.items.length ? (

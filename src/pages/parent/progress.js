@@ -2,83 +2,213 @@ import ParentLayout from "@/components/parent/ParentLayout";
 import {
   ParentButton,
   ParentEmpty,
-  ParentPageHeader,
   ParentPill,
   ParentSection,
   ParentSurface,
 } from "@/components/parent/ParentUI";
 import ProgressEntryTimeline from "@/components/progression/ProgressEntryTimeline";
 import { apiJson } from "@/lib/api";
-import { formatAge } from "@/lib/ageUtils";
+import { ageInMonths, formatAge } from "@/lib/ageUtils";
+import { buildParentMessageComposeHref } from "@/lib/parentSupport";
 import { useRouter } from "next/router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-const STATUS_BADGE = {
-  NOT_STARTED: "bg-gray-100 text-gray-700",
-  IN_PROGRESS: "bg-amber-100 text-amber-800",
-  COMPLETED: "bg-emerald-100 text-emerald-800",
-  PASSED: "bg-emerald-100 text-emerald-800",
-  FAILED: "bg-red-100 text-red-800",
-};
+const DAY_MS = 24 * 60 * 60 * 1000;
+const GOAL_PREVIEW_COUNT = 4;
 
-const STATUS_LABEL = {
-  NOT_STARTED: "Not Started",
-  IN_PROGRESS: "In Progress",
-  COMPLETED: "Completed",
-  PASSED: "Passed",
-  FAILED: "Failed",
-};
-
-const STAGE_FILTERS = [
-  { value: "active", label: "Active Goals", icon: IconActive },
-  { value: "all", label: "All Goals", icon: IconAll },
-  { value: "completed", label: "Completed", icon: IconCompleted },
-  { value: "failed", label: "Failed", icon: IconFailed },
+const VIEW_OPTIONS = [
+  { value: "week", label: "This week", shortLabel: "Weekly", days: 7 },
+  { value: "month", label: "This month", shortLabel: "Monthly", days: 30 },
 ];
 
-function byString(a, b) {
-  return String(a || "").localeCompare(String(b || ""));
-}
+const STATUS_META = {
+  NOT_STARTED: {
+    label: "Ready to begin",
+    badge:
+      "border-stone-200 bg-stone-50 text-stone-700 dark:border-stone-700 dark:bg-stone-900/60 dark:text-stone-200",
+    bar: "bg-stone-300 dark:bg-stone-600",
+    card:
+      "border-stone-200 bg-white dark:border-stone-700 dark:bg-slate-900",
+    progress: 28,
+    weight: 0.35,
+    summary:
+      "This goal is ready for the next classroom update and a gentle start.",
+  },
+  IN_PROGRESS: {
+    label: "Improving",
+    badge:
+      "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200",
+    bar: "bg-amber-400",
+    card:
+      "border-amber-200 bg-white dark:border-amber-900/60 dark:bg-slate-900",
+    progress: 66,
+    weight: 0.72,
+    summary:
+      "Steady practice is happening now, and small repeats at home can help it stick.",
+  },
+  COMPLETED: {
+    label: "On track",
+    badge:
+      "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200",
+    bar: "bg-emerald-400",
+    card:
+      "border-emerald-200 bg-white dark:border-emerald-900/60 dark:bg-slate-900",
+    progress: 100,
+    weight: 1,
+    summary: "This goal is settled and showing confident progress.",
+  },
+  PASSED: {
+    label: "On track",
+    badge:
+      "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200",
+    bar: "bg-emerald-400",
+    card:
+      "border-emerald-200 bg-white dark:border-emerald-900/60 dark:bg-slate-900",
+    progress: 100,
+    weight: 1,
+    summary: "This goal is settled and showing confident progress.",
+  },
+  FAILED: {
+    label: "Needs support",
+    badge:
+      "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200",
+    bar: "bg-rose-400",
+    card:
+      "border-rose-200 bg-white dark:border-rose-900/60 dark:bg-slate-900",
+    progress: 42,
+    weight: 0.18,
+    summary:
+      "This area needs a little more repetition and reassurance before it feels easier.",
+  },
+};
 
-function formatDate(value) {
-  if (!value) return "\u2014";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "\u2014";
-  return d.toLocaleDateString();
-}
+const DOMAIN_META = {
+  communication: {
+    key: "communication",
+    label: "Communication",
+    insightLabel: "communication",
+    code: "CO",
+    codeClasses:
+      "bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-200",
+    chip:
+      "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-200",
+    progress:
+      "from-sky-400 via-cyan-400 to-blue-400",
+  },
+  social: {
+    key: "social",
+    label: "Social skills",
+    insightLabel: "social confidence",
+    code: "SO",
+    codeClasses:
+      "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-200",
+    chip:
+      "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200",
+    progress:
+      "from-emerald-400 via-teal-400 to-cyan-400",
+  },
+  motor: {
+    key: "motor",
+    label: "Motor skills",
+    insightLabel: "motor skills",
+    code: "MO",
+    codeClasses:
+      "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-200",
+    chip:
+      "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200",
+    progress:
+      "from-amber-400 via-orange-400 to-rose-400",
+  },
+  thinking: {
+    key: "thinking",
+    label: "Thinking",
+    insightLabel: "thinking skills",
+    code: "TH",
+    codeClasses:
+      "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-200",
+    chip:
+      "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-200",
+    progress:
+      "from-indigo-400 via-sky-400 to-cyan-400",
+  },
+  creative: {
+    key: "creative",
+    label: "Creativity",
+    insightLabel: "creative expression",
+    code: "CR",
+    codeClasses:
+      "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/60 dark:text-fuchsia-200",
+    chip:
+      "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-900/60 dark:bg-fuchsia-950/40 dark:text-fuchsia-200",
+    progress:
+      "from-fuchsia-400 via-pink-400 to-rose-400",
+  },
+};
+
+const DOMAIN_ORDER = ["communication", "social", "motor", "thinking", "creative"];
 
 export default function ParentProgress() {
   const router = useRouter();
-  const childIdFromQuery = typeof router.query.childId === "string" ? router.query.childId : "";
+  const routeChildId =
+    typeof router.query.childId === "string" ? router.query.childId : "";
 
   const [children, setChildren] = useState([]);
-  const [selectedChildId, setSelectedChildId] = useState(childIdFromQuery);
-  const [progress, setProgress] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [selectedChildId, setSelectedChildId] = useState("");
+  const [view, setView] = useState("week");
+  const [progressRows, setProgressRows] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [childrenLoading, setChildrenLoading] = useState(true);
+  const [recordsLoading, setRecordsLoading] = useState(false);
   const [error, setError] = useState("");
-  const [expanded, setExpanded] = useState({});
-  const [categoryFilter, setCategoryFilter] = useState("");
-  const [stage, setStage] = useState("all");
-  const [query, setQuery] = useState("");
+  const [expandedGoals, setExpandedGoals] = useState({});
+  const [entriesByProgressId, setEntriesByProgressId] = useState({});
   const [noteForm, setNoteForm] = useState({});
   const [savingNote, setSavingNote] = useState("");
+  const [showAllGoals, setShowAllGoals] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState(null);
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
+    let cancelled = false;
+
+    async function loadChildren() {
+      setChildrenLoading(true);
       setError("");
       try {
         const kids = await apiJson("/api/v1/children");
-        const kidsArr = Array.isArray(kids) ? kids : [];
-        setChildren(kidsArr);
-        setSelectedChildId((prev) => prev || childIdFromQuery || kidsArr[0]?.id || "");
+        if (cancelled) return;
+        const sorted = (Array.isArray(kids) ? kids : []).sort((a, b) =>
+          String(a.firstName || "").localeCompare(String(b.firstName || "")),
+        );
+        setChildren(sorted);
       } catch (e) {
-        setError(e.message || "Failed to load children");
+        if (!cancelled) setError(e.message || "Failed to load children");
       } finally {
-        setLoading(false);
+        if (!cancelled) setChildrenLoading(false);
       }
-    })();
-  }, [childIdFromQuery]);
+    }
+
+    loadChildren();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!children.length) {
+      setSelectedChildId("");
+      return;
+    }
+
+    if (routeChildId && children.some((child) => child.id === routeChildId)) {
+      setSelectedChildId(routeChildId);
+      return;
+    }
+
+    setSelectedChildId((current) => {
+      if (current && children.some((child) => child.id === current)) return current;
+      return children[0]?.id || "";
+    });
+  }, [children, routeChildId]);
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -96,24 +226,53 @@ export default function ParentProgress() {
     });
   }, [router, selectedChildId]);
 
-  useEffect(() => {
-    if (!selectedChildId) {
-      setProgress([]);
-      return;
+  const loadChildRecords = useCallback(async (targetChildId, options = {}) => {
+    if (!targetChildId) return;
+
+    const { keepExisting = false } = options;
+
+    setRecordsLoading(true);
+    setError("");
+    if (!keepExisting) {
+      setProgressRows([]);
+      setActivities([]);
+      setEntriesByProgressId({});
     }
 
-    (async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const rows = await apiJson(`/api/v1/progress?childId=${encodeURIComponent(selectedChildId)}`);
-        setProgress(Array.isArray(rows) ? rows : []);
-      } catch (e) {
-        setError(e.message || "Failed to load progress");
-      } finally {
-        setLoading(false);
+    try {
+      const [progressRes, activityRes] = await Promise.all([
+        apiJson(`/api/v1/progress?childId=${encodeURIComponent(targetChildId)}`),
+        apiJson(`/api/v1/activities?childId=${encodeURIComponent(targetChildId)}`),
+      ]);
+      setProgressRows(Array.isArray(progressRes) ? progressRes : []);
+      setActivities(Array.isArray(activityRes) ? activityRes : []);
+      setLastSyncAt(new Date());
+    } catch (e) {
+      setError(e.message || "Failed to load progress");
+      if (!keepExisting) {
+        setProgressRows([]);
+        setActivities([]);
       }
-    })();
+    } finally {
+      setRecordsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!selectedChildId) {
+      setProgressRows([]);
+      setActivities([]);
+      setEntriesByProgressId({});
+      return;
+    }
+    loadChildRecords(selectedChildId);
+  }, [selectedChildId, loadChildRecords]);
+
+  useEffect(() => {
+    setExpandedGoals({});
+    setEntriesByProgressId({});
+    setNoteForm({});
+    setShowAllGoals(false);
   }, [selectedChildId]);
 
   const selectedChild = useMemo(
@@ -121,64 +280,168 @@ export default function ParentProgress() {
     [children, selectedChildId],
   );
 
-  const categories = useMemo(() => {
-    const set = new Set();
-    for (const row of progress) {
-      const name = row.lesson?.category?.name;
-      if (name) set.add(name);
+  const currentView = useMemo(
+    () => VIEW_OPTIONS.find((item) => item.value === view) || VIEW_OPTIONS[0],
+    [view],
+  );
+
+  const currentProgressRows = useMemo(
+    () => getLatestProgressRows(progressRows),
+    [progressRows],
+  );
+
+  const cutoffTime = useMemo(
+    () => Date.now() - currentView.days * DAY_MS,
+    [currentView.days],
+  );
+
+  const todayStartTime = useMemo(() => startOfDayTimestamp(new Date()), []);
+
+  const filteredActivities = useMemo(
+    () =>
+      activities
+        .filter((activity) => toTimestamp(activity.createdAt) >= cutoffTime)
+        .sort((a, b) => toTimestamp(b.createdAt) - toTimestamp(a.createdAt))
+        .slice(0, 6),
+    [activities, cutoffTime],
+  );
+
+  const todayActivityCount = useMemo(
+    () =>
+      activities.filter((activity) => toTimestamp(activity.createdAt) >= todayStartTime)
+        .length,
+    [activities, todayStartTime],
+  );
+
+  const todayProgressCount = useMemo(
+    () =>
+      currentProgressRows.filter(
+        (row) => toTimestamp(row.updatedAt || row.createdAt) >= todayStartTime,
+      ).length,
+    [currentProgressRows, todayStartTime],
+  );
+
+  const overview = useMemo(
+    () => buildOverview(currentProgressRows),
+    [currentProgressRows],
+  );
+
+  const domainSnapshot = useMemo(
+    () => buildDomainSnapshot(currentProgressRows),
+    [currentProgressRows],
+  );
+
+  const activeGoals = useMemo(
+    () =>
+      currentProgressRows
+        .filter((row) => !["COMPLETED", "PASSED"].includes(row.status))
+        .sort(compareGoals),
+    [currentProgressRows],
+  );
+
+  const visibleGoals = useMemo(
+    () => (showAllGoals ? activeGoals : activeGoals.slice(0, GOAL_PREVIEW_COUNT)),
+    [activeGoals, showAllGoals],
+  );
+
+  const previewGoalIds = useMemo(() => {
+    const pinned = activeGoals.slice(0, GOAL_PREVIEW_COUNT).map((row) => row.id);
+    const expanded = Object.entries(expandedGoals)
+      .filter(([, isOpen]) => Boolean(isOpen))
+      .map(([progressId]) => progressId);
+    return [...new Set([...pinned, ...expanded])];
+  }, [activeGoals, expandedGoals]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadGoalEntries() {
+      if (!previewGoalIds.length) {
+        setEntriesByProgressId({});
+        return;
+      }
+
+      const results = await Promise.all(
+        previewGoalIds.map((progressId) =>
+          apiJson(`/api/v1/progress/${encodeURIComponent(progressId)}/entries`).catch(
+            () => [],
+          ),
+        ),
+      );
+
+      if (cancelled) return;
+
+      const next = {};
+      previewGoalIds.forEach((progressId, index) => {
+        next[progressId] = Array.isArray(results[index]) ? results[index] : [];
+      });
+      setEntriesByProgressId(next);
     }
-    return [...set].sort((a, b) => a.localeCompare(b));
-  }, [progress]);
 
-  const filteredProgress = useMemo(() => {
-    const q = String(query || "").trim().toLowerCase();
-    let rows = progress.slice().sort((a, b) => {
-      const newer = new Date(b.updatedAt || b.createdAt || 0).getTime();
-      const older = new Date(a.updatedAt || a.createdAt || 0).getTime();
-      return newer - older;
-    });
+    loadGoalEntries();
+    return () => {
+      cancelled = true;
+    };
+  }, [previewGoalIds]);
 
-    if (stage === "completed") {
-      rows = rows.filter((row) => row.status === "COMPLETED" || row.status === "PASSED");
-    } else if (stage === "failed") {
-      rows = rows.filter((row) => row.status === "FAILED");
-    } else if (stage === "active") {
-      rows = rows.filter((row) => row.status !== "COMPLETED" && row.status !== "PASSED");
-    }
+  const heroInsights = useMemo(
+    () =>
+      buildHeroInsights({
+        child: selectedChild,
+        overview,
+        domainSnapshot,
+        currentView,
+        todayActivityCount,
+        todayProgressCount,
+        recentActivities: filteredActivities,
+      }),
+    [
+      selectedChild,
+      overview,
+      domainSnapshot,
+      currentView,
+      todayActivityCount,
+      todayProgressCount,
+      filteredActivities,
+    ],
+  );
 
-    if (categoryFilter) {
-      rows = rows.filter((row) => (row.lesson?.category?.name || "") === categoryFilter);
-    }
+  const recommendations = useMemo(
+    () =>
+      buildRecommendations({
+        child: selectedChild,
+        domainSnapshot,
+        activeGoals,
+        overview,
+      }),
+    [selectedChild, domainSnapshot, activeGoals, overview],
+  );
 
-    if (!q) return rows;
+  const topRecommendation = recommendations[0] || null;
+  const latestActivity = filteredActivities[0] || activities[0] || null;
+  const initialLoading =
+    recordsLoading && currentProgressRows.length === 0 && activities.length === 0;
 
-    return rows.filter((row) => {
-      const haystack = [
-        row.lesson?.title,
-        row.lesson?.description,
-        row.lesson?.category?.name,
-        row.status,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(q);
-    });
-  }, [progress, stage, categoryFilter, query]);
+  const messageHref = selectedChild
+    ? buildParentMessageComposeHref({
+        subject: `${selectedChild.firstName}'s progress`,
+        message: `Hi, could you share a quick update on ${selectedChild.firstName}'s current goals?`,
+      })
+    : "/parent/messages";
 
-  const stats = useMemo(() => {
-    const total = progress.length;
-    const completed = progress.filter((row) => row.status === "PASSED" || row.status === "COMPLETED").length;
-    const failed = progress.filter((row) => row.status === "FAILED").length;
-    const inProgress = progress.filter((row) => row.status === "IN_PROGRESS").length;
-    const notStarted = progress.filter((row) => row.status === "NOT_STARTED").length;
-    const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
-    return { total, completed, failed, inProgress, notStarted, completionRate };
-  }, [progress]);
+  async function refreshProgressEntries(progressId) {
+    const data = await apiJson(
+      `/api/v1/progress/${encodeURIComponent(progressId)}/entries`,
+    ).catch(() => []);
+    setEntriesByProgressId((prev) => ({
+      ...prev,
+      [progressId]: Array.isArray(data) ? data : [],
+    }));
+  }
 
   async function submitNote(progressId) {
-    const notes = noteForm[progressId];
-    if (!notes?.trim()) return;
+    const notes = String(noteForm[progressId] || "").trim();
+    if (!notes) return;
 
     setSavingNote(progressId);
     setError("");
@@ -188,374 +451,1349 @@ export default function ParentProgress() {
         method: "POST",
         body: JSON.stringify({ status: "IN_PROGRESS", notes }),
       });
-      const refreshed = await apiJson(`/api/v1/progress?childId=${encodeURIComponent(selectedChildId)}`);
-      setProgress(Array.isArray(refreshed) ? refreshed : []);
       setNoteForm((prev) => ({ ...prev, [progressId]: "" }));
-      setExpanded((prev) => ({ ...prev, [progressId]: Date.now() }));
+      await Promise.all([
+        loadChildRecords(selectedChildId, { keepExisting: true }),
+        refreshProgressEntries(progressId),
+      ]);
     } catch (e) {
-      setError(e.message || "Failed to add note");
+      setError(e.message || "Failed to share note");
     } finally {
       setSavingNote("");
     }
   }
 
   return (
-    <ParentLayout title="Progress & Goals">
+    <ParentLayout title="Progress">
       <div className="space-y-4">
-        <ParentPageHeader
-          eyebrow="Progress center"
-          title={
-            selectedChild
-              ? `${selectedChild.firstName}'s goals, status changes, and teacher notes`
-              : "Progress and goals"
-          }
-          description="Track the lessons your child is working through, spot where support is still needed, and leave notes for teacher coordination without losing context."
-          accent="emerald"
-          layout="split"
-          stats={[
-            { label: "Children", value: children.length, hint: "Linked to this account", tone: "sky" },
-            { label: "Total goals", value: stats.total, hint: "Across the selected child", tone: "gray" },
-            { label: "Completed", value: stats.completed, hint: "Passed or completed", tone: "emerald" },
-            { label: "Support", value: stats.failed, hint: "Need attention", tone: stats.failed ? "rose" : "gray" },
-          ]}
-          actions={
-            selectedChildId ? (
-              <ParentButton href={`/parent/children?childId=${encodeURIComponent(selectedChildId)}`} variant="secondary">
-                Open daily reports
-              </ParentButton>
-            ) : null
-          }
-        />
+        <ParentSurface className="relative overflow-hidden border-sky-100 bg-gradient-to-br from-sky-50 via-white to-emerald-50/80 p-0 shadow-[0_28px_80px_-48px_rgba(14,116,144,0.38)] dark:border-sky-900/60 dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-950 dark:to-sky-950/30">
+          <div className="absolute -right-10 top-0 h-40 w-40 rounded-full bg-sky-200/45 blur-3xl dark:bg-sky-900/40" />
+          <div className="absolute -bottom-12 left-0 h-40 w-40 rounded-full bg-emerald-200/45 blur-3xl dark:bg-emerald-900/30" />
+
+          <div className="relative space-y-5 p-5 sm:p-6">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              <div className="max-w-3xl">
+                <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/80 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.22em] text-sky-700 shadow-sm dark:border-sky-900/60 dark:bg-slate-900/90 dark:text-sky-200">
+                  Parent progress
+                </div>
+                <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
+                  {selectedChild
+                    ? `How is ${selectedChild.firstName} doing today?`
+                    : "A calm progress view for parents"}
+                </h1>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+                  See today&apos;s status first, then the learning areas, current goals,
+                  recent classroom moments, and a few easy ideas for home.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <ParentButton
+                  variant="soft"
+                  onClick={() =>
+                    selectedChildId &&
+                    loadChildRecords(selectedChildId, { keepExisting: true })
+                  }
+                  disabled={!selectedChildId || recordsLoading}
+                >
+                  {recordsLoading ? "Refreshing..." : "Refresh"}
+                </ParentButton>
+                <ParentButton
+                  href={
+                    selectedChildId
+                      ? `/parent/children?childId=${encodeURIComponent(selectedChildId)}`
+                      : "/parent/children"
+                  }
+                  variant="secondary"
+                >
+                  Open daily reports
+                </ParentButton>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              <div className="space-y-2">
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Choose child
+                </div>
+                {childrenLoading ? (
+                  <div className="flex flex-wrap gap-2">
+                    {Array.from({ length: 3 }, (_, index) => (
+                      <div
+                        key={index}
+                        className="h-10 w-28 animate-pulse rounded-2xl border border-sky-100 bg-white/80 dark:border-slate-800 dark:bg-slate-900/80"
+                      />
+                    ))}
+                  </div>
+                ) : children.length === 0 ? (
+                  <div className="text-sm text-slate-500 dark:text-slate-400">
+                    No children are linked to this account yet.
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {children.map((child) => (
+                      <ParentPill
+                        key={child.id}
+                        active={selectedChildId === child.id}
+                        onClick={() => setSelectedChildId(child.id)}
+                      >
+                        {child.firstName} {child.lastName || ""}
+                      </ParentPill>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="self-start xl:self-auto">
+                <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  View
+                </div>
+                <div className="mt-2 inline-flex rounded-full border border-sky-100 bg-white/90 p-1 shadow-sm dark:border-slate-800 dark:bg-slate-900/90">
+                  {VIEW_OPTIONS.map((option) => {
+                    const active = option.value === view;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setView(option.value)}
+                        className={[
+                          "rounded-full px-4 py-2 text-sm font-bold transition-all",
+                          active
+                            ? "bg-sky-600 text-white shadow-sm"
+                            : "text-slate-600 hover:bg-sky-50 hover:text-sky-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-sky-200",
+                        ].join(" ")}
+                      >
+                        {option.shortLabel}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </ParentSurface>
 
         {error ? (
-          <ParentSurface className="border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+          <ParentSurface className="border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200">
             {error}
           </ParentSurface>
         ) : null}
 
-        <ParentSection
-          title="Choose child and focus"
-          description="Use the child switcher and filters to stay focused on the goals that matter right now."
-          className="bg-gradient-to-br from-white via-emerald-50/35 to-white"
-        >
-          <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              {children.slice().sort((a, b) => byString(a.firstName, b.firstName)).map((child) => (
-                <ParentPill
-                  key={child.id}
-                  active={selectedChildId === child.id}
-                  onClick={() => setSelectedChildId(child.id)}
-                >
-                  {child.firstName} {child.lastName || ""}
-                </ParentPill>
-              ))}
-            </div>
+        {!childrenLoading && children.length === 0 ? (
+          <ParentEmpty
+            title="No child profile available yet"
+            description="Once a child is linked to this parent account, progress updates will appear here."
+          />
+        ) : !selectedChild && !childrenLoading ? (
+          <ParentEmpty
+            title="Choose a child to see progress"
+            description="Select a child above to open today&apos;s progress snapshot."
+          />
+        ) : initialLoading ? (
+          <LoadingState />
+        ) : selectedChild ? (
+          <>
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_360px]">
+              <div className="relative overflow-hidden rounded-[32px] border border-sky-100 bg-gradient-to-br from-white via-sky-50/70 to-emerald-50/70 p-5 shadow-[0_28px_80px_-48px_rgba(14,116,144,0.3)] dark:border-sky-900/60 dark:bg-gradient-to-br dark:from-slate-950 dark:via-sky-950/25 dark:to-emerald-950/20">
+                <div className="absolute -right-10 top-0 h-32 w-32 rounded-full bg-sky-200/40 blur-3xl dark:bg-sky-900/30" />
+                <div className="absolute bottom-0 left-0 h-28 w-28 rounded-full bg-emerald-200/35 blur-3xl dark:bg-emerald-900/25" />
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-              <FilterSelect
-                label="Child"
-                value={selectedChildId}
-                onChange={setSelectedChildId}
-                disabled={loading}
-                placeholder="Select a child..."
-                icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
-              >
-                {children.slice().sort((a, b) => byString(a.firstName, b.firstName)).map((child) => (
-                  <option key={child.id} value={child.id}>
-                    {child.firstName} {child.lastName || ""}
-                  </option>
-                ))}
-              </FilterSelect>
+                <div className="relative space-y-5">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] bg-sky-600 text-lg font-black text-white shadow-lg shadow-sky-200/70 dark:shadow-sky-950/50">
+                          {initials(selectedChild.firstName, selectedChild.lastName)}
+                        </div>
+                        <div className="min-w-0">
+                          <span
+                            className={[
+                              "inline-flex rounded-full border px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em]",
+                              overview.overallState.badge,
+                            ].join(" ")}
+                          >
+                            {overview.overallState.label}
+                          </span>
+                          <h2 className="mt-3 text-[clamp(1.45rem,2.5vw,2.35rem)] font-black leading-tight tracking-tight text-slate-900 dark:text-slate-100">
+                            {overview.headline}
+                          </h2>
+                          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+                            {overview.description}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
 
-              <FilterSelect
-                label="Category"
-                value={categoryFilter}
-                onChange={setCategoryFilter}
-                disabled={!selectedChildId || loading}
-                placeholder="All categories"
-                icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>}
-              >
-                {categories.map((category) => <option key={category} value={category}>{category}</option>)}
-              </FilterSelect>
+                    {lastSyncAt ? (
+                      <div className="rounded-full border border-white/70 bg-white/85 px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm dark:border-slate-800 dark:bg-slate-900/85 dark:text-slate-300">
+                        Synced {formatRelativeDateTime(lastSyncAt)}
+                      </div>
+                    ) : null}
+                  </div>
 
-              <div className="md:col-span-2">
-                <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">Search</div>
-                <div className="relative">
-                  <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  <input
-                    className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm font-medium text-gray-800 shadow-sm transition hover:border-sky-300 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"
-                    placeholder="Search lesson title, category, status..."
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    disabled={!selectedChildId || loading}
-                  />
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <HeroStat
+                      label="Today"
+                      value={todayActivityCount + todayProgressCount}
+                      hint={
+                        todayActivityCount + todayProgressCount === 1
+                          ? "fresh update shared"
+                          : "fresh updates shared"
+                      }
+                    />
+                    <HeroStat
+                      label="Active goals"
+                      value={activeGoals.length}
+                      hint="current areas being worked on"
+                    />
+                    <HeroStat
+                      label="Support needed"
+                      value={overview.failed}
+                      hint={
+                        overview.failed
+                          ? "areas needing extra practice"
+                          : "nothing urgent right now"
+                      }
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    {heroInsights.map((insight) => (
+                      <InsightCard key={insight.title} insight={insight} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                        Overall progress
+                      </div>
+                      <div className="mt-1 text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100">
+                        {overview.overallState.label}
+                      </div>
+                      <p className="mt-1 text-sm leading-5 text-slate-600 dark:text-slate-300">
+                        A simple pulse based on current goals and statuses.
+                      </p>
+                    </div>
+                    <ProgressRing
+                      value={overview.score}
+                      tone={overview.overallState.ring}
+                    />
+                  </div>
+
+                  <div className="mt-5 space-y-3">
+                    <QuickFact
+                      label="Age"
+                      value={formatChildAge(selectedChild.birthDate) || "Not added yet"}
+                    />
+                    <QuickFact
+                      label="Latest classroom moment"
+                      value={
+                        latestActivity
+                          ? formatRelativeDateTime(latestActivity.createdAt)
+                          : "No recent activity yet"
+                      }
+                    />
+                    <QuickFact
+                      label="Top home tip"
+                      value={
+                        topRecommendation
+                          ? topRecommendation.description
+                          : "Small, playful practice at home is enough."
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-[32px] border border-sky-100 bg-white/95 p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/95">
+                  <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                    Parent actions
+                  </div>
+                  <div className="mt-4 flex flex-col gap-2">
+                    <ParentButton href={messageHref} variant="soft">
+                      Message the teacher
+                    </ParentButton>
+                    <ParentButton
+                      href={
+                        selectedChildId
+                          ? `/parent/children?childId=${encodeURIComponent(
+                              selectedChildId,
+                            )}&tab=daily_report`
+                          : "/parent/children"
+                      }
+                      variant="secondary"
+                    >
+                      Review daily reports
+                    </ParentButton>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div>
-              <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">Stage</div>
-              <div className="flex flex-wrap gap-2">
-                {STAGE_FILTERS.map((item) => {
-                  const Icon = item.icon;
-                  const active = stage === item.value;
-                  return (
-                    <button
-                      key={item.value}
-                      type="button"
-                      className={[
-                        "inline-flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-sm font-bold transition-all",
-                        active
-                          ? "border-sky-300 bg-sky-50 text-sky-900 shadow-sm ring-2 ring-sky-100"
-                          : "border-gray-200 bg-white text-gray-600 hover:border-sky-200 hover:bg-sky-50/60",
-                      ].join(" ")}
-                      onClick={() => setStage(item.value)}
-                    >
-                      <Icon />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
+            <ParentSection
+              title="Progress snapshot"
+              description="A quick look across the learning areas the center is tracking right now."
+              action={<SectionPill>{currentView.label}</SectionPill>}
+              className="overflow-hidden border-sky-100 bg-white shadow-[0_18px_60px_-48px_rgba(14,116,144,0.3)] dark:border-slate-800 dark:bg-slate-900"
+            >
+              {domainSnapshot.length ? (
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {domainSnapshot.map((domain) => (
+                    <DomainCard key={domain.key} domain={domain} />
+                  ))}
+                </div>
+              ) : (
+                <ParentEmpty
+                  title="No learning areas yet"
+                  description="Progress areas will appear here once the center records goals for this child."
+                />
+              )}
+            </ParentSection>
+
+            <ParentSection
+              title="Active goals"
+              description="These are the main goals the center is working on now, with a warm summary of where each one stands."
+              action={
+                activeGoals.length > GOAL_PREVIEW_COUNT ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllGoals((current) => !current)}
+                    className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-700 transition hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-200 dark:hover:bg-sky-950/70"
+                  >
+                    {showAllGoals ? "Show less" : `Show all ${activeGoals.length}`}
+                  </button>
+                ) : null
+              }
+              className="overflow-hidden border-emerald-100 bg-gradient-to-br from-white via-white to-emerald-50/30 shadow-[0_18px_60px_-48px_rgba(16,185,129,0.28)] dark:border-slate-800 dark:bg-gradient-to-br dark:from-slate-900 dark:via-slate-900 dark:to-emerald-950/20"
+            >
+              {currentProgressRows.length === 0 ? (
+                <ParentEmpty
+                  title="No goals have been added yet"
+                  description="The first classroom progress goal will show up here when it is recorded."
+                />
+              ) : activeGoals.length === 0 ? (
+                <ParentEmpty
+                  title="Everything looks settled right now"
+                  description="There are no active goals at the moment. New classroom goals will appear here automatically."
+                />
+              ) : (
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+                  {visibleGoals.map((row) => (
+                    <GoalCard
+                      key={row.id}
+                      row={row}
+                      entries={entriesByProgressId[row.id]}
+                      expanded={Boolean(expandedGoals[row.id])}
+                      noteValue={noteForm[row.id] || ""}
+                      saving={savingNote === row.id}
+                      onToggle={() =>
+                        setExpandedGoals((prev) => ({
+                          ...prev,
+                          [row.id]: !prev[row.id],
+                        }))
+                      }
+                      onNoteChange={(value) =>
+                        setNoteForm((prev) => ({ ...prev, [row.id]: value }))
+                      }
+                      onSubmit={() => submitNote(row.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </ParentSection>
+
+            <ParentSection
+              title="Recent activities"
+              description={`A light timeline of classroom moments from ${currentView.label.toLowerCase()}.`}
+              action={<SectionPill>{currentView.label}</SectionPill>}
+              className="overflow-hidden border-sky-100 bg-white shadow-[0_18px_60px_-48px_rgba(14,116,144,0.25)] dark:border-slate-800 dark:bg-slate-900"
+            >
+              {filteredActivities.length === 0 ? (
+                <ParentEmpty
+                  title={`No activities yet ${currentView.label.toLowerCase()}`}
+                  description="New classroom moments will appear here as soon as they are shared."
+                />
+              ) : (
+                <div className="space-y-3">
+                  {filteredActivities.map((activity, index) => (
+                    <ActivityTimelineItem
+                      key={activity.id || `${activity.type}-${index}`}
+                      activity={activity}
+                      isLast={index === filteredActivities.length - 1}
+                    />
+                  ))}
+                </div>
+              )}
+            </ParentSection>
+
+            <ParentSection
+              title="Insights for home"
+              description="Short, encouraging ideas you can try at home without turning home time into homework."
+              action={
+                <ParentButton href={messageHref} variant="soft">
+                  Ask a teacher
+                </ParentButton>
+              }
+              className="overflow-hidden border-amber-100 bg-gradient-to-br from-white via-amber-50/30 to-emerald-50/30 shadow-[0_18px_60px_-48px_rgba(217,119,6,0.18)] dark:border-slate-800 dark:bg-gradient-to-br dark:from-slate-900 dark:via-amber-950/15 dark:to-emerald-950/15"
+            >
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                {recommendations.map((recommendation) => (
+                  <RecommendationCard
+                    key={recommendation.title}
+                    recommendation={recommendation}
+                  />
+                ))}
               </div>
-            </div>
-          </div>
-        </ParentSection>
-
-        {selectedChild && (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-            <OverviewCard label="Total Goals" count={stats.total} color="sky" icon={<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} sub={`${selectedChild.firstName} ${selectedChild.lastName || ""}${formatAge(selectedChild.birthDate) ? ` · ${formatAge(selectedChild.birthDate)}` : ""}`.trim()} />
-            <OverviewCard label="In Progress" count={stats.inProgress} color="amber" icon={<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
-            <OverviewCard label="Completed" count={stats.completed} color="emerald" icon={<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>} />
-            <OverviewCard label="Failed" count={stats.failed} color="red" icon={<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>} />
-            <OverviewCard label="Not Started" count={stats.notStarted} color="gray" icon={<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
-            <OverviewCard label="Completion" count={`${stats.completionRate}%`} color="sky" icon={<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} />
-          </div>
-        )}
-
-        {selectedChild && stats.total > 0 && (
-          <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wider text-gray-400">
-              <span>Overall Progress</span>
-              <span>{stats.completed} / {stats.total} goals</span>
-            </div>
-            <div className="flex h-4 overflow-hidden rounded-full bg-gray-100">
-              {stats.completed > 0 && <div className="bg-emerald-400 transition-all" style={{ width: `${(stats.completed / stats.total) * 100}%` }} />}
-              {stats.inProgress > 0 && <div className="bg-amber-400 transition-all" style={{ width: `${(stats.inProgress / stats.total) * 100}%` }} />}
-              {stats.failed > 0 && <div className="bg-red-400 transition-all" style={{ width: `${(stats.failed / stats.total) * 100}%` }} />}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-4 text-xs">
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-400" /> Completed ({stats.completed})</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-400" /> In Progress ({stats.inProgress})</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-400" /> Failed ({stats.failed})</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-gray-200" /> Not Started ({stats.notStarted})</span>
-            </div>
-          </div>
-        )}
-
-        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-            <h2 className="flex items-center gap-2 text-sm font-extrabold text-gray-900">
-              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-100 text-sky-600">
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                </svg>
-              </span>
-              {selectedChild ? `${selectedChild.firstName}'s Progress` : "Progress List"}
-              {!loading && selectedChild && <span className="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">{filteredProgress.length}</span>}
-            </h2>
-            {loading && (
-              <span className="flex items-center gap-1.5 text-xs text-gray-500">
-                <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                Loading...
-              </span>
-            )}
-          </div>
-
-          <div className="p-5">
-            {!selectedChild && !loading ? (
-              <ParentEmpty
-                title="Select a child to view progress"
-                description="Choose a child from the filter above to review lessons, statuses, and notes."
-              />
-            ) : !loading && filteredProgress.length === 0 ? (
-              <ParentEmpty
-                title="No goals match this view"
-                description="Try changing the child, stage, category, or search filters."
-              />
-            ) : (
-              <div className="space-y-3">
-                {filteredProgress.map((row) => {
-                  const isExpanded = expanded[row.id];
-                  const isFailed = row.status === "FAILED";
-                  const goals = Array.isArray(row.lesson?.goals) ? row.lesson.goals : [];
-                  const totalGoals = goals.length;
-                  const currentGoal = goals.find((goal) => Number(goal.goalIndex || 0) === Number(row.goalIndex || 0));
-                  const lastUpdate = row.updatedAt || row.createdAt;
-
-                  return (
-                    <div key={row.id} className={`rounded-2xl border p-4 transition hover:shadow-sm ${isFailed ? "border-red-200 bg-red-50/30" : "border-gray-200 bg-white hover:border-gray-300"}`}>
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2.5">
-                            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white ${isFailed ? "bg-red-500" : row.status === "COMPLETED" || row.status === "PASSED" ? "bg-emerald-500" : "bg-sky-500"}`}>
-                              {row.goalIndex || "--"}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="font-semibold text-gray-900">{row.lesson?.title || "Unknown Lesson"}</div>
-                              <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                                {row.lesson?.category?.name && (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
-                                    <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
-                                    {row.lesson.category.name}
-                                  </span>
-                                )}
-                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_BADGE[row.status] || STATUS_BADGE.NOT_STARTED}`}>
-                                  {STATUS_LABEL[row.status] || row.status}
-                                </span>
-                                <span className="text-[10px] text-gray-400">{formatDate(lastUpdate)}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {totalGoals > 0 && (
-                            <div className="mt-3 flex items-center gap-2">
-                              <div className="flex flex-1 gap-0.5">
-                                {Array.from({ length: totalGoals }, (_, index) => {
-                                  const stepIndex = index + 1;
-                                  const isComplete = stepIndex < Number(row.goalIndex || 0);
-                                  const isCurrent = stepIndex === Number(row.goalIndex || 0);
-                                  return (
-                                    <div
-                                      key={stepIndex}
-                                      className={`h-1.5 flex-1 rounded-full ${isComplete ? "bg-emerald-400" : isCurrent ? isFailed ? "bg-red-400" : "bg-amber-400" : "bg-gray-200"}`}
-                                      title={`Step ${stepIndex}`}
-                                    />
-                                  );
-                                })}
-                              </div>
-                              <span className="shrink-0 text-[10px] font-bold text-gray-500">{row.goalIndex || 0}/{totalGoals}</span>
-                            </div>
-                          )}
-
-                          {currentGoal?.title && (
-                            <div className="mt-2 rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-600">
-                              <span className="font-semibold text-gray-700">Current:</span> {currentGoal.title}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex shrink-0 flex-col items-start gap-2 lg:w-40 lg:items-end">
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1 rounded-xl bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 active:scale-[0.98]"
-                            onClick={() => setExpanded((prev) => ({ ...prev, [row.id]: prev[row.id] ? null : Date.now() }))}
-                          >
-                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                            {isExpanded ? "Hide Details" : "View Details"}
-                          </button>
-                        </div>
-                      </div>
-
-                      {isExpanded && (
-                        <div className="mt-4 space-y-3 border-t border-gray-100 pt-4">
-                          <ProgressEntryTimeline key={isExpanded} progressId={row.id} />
-
-                          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                            <div className="mb-1 text-xs font-semibold text-gray-500">Add a Note</div>
-                            <div className="flex flex-col gap-2 sm:flex-row">
-                              <input
-                                type="text"
-                                className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"
-                                placeholder="Share a note with the teacher..."
-                                value={noteForm[row.id] || ""}
-                                onChange={(e) => setNoteForm((prev) => ({ ...prev, [row.id]: e.target.value }))}
-                                disabled={savingNote === row.id}
-                              />
-                              <button
-                                type="button"
-                                className="shrink-0 rounded-lg bg-sky-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-sky-700 disabled:opacity-60"
-                                onClick={() => submitNote(row.id)}
-                                disabled={savingNote === row.id || !(noteForm[row.id] || "").trim()}
-                              >
-                                {savingNote === row.id ? "Sending..." : "Send"}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
+            </ParentSection>
+          </>
+        ) : null}
       </div>
     </ParentLayout>
   );
 }
 
-function FilterSelect({ label, value, onChange, disabled, placeholder, icon, children }) {
+function LoadingState() {
   return (
-    <div>
-      <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">{label}</div>
-      <div className="relative">
-        <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">{icon}</div>
-        <select
-          className="w-full appearance-none rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-10 text-sm font-medium text-gray-800 shadow-sm transition hover:border-sky-300 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 disabled:opacity-50"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          disabled={disabled}
-        >
-          <option value="">{placeholder}</option>
-          {children}
-        </select>
-        <svg className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_360px]">
+        {Array.from({ length: 2 }, (_, index) => (
+          <div
+            key={index}
+            className="h-72 animate-pulse rounded-[32px] border border-slate-200 bg-white/80 dark:border-slate-800 dark:bg-slate-900/80"
+          />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }, (_, index) => (
+          <div
+            key={index}
+            className="h-44 animate-pulse rounded-[28px] border border-slate-200 bg-white/80 dark:border-slate-800 dark:bg-slate-900/80"
+          />
+        ))}
+      </div>
+      <div className="h-80 animate-pulse rounded-[32px] border border-slate-200 bg-white/80 dark:border-slate-800 dark:bg-slate-900/80" />
+    </div>
+  );
+}
+
+function HeroStat({ label, value, hint }) {
+  return (
+    <div className="rounded-[22px] border border-white/80 bg-white/80 px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/90">
+      <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+        {label}
+      </div>
+      <div className="mt-2 text-[clamp(1.3rem,2.4vw,1.8rem)] font-black leading-tight tracking-tight text-slate-900 dark:text-slate-100">
+        {value}
+      </div>
+      <div className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">
+        {hint}
       </div>
     </div>
   );
 }
 
-function OverviewCard({ label, count, color, icon, sub }) {
-  const colors = {
-    sky: "from-sky-50 to-sky-100/50 text-sky-600 border-sky-200/60",
-    amber: "from-amber-50 to-amber-100/50 text-amber-600 border-amber-200/60",
-    emerald: "from-emerald-50 to-emerald-100/50 text-emerald-600 border-emerald-200/60",
-    red: "from-red-50 to-red-100/50 text-red-600 border-red-200/60",
-    gray: "from-gray-50 to-gray-100/50 text-gray-600 border-gray-200/60",
+function InsightCard({ insight }) {
+  return (
+    <div className={`rounded-[24px] border p-4 shadow-sm ${insight.tone}`}>
+      <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+        {insight.tag}
+      </div>
+      <div className="mt-2 text-sm font-black tracking-tight text-slate-900 dark:text-slate-100">
+        {insight.title}
+      </div>
+      <div className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
+        {insight.description}
+      </div>
+    </div>
+  );
+}
+
+function ProgressRing({ value, tone }) {
+  const safeValue = Math.max(0, Math.min(100, Number(value || 0)));
+  const track = tone === "rose" ? "#fb7185" : tone === "amber" ? "#f59e0b" : "#10b981";
+  const style = {
+    background: `conic-gradient(${track} ${safeValue * 3.6}deg, rgba(148, 163, 184, 0.16) 0deg)`,
   };
-  const palette = colors[color] || colors.gray;
 
   return (
-    <div className={`rounded-2xl border bg-gradient-to-br p-4 ${palette}`}>
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-[10px] font-bold uppercase tracking-widest opacity-60">{label}</div>
-          <div className="mt-1 text-2xl font-extrabold">{count}</div>
-          {sub && <div className="mt-0.5 text-[10px] opacity-50">{sub}</div>}
+    <div className="relative h-28 w-28 shrink-0">
+      <div className="absolute inset-0 rounded-full" style={style} />
+      <div className="absolute inset-[10px] rounded-full bg-white dark:bg-slate-900" />
+      <div className="relative flex h-full w-full flex-col items-center justify-center">
+        <div className="text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100">
+          {safeValue}%
         </div>
-        <div className="opacity-30">{icon}</div>
+        <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+          Pulse
+        </div>
       </div>
     </div>
   );
 }
 
-function IconActive() {
-  return <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>;
+function QuickFact({ label, value }) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-[18px] border border-slate-200 bg-slate-50/80 px-3.5 py-3 dark:border-slate-800 dark:bg-slate-950/80">
+      <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+        {label}
+      </div>
+      <div className="max-w-[16rem] text-right text-sm leading-5 text-slate-700 dark:text-slate-200">
+        {value}
+      </div>
+    </div>
+  );
 }
 
-function IconAll() {
-  return <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>;
+function SectionPill({ children }) {
+  return (
+    <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-200">
+      {children}
+    </span>
+  );
 }
 
-function IconCompleted() {
-  return <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>;
+function DomainCard({ domain }) {
+  const meta = DOMAIN_META[domain.key] || DOMAIN_META.thinking;
+
+  return (
+    <article className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-950/90">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+            Learning area
+          </div>
+          <h3 className="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-slate-100">
+            {meta.label}
+          </h3>
+        </div>
+        <div
+          className={[
+            "flex h-10 w-10 items-center justify-center rounded-2xl text-xs font-black shadow-sm",
+            meta.codeClasses,
+          ].join(" ")}
+        >
+          {meta.code}
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-end justify-between gap-3">
+        <div>
+          <div className="text-3xl font-black tracking-tight text-slate-900 dark:text-slate-100">
+            {domain.progress}%
+          </div>
+          <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            {domain.summary}
+          </div>
+        </div>
+        <span
+          className={[
+            "inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold",
+            domain.status.badge,
+          ].join(" ")}
+        >
+          {domain.status.label}
+        </span>
+      </div>
+
+      <div className="mt-4 h-2.5 rounded-full bg-slate-100 dark:bg-slate-800">
+        <div
+          className={`h-full rounded-full bg-gradient-to-r ${meta.progress}`}
+          style={{ width: `${domain.progress}%` }}
+        />
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">
+        <span>{domain.total} current goal{domain.total === 1 ? "" : "s"}</span>
+        {domain.latestAt ? (
+          <span>Updated {formatRelativeDateTime(domain.latestAt)}</span>
+        ) : null}
+      </div>
+    </article>
+  );
 }
 
-function IconFailed() {
-  return <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>;
+function GoalCard({
+  row,
+  entries,
+  expanded,
+  noteValue,
+  saving,
+  onToggle,
+  onNoteChange,
+  onSubmit,
+}) {
+  const domain = DOMAIN_META[inferDomainKey(row)] || DOMAIN_META.thinking;
+  const status = STATUS_META[row.status] || STATUS_META.NOT_STARTED;
+  const staffNote = findStaffNote(entries);
+
+  return (
+    <article
+      className={[
+        "rounded-[28px] border p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
+        status.card,
+      ].join(" ")}
+    >
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={[
+                  "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold",
+                  domain.chip,
+                ].join(" ")}
+              >
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-white/80 text-[9px] font-black dark:bg-slate-900/80">
+                  {domain.code}
+                </span>
+                <span>{domain.label}</span>
+              </span>
+              <span
+                className={[
+                  "inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold",
+                  status.badge,
+                ].join(" ")}
+              >
+                {status.label}
+              </span>
+            </div>
+
+            <h3 className="mt-3 text-lg font-black tracking-tight text-slate-900 dark:text-slate-100">
+              {row.lessonGoal?.title || row.lesson?.title || "Current goal"}
+            </h3>
+            <p className="mt-1 text-sm leading-5 text-slate-600 dark:text-slate-300">
+              {row.lesson?.title && row.lessonGoal?.title
+                ? `Working inside ${row.lesson.title}.`
+                : status.summary}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onToggle}
+            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-sky-900/60 dark:hover:bg-sky-950/40 dark:hover:text-sky-200"
+          >
+            {expanded ? "Hide details" : "View details"}
+          </button>
+        </div>
+
+        <div className="rounded-[22px] border border-slate-200 bg-slate-50/80 p-3.5 dark:border-slate-800 dark:bg-slate-950/70">
+          <div className="flex items-center justify-between gap-3 text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+            <span>Goal progress</span>
+            <span>{status.progress}%</span>
+          </div>
+          <div className="mt-2 h-2.5 rounded-full bg-white dark:bg-slate-800">
+            <div
+              className={`h-full rounded-full ${status.bar}`}
+              style={{ width: `${status.progress}%` }}
+            />
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <span>Step {row.goalIndex || 1}</span>
+            <span>Updated {formatRelativeDateTime(row.updatedAt || row.createdAt)}</span>
+          </div>
+        </div>
+
+        {staffNote ? (
+          <div className="rounded-[22px] border border-slate-200 bg-white/90 p-3.5 dark:border-slate-800 dark:bg-slate-950/80">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+              Teacher note
+            </div>
+            <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-200">
+              {staffNote.notes}
+            </p>
+            <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              Shared {formatRelativeDateTime(staffNote.occurredAt)}
+            </div>
+          </div>
+        ) : null}
+
+        {expanded ? (
+          <div className="space-y-3 border-t border-slate-200 pt-4 dark:border-slate-800">
+            <div className="rounded-[22px] border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-950/70">
+              <ProgressEntryTimeline
+                progressId={row.id}
+                entries={Array.isArray(entries) ? entries : undefined}
+              />
+            </div>
+
+            <div className="rounded-[22px] border border-slate-200 bg-white p-3.5 dark:border-slate-800 dark:bg-slate-950">
+              <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                Add a note for the teacher
+              </div>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <input
+                  type="text"
+                  className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-sky-700 dark:focus:ring-sky-950"
+                  placeholder="Share a quick note or question..."
+                  value={noteValue}
+                  onChange={(event) => onNoteChange(event.target.value)}
+                  disabled={saving}
+                />
+                <button
+                  type="button"
+                  onClick={onSubmit}
+                  disabled={saving || !String(noteValue || "").trim()}
+                  className="rounded-2xl bg-sky-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {saving ? "Sending..." : "Send note"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+function ActivityTimelineItem({ activity, isLast }) {
+  const meta = activityMeta(activity.type);
+  const mediaCount = extractMediaUrls(activity).length;
+
+  return (
+    <div className="relative pl-11">
+      {!isLast ? (
+        <div className="absolute left-[15px] top-9 bottom-[-18px] w-px bg-sky-100 dark:bg-sky-950/70" />
+      ) : null}
+
+      <div
+        className={[
+          "absolute left-0 top-1 flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-black shadow-sm",
+          meta.bubble,
+        ].join(" ")}
+      >
+        {meta.code}
+      </div>
+
+      <article className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/90">
+        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0">
+            <h3 className="text-sm font-black tracking-tight text-slate-900 dark:text-slate-100">
+              {activityTitle(activity)}
+            </h3>
+            <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
+              {activityDescription(activity)}
+            </p>
+          </div>
+          <div className="shrink-0 text-xs font-semibold text-slate-500 dark:text-slate-400">
+            {formatTimelineTime(activity.createdAt)}
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <TimelinePill>{dayPartLabel(activity.createdAt)}</TimelinePill>
+          {activity.recordedBy?.name ? (
+            <TimelinePill>Shared by {activity.recordedBy.name}</TimelinePill>
+          ) : null}
+          {mediaCount ? (
+            <TimelinePill>
+              {mediaCount} attachment{mediaCount === 1 ? "" : "s"}
+            </TimelinePill>
+          ) : null}
+        </div>
+      </article>
+    </div>
+  );
+}
+
+function TimelinePill({ children }) {
+  return (
+    <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+      {children}
+    </span>
+  );
+}
+
+function RecommendationCard({ recommendation }) {
+  return (
+    <article className={`rounded-[26px] border p-4 shadow-sm ${recommendation.tone}`}>
+      <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+        {recommendation.tag}
+      </div>
+      <div className="mt-2 text-sm font-black tracking-tight text-slate-900 dark:text-slate-100">
+        {recommendation.title}
+      </div>
+      <div className="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-200">
+        {recommendation.description}
+      </div>
+    </article>
+  );
+}
+
+function buildOverview(rows) {
+  const total = rows.length;
+  const completed = rows.filter((row) =>
+    ["COMPLETED", "PASSED"].includes(row.status),
+  ).length;
+  const inProgress = rows.filter((row) => row.status === "IN_PROGRESS").length;
+  const failed = rows.filter((row) => row.status === "FAILED").length;
+  const weighted = rows.reduce(
+    (sum, row) => sum + (STATUS_META[row.status]?.weight ?? STATUS_META.NOT_STARTED.weight),
+    0,
+  );
+  const score = total ? Math.round((weighted / total) * 100) : 0;
+
+  let overallState = {
+    label: "Waiting for updates",
+    badge:
+      "border-stone-200 bg-stone-50 text-stone-700 dark:border-stone-700 dark:bg-stone-900/60 dark:text-stone-200",
+    ring: "amber",
+  };
+  let headline = "Waiting for the first progress update";
+  let description =
+    "The center has not shared a development goal yet. Once they do, this page will turn into a quick daily snapshot.";
+
+  if (total > 0) {
+    if (failed > 0) {
+      overallState = {
+        label: "Needs support",
+        badge:
+          "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200",
+        ring: "rose",
+      };
+      headline =
+        failed > 1
+          ? "A few areas need extra support right now"
+          : "One goal needs a little extra support right now";
+      description =
+        "There is still progress happening, but one or more goals need a gentler pace, repetition, or closer teacher support.";
+    } else if (score >= 82 || completed >= Math.max(1, total - 1)) {
+      overallState = {
+        label: "On track",
+        badge:
+          "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200",
+        ring: "emerald",
+      };
+      headline = "Doing great this week";
+      description =
+        "Most current goals are moving smoothly, with steady classroom practice and no urgent concerns showing up.";
+    } else {
+      overallState = {
+        label: "Improving",
+        badge:
+          "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200",
+        ring: "amber",
+      };
+      headline = "Making steady progress right now";
+      description =
+        "There is active growth in progress, and the current goals are moving forward with continued practice and support.";
+    }
+  }
+
+  return { total, completed, inProgress, failed, score, overallState, headline, description };
+}
+
+function buildDomainSnapshot(rows) {
+  const grouped = new Map();
+
+  for (const row of rows) {
+    const key = inferDomainKey(row);
+    const current = grouped.get(key) || {
+      key,
+      total: 0,
+      score: 0,
+      completed: 0,
+      inProgress: 0,
+      failed: 0,
+      latestAt: null,
+    };
+
+    current.total += 1;
+    current.score +=
+      STATUS_META[row.status]?.weight ?? STATUS_META.NOT_STARTED.weight;
+
+    if (row.status === "FAILED") current.failed += 1;
+    else if (row.status === "IN_PROGRESS") current.inProgress += 1;
+    else if (["COMPLETED", "PASSED"].includes(row.status)) current.completed += 1;
+
+    const timestamp = toTimestamp(row.updatedAt || row.createdAt);
+    if (!current.latestAt || timestamp > toTimestamp(current.latestAt)) {
+      current.latestAt = row.updatedAt || row.createdAt;
+    }
+
+    grouped.set(key, current);
+  }
+
+  return DOMAIN_ORDER.map((key) => grouped.get(key))
+    .filter(Boolean)
+    .map((item) => {
+      const progress = item.total
+        ? Math.round((item.score / item.total) * 100)
+        : 0;
+      const status =
+        item.failed > 0
+          ? STATUS_META.FAILED
+          : item.completed === item.total
+            ? STATUS_META.COMPLETED
+            : item.inProgress > 0 || progress >= 55
+              ? STATUS_META.IN_PROGRESS
+              : STATUS_META.NOT_STARTED;
+
+      return {
+        ...item,
+        progress,
+        status,
+        summary:
+          item.failed > 0
+            ? "Needs extra practice"
+            : item.completed === item.total
+              ? "Strong and settled"
+              : item.inProgress > 0
+                ? "Moving forward"
+                : "Ready for more updates",
+      };
+    });
+}
+
+function buildHeroInsights({
+  child,
+  overview,
+  domainSnapshot,
+  currentView,
+  todayActivityCount,
+  todayProgressCount,
+  recentActivities,
+}) {
+  const childName = child?.firstName || "Your child";
+  const strongest =
+    domainSnapshot
+      .filter((domain) => domain.progress >= 70)
+      .sort((a, b) => b.progress - a.progress)[0] || null;
+  const focus =
+    domainSnapshot
+      .filter((domain) => domain.failed > 0 || domain.progress < 60)
+      .sort((a, b) => a.progress - b.progress)[0] || null;
+
+  const cards = [];
+
+  if (strongest) {
+    const meta = DOMAIN_META[strongest.key] || DOMAIN_META.thinking;
+    cards.push({
+      tag: "Strong area",
+      title: meta.label,
+      description: `${childName} is showing steady confidence in ${meta.insightLabel}.`,
+      tone:
+        "border-emerald-200 bg-emerald-50/80 dark:border-emerald-900/60 dark:bg-emerald-950/30",
+    });
+  }
+
+  if (focus) {
+    const meta = DOMAIN_META[focus.key] || DOMAIN_META.thinking;
+    cards.push({
+      tag: "Focus area",
+      title: meta.label,
+      description: `${childName} may need a little more support in ${meta.insightLabel} right now.`,
+      tone:
+        "border-amber-200 bg-amber-50/80 dark:border-amber-900/60 dark:bg-amber-950/30",
+    });
+  }
+
+  if (cards.length < 2) {
+    cards.push({
+      tag: "Fresh updates",
+      title: `${todayActivityCount + todayProgressCount} new today`,
+      description:
+        todayActivityCount + todayProgressCount > 0
+          ? "There has been new activity or goal movement shared today."
+          : "No new update has been shared today yet, but this view stays ready for it.",
+      tone:
+        "border-sky-200 bg-sky-50/80 dark:border-sky-900/60 dark:bg-sky-950/30",
+    });
+  }
+
+  if (cards.length < 2) {
+    cards.push({
+      tag: currentView.label,
+      title: `${recentActivities.length} classroom moments`,
+      description:
+        recentActivities.length > 0
+          ? "The timeline below shows the latest classroom moments at a glance."
+          : "New classroom moments will appear below as soon as they are shared.",
+      tone:
+        "border-sky-200 bg-sky-50/80 dark:border-sky-900/60 dark:bg-sky-950/30",
+    });
+  }
+
+  if (cards.length < 2) {
+    cards.push({
+      tag: "Progress",
+      title: `${overview.completed} goal${overview.completed === 1 ? "" : "s"} on track`,
+      description: "Current goals are being checked against what matters most right now.",
+      tone:
+        "border-emerald-200 bg-emerald-50/80 dark:border-emerald-900/60 dark:bg-emerald-950/30",
+    });
+  }
+
+  return cards.slice(0, 2);
+}
+
+function buildRecommendations({ child, domainSnapshot, activeGoals, overview }) {
+  const childName = child?.firstName || "your child";
+  const ageMonths = ageInMonths(child?.birthDate);
+  const weakest =
+    domainSnapshot
+      .filter((item) => item.total > 0)
+      .sort((a, b) => a.progress - b.progress)[0] || null;
+  const strongest =
+    domainSnapshot
+      .filter((item) => item.total > 0)
+      .sort((a, b) => b.progress - a.progress)[0] || null;
+
+  const items = [];
+
+  if (weakest) {
+    const meta = DOMAIN_META[weakest.key] || DOMAIN_META.thinking;
+    items.push({
+      tag: "Try at home",
+      title: `A small ${meta.label.toLowerCase()} moment`,
+      description: recommendationForDomain(meta.key, ageMonths),
+      tone:
+        "border-amber-200 bg-white/90 dark:border-amber-900/60 dark:bg-slate-950/80",
+    });
+  }
+
+  items.push({
+    tag: "Keep it simple",
+    title: "Short, warm practice works best",
+    description:
+      overview.failed > 0
+        ? `A few calm minutes of repetition and praise can help ${childName} feel safer trying again.`
+        : "Five to ten minutes of playful repetition is enough. Small wins matter more than long sessions.",
+    tone:
+      "border-emerald-200 bg-white/90 dark:border-emerald-900/60 dark:bg-slate-950/80",
+  });
+
+  if (strongest) {
+    const meta = DOMAIN_META[strongest.key] || DOMAIN_META.thinking;
+    items.push({
+      tag: "Celebrate",
+      title: `Build on ${meta.label.toLowerCase()}`,
+      description: celebrationTip(meta.key, childName),
+      tone:
+        "border-sky-200 bg-white/90 dark:border-sky-900/60 dark:bg-slate-950/80",
+    });
+  } else if (activeGoals.length) {
+    items.push({
+      tag: "Ask the teacher",
+      title: "Request one clear next step",
+      description:
+        "If you want to help at home, ask the teacher for the one goal that would make the biggest difference this week.",
+      tone:
+        "border-sky-200 bg-white/90 dark:border-sky-900/60 dark:bg-slate-950/80",
+    });
+  }
+
+  return items.slice(0, 3);
+}
+
+function recommendationForDomain(domainKey, ageMonths) {
+  const isInfant = ageMonths !== null && ageMonths < 12;
+  const isToddler = ageMonths !== null && ageMonths >= 12 && ageMonths < 36;
+
+  if (domainKey === "communication") {
+    if (isInfant) return "Talk through everyday routines, copy sounds, and pause so your child can answer back in their own way.";
+    if (isToddler) return "Name familiar objects during meals, bath time, or walks, then invite your child to point, copy, or repeat.";
+    return "Try short story time, naming games, or asking simple choice questions that invite a spoken answer.";
+  }
+
+  if (domainKey === "social") {
+    if (isInfant) return "Use face-to-face play, smiles, and gentle turn-taking sounds to build connection and shared attention.";
+    if (isToddler) return "Practice turn-taking with a toy, a song, or a short back-and-forth game and celebrate every calm try.";
+    return "Use pretend play, sharing games, or simple routines like greeting and cleanup to support social confidence.";
+  }
+
+  if (domainKey === "motor") {
+    if (isInfant) return "A little tummy time, reaching, and safe floor play can build strength in small, reassuring bursts.";
+    if (isToddler) return "Try stacking, play dough, ball play, or easy obstacle games for a few playful minutes.";
+    return "Cutting practice, drawing, dance, hopping, or building games can support both fine and gross motor growth.";
+  }
+
+  if (domainKey === "creative") {
+    return "Offer music, drawing, pretend play, or open-ended materials and let curiosity lead the pace.";
+  }
+
+  if (isInfant) return "Simple sensory play, peekaboo, and naming what is happening can gently build thinking skills.";
+  if (isToddler) return "Sorting colors, matching shapes, and counting small objects can make thinking practice feel like play.";
+  return "Try counting, matching, simple puzzles, or sorting games to build problem-solving in a playful way.";
+}
+
+function celebrationTip(domainKey, childName) {
+  if (domainKey === "communication") {
+    return `Invite ${childName} to tell you about one favorite part of the day, even in a few words or gestures.`;
+  }
+  if (domainKey === "social") {
+    return `Notice and praise kind moments, turn-taking, or calm transitions so ${childName} keeps feeling confident.`;
+  }
+  if (domainKey === "motor") {
+    return `Offer a playful challenge like throwing a ball, drawing a shape, or building a tower and celebrate the effort.`;
+  }
+  if (domainKey === "creative") {
+    return `Give ${childName} room to choose colors, sounds, or pretend roles and follow their lead for a few minutes.`;
+  }
+  return `Use puzzles, matching, or counting games and let ${childName} show you how they want to solve them.`;
+}
+
+function getLatestProgressRows(rows) {
+  const map = new Map();
+
+  for (const row of rows) {
+    const existing = map.get(row.lessonId);
+    if (!existing) {
+      map.set(row.lessonId, row);
+      continue;
+    }
+
+    const goalA = Number(existing.goalIndex || 0);
+    const goalB = Number(row.goalIndex || 0);
+    if (goalB > goalA) {
+      map.set(row.lessonId, row);
+      continue;
+    }
+
+    if (
+      goalB === goalA &&
+      toTimestamp(row.updatedAt || row.createdAt) >
+        toTimestamp(existing.updatedAt || existing.createdAt)
+    ) {
+      map.set(row.lessonId, row);
+    }
+  }
+
+  return [...map.values()].sort(
+    (a, b) =>
+      toTimestamp(b.updatedAt || b.createdAt) - toTimestamp(a.updatedAt || a.createdAt),
+  );
+}
+
+function compareGoals(a, b) {
+  const priority = (row) => {
+    if (row.status === "FAILED") return 0;
+    if (row.status === "IN_PROGRESS") return 1;
+    if (row.status === "NOT_STARTED") return 2;
+    return 3;
+  };
+
+  const priorityDiff = priority(a) - priority(b);
+  if (priorityDiff !== 0) return priorityDiff;
+
+  return (
+    toTimestamp(b.updatedAt || b.createdAt) - toTimestamp(a.updatedAt || a.createdAt)
+  );
+}
+
+function inferDomainKey(row) {
+  const haystack = `${String(row?.lesson?.category?.name || "").toLowerCase()} ${String(
+    row?.lesson?.title || "",
+  ).toLowerCase()}`;
+
+  if (
+    haystack.includes("social") ||
+    haystack.includes("emotion") ||
+    haystack.includes("behavior")
+  ) {
+    return "social";
+  }
+  if (
+    haystack.includes("physical") ||
+    haystack.includes("motor") ||
+    haystack.includes("movement")
+  ) {
+    return "motor";
+  }
+  if (
+    haystack.includes("language") ||
+    haystack.includes("literacy") ||
+    haystack.includes("reading") ||
+    haystack.includes("phonics") ||
+    haystack.includes("communication")
+  ) {
+    return "communication";
+  }
+  if (
+    haystack.includes("creative") ||
+    haystack.includes("art") ||
+    haystack.includes("music")
+  ) {
+    return "creative";
+  }
+  return "thinking";
+}
+
+function findStaffNote(entries) {
+  if (!Array.isArray(entries)) return null;
+  return (
+    entries.find(
+      (entry) =>
+        String(entry?.notes || "").trim() &&
+        ["TEACHER", "ADMIN", "COACH"].includes(entry?.recordedBy?.role),
+    ) || null
+  );
+}
+
+function activityMeta(type) {
+  if (["MEAL", "SNACK", "BOTTLE"].includes(type)) {
+    return {
+      code: "FO",
+      bubble:
+        "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-200",
+    };
+  }
+  if (type === "NAP") {
+    return {
+      code: "RS",
+      bubble:
+        "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-200",
+    };
+  }
+  if (type === "DIAPER_CHANGE") {
+    return {
+      code: "CR",
+      bubble:
+        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-200",
+    };
+  }
+  if (type === "ACTIVITY") {
+    return {
+      code: "AC",
+      bubble:
+        "bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-200",
+    };
+  }
+  if (type === "BEHAVIOR") {
+    return {
+      code: "BV",
+      bubble:
+        "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/60 dark:text-fuchsia-200",
+    };
+  }
+  return {
+    code: "UP",
+    bubble:
+      "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
+  };
+}
+
+function activityTitle(activity) {
+  if (activity?.type === "ACTIVITY") return "Classroom activity";
+  if (activity?.type === "NAP") return "Rest time";
+  if (activity?.type === "DIAPER_CHANGE") return "Care routine";
+  if (["MEAL", "SNACK", "BOTTLE"].includes(activity?.type)) return "Meals and nutrition";
+  if (activity?.type === "BEHAVIOR") return "Behavior update";
+  return "Classroom update";
+}
+
+function activityDescription(activity) {
+  const note = String(activity?.notes || "").trim();
+  if (note) return note;
+
+  const details =
+    activity?.details &&
+    typeof activity.details === "object" &&
+    !Array.isArray(activity.details)
+      ? activity.details
+      : {};
+
+  if (activity?.type === "NAP") {
+    if (details.startTime && details.endTime) {
+      return `Rest time was logged from ${details.startTime} to ${details.endTime}.`;
+    }
+    return "Rest time was logged for the day.";
+  }
+  if (activity?.type === "DIAPER_CHANGE") return "A care routine update was recorded.";
+  if (["MEAL", "SNACK", "BOTTLE"].includes(activity?.type)) {
+    if (details.meal && details.quantity) {
+      return `${details.meal} was recorded with quantity marked as ${String(details.quantity).toLowerCase()}.`;
+    }
+    if (details.meal) return `${details.meal} was served and recorded.`;
+    return "A meal or bottle update was shared.";
+  }
+  if (activity?.type === "ACTIVITY") return "A classroom learning moment was shared.";
+  if (activity?.type === "BEHAVIOR") return "A behavior or regulation update was shared.";
+  return "A new classroom note was added.";
+}
+
+function extractMediaUrls(activity) {
+  const details =
+    activity?.details &&
+    typeof activity.details === "object" &&
+    !Array.isArray(activity.details)
+      ? activity.details
+      : {};
+  const raw = Array.isArray(details.media) ? details.media : [];
+  return raw
+    .map((item) =>
+      typeof item === "string" ? item.trim() : String(item?.url || "").trim(),
+    )
+    .filter(Boolean);
+}
+
+function formatChildAge(birthDate) {
+  const age = formatAge(birthDate);
+  return age ? `${age} old` : "";
+}
+
+function formatTimelineTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatRelativeDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  const now = new Date();
+  const startToday = startOfDayTimestamp(now);
+  const startTarget = startOfDayTimestamp(date);
+  const diffDays = Math.round((startToday - startTarget) / DAY_MS);
+
+  if (diffDays === 0) return `today at ${formatTime(date)}`;
+  if (diffDays === 1) return `yesterday at ${formatTime(date)}`;
+  return formatTimelineTime(date);
+}
+
+function dayPartLabel(value) {
+  if (!value) return "Update";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Update";
+  if (date.getHours() < 12) return "Morning";
+  if (date.getHours() < 17) return "Afternoon";
+  return "Evening";
+}
+
+function formatTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function initials(firstName, lastName) {
+  const first = String(firstName || "").trim().slice(0, 1).toUpperCase();
+  const last = String(lastName || "").trim().slice(0, 1).toUpperCase();
+  return `${first}${last}` || "C";
+}
+
+function toTimestamp(value) {
+  if (!value) return 0;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function startOfDayTimestamp(value) {
+  const date = new Date(value);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }

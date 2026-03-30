@@ -58,7 +58,7 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Only admins and parents can manage permissions" });
     }
 
-    const { permissionType, status, notes, expirationDate } = req.body;
+    const { permissionType, status, notes, expirationDate, effectiveDate, signatureName, signedAt } = req.body;
 
     if (!permissionType || !VALID_TYPES.includes(permissionType)) {
       return res.status(400).json({ error: "Valid permissionType is required" });
@@ -72,13 +72,30 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Parents can only grant or deny permissions" });
     }
 
+    const cleanSignatureName =
+      typeof signatureName === "string" && signatureName.trim()
+        ? signatureName.trim()
+        : null;
+
+    if (session.user.role === "PARENT" && !cleanSignatureName) {
+      return res.status(400).json({ error: "Signature name is required" });
+    }
+
+    const decisionDateSource = effectiveDate || signedAt || new Date().toISOString();
+    const decisionDate = new Date(decisionDateSource);
+    if (Number.isNaN(decisionDate.getTime())) {
+      return res.status(400).json({ error: "Valid decision date is required" });
+    }
+
     const permission = await prisma.childPermission.upsert({
       where: { childId_permissionType: { childId: id, permissionType } },
       update: {
         status,
         notes: notes || null,
         grantedById: session.user.id,
-        effectiveDate: new Date(),
+        signatureName: cleanSignatureName ?? undefined,
+        signedAt: cleanSignatureName || effectiveDate || signedAt ? decisionDate : undefined,
+        effectiveDate: decisionDate,
         expirationDate: expirationDate ? new Date(expirationDate) : null,
       },
       create: {
@@ -87,6 +104,9 @@ export default async function handler(req, res) {
         status,
         notes: notes || null,
         grantedById: session.user.id,
+        signatureName: cleanSignatureName,
+        signedAt: cleanSignatureName ? decisionDate : null,
+        effectiveDate: decisionDate,
         expirationDate: expirationDate ? new Date(expirationDate) : null,
       },
       include: {

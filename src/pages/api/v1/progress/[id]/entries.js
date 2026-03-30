@@ -54,7 +54,7 @@ export default async function handler(req, res) {
     const entries = await prisma.progressEntry.findMany({
       where: { progressId: id },
       orderBy: { occurredAt: "desc" },
-      include: { recordedBy: { select: { id: true, name: true, email: true } } },
+      include: { recordedBy: { select: { id: true, name: true, email: true, role: true } } },
     });
     return res.status(200).json(entries);
   }
@@ -94,7 +94,7 @@ export default async function handler(req, res) {
         recordedById: session.user.id,
         occurredAt: normalizedOccurredAt,
       },
-      include: { recordedBy: { select: { id: true, name: true, email: true } } },
+      include: { recordedBy: { select: { id: true, name: true, email: true, role: true } } },
     });
 
     const shouldAchieve = status === "PASSED" || status === "COMPLETED";
@@ -111,7 +111,7 @@ export default async function handler(req, res) {
         lessonGoal: true,
         entries: {
           orderBy: { occurredAt: "desc" },
-          include: { recordedBy: { select: { id: true, name: true, email: true } } },
+          include: { recordedBy: { select: { id: true, name: true, email: true, role: true } } },
         },
       },
     });

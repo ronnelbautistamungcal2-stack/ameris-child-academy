@@ -7,6 +7,10 @@ function daysAgo(n) {
   return d;
 }
 
+function startOfDay(date = new Date()) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
@@ -55,8 +59,19 @@ export default async function handler(req, res) {
       })
     : [];
 
+  const activityLogs = await prisma.activityLog.findMany({
+    where: {
+      createdAt: { gte: daysAgo(30) },
+      ...(centerId ? { child: { centerId } } : {}),
+    },
+    select: { type: true, createdAt: true },
+    take: 5000,
+  });
+
   const now = new Date();
   const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const today = startOfDay(now);
+  const last30Days = daysAgo(30);
 
   const counts = new Map();
   for (const t of teachers) {
@@ -70,13 +85,23 @@ export default async function handler(req, res) {
     if (l.createdAt >= last24h) row.last24Hours += 1;
   }
 
+  const activityByType = activityLogs.reduce((acc, row) => {
+    acc[row.type] = (acc[row.type] || 0) + 1;
+    return acc;
+  }, {});
+
   return res.status(200).json({
     since: since.toISOString(),
     centerId: centerId || null,
+    activitySummary: {
+      today: activityLogs.filter((row) => row.createdAt >= today).length,
+      week: activityLogs.filter((row) => row.createdAt >= since).length,
+      month: activityLogs.filter((row) => row.createdAt >= last30Days).length,
+      byType: activityByType,
+    },
     teachers: teachers.map((t) => ({
       ...t,
       logs: counts.get(t.id) || { last7Days: 0, last24Hours: 0 },
     })),
   });
 }
-

@@ -7,6 +7,7 @@ import MilestoneCalendarPanel from "@/components/reports/MilestoneCalendarPanel"
 import ActiveGoalsPanel from "@/components/progression/ActiveGoalsPanel";
 import { AGE_GROUPS, ageInMonths, ageGroupKeyFromBirthDate, mapAgeRangeToGroup } from "@/lib/ageUtils";
 import { apiJson } from "@/lib/api";
+import { formatContactLine, getEmergencyContacts, getParentContacts } from "@/lib/child-contacts";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -646,6 +647,8 @@ export default function TeacherChildDetailPage() {
     child?.classRoom?.name || child?.classRoomName || child?.classRoomId || "Unassigned";
   const ageGroupLabel = AGE_GROUPS.find((g) => g.key === childAgeGroupKey)?.label || "Unknown";
   const completionPct = stepRows.length ? pct(completedSteps.length, stepRows.length) : null;
+  const parentContacts = getParentContacts(child);
+  const emergencyContacts = getEmergencyContacts(child);
   const enrollmentLabel = child?.enrollmentStartDate
     ? `${formatDate(child.enrollmentStartDate)} - ${child.enrollmentEndDate ? formatDate(child.enrollmentEndDate) : "Present"}`
     : "Not set";
@@ -747,8 +750,24 @@ export default function TeacherChildDetailPage() {
               <InfoCard label="Classroom" value={classroomLabel} />
               <InfoCard label="DOB" value={formatDate(child.birthDate)} />
               <InfoCard label="Age group" value={ageGroupLabel} />
-              <InfoCard label="Parents" value={child.parent?.name || child.parent?.email || "No parent linked"} />
-              <InfoCard label="Emergency contact" value={child.emergencyContact || "Not provided"} />
+              <InfoCard
+                label="Parents"
+                value={
+                  parentContacts.length
+                    ? parentContacts.map((contact) => formatContactLine(contact)).join(" | ")
+                    : child.parent?.name || child.parent?.email || "No parent linked"
+                }
+              />
+              <InfoCard
+                label="Emergency contacts"
+                value={
+                  emergencyContacts.length
+                    ? emergencyContacts
+                      .map((contact) => formatContactLine(contact, { includeEmail: false }))
+                      .join(" | ")
+                    : "Not provided"
+                }
+              />
               <InfoCard label="Allergies" value={child.allergies || "None listed"} />
               <InfoCard label="Enrollment" value={enrollmentLabel} />
             </div>

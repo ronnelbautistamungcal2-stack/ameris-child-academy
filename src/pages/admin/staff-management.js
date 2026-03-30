@@ -54,6 +54,29 @@ function today() { return new Date().toISOString().split("T")[0]; }
 function currentMonth() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; }
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString() : ""; }
 function fmtDateTime(d) { return d ? new Date(d).toLocaleString() : "—"; }
+function fmtTimeOffRange(start, end) {
+  if (!start || !end) return "—";
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return "—";
+
+  const sameDay =
+    startDate.getFullYear() === endDate.getFullYear() &&
+    startDate.getMonth() === endDate.getMonth() &&
+    startDate.getDate() === endDate.getDate();
+
+  if (sameDay) {
+    return `${startDate.toLocaleDateString()} · ${startDate.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    })} - ${endDate.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    })}`;
+  }
+
+  return `${fmtDateTime(start)} — ${fmtDateTime(end)}`;
+}
 
 export default function StaffManagement() {
   const [activeTab, setActiveTab] = useState("attendance");
@@ -407,7 +430,7 @@ function TimeOffTab({ centerId, teachers }) {
                     <div className="text-xs text-gray-500">
                       <span className="font-semibold text-gray-700">{r.type}</span>
                       {" · "}
-                      {fmtDate(r.startDate)} — {fmtDate(r.endDate)}
+                      {fmtTimeOffRange(r.startDate, r.endDate)}
                       {r.reason && <span className="ml-2 text-gray-400">({r.reason})</span>}
                     </div>
                   </div>
@@ -448,7 +471,7 @@ function TimeOffTab({ centerId, teachers }) {
             <table className="min-w-full text-sm">
               <thead><tr className="border-b border-gray-200 bg-gray-50/80 text-left text-xs font-bold uppercase tracking-wider text-gray-400">
                 <th className="px-4 py-3">Teacher</th><th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Dates</th><th className="px-4 py-3">Reason</th>
+                <th className="px-4 py-3">Dates / Times</th><th className="px-4 py-3">Reason</th>
                 <th className="px-4 py-3">Status</th><th className="px-4 py-3">Reviewed By</th>
               </tr></thead>
               <tbody>
@@ -456,7 +479,7 @@ function TimeOffTab({ centerId, teachers }) {
                   <tr key={r.id} className="border-b border-gray-50 transition hover:bg-blue-50/30">
                     <td className="px-4 py-3 font-semibold text-gray-900">{r.user?.name || "—"}</td>
                     <td className="px-4 py-3">{r.type}</td>
-                    <td className="px-4 py-3 text-gray-600">{fmtDate(r.startDate)} — {fmtDate(r.endDate)}</td>
+                    <td className="px-4 py-3 text-gray-600">{fmtTimeOffRange(r.startDate, r.endDate)}</td>
                     <td className="px-4 py-3 text-gray-500">{r.reason || ""}</td>
                     <td className="px-4 py-3"><Badge map={TIMEOFF_STATUS_BADGE} value={r.status} /></td>
                     <td className="px-4 py-3 text-gray-500">{r.reviewedBy?.name || ""}</td>

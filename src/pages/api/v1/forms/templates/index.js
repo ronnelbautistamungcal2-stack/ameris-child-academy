@@ -1,5 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { assertSubscriptionFeature } from "@/lib/subscriptions";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -17,6 +18,25 @@ export default async function handler(req, res) {
         if (user.role !== "PARENT") {
           const ok = await hasAccessToCenter(user.id, centerId);
           if (!ok) return res.status(403).json({ error: "Forbidden" });
+        }
+        const center = await prisma.center.findUnique({
+          where: { id: centerId },
+          include: { subscription: true },
+        });
+        if (center?.subscription) {
+          try {
+            assertSubscriptionFeature(center.subscription, "forms", { centerId });
+          } catch (error) {
+            return res.status(error.status || 402).json({
+              ok: false,
+              message: error.message,
+              error: {
+                code: error.code,
+                message: error.message,
+                ...(error.details ? { details: error.details } : {}),
+              },
+            });
+          }
         }
         // Include center-specific and global templates for scoped center views.
         where = { ...where, OR: [{ centerId }, { centerId: null }] };
@@ -41,6 +61,27 @@ export default async function handler(req, res) {
     const { title, description, targetRole, schema, centerId: cId, active, requiresRenewal, renewalPeriodDays, autoFillMapping } = req.body || {};
     if (!title || !targetRole) {
       return res.status(400).json({ error: "title and targetRole are required" });
+    }
+    if (cId) {
+      const center = await prisma.center.findUnique({
+        where: { id: cId },
+        include: { subscription: true },
+      });
+      if (center?.subscription) {
+        try {
+          assertSubscriptionFeature(center.subscription, "forms", { centerId: cId });
+        } catch (error) {
+          return res.status(error.status || 402).json({
+            ok: false,
+            message: error.message,
+            error: {
+              code: error.code,
+              message: error.message,
+              ...(error.details ? { details: error.details } : {}),
+            },
+          });
+        }
+      }
     }
 
     const created = await prisma.formTemplate.create({

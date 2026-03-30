@@ -10,12 +10,15 @@ async function main() {
   const teacherPassword = process.env.SEED_TEACHER_PASSWORD || "teacherpass";
   const parentEmail = process.env.SEED_PARENT_EMAIL || "parent@demo.com";
   const parentPassword = process.env.SEED_PARENT_PASSWORD || "parentpass";
+  const coachEmail = process.env.SEED_COACH_EMAIL || "coach@demo.com";
+  const coachPassword = process.env.SEED_COACH_PASSWORD || "coachpass";
 
   if (process.env.NODE_ENV === "production") {
     const missingPasswords = [
       !process.env.SEED_ADMIN_PASSWORD && "SEED_ADMIN_PASSWORD",
       !process.env.SEED_TEACHER_PASSWORD && "SEED_TEACHER_PASSWORD",
       !process.env.SEED_PARENT_PASSWORD && "SEED_PARENT_PASSWORD",
+      !process.env.SEED_COACH_PASSWORD && "SEED_COACH_PASSWORD",
     ].filter(Boolean);
 
     if (missingPasswords.length) {
@@ -26,6 +29,9 @@ async function main() {
   }
 
   const passwordHash = await bcrypt.hash(adminPassword, 10);
+  const teacherHash = await bcrypt.hash(teacherPassword, 10);
+  const parentHash = await bcrypt.hash(parentPassword, 10);
+  const coachHash = await bcrypt.hash(coachPassword, 10);
 
   let center = await prisma.center.findFirst({
     where: { name: "Demo Center" },
@@ -36,51 +42,80 @@ async function main() {
     });
   }
 
-  let admin = await prisma.user.findUnique({
+  const admin = await prisma.user.upsert({
     where: { email: adminEmail },
+    update: {
+      name: "Admin User",
+      password: passwordHash,
+      role: "ADMIN",
+    },
+    create: {
+      email: adminEmail,
+      name: "Admin User",
+      password: passwordHash,
+      role: "ADMIN",
+    },
   });
-  if (!admin) {
-    admin = await prisma.user.create({
-      data: {
-        email: adminEmail,
-        name: "Admin User",
-        password: passwordHash,
-        role: "ADMIN",
-        centers: {
-          create: { center: { connect: { id: center.id } }, role: "ADMIN" },
+
+  const teacher = await prisma.user.upsert({
+    where: { email: teacherEmail },
+    update: {
+      name: "Teacher User",
+      password: teacherHash,
+      role: "TEACHER",
+    },
+    create: {
+      email: teacherEmail,
+      name: "Teacher User",
+      password: teacherHash,
+      role: "TEACHER",
+    },
+  });
+
+  const parent = await prisma.user.upsert({
+    where: { email: parentEmail },
+    update: {
+      name: "Parent User",
+      password: parentHash,
+      role: "PARENT",
+    },
+    create: {
+      email: parentEmail,
+      name: "Parent User",
+      password: parentHash,
+      role: "PARENT",
+    },
+  });
+
+  const coach = await prisma.user.upsert({
+    where: { email: coachEmail },
+    update: {
+      name: "Coach User",
+      password: coachHash,
+      role: "COACH",
+    },
+    create: {
+      email: coachEmail,
+      name: "Coach User",
+      password: coachHash,
+      role: "COACH",
+    },
+  });
+
+  for (const membership of [
+    { userId: admin.id, centerId: center.id, role: "ADMIN" },
+    { userId: teacher.id, centerId: center.id, role: "TEACHER" },
+    { userId: coach.id, centerId: center.id, role: "COACH" },
+  ]) {
+    await prisma.centerUser.upsert({
+      where: {
+        userId_centerId: {
+          userId: membership.userId,
+          centerId: membership.centerId,
         },
       },
-    });
-  }
-
-  // Demo teacher + parent + child
-  const teacherHash = await bcrypt.hash(teacherPassword, 10);
-  const parentHash = await bcrypt.hash(parentPassword, 10);
-
-  let teacher = await prisma.user.findUnique({ where: { email: teacherEmail } });
-  if (!teacher) {
-    teacher = await prisma.user.create({
-      data: {
-        email: teacherEmail,
-        name: "Teacher User",
-        password: teacherHash,
-        role: "TEACHER",
-        centers: {
-          create: { center: { connect: { id: center.id } }, role: "TEACHER" },
-        },
-      },
-    });
-  }
-
-  let parent = await prisma.user.findUnique({ where: { email: parentEmail } });
-  if (!parent) {
-    parent = await prisma.user.create({
-      data: {
-        email: parentEmail,
-        name: "Parent User",
-        password: parentHash,
-        role: "PARENT",
-      },
+      update: { role: membership.role },
+      create: membership,
     });
   }
 
@@ -117,6 +152,69 @@ async function main() {
     });
   }
 
+  await prisma.subscription.upsert({
+    where: { centerId: center.id },
+    update: {
+      tier: "PRO",
+      active: true,
+      expiresAt: null,
+      paymentInfo: {
+        features: {
+          analytics: true,
+          messaging: true,
+          forms: true,
+          exports: true,
+          coachReports: true,
+          teacherMetrics: true,
+          pushNotifications: true,
+          billingPortal: true,
+          autoPay: false,
+        },
+        billing: {
+          provider: "manual",
+          customerId: "demo-center",
+          supportEmail: "billing@demo.com",
+          invoiceEmail: "billing@demo.com",
+          paymentLinkUrl: "mailto:billing@demo.com?subject=Ameris%20Academy%20Payment",
+          portalUrl: "mailto:billing@demo.com?subject=Ameris%20Academy%20Billing%20Portal",
+          autopayEnabled: false,
+          cardBrand: "Demo",
+          cardLast4: "0001",
+        },
+      },
+    },
+    create: {
+      centerId: center.id,
+      tier: "PRO",
+      active: true,
+      expiresAt: null,
+      paymentInfo: {
+        features: {
+          analytics: true,
+          messaging: true,
+          forms: true,
+          exports: true,
+          coachReports: true,
+          teacherMetrics: true,
+          pushNotifications: true,
+          billingPortal: true,
+          autoPay: false,
+        },
+        billing: {
+          provider: "manual",
+          customerId: "demo-center",
+          supportEmail: "billing@demo.com",
+          invoiceEmail: "billing@demo.com",
+          paymentLinkUrl: "mailto:billing@demo.com?subject=Ameris%20Academy%20Payment",
+          portalUrl: "mailto:billing@demo.com?subject=Ameris%20Academy%20Billing%20Portal",
+          autopayEnabled: false,
+          cardBrand: "Demo",
+          cardLast4: "0001",
+        },
+      },
+    },
+  });
+
   // Demo invite codes (for signup flows)
   const invites = [
     { code: "PARENTDEMO", role: "PARENT" },
@@ -142,7 +240,13 @@ async function main() {
     }
   }
 
-  console.log("Seeded:", { centerId: center.id, adminEmail: admin.email });
+  console.log("Seeded:", {
+    centerId: center.id,
+    adminEmail: admin.email,
+    teacherEmail: teacher.email,
+    parentEmail: parent.email,
+    coachEmail: coach.email,
+  });
 }
 
 main()

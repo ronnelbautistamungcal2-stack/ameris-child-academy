@@ -1,4 +1,3 @@
-import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 import CoachLayout from "@/components/coach/CoachLayout";
 import {
@@ -11,6 +10,7 @@ import {
   coachInputClass,
   coachSecondaryButtonClass,
 } from "@/components/coach/CoachPage";
+import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 
@@ -37,9 +37,6 @@ const CATEGORY_TONES = {
 };
 
 export default function CoachChecklists() {
-  const router = useRouter();
-  const { centerId: qCenterId } = router.query;
-
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
   const [checklists, setChecklists] = useState([]);
@@ -49,18 +46,19 @@ export default function CoachChecklists() {
   const [selectedDate, setSelectedDate] = useState(todayStr());
   const [completing, setCompleting] = useState("");
 
+  useSyncedCenterId(centerId, setCenterId, centers);
+
   useEffect(() => {
     (async () => {
       try {
         const response = await apiJson("/api/v1/centers");
         const nextCenters = Array.isArray(response) ? response : [];
         setCenters(nextCenters);
-        setCenterId(String(qCenterId || (nextCenters.length === 1 ? nextCenters[0].id : "")));
       } catch {
         // ignore, page fetch will surface errors
       }
     })();
-  }, [qCenterId]);
+  }, []);
 
   async function loadChecklists() {
     if (!centerId) return;
@@ -177,14 +175,14 @@ export default function CoachChecklists() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <label className="block sm:col-span-2">
                 <div className="mb-1.5 text-xs font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
-                  Center
+                  Center View
                 </div>
                 <select
                   value={centerId}
                   onChange={(event) => setCenterId(event.target.value)}
                   className={coachInputClass}
                 >
-                  <option value="">Select a center...</option>
+                  <option value="">Select a center to load checklists...</option>
                   {centers.map((center) => (
                     <option key={center.id} value={center.id}>
                       {center.name}

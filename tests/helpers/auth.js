@@ -28,6 +28,28 @@ async function getAuthCookie(request, email, password) {
   return setCookieHeader;
 }
 
+function getSessionCookieValue(setCookieHeader) {
+  const match = String(setCookieHeader || "").match(
+    /(?:__Secure-)?next-auth\.session-token=([^;]+)/,
+  );
+  if (!match) {
+    throw new Error("Unable to find NextAuth session cookie");
+  }
+  return decodeURIComponent(match[1]);
+}
+
+function buildBrowserSessionCookie(setCookieHeader) {
+  const value = getSessionCookieValue(setCookieHeader);
+  return {
+    name: "next-auth.session-token",
+    value,
+    domain: "localhost",
+    path: "/",
+    httpOnly: true,
+    sameSite: "Lax",
+  };
+}
+
 async function loginAsAdmin(request) {
   return getAuthCookie(request, "admin@demo.com", "adminpass");
 }
@@ -40,4 +62,11 @@ async function loginAsParent(request) {
   return getAuthCookie(request, "parent@demo.com", "parentpass");
 }
 
-module.exports = { getAuthCookie, loginAsAdmin, loginAsTeacher, loginAsParent };
+module.exports = {
+  getAuthCookie,
+  getSessionCookieValue,
+  buildBrowserSessionCookie,
+  loginAsAdmin,
+  loginAsTeacher,
+  loginAsParent,
+};

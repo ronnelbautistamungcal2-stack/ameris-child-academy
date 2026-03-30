@@ -28,6 +28,62 @@ const TYPE_LABELS = {
   OTHER: "Other",
 };
 
+const MEAL_OCCASIONS = [
+  { value: "BREAKFAST", label: "Breakfast" },
+  { value: "AM_SNACK", label: "AM snack" },
+  { value: "LUNCH", label: "Lunch" },
+  { value: "PM_SNACK", label: "PM snack" },
+  { value: "DINNER", label: "Dinner" },
+  { value: "EVENING_SNACK", label: "Evening snack" },
+];
+
+const PORTION_OPTIONS = [
+  { value: "ALL", label: "All" },
+  { value: "MOST", label: "Most" },
+  { value: "SOME", label: "Some" },
+  { value: "NONE", label: "None" },
+];
+
+const BOTTLE_PORTION_OPTIONS = [
+  { value: "FULL", label: "Full" },
+  { value: "MOST", label: "Most" },
+  { value: "HALF", label: "Half" },
+  { value: "SOME", label: "Some" },
+  { value: "NONE", label: "None" },
+];
+
+function toTimeInputValue(date) {
+  const value = date instanceof Date ? date : new Date(date || Date.now());
+  if (Number.isNaN(value.getTime())) return "";
+  const hours = String(value.getHours()).padStart(2, "0");
+  const minutes = String(value.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function buildCreatedAtForToday(timeValue) {
+  const trimmed = String(timeValue || "").trim();
+  if (!trimmed) return null;
+  const [hoursRaw, minutesRaw] = trimmed.split(":");
+  const hours = Number(hoursRaw);
+  const minutes = Number(minutesRaw);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  const now = new Date();
+  const value = new Date(now);
+  value.setHours(hours, minutes, 0, 0);
+  return value;
+}
+
+function defaultActivityFields(nextType) {
+  return {
+    activityTime: toTimeInputValue(new Date()),
+    napStartTime: nextType === "NAP" ? toTimeInputValue(new Date()) : "",
+    napEndTime: "",
+    mealType: nextType === "SNACK" ? "AM_SNACK" : "BREAKFAST",
+    quantity: "ALL",
+    bottleQuantity: "FULL",
+  };
+}
+
 const ASSESSMENT_DOMAINS = [
   {
     key: "cognitive",
@@ -184,6 +240,7 @@ export default function TeacherLogs() {
   const [bulkChildIds, setBulkChildIds] = useState([]);
 
   const [type, setType] = useState("MEAL");
+  const [activityFields, setActivityFields] = useState(() => defaultActivityFields("MEAL"));
   const [notes, setNotes] = useState("");
   const [dailyGrade, setDailyGrade] = useState("");
   const [assessmentOpen, setAssessmentOpen] = useState(false);
@@ -353,6 +410,30 @@ export default function TeacherLogs() {
     () => new Set(bulkChildIds || []),
     [bulkChildIds],
   );
+
+  const selectedMealOptions = useMemo(() => {
+    if (type === "SNACK") {
+      return MEAL_OCCASIONS.filter((option) => option.value.includes("SNACK"));
+    }
+    return MEAL_OCCASIONS;
+  }, [type]);
+
+  function handleTypeChange(nextType) {
+    setType(nextType);
+    setActivityFields((current) => {
+      const defaults = defaultActivityFields(nextType);
+      return {
+        ...defaults,
+        activityTime: current.activityTime || defaults.activityTime,
+        napStartTime: nextType === "NAP" ? current.napStartTime || defaults.napStartTime : "",
+        napEndTime: nextType === "NAP" ? current.napEndTime : "",
+      };
+    });
+  }
+
+  function updateActivityField(field, value) {
+    setActivityFields((current) => ({ ...current, [field]: value }));
+  }
 
   function toggleBulkChild(id, next) {
     setBulkChildIds((prev) => {
@@ -626,10 +707,54 @@ export default function TeacherLogs() {
       details = { kind: "DAILY_GRADE", grade: gradeNum };
     }
 
+    const timeValue = activityFields.activityTime || toTimeInputValue(new Date());
+    if (payloadType === "NAP") {
+      details = {
+        ...(details || {}),
+        time: activityFields.napStartTime || timeValue,
+        startTime: activityFields.napStartTime || "",
+        endTime: activityFields.napEndTime || "",
+      };
+    } else if (["MEAL", "SNACK"].includes(payloadType)) {
+      const mealType =
+        selectedMealOptions.find((option) => option.value === activityFields.mealType)?.label ||
+        activityFields.mealType ||
+        "";
+      details = {
+        ...(details || {}),
+        time: timeValue,
+        meal: mealType,
+        mealType: activityFields.mealType,
+        quantity: activityFields.quantity || "ALL",
+      };
+    } else if (payloadType === "BOTTLE") {
+      details = {
+        ...(details || {}),
+        time: timeValue,
+        quantity: activityFields.bottleQuantity || "FULL",
+      };
+    } else {
+      details = {
+        ...(details || {}),
+        time: timeValue,
+      };
+    }
+
     if (photoUrls.length) {
       details = { ...(details || {}), media: photoUrls };
     }
-    return { payloadType, details };
+
+    const createdAtSource =
+      payloadType === "NAP"
+        ? activityFields.napStartTime || activityFields.activityTime
+        : activityFields.activityTime;
+    const createdAt = buildCreatedAtForToday(createdAtSource);
+
+    return {
+      payloadType,
+      details,
+      createdAt: createdAt ? createdAt.toISOString() : undefined,
+    };
   }
 
   async function submitSingle(e) {
@@ -643,15 +768,16 @@ export default function TeacherLogs() {
     setSuccess("");
     try {
       const { urls: photoUrls, warning } = await uploadPhotoUrls();
-      const { payloadType, details } = buildPayload(photoUrls);
+      const { payloadType, details, createdAt } = buildPayload(photoUrls);
       await apiJson("/api/v1/activities", {
         method: "POST",
-        body: JSON.stringify({ childId, type: payloadType, notes, details }),
+        body: JSON.stringify({ childId, type: payloadType, notes, details, createdAt }),
       });
       setNotes("");
       setDailyGrade("");
       setDomainScores({});
       setAssessmentOpen(false);
+      setActivityFields(defaultActivityFields(type));
       clearPhotos();
       toast.success(
         warning
@@ -675,7 +801,7 @@ export default function TeacherLogs() {
     setSuccess("");
     try {
       const { urls: photoUrls, warning } = await uploadPhotoUrls();
-      const { payloadType, details } = buildPayload(photoUrls);
+      const { payloadType, details, createdAt } = buildPayload(photoUrls);
 
       let ok = 0;
       const failures = [];
@@ -683,7 +809,7 @@ export default function TeacherLogs() {
         try {
           await apiJson("/api/v1/activities", {
             method: "POST",
-            body: JSON.stringify({ childId: id, type: payloadType, notes, details }),
+            body: JSON.stringify({ childId: id, type: payloadType, notes, details, createdAt }),
           });
           ok += 1;
         } catch (e2) {
@@ -695,6 +821,7 @@ export default function TeacherLogs() {
       setDailyGrade("");
       setDomainScores({});
       setAssessmentOpen(false);
+      setActivityFields(defaultActivityFields(type));
       clearPhotos();
       setBulkChildIds([]);
       if (failures.length) {
@@ -724,7 +851,7 @@ export default function TeacherLogs() {
           <div>
             <h2 className="text-lg font-extrabold text-gray-900">Daily Activity Logging</h2>
             <p className="mt-1 text-sm text-gray-600">
-              Teachers cannot backdate activity logs. Bulk logging is supported.
+              Teachers can set the time for today's entry, but the date stays locked to today. Bulk logging is supported.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1050,7 +1177,7 @@ export default function TeacherLogs() {
               </div>
             </div>
             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <label className="block">
+              <div className="block">
                 <div className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
                   <Icons.list className="h-3.5 w-3.5" />
                   Type
@@ -1058,7 +1185,7 @@ export default function TeacherLogs() {
                 <select
                   className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
                   value={type}
-                  onChange={(e) => setType(e.target.value)}
+                  onChange={(e) => handleTypeChange(e.target.value)}
                 >
                   {TYPES.map((t) => (
                     <option key={t} value={t}>
@@ -1071,7 +1198,7 @@ export default function TeacherLogs() {
                     <button
                       key={t}
                       type="button"
-                      onClick={() => setType(t)}
+                      onClick={() => handleTypeChange(t)}
                       className={[
                         "rounded-full border px-3 py-1 text-xs font-semibold transition",
                         type === t
@@ -1086,18 +1213,136 @@ export default function TeacherLogs() {
                 <div className="mt-2 text-xs text-gray-600">
                   Daily grade uses type <span className="font-semibold">OTHER</span> automatically.
                 </div>
-              </label>
+              </div>
 
-              <label className="block">
+              <div className="rounded-lg border border-gray-200 bg-white p-3">
+                <div className="mb-2 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <Icons.info className="h-3.5 w-3.5" />
+                  Activity requirements
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {type === "NAP" ? (
+                    <>
+                      <label className="block">
+                        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          Start time
+                        </div>
+                        <input
+                          type="time"
+                          value={activityFields.napStartTime}
+                          onChange={(e) => updateActivityField("napStartTime", e.target.value)}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        />
+                      </label>
+                      <label className="block">
+                        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          End time
+                        </div>
+                        <input
+                          type="time"
+                          value={activityFields.napEndTime}
+                          onChange={(e) => updateActivityField("napEndTime", e.target.value)}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        />
+                      </label>
+                    </>
+                  ) : (
+                    <label className="block">
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Time
+                      </div>
+                      <input
+                        type="time"
+                        value={activityFields.activityTime}
+                        onChange={(e) => updateActivityField("activityTime", e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+                  )}
+
+                  {["MEAL", "SNACK"].includes(type) ? (
+                    <>
+                      <label className="block">
+                        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          Meal type
+                        </div>
+                        <select
+                          value={activityFields.mealType}
+                          onChange={(e) => updateActivityField("mealType", e.target.value)}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        >
+                          {selectedMealOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block">
+                        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          Quantity
+                        </div>
+                        <select
+                          value={activityFields.quantity}
+                          onChange={(e) => updateActivityField("quantity", e.target.value)}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        >
+                          {PORTION_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </>
+                  ) : null}
+
+                  {type === "BOTTLE" ? (
+                    <label className="block">
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Quantity
+                      </div>
+                      <select
+                        value={activityFields.bottleQuantity}
+                        onChange={(e) => updateActivityField("bottleQuantity", e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      >
+                        {BOTTLE_PORTION_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                </div>
+                <div className="mt-3 text-xs text-gray-600">
+                  {type === "NAP"
+                    ? "Nap entries capture a start time, end time, and description."
+                    : ["MEAL", "SNACK"].includes(type)
+                      ? "Meal entries capture the time, meal type, quantity, and description."
+                      : type === "BOTTLE"
+                        ? "Bottle entries capture the time, quantity, and description."
+                        : "Other entries capture the time and description."}
+                </div>
+              </div>
+
+              <label className="block md:col-span-2">
                 <div className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
                   <Icons.note className="h-3.5 w-3.5" />
-                  Notes (optional)
+                  Description
                 </div>
                 <textarea
                   className="min-h-[96px] w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Short note about the activity"
+                  placeholder={
+                    type === "NAP"
+                      ? "Add a short rest-time note"
+                      : ["MEAL", "SNACK", "BOTTLE"].includes(type)
+                        ? "Add meal or feeding details"
+                        : "Add a short note about the activity"
+                  }
                 />
               </label>
             </div>

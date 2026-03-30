@@ -1,5 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { normalizeSubscription } from "@/lib/subscriptions";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -24,7 +25,10 @@ export default async function handler(req, res) {
       },
     });
     if (!center) return res.status(404).json({ error: "Center not found" });
-    return res.status(200).json(center);
+    return res.status(200).json({
+      ...center,
+      subscription: normalizeSubscription(center.subscription),
+    });
   }
 
   if (req.method === "PUT") {

@@ -15,8 +15,58 @@ function toDateInputValue(date) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function fmtDate(d) {
-  return d ? new Date(d).toLocaleDateString() : "—";
+function toTimeInputValue(date) {
+  if (!date) return "";
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+function buildDateTime(dateValue, timeValue, fallback = "00:00") {
+  const datePart = String(dateValue || "").trim();
+  if (!datePart) return null;
+  const timePart = String(timeValue || fallback).trim() || fallback;
+  const value = new Date(`${datePart}T${timePart}`);
+  return Number.isNaN(value.getTime()) ? null : value;
+}
+
+function fmtDateTime(d) {
+  if (!d) return "—";
+  const value = new Date(d);
+  if (Number.isNaN(value.getTime())) return "—";
+  return value.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function fmtRange(start, end) {
+  if (!start || !end) return "—";
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return "—";
+
+  const sameDay =
+    startDate.getFullYear() === endDate.getFullYear() &&
+    startDate.getMonth() === endDate.getMonth() &&
+    startDate.getDate() === endDate.getDate();
+
+  if (sameDay) {
+    return `${startDate.toLocaleDateString()} · ${startDate.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    })} - ${endDate.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    })}`;
+  }
+
+  return `${fmtDateTime(start)} — ${fmtDateTime(end)}`;
 }
 
 const STATUS_BADGE = {
@@ -38,6 +88,8 @@ export default function TeacherTimeOff() {
 
   const [startDate, setStartDate] = useState(toDateInputValue(new Date()));
   const [endDate, setEndDate] = useState(toDateInputValue(new Date()));
+  const [startTime, setStartTime] = useState(toTimeInputValue(new Date()) || "08:00");
+  const [endTime, setEndTime] = useState("17:00");
   const [requestType, setRequestType] = useState("PTO");
   const [reason, setReason] = useState("");
   const [cancelTarget, setCancelTarget] = useState(null);
@@ -100,9 +152,9 @@ export default function TeacherTimeOff() {
     setSuccess("");
     try {
       if (!startDate || !endDate) throw new Error("Start and end date are required.");
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) throw new Error("Invalid date.");
+      const start = buildDateTime(startDate, startTime, "00:00");
+      const end = buildDateTime(endDate, endTime, "23:59");
+      if (!start || !end) throw new Error("Invalid date or time.");
       if (end < start) throw new Error("End date cannot be before start date.");
 
       await apiJson("/api/v1/time-off", {
@@ -110,8 +162,8 @@ export default function TeacherTimeOff() {
         body: JSON.stringify({
           centerId,
           type: requestType,
-          startDate,
-          endDate,
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
           reason: reason || null,
         }),
       });
@@ -153,7 +205,7 @@ export default function TeacherTimeOff() {
             <div>
               <h2 className="text-lg font-extrabold text-gray-900">Time Off Request</h2>
               <p className="mt-1 text-sm text-gray-600">
-                Submit PTO requests and view your time off calendar.
+                Submit PTO requests here. Approvals are managed from the admin portal under Staff Management.
               </p>
             </div>
 
@@ -204,6 +256,16 @@ export default function TeacherTimeOff() {
                         <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
                           className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm" required />
                       </label>
+                      <label className="block">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Start time</div>
+                        <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)}
+                          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm" required />
+                      </label>
+                      <label className="block">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">End time</div>
+                        <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
+                          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm" required />
+                      </label>
                     </div>
 
                     <label className="block">
@@ -215,7 +277,7 @@ export default function TeacherTimeOff() {
                     </label>
 
                     <label className="block">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Reason (optional)</div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Reason</div>
                       <input value={reason} onChange={(e) => setReason(e.target.value)}
                         className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm" placeholder="Short note" />
                     </label>
@@ -243,7 +305,7 @@ export default function TeacherTimeOff() {
                           <div className="text-xs font-semibold text-emerald-700 mb-1">Approved Time Off</div>
                           {approved.map((r) => (
                             <div key={r.id} className="text-sm text-emerald-800">
-                              {r.type} &middot; {fmtDate(r.startDate)} — {fmtDate(r.endDate)}
+                              {r.type} &middot; {fmtRange(r.startDate, r.endDate)}
                               {r.reason && <span className="text-emerald-600 ml-1">({r.reason})</span>}
                             </div>
                           ))}
@@ -255,7 +317,7 @@ export default function TeacherTimeOff() {
                           <div className="flex items-center justify-between gap-3">
                             <div>
                               <div className="text-sm font-extrabold text-gray-900">{r.type || "Time off"}</div>
-                              <div className="mt-1 text-sm text-gray-700">{fmtDate(r.startDate)} — {fmtDate(r.endDate)}</div>
+                              <div className="mt-1 text-sm text-gray-700">{fmtRange(r.startDate, r.endDate)}</div>
                               {r.reason && <div className="mt-1 text-xs text-gray-600">{r.reason}</div>}
                             </div>
                             <div className="flex items-center gap-2">
@@ -275,7 +337,7 @@ export default function TeacherTimeOff() {
                               {r.status}
                             </span>
                           </div>
-                          <div className="mt-1 text-sm text-gray-700">{fmtDate(r.startDate)} — {fmtDate(r.endDate)}</div>
+                          <div className="mt-1 text-sm text-gray-700">{fmtRange(r.startDate, r.endDate)}</div>
                           {r.reason && <div className="mt-1 text-xs text-gray-600">{r.reason}</div>}
                           {r.reviewNotes && <div className="mt-1 text-xs text-gray-500 italic">Review: {r.reviewNotes}</div>}
                         </div>
@@ -289,7 +351,7 @@ export default function TeacherTimeOff() {
               <div className="rounded-2xl border border-gray-200 bg-white p-5">
                 <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Calendar view</div>
                 <p className="mt-1 text-sm text-gray-600">
-                  Visual overview of approved and pending time off across the center.
+                  Visual overview of approved time off across the center. Pending requests stay off the calendar until approved.
                 </p>
                 <div className="mt-3">
                   <MonthlyCalendar

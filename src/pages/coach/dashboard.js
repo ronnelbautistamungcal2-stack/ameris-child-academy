@@ -13,6 +13,7 @@ import {
   coachSecondaryButtonClass,
 } from "@/components/coach/CoachPage";
 import { SkeletonCard, SkeletonTable } from "@/components/ui/Skeleton";
+import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
 
 export default function CoachDashboard() {
@@ -22,18 +23,14 @@ export default function CoachDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  useSyncedCenterId(centerId, setCenterId, centers);
+
   useEffect(() => {
     (async () => {
       try {
         const response = await apiJson("/api/v1/centers");
         const nextCenters = Array.isArray(response) ? response : [];
         setCenters(nextCenters);
-
-        if (nextCenters.length === 1) {
-          setCenterId(nextCenters[0].id);
-          return;
-        }
-
         setLoading(false);
       } catch (err) {
         setError(err.message || "Failed to load centers");
@@ -109,14 +106,14 @@ export default function CoachDashboard() {
             centers.length > 0 ? (
               <label className="block">
                 <div className="mb-1.5 text-xs font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
-                  Center
+                  Center View
                 </div>
                 <select
                   value={centerId}
                   onChange={(event) => setCenterId(event.target.value)}
                   className={coachInputClass}
                 >
-                  <option value="">Select a center...</option>
+                  <option value="">Select a center to load data...</option>
                   {centers.map((center) => (
                     <option key={center.id} value={center.id}>
                       {center.name}
@@ -254,7 +251,7 @@ export default function CoachDashboard() {
                             <div className="text-sm font-black text-gray-900 dark:text-gray-100">
                               {teacher.name || teacher.email}
                             </div>
-                            <div className="truncate text-xs text-gray-500 dark:text-gray-400">
+                            <div className="break-words text-xs text-gray-500 dark:text-gray-400">
                               {teacher.email}
                             </div>
                           </div>
@@ -275,12 +272,18 @@ export default function CoachDashboard() {
                           )}
                         </div>
 
-                        <div className="mt-4 grid grid-cols-2 gap-2">
+                        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
                           <Link
                             href={`/coach/observations?teacherId=${teacher.id}&centerId=${centerId}`}
                             className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2 text-center text-xs font-black uppercase tracking-[0.12em] text-sky-700 transition hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300"
                           >
                             Observe
+                          </Link>
+                          <Link
+                            href={buildTeacherMessageLink(centerId, teacher)}
+                            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-center text-xs font-black uppercase tracking-[0.12em] text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200"
+                          >
+                            Message
                           </Link>
                           <Link
                             href={`/coach/follow-ups?assignedToId=${teacher.id}&centerId=${centerId}`}
@@ -328,8 +331,8 @@ export default function CoachDashboard() {
                           className="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80"
                         >
                           <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                              <div className="text-sm font-black text-gray-900 dark:text-gray-100">
+                            <div className="min-w-0">
+                              <div className="break-words text-sm font-black text-gray-900 dark:text-gray-100">
                                 {plan.title}
                               </div>
                               <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -372,9 +375,10 @@ export default function CoachDashboard() {
                                 .map((item) => (
                                   <CoachBadge
                                     key={item.id}
-                                    tone={item.priority === "CRITICAL" ? "rose" : "amber"}
-                                  >
-                                    {item.title}
+                                     tone={item.priority === "CRITICAL" ? "rose" : "amber"}
+                                     className="max-w-full"
+                                   >
+                                    <span className="break-words">{item.title}</span>
                                   </CoachBadge>
                                 ))}
                             </div>
@@ -408,7 +412,7 @@ export default function CoachDashboard() {
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <div className="text-sm font-black text-rose-900 dark:text-rose-200">
+                            <div className="break-words text-sm font-black text-rose-900 dark:text-rose-200">
                               {alarm.title}
                             </div>
                             <div className="mt-1 text-xs text-rose-700 dark:text-rose-300">
@@ -490,7 +494,7 @@ export default function CoachDashboard() {
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <div className="text-sm font-black text-gray-900 dark:text-gray-100">
+                            <div className="break-words text-sm font-black text-gray-900 dark:text-gray-100">
                               {observation.teacher?.name || observation.teacher?.email || "Teacher"}
                             </div>
                             <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -561,6 +565,19 @@ function SnapshotRow({ label, value, detail, tone }) {
       <div className="mt-1 text-sm opacity-80">{detail}</div>
     </div>
   );
+}
+
+function buildTeacherMessageLink(centerId, teacher) {
+  const params = new URLSearchParams();
+  if (centerId) params.set("centerId", centerId);
+  params.set("compose", "1");
+  params.set("recipientId", teacher.id);
+  params.set("recipientName", teacher.name || teacher.email || "Teacher");
+  if (teacher.email) params.set("recipientEmail", teacher.email);
+  params.set("recipientRole", "TEACHER");
+  params.set("subject", "Coaching follow-up");
+
+  return `/coach/messages?${params.toString()}`;
 }
 
 function initials(value) {

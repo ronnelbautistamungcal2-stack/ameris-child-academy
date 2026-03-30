@@ -1223,6 +1223,10 @@ function buildActivityFacts(activity) {
     facts.push({ label: "Care type", value: "Toileting" });
   }
   if (details.meal) facts.push({ label: "Meal", value: String(details.meal) });
+  if (details.quantity) facts.push({ label: "Quantity", value: String(details.quantity) });
+  if (details.startTime && details.endTime) {
+    facts.push({ label: "Nap", value: `${details.startTime} - ${details.endTime}` });
+  }
   if (details.time) facts.push({ label: "Logged time", value: String(details.time) });
   const media = extractMediaUrls(activity);
   if (media.length) {

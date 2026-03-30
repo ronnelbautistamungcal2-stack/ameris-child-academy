@@ -2,6 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import { apiJson } from "@/lib/api";
 import { useUserSocket, useNotifications } from "@/hooks/useSocket";
+import {
+  disableBrowserNotifications,
+  enableBrowserNotifications,
+  getBrowserNotificationPreference,
+  showBrowserNotification,
+  supportsBrowserNotifications,
+} from "@/lib/browser-notifications";
 
 /* ── Toast notification popup ── */
 function NotificationToast({ notification, onClose, onClick }) {
@@ -77,6 +84,11 @@ const TYPE_ICONS = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   ),
+  FORM_RENEWAL: (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0119 9.414V19a2 2 0 01-2 2z" />
+    </svg>
+  ),
 };
 
 const TYPE_COLORS = {
@@ -85,6 +97,7 @@ const TYPE_COLORS = {
   ACTIVITY_UPDATE: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400",
   PROGRESS_UPDATE: "bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-400",
   SYSTEM: "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400",
+  FORM_RENEWAL: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
 };
 
 export default function NotificationBell({ userId }) {
@@ -94,6 +107,8 @@ export default function NotificationBell({ userId }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [toasts, setToasts] = useState([]);
+  const [browserAlertsEnabled, setBrowserAlertsEnabled] = useState(false);
+  const [browserAlertsSupported, setBrowserAlertsSupported] = useState(false);
   const dropdownRef = useRef(null);
 
   const socket = useUserSocket(userId);
@@ -115,6 +130,11 @@ export default function NotificationBell({ userId }) {
     if (userId) fetchNotifications();
   }, [userId, fetchNotifications]);
 
+  useEffect(() => {
+    setBrowserAlertsSupported(supportsBrowserNotifications());
+    setBrowserAlertsEnabled(getBrowserNotificationPreference());
+  }, []);
+
   // Real-time notification updates
   useNotifications(
     socket,
@@ -124,6 +144,7 @@ export default function NotificationBell({ userId }) {
         setUnreadCount((prev) => prev + 1);
         // Show toast popup
         setToasts((prev) => [...prev, { ...notification, _toastId: Date.now() + Math.random() }]);
+        showBrowserNotification(notification).catch(() => null);
       },
       [],
     ),
@@ -191,6 +212,18 @@ export default function NotificationBell({ userId }) {
     }
   }
 
+  async function toggleBrowserAlerts() {
+    if (!browserAlertsSupported) return;
+    if (browserAlertsEnabled) {
+      disableBrowserNotifications();
+      setBrowserAlertsEnabled(false);
+      return;
+    }
+
+    const result = await enableBrowserNotifications();
+    setBrowserAlertsEnabled(!!result.enabled);
+  }
+
   return (
     <>
       {/* Toast popup container — fixed top-right */}
@@ -234,15 +267,26 @@ export default function NotificationBell({ userId }) {
         <div className="absolute right-0 top-12 z-50 w-80 rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-800 sm:w-96" role="menu" aria-label="Notifications">
           <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 dark:border-gray-700">
             <h3 className="text-sm font-extrabold text-gray-900 dark:text-gray-100">Notifications</h3>
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={markAllRead}
-                className="text-xs font-semibold text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300"
-              >
-                Mark all as read
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {browserAlertsSupported ? (
+                <button
+                  type="button"
+                  onClick={toggleBrowserAlerts}
+                  className="text-xs font-semibold text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
+                >
+                  {browserAlertsEnabled ? "Disable browser alerts" : "Enable browser alerts"}
+                </button>
+              ) : null}
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={markAllRead}
+                  className="text-xs font-semibold text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300"
+                >
+                  Mark all as read
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="max-h-[400px] overflow-y-auto">

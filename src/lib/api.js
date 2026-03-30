@@ -22,11 +22,15 @@ export async function apiJson(url, options) {
 
     if (!res.ok) {
       const message =
-        (data && (data.error || data.message)) ||
+        (typeof data?.error === "string" && data.error) ||
+        data?.error?.message ||
+        data?.message ||
         `${res.status} ${res.statusText}`.trim();
       const err = new Error(message);
       err.status = res.status;
       err.data = data;
+      err.code = data?.error?.code || null;
+      err.details = data?.error?.details || null;
       throw err;
     }
 

@@ -33,20 +33,27 @@ export default function Login() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const res = await signIn("credentials", {
-      redirect: false,
-      email,
-      password,
-    });
-    setLoading(false);
-    if (res && !res.error) {
-      router.replace(callbackUrl || "/dashboard");
-    } else {
-      setError(
-        res?.error === "CredentialsSignin"
-          ? "Invalid email or password. Please try again."
-          : res?.error || "Login failed. Please try again.",
-      );
+    try {
+      const res = await signIn("credentials", {
+        redirect: false,
+        email,
+        password,
+      });
+      if (res && !res.error) {
+        router.replace(callbackUrl || "/dashboard");
+      } else {
+        setError(
+          res?.error === "CredentialsSignin"
+            ? "Invalid email or password. Please try again."
+            : res?.error === "AUTH_SERVICE_UNAVAILABLE"
+              ? "Authentication service is unavailable. Check the database connection and seed data."
+              : res?.error || "Login failed. Please try again.",
+        );
+      }
+    } catch (err) {
+      setError(err?.message || "Login failed. Please try again.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -70,7 +77,7 @@ export default function Login() {
             <AmerisLogo size="sm" showText={false} className="h-10 w-10 rounded-2xl" />
             <div>
               <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">Ameris Academy</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">Childcare</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Operations Platform</div>
             </div>
           </Link>
           <div className="flex items-center gap-3">
@@ -275,7 +282,7 @@ export default function Login() {
   );
 }
 
-/* ── Illustrations ────────────────────────────────────── */
+/* Illustrations */
 
 function LeftIllustration() {
   return (

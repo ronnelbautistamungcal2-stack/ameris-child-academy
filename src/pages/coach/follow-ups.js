@@ -14,7 +14,10 @@ import {
   coachSecondaryButtonClass,
   coachTextareaClass,
 } from "@/components/coach/CoachPage";
+import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { SkeletonTable } from "@/components/ui/Skeleton";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useToast } from "@/contexts/ToastContext";
 import { apiJson } from "@/lib/api";
 
 const TYPES = [
@@ -49,7 +52,8 @@ const INITIAL_FORM = {
 
 export default function CoachFollowUps() {
   const router = useRouter();
-  const { centerId: qCenterId, assignedToId: qAssignedToId } = router.query;
+  const { assignedToId: qAssignedToId } = router.query;
+  const toast = useToast();
 
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
@@ -63,6 +67,9 @@ export default function CoachFollowUps() {
   const [assigneeFilter, setAssigneeFilter] = useState("");
   const [form, setForm] = useState(INITIAL_FORM);
   const [saving, setSaving] = useState(false);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState("");
+
+  useSyncedCenterId(centerId, setCenterId, centers);
 
   useEffect(() => {
     (async () => {
@@ -70,12 +77,11 @@ export default function CoachFollowUps() {
         const response = await apiJson("/api/v1/centers");
         const nextCenters = Array.isArray(response) ? response : [];
         setCenters(nextCenters);
-        setCenterId(String(qCenterId || (nextCenters.length === 1 ? nextCenters[0].id : "")));
       } catch {
         // ignore; subsequent calls surface real errors
       }
     })();
-  }, [qCenterId]);
+  }, []);
 
   useEffect(() => {
     if (!qAssignedToId) return;
@@ -83,6 +89,18 @@ export default function CoachFollowUps() {
     setShowForm(true);
     setForm((current) => ({ ...current, assignedToId: String(qAssignedToId) }));
   }, [qAssignedToId]);
+
+  useEffect(() => {
+    if (!assigneeFilter) return;
+    if (teachers.some((teacher) => teacher.id === assigneeFilter)) return;
+
+    setAssigneeFilter("");
+    setForm((current) => ({
+      ...current,
+      assignedToId:
+        current.assignedToId === assigneeFilter ? "" : current.assignedToId,
+    }));
+  }, [assigneeFilter, teachers]);
 
   useEffect(() => {
     if (!centerId) return;
@@ -146,40 +164,55 @@ export default function CoachFollowUps() {
         ...INITIAL_FORM,
         assignedToId: assigneeFilter || "",
       });
+      toast.success("Follow-up created.");
     } catch (err) {
-      setError(err.message || "Failed to save follow-up");
+      const message = err.message || "Failed to save follow-up";
+      setError(message);
+      toast.error(message);
     } finally {
       setSaving(false);
     }
   }
 
   async function handleStatusChange(id, status) {
+    setError("");
     try {
       const updated = await apiJson("/api/v1/coach/follow-ups", {
         method: "PUT",
         body: JSON.stringify({ id, status }),
       });
       setFollowUps((current) => current.map((item) => (item.id === id ? updated : item)));
+      toast.success(`Follow-up marked ${statusLabel(status).toLowerCase()}.`);
     } catch (err) {
-      setError(err.message || "Failed to update follow-up");
+      const message = err.message || "Failed to update follow-up";
+      setError(message);
+      toast.error(message);
     }
   }
 
-  async function handleDelete(id) {
-    if (!confirm("Delete this follow-up?")) return;
-
+  async function handleDelete() {
+    if (!confirmingDeleteId) return;
     try {
-      await apiJson(`/api/v1/coach/follow-ups?id=${encodeURIComponent(id)}`, {
+      await apiJson(`/api/v1/coach/follow-ups?id=${encodeURIComponent(confirmingDeleteId)}`, {
         method: "DELETE",
       });
-      setFollowUps((current) => current.filter((item) => item.id !== id));
+      setFollowUps((current) =>
+        current.filter((item) => item.id !== confirmingDeleteId),
+      );
+      setConfirmingDeleteId("");
+      toast.success("Follow-up deleted.");
     } catch (err) {
-      setError(err.message || "Failed to delete follow-up");
+      const message = err.message || "Failed to delete follow-up";
+      setError(message);
+      toast.error(message);
     }
   }
 
   const centerName = centers.find((center) => center.id === centerId)?.name || "";
   const selectedTeacher = teachers.find((teacher) => teacher.id === assigneeFilter);
+  const followUpPendingDelete = visibleFollowUps.find(
+    (followUp) => followUp.id === confirmingDeleteId,
+  );
 
   return (
     <CoachLayout title="Follow-ups">
@@ -203,14 +236,14 @@ export default function CoachFollowUps() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="block">
                 <div className="mb-1.5 text-xs font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
-                  Center
+                  Center View
                 </div>
                 <select
                   value={centerId}
                   onChange={(event) => setCenterId(event.target.value)}
                   className={coachInputClass}
                 >
-                  <option value="">Select a center...</option>
+                  <option value="">Select a center to load follow-ups...</option>
                   {centers.map((center) => (
                     <option key={center.id} value={center.id}>
                       {center.name}
@@ -510,13 +543,28 @@ export default function CoachFollowUps() {
                     key={followUp.id}
                     followUp={followUp}
                     onStatusChange={handleStatusChange}
-                    onDelete={handleDelete}
+                    onDelete={() => setConfirmingDeleteId(followUp.id)}
                   />
                 ))}
               </div>
             )}
           </CoachPanel>
         ) : null}
+
+        <ConfirmDialog
+          open={!!confirmingDeleteId}
+          title="Delete follow-up?"
+          message={
+            followUpPendingDelete
+              ? `Delete "${followUpPendingDelete.title}"? This removes the coaching item from the current queue.`
+              : "Delete this follow-up?"
+          }
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmingDeleteId("")}
+          variant="danger"
+        />
       </div>
     </CoachLayout>
   );
@@ -538,7 +586,7 @@ function FollowUpCard({ followUp, onStatusChange, onDelete }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="text-base font-black text-gray-900 dark:text-gray-100">
+            <div className="break-words text-base font-black text-gray-900 dark:text-gray-100">
               {followUp.title}
             </div>
             <CoachBadge tone={typeTone(followUp.type)}>{typeLabel(followUp.type)}</CoachBadge>
@@ -548,14 +596,16 @@ function FollowUpCard({ followUp, onStatusChange, onDelete }) {
           </div>
 
           {followUp.description ? (
-            <p className="mt-3 text-sm leading-6 text-gray-600 dark:text-gray-400">
+            <p className="mt-3 break-words text-sm leading-6 text-gray-600 dark:text-gray-400">
               {followUp.description}
             </p>
           ) : null}
 
           <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
             {followUp.assignedTo ? (
-              <span>Assigned to {followUp.assignedTo.name || followUp.assignedTo.email}</span>
+              <span className="break-words">
+                Assigned to {followUp.assignedTo.name || followUp.assignedTo.email}
+              </span>
             ) : (
               <span>Unassigned</span>
             )}

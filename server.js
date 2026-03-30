@@ -65,6 +65,8 @@ async function start() {
 
   // Initialize Socket.io
   initializeSocket(httpServer);
+  const { startScheduledJobs } = await import("./src/lib/jobs/index.js");
+  startScheduledJobs();
 
   httpServer.listen(port, hostname, (err) => {
     if (err) throw err;

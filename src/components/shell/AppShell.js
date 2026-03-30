@@ -23,6 +23,8 @@ export default function AppShell({
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const menuButtonRef = useRef(null);
+  const mainContentId = "app-shell-main";
 
   const showBackComputed = useMemo(() => {
     if (typeof showBack === "boolean") return showBack;
@@ -60,6 +62,17 @@ export default function AppShell({
     setMobileOpen(false);
   }, [router.asPath]);
 
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [mobileOpen]);
+
   const isActive = useCallback(
     (href) => {
       const exactOnly = new Set([
@@ -86,12 +99,14 @@ export default function AppShell({
             <div className="truncate text-sm font-extrabold text-gray-900 dark:text-gray-100">
               Ameris Academy
             </div>
-            <div className="truncate text-xs font-semibold text-blue-700 dark:text-blue-400">Childcare</div>
+            <div className="truncate text-xs font-semibold text-blue-700 dark:text-blue-400">
+              Operations Platform
+            </div>
           </div>
         </Link>
       </div>
 
-      <nav className="scrollbar-hide flex-1 overflow-y-auto px-4 pb-6">
+      <nav className="scrollbar-hide flex-1 overflow-y-auto px-4 pb-6" aria-label="Primary navigation">
         <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-blue-300 dark:text-blue-500">
           Navigation
         </div>
@@ -119,6 +134,7 @@ export default function AppShell({
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={active ? "page" : undefined}
                 className={[
                   "flex items-center justify-between rounded-2xl px-4 py-2.5 text-sm font-bold transition-all duration-150",
                   active
@@ -149,11 +165,17 @@ export default function AppShell({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50/50 to-amber-50/40 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+      <a href={`#${mainContentId}`} className="skip-link">
+        Skip to main content
+      </a>
       <div className="mx-auto flex min-h-screen max-w-[1500px]">
         <div className="hidden md:block">{Sidebar}</div>
 
         {mobileOpen ? (
-          <MobileSidebar onClose={() => setMobileOpen(false)}>
+          <MobileSidebar
+            onClose={() => setMobileOpen(false)}
+            triggerRef={menuButtonRef}
+          >
             {Sidebar}
           </MobileSidebar>
         ) : null}
@@ -163,9 +185,12 @@ export default function AppShell({
             <div className="flex items-center justify-between gap-3 px-4 py-3">
               <div className="flex min-w-0 items-center gap-3">
                 <button
+                  ref={menuButtonRef}
                   type="button"
                   className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 md:hidden"
                   aria-label="Open navigation"
+                  aria-controls="app-shell-mobile-nav"
+                  aria-expanded={mobileOpen}
                   onClick={() => setMobileOpen(true)}
                 >
                   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
@@ -251,7 +276,7 @@ export default function AppShell({
             </div>
           </header>
 
-          <main className="px-4 py-6">
+          <main id={mainContentId} className="px-4 py-6" tabIndex={-1}>
             <div className="mx-auto w-full max-w-6xl">
               {right ? (
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_360px]">
@@ -276,19 +301,20 @@ export default function AppShell({
                           Ameris Academy
                         </div>
                         <div className="truncate text-xs text-gray-500 dark:text-gray-400">
-                          Childcare
+                          Operations Platform
                         </div>
                       </div>
                     </div>
                     <p className="mt-4 max-w-sm text-sm text-gray-600 dark:text-gray-400">
-                      Providing high-quality care and education for children
-                      since 2015. Shaping the leaders of tomorrow, today.
+                      A shared workspace for admins, teachers, coaches, and
+                      families to stay aligned on daily operations and child
+                      support.
                     </p>
                   </div>
 
                   <FooterCol
                     title="Support"
-                    items={["Help Center", "Contact Support", "Technical Issues"]}
+                    items={["Center Support", "Platform Help", "Status Updates"]}
                   />
 
                   <FooterCol
@@ -298,23 +324,25 @@ export default function AppShell({
 
                   <div>
                     <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                      Newsletter
+                      Platform Updates
                     </div>
                     <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                      Get the latest news and activity updates.
+                      Release notes and shared guidance will appear here as the
+                      platform rollout continues.
                     </div>
                     <p className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-gray-100 px-4 py-2 text-xs font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400">
                       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14" />
                         <path strokeLinecap="round" strokeLinejoin="round" d="M13 6l6 6-6 6" />
                       </svg>
-                      Coming soon
+                      Rolling out soon
                     </p>
                   </div>
                 </div>
 
                 <div className="mt-10 border-t border-gray-200 pt-6 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                  Copyright {new Date().getFullYear()} Ameris Childcare Management. All rights reserved.
+                  Copyright {new Date().getFullYear()} Ameris Academy. All rights
+                  reserved.
                 </div>
               </div>
             </footer>
@@ -379,6 +407,7 @@ function NavGroup({ label, icon, items, isActive, activePath }) {
               <Link
                 key={child.href}
                 href={child.href}
+                aria-current={active ? "page" : undefined}
                 className={[
                   "flex items-center justify-between rounded-xl px-3 py-2 text-[13px] font-bold transition-all duration-150",
                   active
@@ -418,24 +447,41 @@ function FooterCol({ title, items }) {
   );
 }
 
-function MobileSidebar({ onClose, children }) {
+function MobileSidebar({ onClose, children, triggerRef }) {
   const sidebarRef = useRef(null);
+  const closeButtonRef = useRef(null);
 
   useEffect(() => {
     function handleKeyDown(e) {
       if (e.key === "Escape") onClose();
+      if (e.key !== "Tab" || !sidebarRef.current) return;
+
+      const focusable = sidebarRef.current.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+
+      if (!focusable.length) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      triggerRef?.current?.focus?.();
+    };
+  }, [onClose, triggerRef]);
 
   useEffect(() => {
-    if (sidebarRef.current) {
-      const focusable = sidebarRef.current.querySelectorAll(
-        'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
-      if (focusable.length) focusable[0].focus();
-    }
+    closeButtonRef.current?.focus();
   }, []);
 
   return (
@@ -443,9 +489,15 @@ function MobileSidebar({ onClose, children }) {
       <div
         className="absolute inset-0 bg-gray-900/40 dark:bg-black/60 animate-[overlayIn_0.2s_ease-out]"
         onClick={onClose}
+        aria-hidden="true"
       />
-      <div ref={sidebarRef} className="absolute inset-y-0 left-0 w-80 max-w-[85vw] shadow-xl animate-[slideInLeft_0.25s_ease-out]">
+      <div
+        id="app-shell-mobile-nav"
+        ref={sidebarRef}
+        className="absolute inset-y-0 left-0 w-80 max-w-[85vw] shadow-xl animate-[slideInLeft_0.25s_ease-out]"
+      >
         <button
+          ref={closeButtonRef}
           type="button"
           onClick={onClose}
           aria-label="Close navigation"

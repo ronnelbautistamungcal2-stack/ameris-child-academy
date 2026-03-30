@@ -1,5 +1,15 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
 import { SkeletonCard } from "@/components/ui/Skeleton";
+import StatusBadge from "@/components/ui/StatusBadge";
+import {
+  WorkspaceHero,
+  WorkspacePill,
+  WorkspaceState,
+  workspaceInputClass,
+  workspacePrimaryButtonClass,
+  workspaceSecondaryButtonClass,
+} from "@/components/ui/Workspace";
+import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -47,6 +57,8 @@ export default function TeacherDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  useSyncedCenterId(centerId, setCenterId, centers);
+
   const dayKey = useMemo(() => toDateKey(new Date()), []);
   const scheduleStorageKey = useMemo(() => {
     if (!centerId) return "";
@@ -61,7 +73,6 @@ export default function TeacherDashboard() {
         const c = await apiJson("/api/v1/centers");
         const arr = Array.isArray(c) ? c : [];
         setCenters(arr);
-        if (arr.length === 1) setCenterId(arr[0].id);
       } catch (e) {
         setError(e.message || "Failed to load centers");
       } finally {
@@ -170,33 +181,44 @@ export default function TeacherDashboard() {
     return flags.sort((a, b) => byString(fullName(a.child), fullName(b.child)));
   }, [children]);
 
+  const selectedCenterName =
+    centers.find((center) => center.id === centerId)?.name || "";
+  const headerDate = useMemo(() => formatHeaderDate(new Date()), []);
+
   return (
     <TeacherLayout title="Dashboard">
-      <div className="space-y-4">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-extrabold text-gray-900">Dashboard</h2>
-              <p className="mt-1 text-sm text-gray-600">
-                {new Date().toLocaleDateString("en-US", {
-                  weekday: "long",
-                  month: "long",
-                  day: "numeric",
-                })}
-                {" - "}Attendance, birthdays, and schedule
-              </p>
-            </div>
-
+      <div className="space-y-5">
+        <WorkspaceHero
+          eyebrow="Teacher Dashboard"
+          title={
+            selectedCenterName
+              ? `${selectedCenterName} classroom snapshot`
+              : "Daily classroom snapshot"
+          }
+          description="Keep attendance, birthdays, saved schedule items, and child profile gaps visible in one center-aware teacher workspace."
+          meta={
+            <>
+              <WorkspacePill tone="amber">{headerDate}</WorkspacePill>
+              {selectedCenterName ? (
+                <WorkspacePill tone="sky">{selectedCenterName}</WorkspacePill>
+              ) : (
+                <WorkspacePill tone="slate">
+                  Select a center to load live classroom data
+                </WorkspacePill>
+              )}
+            </>
+          }
+          controls={
             <label className="block">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Center
+              <div className="mb-1.5 text-xs font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                Center View
               </div>
               <select
                 value={centerId}
                 onChange={(e) => setCenterId(e.target.value)}
-                className="mt-1 w-72 max-w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                className={workspaceInputClass}
               >
-                <option value="">Select a center...</option>
+                <option value="">Select a center to load data...</option>
                 {centers.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -204,89 +226,97 @@ export default function TeacherDashboard() {
                 ))}
               </select>
             </label>
+          }
+        />
+
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            {error}
           </div>
+        ) : null}
 
-          {error ? (
-            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {error}
-            </div>
-          ) : null}
-
-          {loading ? (
-            <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {Array.from({ length: 4 }, (_, i) => (
-                <SkeletonCard key={i} />
-              ))}
-            </div>
-          ) : !centerId ? (
-            <div className="mt-4 text-sm text-gray-600">
-              Choose a center to view your teacher dashboard.
-            </div>
-          ) : (
-            <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <Tile
-                title="Attendance"
-                value={
-                  attendanceSummary
-                    ? `${attendanceSummary.checkedIn} / ${attendanceSummary.total}`
-                    : "-"
-                }
-                subtitle="Children checked in today"
-                href="/teacher/classroom"
-                color="sky"
-                icon={
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
-                  </svg>
-                }
-              />
-              <Tile
-                title="Birthdays"
-                value={String(upcomingBirthdays.length)}
-                subtitle="Next 6 on file"
-                href="/teacher/classroom"
-                color="pink"
-                icon={
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75v10.5m6.364-8.114a9 9 0 11-12.728 0m12.728 0A9.002 9.002 0 1012 3a9.002 9.002 0 016.364 3.636z" />
-                  </svg>
-                }
-              />
-              <Tile
-                title="Schedule"
-                value={String(scheduleItems.length)}
-                subtitle="Items saved today"
-                href="/teacher/checklists"
-                color="violet"
-                icon={
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                }
-              />
-              <Tile
-                title="Red flags"
-                value={String(redFlagChildren.length)}
-                subtitle={redFlagChildren.length ? "Needs attention" : "All clear"}
-                href="/teacher/classroom"
-                color={redFlagChildren.length ? "amber" : "emerald"}
-                icon={
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                  </svg>
-                }
-              />
-            </div>
-          )}
-        </div>
+        {loading ? (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: 4 }, (_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        ) : !centerId ? (
+          <WorkspaceState
+            title="Select a center to load your classroom snapshot."
+            description="The selected center stays in the URL so checklists, messages, and classroom tools keep the same context when you move between pages."
+          />
+        ) : (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <Tile
+              title="Attendance"
+              value={
+                attendanceSummary
+                  ? formatCountSummary(
+                      attendanceSummary.checkedIn,
+                      attendanceSummary.total,
+                    )
+                  : "Unavailable"
+              }
+              subtitle={
+                attendanceSummary
+                  ? "Children checked in today"
+                  : "Attendance data is not available right now"
+              }
+              href="/teacher/classroom"
+              color="sky"
+              icon={
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                </svg>
+              }
+            />
+            <Tile
+              title="Birthdays"
+              value={String(upcomingBirthdays.length)}
+              subtitle="Next 6 on file"
+              href="/teacher/classroom"
+              color="pink"
+              icon={
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75v10.5m6.364-8.114a9 9 0 11-12.728 0m12.728 0A9.002 9.002 0 1012 3a9.002 9.002 0 016.364 3.636z" />
+                </svg>
+              }
+            />
+            <Tile
+              title="Schedule"
+              value={String(scheduleItems.length)}
+              subtitle="Items saved on this device today"
+              href="/teacher/checklists"
+              color="violet"
+              icon={
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              }
+            />
+            <Tile
+              title="Profile Flags"
+              value={String(redFlagChildren.length)}
+              subtitle={redFlagChildren.length ? "Needs attention" : "All clear"}
+              href="/teacher/classroom"
+              color={redFlagChildren.length ? "amber" : "emerald"}
+              icon={
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+              }
+            />
+          </div>
+        )}
 
         {centerId ? (
           <div className="grid auto-rows-fr grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
             <div className="lg:col-span-2 xl:col-span-2">
               <Card
                 title="Today's schedule"
-                subtitle={`${dayKey} - saved locally`}
+                subtitle={`${dayKey} - saved on this device`}
                 href="/teacher/checklists"
                 hrefLabel="Open Checklists"
                 accent="violet"
@@ -303,14 +333,14 @@ export default function TeacherDashboard() {
                           addScheduleItem();
                         }
                       }}
-                      className="w-full flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      className={workspaceInputClass}
                       placeholder="Add item and press Enter (e.g., Circle time 9:30)"
                     />
                     <button
                       type="button"
                       onClick={addScheduleItem}
                       disabled={!String(scheduleDraft || "").trim()}
-                      className="shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-sm font-extrabold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      className={[workspacePrimaryButtonClass, "shrink-0"].join(" ")}
                     >
                       Add item
                     </button>
@@ -326,13 +356,13 @@ export default function TeacherDashboard() {
                         key={it.id}
                         className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm"
                       >
-                        <span className="min-w-0 truncate font-semibold text-gray-900">
+                        <span className="min-w-0 break-words font-semibold text-gray-900">
                           {it.text}
                         </span>
                         <button
                           type="button"
                           onClick={() => removeScheduleItem(it.id)}
-                          className="shrink-0 rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                          className={[workspaceSecondaryButtonClass, "shrink-0 px-3 py-1.5 text-xs"].join(" ")}
                         >
                           Remove
                         </button>
@@ -347,7 +377,7 @@ export default function TeacherDashboard() {
               </Card>
             </div>
 
-            <Card title="Quick links" subtitle="Jump to your tools" className="h-full">
+            <Card title="Quick links" subtitle="Jump to classroom tools" className="h-full">
               <div className="mt-3 grid grid-cols-1 gap-2">
                 <QuickLink
                   href="/teacher/classroom"
@@ -410,8 +440,8 @@ export default function TeacherDashboard() {
               title="Children clocked in"
               subtitle={
                 attendanceSummary
-                  ? `${attendanceSummary.checkedIn} / ${attendanceSummary.total} checked in`
-                  : "Attendance not available"
+                  ? `${formatCountSummary(attendanceSummary.checkedIn, attendanceSummary.total)} checked in`
+                  : "Attendance data not available"
               }
               href="/teacher/classroom"
               hrefLabel="Open My Classroom"
@@ -422,7 +452,7 @@ export default function TeacherDashboard() {
                 <ul className="mt-3 space-y-1 text-sm text-gray-700">
                   {attendance.checkedInChildren.slice(0, 6).map((row) => (
                     <li key={row.child?.id} className="flex items-center justify-between gap-3">
-                      <span className="truncate font-semibold text-gray-900">
+                      <span className="min-w-0 break-words font-semibold text-gray-900">
                         {fullName(row.child) || row.child?.id}
                       </span>
                       <span className="shrink-0 text-xs text-gray-500">
@@ -433,7 +463,7 @@ export default function TeacherDashboard() {
                 </ul>
               ) : (
                 <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                  No checked-in children detected yet.
+                  No check-ins have been recorded for this center yet today.
                 </div>
               )}
             </Card>
@@ -450,7 +480,7 @@ export default function TeacherDashboard() {
                 <ul className="mt-3 space-y-1 text-sm text-gray-700">
                   {upcomingBirthdays.map((row) => (
                     <li key={row.child?.id} className="flex items-center justify-between gap-3">
-                      <span className="truncate font-semibold text-gray-900">
+                      <span className="min-w-0 break-words font-semibold text-gray-900">
                         {fullName(row.child)}
                       </span>
                       <span className="shrink-0 text-xs text-gray-500">
@@ -461,7 +491,7 @@ export default function TeacherDashboard() {
                 </ul>
               ) : (
                 <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                  Add DOBs to children profiles to surface birthdays here.
+                  Add dates of birth on child profiles to surface birthdays here.
                 </div>
               )}
             </Card>
@@ -481,17 +511,12 @@ export default function TeacherDashboard() {
                       key={row.child?.id}
                       className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2"
                     >
-                      <div className="text-sm font-semibold text-amber-900">
+                      <div className="break-words text-sm font-semibold text-amber-900">
                         {fullName(row.child)}
                       </div>
                       <div className="mt-1 flex flex-wrap gap-2 text-xs">
                         {row.tags.map((t) => (
-                          <span
-                            key={t}
-                            className="rounded-full border border-amber-200 bg-white px-2 py-1 font-semibold text-amber-900"
-                          >
-                            {t}
-                          </span>
+                          <StatusBadge key={t} status="high" label={t} />
                         ))}
                       </div>
                     </li>
@@ -499,7 +524,8 @@ export default function TeacherDashboard() {
                 </ul>
               ) : (
                 <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                  Flags appear when allergies or key fields are missing.
+                  Flags appear when allergies or key child profile fields are
+                  missing.
                 </div>
               )}
             </Card>
@@ -508,6 +534,18 @@ export default function TeacherDashboard() {
       </div>
     </TeacherLayout>
   );
+}
+
+function formatHeaderDate(date) {
+  return new Date(date).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+function formatCountSummary(value, total) {
+  return `${value} of ${total}`;
 }
 
 const TILE_COLORS = {
@@ -580,7 +618,7 @@ function Tile({ title, value, subtitle, href, color = "sky", icon }) {
       </div>
       <div className={["mt-2 text-2xl font-extrabold", c.value].join(" ")}>{value}</div>
       <div className="mt-1 flex items-center justify-between text-sm text-gray-600">
-        <span>{subtitle}</span>
+        <span className="min-w-0 break-words">{subtitle}</span>
         <svg
           viewBox="0 0 20 20"
           fill="currentColor"
@@ -615,12 +653,12 @@ function Card({ title, subtitle, href, hrefLabel, children, accent, className = 
           <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
             {title}
           </div>
-          <div className="mt-1.5 text-base font-extrabold text-gray-900">{subtitle}</div>
+          <div className="mt-1.5 break-words text-base font-extrabold text-gray-900">{subtitle}</div>
         </div>
         {href ? (
           <Link
             href={href}
-            className="shrink-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-extrabold text-gray-700 transition hover:border-gray-300 hover:bg-gray-50 group-hover:shadow-sm"
+            className={[workspaceSecondaryButtonClass, "shrink-0 text-xs font-extrabold"].join(" ")}
           >
             {hrefLabel || "Open"}
           </Link>
@@ -638,12 +676,12 @@ function QuickLink({ href, label, icon }) {
       href={href}
       className="group flex items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 transition-all duration-200 hover:border-sky-200 hover:bg-sky-50/50 hover:text-sky-700"
     >
-      <span className="flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-50 text-sky-600 transition group-hover:bg-sky-100">
-          {icon}
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-50 text-sky-600 transition group-hover:bg-sky-100">
+            {icon}
+          </span>
+          <span className="min-w-0 break-words">{label}</span>
         </span>
-        <span>{label}</span>
-      </span>
       <svg
         viewBox="0 0 20 20"
         fill="currentColor"

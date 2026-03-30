@@ -1,5 +1,10 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import {
+  buildLegacyEmergencyContact,
+  normalizeEmergencyContacts,
+  normalizeParentContacts,
+} from "@/lib/child-contacts";
 
 function normalizeDocs(value) {
   const arr = Array.isArray(value) ? value : [];
@@ -101,6 +106,8 @@ export default async function handler(req, res) {
       centerId: cId,
       classRoomId,
       parentId,
+      parentContacts,
+      emergencyContacts,
       emergencyContact,
       allergies,
       healthAssessmentDocuments,
@@ -111,6 +118,14 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "firstName and centerId required" });
     }
 
+    const normalizedParentContacts = normalizeParentContacts(parentContacts);
+    const normalizedEmergencyContacts = normalizeEmergencyContacts(emergencyContacts);
+    const legacyEmergencyContact =
+      buildLegacyEmergencyContact(normalizedEmergencyContacts) ||
+      (typeof emergencyContact === "string" && emergencyContact.trim()
+        ? emergencyContact.trim()
+        : null);
+
     const child = await prisma.child.create({
       data: {
         firstName,
@@ -119,10 +134,9 @@ export default async function handler(req, res) {
         centerId: cId,
         classRoomId,
         parentId,
-        emergencyContact:
-          typeof emergencyContact === "string" && emergencyContact.trim()
-            ? emergencyContact.trim()
-            : null,
+        parentContacts: normalizedParentContacts,
+        emergencyContacts: normalizedEmergencyContacts,
+        emergencyContact: legacyEmergencyContact,
         allergies:
           typeof allergies === "string" && allergies.trim()
             ? allergies.trim()

@@ -3,6 +3,14 @@ import prisma from "@/lib/prisma";
 import { emitActivityLog } from "@/lib/socket";
 import { getTeacherClassIds, teacherChildFilter } from "@/lib/teacherScope";
 
+function sameCalendarDay(left, right) {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
+
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
@@ -79,14 +87,26 @@ export default async function handler(req, res) {
       }
     }
 
-    // Prevent backdating unless admin
-    const logDate = createdAt ? new Date(createdAt) : new Date();
-    const isBackdated = logDate < new Date(Date.now() - 60000); // older than 1 minute
-    if (isBackdated && session.user.role !== "ADMIN") {
-      return res
-        .status(403)
-        .json({ error: "Teachers cannot backdate activity logs" });
+    if (createdAt && Number.isNaN(new Date(createdAt).getTime())) {
+      return res.status(400).json({ error: "Invalid activity time" });
     }
+
+    const logDate = createdAt ? new Date(createdAt) : new Date();
+    const now = new Date();
+
+    if (session.user.role !== "ADMIN") {
+      if (!sameCalendarDay(logDate, now)) {
+        return res
+          .status(403)
+          .json({ error: "Teachers can set the activity time for today only" });
+      }
+
+      if (logDate.getTime() > now.getTime() + 5 * 60 * 1000) {
+        return res.status(400).json({ error: "Activity time cannot be in the future" });
+      }
+    }
+
+    const isBackdated = !sameCalendarDay(logDate, now);
 
     const activity = await prisma.activityLog.create({
       data: {

@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { teacherCanAccessClass } from "@/lib/teacherScope";
+import { assertSubscriptionFeature } from "@/lib/subscriptions";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -20,9 +21,29 @@ export default async function handler(req, res) {
 
   const child = await prisma.child.findUnique({
     where: { id: childId },
-    include: { center: { select: { name: true } }, classRoom: { select: { name: true } } },
+    include: {
+      center: { include: { subscription: true } },
+      classRoom: { select: { name: true } },
+    },
   });
   if (!child) return res.status(404).json({ error: "Child not found" });
+  if (child.center?.subscription) {
+    try {
+      assertSubscriptionFeature(child.center.subscription, "exports", {
+        centerId: child.centerId,
+      });
+    } catch (error) {
+      return res.status(error.status || 402).json({
+        ok: false,
+        message: error.message,
+        error: {
+          code: error.code,
+          message: error.message,
+          ...(error.details ? { details: error.details } : {}),
+        },
+      });
+    }
+  }
 
   if (session.user.role === "TEACHER") {
     const hasClassAccess = await teacherCanAccessClass(session.user.id, child.classRoomId);

@@ -1,45 +1,32 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import MessageInbox from "@/components/messages/MessageInbox";
 import Skeleton from "@/components/ui/Skeleton";
+import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/router";
 
 export default function AdminMessages() {
-  const router = useRouter();
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
   const [loading, setLoading] = useState(true);
+
+  useSyncedCenterId(centerId, setCenterId, centers, {
+    blankQueryValue: "all",
+  });
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
         const data = await apiJson("/api/v1/centers");
-        const centersArr = Array.isArray(data) ? data : [];
-        setCenters(centersArr);
-        const fromQuery =
-          typeof router.query.centerId === "string" ? router.query.centerId : "";
-        setCenterId(fromQuery || (centersArr.length === 1 ? centersArr[0].id : ""));
+        setCenters(Array.isArray(data) ? data : []);
       } catch {
         setCenters([]);
       } finally {
         setLoading(false);
       }
     })();
-  }, [router.query.centerId]);
-
-  useEffect(() => {
-    if (!router.isReady) return;
-    const current = typeof router.query.centerId === "string" ? router.query.centerId : "";
-    if (current === centerId) return;
-    const nextQuery = { ...router.query };
-    if (centerId) nextQuery.centerId = centerId;
-    else delete nextQuery.centerId;
-    router.replace({ pathname: router.pathname, query: nextQuery }, undefined, {
-      shallow: true,
-    });
-  }, [centerId, router]);
+  }, []);
 
   const selectedCenter = useMemo(
     () => centers.find((center) => center.id === centerId) || null,

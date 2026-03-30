@@ -1,6 +1,6 @@
 import AppShell from "@/components/shell/AppShell";
-import { useRequireRole } from "@/hooks/useRequireRole";
 import { ADMIN_NAV_ITEMS } from "@/components/admin/adminNav";
+import { useRequireRole } from "@/hooks/useRequireRole";
 
 export default function AdminLayout({ title, children }) {
   const { session, status, allowed } = useRequireRole(["ADMIN"], "/dashboard");
@@ -11,7 +11,7 @@ export default function AdminLayout({ title, children }) {
 
   return (
     <AppShell
-      title={title ? `Admin — ${title}` : "Admin"}
+      title={title ? `Admin - ${title}` : "Admin"}
       userName={session?.user?.name || session?.user?.email}
       userLabel={session?.user?.email}
       userImageUrl={session?.user?.pictureUrl}

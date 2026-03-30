@@ -1,6 +1,7 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { emitNewMessage, emitNotification } from "@/lib/socket";
+import { assertSubscriptionFeature } from "@/lib/subscriptions";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -20,7 +21,10 @@ export default async function handler(req, res) {
 
   const thread = await prisma.messageThread.findUnique({
     where: { id: threadId },
-    include: { participants: true },
+    include: {
+      participants: true,
+      center: { include: { subscription: true } },
+    },
   });
   if (!thread) return res.status(404).json({ error: "Thread not found" });
 
@@ -39,6 +43,23 @@ export default async function handler(req, res) {
   if (thread.centerId && user.role !== "ADMIN") {
     const ok = await hasAccessToCenter(user.id, thread.centerId);
     if (!ok) return res.status(403).json({ error: "Forbidden" });
+  }
+  if (thread.center?.subscription) {
+    try {
+      assertSubscriptionFeature(thread.center.subscription, "messaging", {
+        centerId: thread.centerId,
+      });
+    } catch (error) {
+      return res.status(error.status || 402).json({
+        ok: false,
+        message: error.message,
+        error: {
+          code: error.code,
+          message: error.message,
+          ...(error.details ? { details: error.details } : {}),
+        },
+      });
+    }
   }
 
   const message = await prisma.message.create({

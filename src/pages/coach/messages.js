@@ -1,4 +1,3 @@
-import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import CoachLayout from "@/components/coach/CoachLayout";
 import {
@@ -8,15 +7,17 @@ import {
   CoachPanel,
   coachInputClass,
 } from "@/components/coach/CoachPage";
+import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import MessageInbox from "@/components/messages/MessageInbox";
 import { apiJson } from "@/lib/api";
 
 export default function CoachMessages() {
-  const router = useRouter();
-  const { centerId: qCenterId } = router.query;
-
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
+
+  useSyncedCenterId(centerId, setCenterId, centers, {
+    blankQueryValue: "all",
+  });
 
   useEffect(() => {
     (async () => {
@@ -24,12 +25,11 @@ export default function CoachMessages() {
         const response = await apiJson("/api/v1/centers");
         const nextCenters = Array.isArray(response) ? response : [];
         setCenters(nextCenters);
-        setCenterId(String(qCenterId || (nextCenters.length === 1 ? nextCenters[0].id : "")));
       } catch {
         setCenters([]);
       }
     })();
-  }, [qCenterId]);
+  }, []);
 
   const activeCenterName = centers.find((center) => center.id === centerId)?.name || "";
 

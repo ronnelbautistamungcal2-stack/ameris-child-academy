@@ -136,7 +136,7 @@ export default async function handler(req, res) {
       const goal = it?.lessonGoalId ? lessonGoalMetaById[it.lessonGoalId] : null;
       if (goal) {
         const lessonTitle = lessonTitleById[goal.lessonId] || "Lesson";
-        return `${lessonTitle} — Step ${goal.goalIndex}`;
+        return `${lessonTitle} - Step ${goal.goalIndex}`;
       }
 
       const lessonTitle = it?.lessonId ? lessonTitleById[it.lessonId] : null;

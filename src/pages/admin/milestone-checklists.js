@@ -1,4 +1,7 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { WorkspaceState } from "@/components/ui/Workspace";
+import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -50,10 +53,15 @@ export default function AdminMilestoneChecklists() {
   const [lessons, setLessons] = useState([]);
   const [existingPlans, setExistingPlans] = useState([]);
 
-  const [loading, setLoading] = useState(true);
+  const [loadingCenters, setLoadingCenters] = useState(true);
+  const [loadingReferences, setLoadingReferences] = useState(false);
+  const [loadingPlans, setLoadingPlans] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState("");
+
+  useSyncedCenterId(centerId, setCenterId, centers);
 
   const periodStart = useMemo(() => {
     const parsed = dateValue ? new Date(dateValue) : new Date();
@@ -62,17 +70,16 @@ export default function AdminMilestoneChecklists() {
 
   useEffect(() => {
     (async () => {
-      setLoading(true);
+      setLoadingCenters(true);
       setError("");
       try {
         const c = await apiJson("/api/v1/centers");
         const arr = Array.isArray(c) ? c : [];
         setCenters(arr);
-        if (arr.length === 1) setCenterId(arr[0].id);
       } catch (e) {
         setError(e.message || "Failed to load centers");
       } finally {
-        setLoading(false);
+        setLoadingCenters(false);
       }
     })();
   }, []);
@@ -83,6 +90,7 @@ export default function AdminMilestoneChecklists() {
       setLessons([]);
       return;
     }
+    setLoadingReferences(true);
     try {
       const [p, l] = await Promise.all([
         apiJson(
@@ -97,6 +105,8 @@ export default function AdminMilestoneChecklists() {
     } catch {
       setPolicies([]);
       setLessons([]);
+    } finally {
+      setLoadingReferences(false);
     }
   }
 
@@ -105,6 +115,7 @@ export default function AdminMilestoneChecklists() {
       setExistingPlans([]);
       return;
     }
+    setLoadingPlans(true);
     try {
       const qs = new URLSearchParams({
         centerId,
@@ -117,6 +128,8 @@ export default function AdminMilestoneChecklists() {
       setExistingPlans(Array.isArray(data) ? data : []);
     } catch {
       setExistingPlans([]);
+    } finally {
+      setLoadingPlans(false);
     }
   }
 
@@ -173,6 +186,9 @@ export default function AdminMilestoneChecklists() {
     return Object.fromEntries((lessons || []).map((l) => [l.id, l]));
   }, [lessons]);
 
+  const selectedCenterName =
+    centers.find((center) => center.id === centerId)?.name || "";
+
   async function createPlan(e) {
     e.preventDefault();
     if (!centerId) return;
@@ -212,12 +228,12 @@ export default function AdminMilestoneChecklists() {
   }
 
   async function deletePlan(id) {
-    if (!confirm("Delete this plan?")) return;
     setError("");
     setSuccess("");
     try {
       await apiJson(`/api/v1/milestone-checklists/${id}`, { method: "DELETE" });
       await loadExistingPlans();
+      setConfirmingDeleteId("");
     } catch (e) {
       setError(e.message || "Failed to delete plan");
     }
@@ -228,9 +244,9 @@ export default function AdminMilestoneChecklists() {
       <Panel>
         <h2 style={{ marginTop: 0 }}>Milestone Checklist Planner</h2>
         <p style={{ color: "#6b7280", marginTop: 6 }}>
-          Plan what teachers will teach by day/week/month. Items can link to
-          policies, procedures, videos, and lessons (optionally to a specific
-          step).
+          Build day, week, or month checklist plans for each center. Items can
+          point to policies, procedures, videos, lessons, and specific lesson
+          steps.
         </p>
 
         {error ? <Banner kind="error" message={error} /> : null}
@@ -250,9 +266,9 @@ export default function AdminMilestoneChecklists() {
               value={centerId}
               onChange={(e) => setCenterId(e.target.value)}
               style={inputStyle}
-              disabled={loading}
+              disabled={loadingCenters}
             >
-              <option value="">Select a center</option>
+              <option value="">Select a center to start planning</option>
               {centers.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -265,7 +281,7 @@ export default function AdminMilestoneChecklists() {
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
               style={inputStyle}
-              disabled={!centerId}
+              disabled={!centerId || loadingCenters}
             >
               {PERIODS.map((p) => (
                 <option key={p} value={p}>
@@ -288,10 +304,31 @@ export default function AdminMilestoneChecklists() {
               value={dateValue}
               onChange={(e) => setDateValue(e.target.value)}
               style={inputStyle}
-              disabled={!centerId}
+              disabled={!centerId || loadingCenters}
             />
           </Field>
         </div>
+
+        {!centerId ? (
+          <div style={{ marginTop: 12 }}>
+            <WorkspaceState
+              title="Select a center to start planning."
+              description="Lessons, policy links, and existing milestone plans are all scoped to the selected center."
+            />
+          </div>
+        ) : loadingReferences ? (
+          <div style={{ marginTop: 12 }}>
+            <WorkspaceState
+              title="Loading linked references..."
+              description={`Loading lessons and policy links for ${selectedCenterName || "this center"}.`}
+            />
+          </div>
+        ) : (
+          <Banner
+            kind="info"
+            message={`Planning ${period.toLowerCase()} checklists for ${selectedCenterName || "the selected center"} starting ${periodStart.toLocaleDateString()}.`}
+          />
+        )}
 
         <form onSubmit={createPlan} style={{ marginTop: 12 }}>
           <div
@@ -337,9 +374,9 @@ export default function AdminMilestoneChecklists() {
                 value={quickLessonId}
                 onChange={(e) => setQuickLessonId(e.target.value)}
                 style={{ ...inputStyle, width: 260 }}
-                disabled={!centerId}
+                disabled={!centerId || loadingReferences}
               >
-                <option value="">Add a lesson</option>
+                <option value="">Quick add a lesson</option>
                 {lessons
                   .slice()
                   .sort((a, b) => (a.title || "").localeCompare(b.title || ""))
@@ -353,14 +390,14 @@ export default function AdminMilestoneChecklists() {
                 type="button"
                 onClick={addLessonItem}
                 style={secondaryButton}
-                disabled={!quickLessonId}
+                disabled={!quickLessonId || loadingReferences}
               >
                 Add lesson
               </button>
             </div>
             <div style={{ fontSize: 12, color: "#6b7280" }}>
-              Tip: For LESSON items, pick a lesson and optionally a specific
-              step.
+              Tip: pick a lesson first, then add a specific step only when you
+              need tighter teacher guidance.
             </div>
           </div>
 
@@ -414,7 +451,7 @@ export default function AdminMilestoneChecklists() {
                           updateItem(idx, { title: e.target.value })
                         }
                         style={inputStyle}
-                        placeholder="Auto-fills when you select a lesson/step"
+                        placeholder="Auto-fills when you select a lesson or step"
                       />
                     </Field>
                     <Field label="Kind">
@@ -523,7 +560,7 @@ export default function AdminMilestoneChecklists() {
                           if (goal && selectedLesson) {
                             const baseTitle = selectedLesson.title || "Lesson";
                             if (!it.title || it.title === baseTitle) {
-                              patch.title = `${baseTitle} — Step ${goal.goalIndex}`;
+                              patch.title = `${baseTitle} - Step ${goal.goalIndex}`;
                             }
                             if (!it.kind || it.kind === "OTHER")
                               patch.kind = "LESSON";
@@ -582,12 +619,21 @@ export default function AdminMilestoneChecklists() {
           <h3 style={{ margin: "0 0 8px 0" }}>
             Existing plans for this period
           </h3>
-          {loading ? (
-            <p>Loading...</p>
+          {loadingPlans ? (
+            <WorkspaceState
+              title="Loading plans for this period..."
+              description="Refreshing scheduled milestone plans for the selected center and date range."
+            />
           ) : !centerId ? (
-            <p style={{ color: "#6b7280" }}>Select a center.</p>
+            <WorkspaceState
+              title="Select a center to review plans."
+              description="Choose a center above to load the milestone plans scheduled for this period."
+            />
           ) : existingPlans.length === 0 ? (
-            <p style={{ color: "#6b7280" }}>No plans found.</p>
+            <WorkspaceState
+              title={`No milestone plans scheduled for this ${period.toLowerCase()}.`}
+              description="Create a plan above to populate this period with linked lessons, policies, or reminder items."
+            />
           ) : (
             <div
               style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10 }}
@@ -611,7 +657,7 @@ export default function AdminMilestoneChecklists() {
                       <div
                         style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}
                       >
-                        {(p.items || []).length} items | {p.period} |{" "}
+                        {(p.items || []).length} items | {p.period} plan |{" "}
                         {new Date(p.periodStart).toLocaleDateString()}
                       </div>
                     </div>
@@ -619,7 +665,7 @@ export default function AdminMilestoneChecklists() {
                       <button
                         type="button"
                         style={dangerButton}
-                        onClick={() => deletePlan(p.id)}
+                        onClick={() => setConfirmingDeleteId(p.id)}
                       >
                         Delete
                       </button>
@@ -630,6 +676,21 @@ export default function AdminMilestoneChecklists() {
             </div>
           )}
         </div>
+
+        <ConfirmDialog
+          open={!!confirmingDeleteId}
+          title="Delete milestone plan?"
+          message={
+            existingPlans.find((plan) => plan.id === confirmingDeleteId)?.title
+              ? `Delete "${existingPlans.find((plan) => plan.id === confirmingDeleteId)?.title}"? This removes the plan and its checklist items from this period.`
+              : "Delete this milestone plan?"
+          }
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          onConfirm={() => deletePlan(confirmingDeleteId)}
+          onCancel={() => setConfirmingDeleteId("")}
+          variant="danger"
+        />
       </Panel>
     </AdminLayout>
   );
@@ -665,11 +726,17 @@ function Banner({ message, kind }) {
   const style =
     kind === "success"
       ? { background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0" }
-      : {
-          background: "#fee2e2",
-          color: "#991b1b",
-          border: "1px solid #fecaca",
-        };
+      : kind === "info"
+        ? {
+            background: "#eff6ff",
+            color: "#1d4ed8",
+            border: "1px solid #bfdbfe",
+          }
+        : {
+            background: "#fee2e2",
+            color: "#991b1b",
+            border: "1px solid #fecaca",
+          };
   return (
     <div style={{ padding: 12, borderRadius: 8, marginTop: 12, ...style }}>
       {message}

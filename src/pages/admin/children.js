@@ -4,8 +4,40 @@ import { SkeletonTable } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import { childAgeGroup, ageInMonths } from "@/lib/ageUtils";
 import { apiJson } from "@/lib/api";
+import {
+  MAX_EMERGENCY_CONTACTS,
+  MAX_PARENT_CONTACTS,
+  formatContactLine,
+  getEmergencyContacts,
+  getParentContacts,
+} from "@/lib/child-contacts";
 import { useToast } from "@/contexts/ToastContext";
 import { useCallback, useEffect, useMemo, useState } from "react";
+
+function createParentContacts(value = []) {
+  const source = Array.isArray(value) ? value : [];
+  return Array.from({ length: MAX_PARENT_CONTACTS }, (_, index) => {
+    const item = source[index] && typeof source[index] === "object" ? source[index] : {};
+    return {
+      label: item.label || `Parent ${index + 1}`,
+      name: item.name || "",
+      email: item.email || "",
+      phone: item.phone || "",
+    };
+  });
+}
+
+function createEmergencyContacts(value = []) {
+  const source = Array.isArray(value) ? value : [];
+  return Array.from({ length: MAX_EMERGENCY_CONTACTS }, (_, index) => {
+    const item = source[index] && typeof source[index] === "object" ? source[index] : {};
+    return {
+      label: item.label || `Emergency ${index + 1}`,
+      name: item.name || "",
+      phone: item.phone || "",
+    };
+  });
+}
 
 export default function AdminChildren() {
   const toast = useToast();
@@ -27,8 +59,9 @@ export default function AdminChildren() {
   const [centerId, setCenterId] = useState("");
   const [classRoomId, setClassRoomId] = useState("");
   const [parentId, setParentId] = useState("");
+  const [parentContacts, setParentContacts] = useState(createParentContacts());
 
-  const [emergencyContact, setEmergencyContact] = useState("");
+  const [emergencyContacts, setEmergencyContacts] = useState(createEmergencyContacts());
   const [allergies, setAllergies] = useState("");
   const [enrollmentStartDate, setEnrollmentStartDate] = useState("");
   const [enrollmentEndDate, setEnrollmentEndDate] = useState("");
@@ -170,8 +203,8 @@ export default function AdminChildren() {
     setCenterId("");
     setClassRoomId("");
     setParentId("");
-
-    setEmergencyContact("");
+    setParentContacts(createParentContacts());
+    setEmergencyContacts(createEmergencyContacts());
     setAllergies("");
     setEnrollmentStartDate("");
     setEnrollmentEndDate("");
@@ -195,8 +228,8 @@ export default function AdminChildren() {
     setCenterId(child.centerId || "");
     setClassRoomId(child.classRoomId || "");
     setParentId(child.parentId || "");
-
-    setEmergencyContact(child.emergencyContact || "");
+    setParentContacts(createParentContacts(getParentContacts(child)));
+    setEmergencyContacts(createEmergencyContacts(getEmergencyContacts(child)));
     setAllergies(child.allergies || "");
     setEnrollmentStartDate(child.enrollmentStartDate ? child.enrollmentStartDate.slice(0, 10) : "");
     setEnrollmentEndDate(child.enrollmentEndDate ? child.enrollmentEndDate.slice(0, 10) : "");
@@ -275,6 +308,22 @@ export default function AdminChildren() {
     }
     if (num < 0) throw new Error("Must be >= 0.");
     return num;
+  }
+
+  function updateParentContact(index, field, value) {
+    setParentContacts((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [field]: value } : item,
+      ),
+    );
+  }
+
+  function updateEmergencyContact(index, field, value) {
+    setEmergencyContacts((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [field]: value } : item,
+      ),
+    );
   }
 
   function fileToBase64(file) {
@@ -404,7 +453,8 @@ export default function AdminChildren() {
           centerId,
           classRoomId: classRoomId || null,
           parentId: parentId || null,
-          emergencyContact: emergencyContact || null,
+          parentContacts,
+          emergencyContacts,
           allergies: allergies || null,
           enrollmentStartDate: enrollmentStartDate || null,
           enrollmentEndDate: enrollmentEndDate || null,
@@ -452,7 +502,8 @@ export default function AdminChildren() {
           lastName: lastName || null,
           birthDate: birthDate || null,
           classRoomId: classRoomId || null,
-          emergencyContact: emergencyContact || null,
+          parentContacts,
+          emergencyContacts,
           allergies: allergies || null,
           enrollmentStartDate: enrollmentStartDate || null,
           enrollmentEndDate: enrollmentEndDate || null,
@@ -648,6 +699,12 @@ export default function AdminChildren() {
                 const centerName = centerById[ch.centerId]?.name || "—";
                 const className = ch.classRoomId ? (classById[ch.classRoomId]?.name || ch.classRoomId) : null;
                 const parentEmail = ch.parentId ? (userById[ch.parentId]?.email || ch.parentId) : null;
+                const parentSummaries = getParentContacts(ch)
+                  .map((contact) => formatContactLine(contact))
+                  .filter(Boolean);
+                const emergencySummary = getEmergencyContacts(ch)
+                  .map((contact) => formatContactLine(contact, { includeEmail: false }))
+                  .filter(Boolean);
 
                 return (
                   <div
@@ -696,12 +753,20 @@ export default function AdminChildren() {
                             {className}
                           </span>
                         )}
-                        {parentEmail && (
+                        {(parentSummaries[0] || parentEmail) && (
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                            👤 {parentEmail}
+                            👤 {parentSummaries[0] || parentEmail}
                           </span>
                         )}
                       </div>
+
+                      {parentSummaries.length > 1 || emergencySummary.length > 0 ? (
+                        <div style={{ marginTop: 4, fontSize: 11, color: "var(--admin-text-muted)" }}>
+                          {parentSummaries.length > 1 ? `Parent 2: ${parentSummaries[1]}` : null}
+                          {parentSummaries.length > 1 && emergencySummary.length > 0 ? " • " : null}
+                          {emergencySummary.length > 0 ? `Emergency: ${emergencySummary.join(" • ")}` : null}
+                        </div>
+                      ) : null}
 
                       {(ch.enrollmentStartDate || ch.enrollmentEndDate) && (
                         <div style={{ marginTop: 4, fontSize: 11, color: "var(--admin-text-muted)" }}>
@@ -836,7 +901,7 @@ export default function AdminChildren() {
                     ))}
                 </select>
               </Field>
-              <Field label={editing ? "Parent (set at creation)" : "Parent"}>
+              <Field label={editing ? "Linked parent account (set at creation)" : "Linked parent account"}>
                 <select
                   value={parentId}
                   onChange={(e) => setParentId(e.target.value)}
@@ -855,17 +920,87 @@ export default function AdminChildren() {
               </Field>
             </div>
 
+            <SectionHeader icon="👪" title="Parent Contacts" style={{ marginTop: 20 }} />
+            <div style={formGridStyle}>
+              {parentContacts.map((contact, index) => (
+                <div
+                  key={contact.label}
+                  style={{
+                    border: "1px solid var(--admin-border)",
+                    borderRadius: 12,
+                    padding: 14,
+                    background: "var(--admin-bg-secondary)",
+                  }}
+                >
+                  <div style={{ fontWeight: 800, fontSize: 13, color: "var(--admin-text)", marginBottom: 10 }}>
+                    {contact.label}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
+                    <Field label="Name">
+                      <input
+                        value={contact.name}
+                        onChange={(e) => updateParentContact(index, "name", e.target.value)}
+                        style={inputStyle}
+                        placeholder={contact.label}
+                      />
+                    </Field>
+                    <Field label="Email">
+                      <input
+                        value={contact.email}
+                        onChange={(e) => updateParentContact(index, "email", e.target.value)}
+                        style={inputStyle}
+                        placeholder="name@example.com"
+                      />
+                    </Field>
+                    <Field label="Phone">
+                      <input
+                        value={contact.phone}
+                        onChange={(e) => updateParentContact(index, "phone", e.target.value)}
+                        style={inputStyle}
+                        placeholder="(555) 000-0000"
+                      />
+                    </Field>
+                  </div>
+                </div>
+              ))}
+            </div>
+
             {/* Section: Health & Safety */}
             <SectionHeader icon="🏥" title="Health & Safety" style={{ marginTop: 20 }} />
             <div style={formGridStyle}>
-              <Field label="Emergency Contact">
-                <input
-                  value={emergencyContact}
-                  onChange={(e) => setEmergencyContact(e.target.value)}
-                  style={inputStyle}
-                  placeholder="Name + phone"
-                />
-              </Field>
+              {emergencyContacts.map((contact, index) => (
+                <div
+                  key={contact.label}
+                  style={{
+                    border: "1px solid var(--admin-border)",
+                    borderRadius: 12,
+                    padding: 14,
+                    background: "var(--admin-bg-secondary)",
+                  }}
+                >
+                  <div style={{ fontWeight: 800, fontSize: 13, color: "var(--admin-text)", marginBottom: 10 }}>
+                    {contact.label}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
+                    <Field label="Name">
+                      <input
+                        value={contact.name}
+                        onChange={(e) => updateEmergencyContact(index, "name", e.target.value)}
+                        style={inputStyle}
+                        placeholder="Emergency contact name"
+                      />
+                    </Field>
+                    <Field label="Phone">
+                      <input
+                        value={contact.phone}
+                        onChange={(e) => updateEmergencyContact(index, "phone", e.target.value)}
+                        style={inputStyle}
+                        placeholder="(555) 000-0000"
+                      />
+                    </Field>
+                  </div>
+                </div>
+              ))}
               <Field label="Allergies">
                 <input
                   value={allergies}

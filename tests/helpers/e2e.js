@@ -1,6 +1,12 @@
 /**
  * E2E test helpers for Playwright browser tests.
  */
+const {
+  buildBrowserSessionCookie,
+  loginAsAdmin: loginAsAdminCookie,
+  loginAsTeacher: loginAsTeacherCookie,
+  loginAsParent: loginAsParentCookie,
+} = require("./auth");
 
 async function loginViaUI(page, email, password) {
   await page.goto("/login");
@@ -13,15 +19,41 @@ async function loginViaUI(page, email, password) {
   });
 }
 
-async function loginAsAdmin(page) {
+async function loginViaApi(page, request, email, password) {
+  const { getAuthCookie } = require("./auth");
+  const setCookieHeader = await getAuthCookie(request, email, password);
+  const sessionCookie = buildBrowserSessionCookie(setCookieHeader);
+  await page.context().addCookies([sessionCookie]);
+  await page.goto("/dashboard");
+}
+
+async function loginAsAdmin(page, request) {
+  if (request) {
+    const setCookieHeader = await loginAsAdminCookie(request);
+    await page.context().addCookies([buildBrowserSessionCookie(setCookieHeader)]);
+    await page.goto("/dashboard");
+    return;
+  }
   await loginViaUI(page, "admin@demo.com", "adminpass");
 }
 
-async function loginAsTeacher(page) {
+async function loginAsTeacher(page, request) {
+  if (request) {
+    const setCookieHeader = await loginAsTeacherCookie(request);
+    await page.context().addCookies([buildBrowserSessionCookie(setCookieHeader)]);
+    await page.goto("/dashboard");
+    return;
+  }
   await loginViaUI(page, "teacher@demo.com", "teacherpass");
 }
 
-async function loginAsParent(page) {
+async function loginAsParent(page, request) {
+  if (request) {
+    const setCookieHeader = await loginAsParentCookie(request);
+    await page.context().addCookies([buildBrowserSessionCookie(setCookieHeader)]);
+    await page.goto("/dashboard");
+    return;
+  }
   await loginViaUI(page, "parent@demo.com", "parentpass");
 }
 
@@ -41,6 +73,7 @@ async function waitForLoadingDone(page) {
 }
 
 module.exports = {
+  loginViaApi,
   loginViaUI,
   loginAsAdmin,
   loginAsTeacher,

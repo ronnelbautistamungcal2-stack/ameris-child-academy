@@ -24,9 +24,13 @@ const TYPE_LABELS = {
     label: "System announcements",
     description: "Important portal updates and service-wide reminders.",
   },
+  FORM_RENEWAL: {
+    label: "Form renewals",
+    description: "See reminders when enrollment or medical forms are close to expiring.",
+  },
 };
 
-const PARENT_TYPES = ["MESSAGE", "ACTIVITY_UPDATE", "PROGRESS_UPDATE", "SYSTEM"];
+const PARENT_TYPES = ["MESSAGE", "ACTIVITY_UPDATE", "PROGRESS_UPDATE", "SYSTEM", "FORM_RENEWAL"];
 
 export default function NotificationSettings() {
   const [preferences, setPreferences] = useState([]);

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useUserSocket, useNewMessages } from "@/hooks/useSocket";
+import { useToast } from "@/contexts/ToastContext";
 
 const ADMIN_FILTERS = [
   { id: "all", label: "All" },
@@ -11,6 +12,38 @@ const ADMIN_FILTERS = [
   { id: "coach", label: "Coaches" },
   { id: "group", label: "Groups" },
 ];
+
+const COMPOSE_QUERY_KEYS = [
+  "compose",
+  "subject",
+  "message",
+  "recipientId",
+  "recipientName",
+  "recipientEmail",
+  "recipientRole",
+];
+
+function queryList(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item || ""));
+  if (typeof value === "string" && value) return [value];
+  return [];
+}
+
+function seedRecipientsFromQuery(query) {
+  const ids = queryList(query.recipientId);
+  const names = queryList(query.recipientName);
+  const emails = queryList(query.recipientEmail);
+  const roles = queryList(query.recipientRole);
+
+  return ids
+    .map((id, index) => ({
+      id,
+      name: names[index] || "",
+      email: emails[index] || "",
+      role: roles[index] || "",
+    }))
+    .filter((recipient) => recipient.id);
+}
 
 function timeAgo(date) {
   if (!date) return "";
@@ -79,6 +112,7 @@ function summaryCardTone(tone) {
 export default function MessageInbox({ centerId, isAdmin }) {
   const { data: session } = useSession();
   const router = useRouter();
+  const toast = useToast();
   const userId = session?.user?.id;
 
   const [threads, setThreads] = useState([]);
@@ -104,6 +138,49 @@ export default function MessageInbox({ centerId, isAdmin }) {
 
   const messagesEndRef = useRef(null);
   const socket = useUserSocket(userId);
+
+  function resetComposeForm() {
+    setSelectedUsers([]);
+    setNewTitle("");
+    setNewMessage("");
+    setSearchQuery("");
+    setSearchResults([]);
+  }
+
+  function clearComposeQuery() {
+    if (!router.isReady) return;
+
+    const nextQuery = { ...router.query };
+    COMPOSE_QUERY_KEYS.forEach((key) => {
+      delete nextQuery[key];
+    });
+
+    router.replace(
+      {
+        pathname: router.pathname,
+        query: nextQuery,
+      },
+      undefined,
+      { shallow: true },
+    );
+  }
+
+  function openCompose() {
+    setShowCompose(true);
+    setMobilePanel("list");
+  }
+
+  function startBlankCompose() {
+    resetComposeForm();
+    clearComposeQuery();
+    openCompose();
+  }
+
+  function closeCompose() {
+    setShowCompose(false);
+    resetComposeForm();
+    clearComposeQuery();
+  }
 
   async function refreshThreads() {
     setLoading(true);
@@ -143,11 +220,45 @@ export default function MessageInbox({ centerId, isAdmin }) {
 
   useEffect(() => {
     if (router.query.compose !== "1") return;
-    setShowCompose(true);
-    setMobilePanel("list");
-    if (typeof router.query.subject === "string") setNewTitle(router.query.subject);
-    if (typeof router.query.message === "string") setNewMessage(router.query.message);
-  }, [router.query.compose, router.query.subject, router.query.message]);
+    openCompose();
+    setNewTitle(
+      typeof router.query.subject === "string" ? router.query.subject : "",
+    );
+    setNewMessage(
+      typeof router.query.message === "string" ? router.query.message : "",
+    );
+    setSelectedUsers(seedRecipientsFromQuery(router.query));
+    setSearchQuery("");
+    setSearchResults([]);
+  }, [
+    router.query.compose,
+    router.query.message,
+    router.query.recipientEmail,
+    router.query.recipientId,
+    router.query.recipientName,
+    router.query.recipientRole,
+    router.query.subject,
+  ]);
+
+  useEffect(() => {
+    if (!router.isReady) return;
+    const queryThreadId =
+      typeof router.query.threadId === "string" ? router.query.threadId : "";
+    if (queryThreadId === activeThreadId) return;
+
+    const nextQuery = { ...router.query };
+    if (activeThreadId) nextQuery.threadId = activeThreadId;
+    else delete nextQuery.threadId;
+
+    router.replace(
+      {
+        pathname: router.pathname,
+        query: nextQuery,
+      },
+      undefined,
+      { shallow: true },
+    );
+  }, [activeThreadId, router]);
 
   useEffect(() => {
     if (!activeThreadId) {
@@ -218,7 +329,9 @@ export default function MessageInbox({ centerId, isAdmin }) {
       setActiveThread(thread);
       refreshThreads();
     } catch (e2) {
-      setError(e2.message || "Failed to send message");
+      const messageText = e2.message || "Failed to send message";
+      setError(messageText);
+      toast.error(messageText);
     } finally {
       setSending(false);
     }
@@ -260,16 +373,19 @@ export default function MessageInbox({ centerId, isAdmin }) {
           firstMessage: newMessage,
         }),
       });
-      setShowCompose(false);
-      setSelectedUsers([]);
-      setNewTitle("");
-      setNewMessage("");
-      setSearchQuery("");
+      closeCompose();
       await refreshThreads();
       setActiveThreadId(thread.id);
       setMobilePanel("thread");
+      toast.success(
+        selectedUsers.length > 1
+          ? "Conversation created."
+          : "Conversation started.",
+      );
     } catch (e2) {
-      setError(e2.message || "Failed to create conversation");
+      const messageText = e2.message || "Failed to create conversation";
+      setError(messageText);
+      toast.error(messageText);
     } finally {
       setCreating(false);
     }
@@ -426,7 +542,7 @@ export default function MessageInbox({ centerId, isAdmin }) {
         </div>
         <button
           type="button"
-          onClick={() => setShowCompose(true)}
+          onClick={startBlankCompose}
           className="rounded-2xl bg-gradient-to-r from-sky-600 to-cyan-500 px-5 py-2.5 text-sm font-extrabold text-white shadow-sm transition hover:from-sky-700 hover:to-cyan-600"
         >
           New Conversation
@@ -458,7 +574,7 @@ export default function MessageInbox({ centerId, isAdmin }) {
       {showCompose ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm dark:bg-black/60"
-          onClick={() => setShowCompose(false)}
+          onClick={closeCompose}
         >
           <div
             className="w-full max-w-xl rounded-3xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800"
@@ -477,7 +593,7 @@ export default function MessageInbox({ centerId, isAdmin }) {
               </div>
               <button
                 type="button"
-                onClick={() => setShowCompose(false)}
+                onClick={closeCompose}
                 className="rounded-full border border-gray-200 px-2 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
               >
                 Close
@@ -513,7 +629,7 @@ export default function MessageInbox({ centerId, isAdmin }) {
                       key={u.id}
                       className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-1 text-xs font-semibold text-sky-800 dark:bg-sky-900/40 dark:text-sky-300"
                     >
-                      {u.name || u.email}
+                      <span className="max-w-[14rem] break-words">{u.name || u.email}</span>
                       <button
                         type="button"
                         onClick={() =>
@@ -585,7 +701,7 @@ export default function MessageInbox({ centerId, isAdmin }) {
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowCompose(false)}
+                  onClick={closeCompose}
                   className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
                 >
                   Cancel
@@ -736,7 +852,7 @@ export default function MessageInbox({ centerId, isAdmin }) {
                               </span>
                             ) : null}
                           </div>
-                          <div className="mt-1 truncate text-sm font-extrabold text-gray-900 dark:text-gray-100">
+                          <div className="mt-1 line-clamp-2 break-words text-sm font-extrabold text-gray-900 dark:text-gray-100">
                             {thread.title}
                           </div>
                         </div>
@@ -758,7 +874,7 @@ export default function MessageInbox({ centerId, isAdmin }) {
                           {thread.participantCount} participants
                         </span>
                       </div>
-                      <div className="mt-2 line-clamp-2 text-xs leading-5 text-gray-600 dark:text-gray-400">
+                      <div className="mt-2 line-clamp-2 break-words text-xs leading-5 text-gray-600 dark:text-gray-400">
                         {thread.last}
                       </div>
                     </div>
@@ -803,7 +919,7 @@ export default function MessageInbox({ centerId, isAdmin }) {
                 </p>
                 <button
                   type="button"
-                  onClick={() => setShowCompose(true)}
+                  onClick={startBlankCompose}
                   className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-bold text-sky-700 hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-900/20 dark:text-sky-200"
                 >
                   Start a conversation
@@ -837,7 +953,7 @@ export default function MessageInbox({ centerId, isAdmin }) {
                         {activeMeta.avatar}
                       </div>
                       <div className="min-w-0">
-                        <h3 className="truncate text-base font-extrabold text-gray-900 dark:text-gray-100">
+                        <h3 className="break-words text-base font-extrabold text-gray-900 dark:text-gray-100">
                           {activeMeta.title}
                         </h3>
                         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -864,15 +980,17 @@ export default function MessageInbox({ centerId, isAdmin }) {
                         <span
                           key={participant.userId}
                           className={[
-                            "rounded-full px-2.5 py-1 text-[10px] font-extrabold",
+                            "max-w-full rounded-full px-2.5 py-1 text-[10px] font-extrabold",
                             participant.userId === userId
                               ? "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
                               : roleBadgeColor(participant.user?.role),
                           ].join(" ")}
                         >
-                          {participant.userId === userId
-                            ? "You"
-                            : participant.user?.name || participant.user?.email}
+                          <span className="break-words">
+                            {participant.userId === userId
+                              ? "You"
+                              : participant.user?.name || participant.user?.email}
+                          </span>
                         </span>
                       ))}
                     </div>
@@ -913,7 +1031,7 @@ export default function MessageInbox({ centerId, isAdmin }) {
                               </span>
                             </div>
                           ) : null}
-                          <p className="text-sm leading-6">{item.body}</p>
+                          <p className="break-words whitespace-pre-wrap text-sm leading-6">{item.body}</p>
                           <p className={["mt-1 text-[11px]", isOwn ? "text-sky-100" : "text-gray-400"].join(" ")}>
                             {new Date(item.createdAt).toLocaleString()}
                           </p>

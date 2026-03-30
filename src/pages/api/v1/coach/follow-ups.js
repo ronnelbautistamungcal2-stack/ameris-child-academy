@@ -1,24 +1,31 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { createApiHandler, forbidden, notFound, unauthorized } from "@/lib/api-error";
+import {
+  ensureObject,
+  optionalDate,
+  optionalString,
+  requiredString,
+} from "@/lib/validation";
 
 const VALID_TYPES = ["PARENT", "CAMERA_OBSERVATION", "GENERAL"];
 const VALID_STATUSES = ["OPEN", "IN_PROGRESS", "COMPLETED", "CANCELLED"];
 const VALID_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 
-export default async function handler(req, res) {
+export default createApiHandler(async function handler(req, res) {
   const session = await getSession(req, res);
-  if (!session) return res.status(401).json({ error: "Unauthorized" });
+  if (!session) throw unauthorized();
+  if (!["ADMIN", "COACH"].includes(session.user.role)) throw forbidden();
 
   const role = session.user.role;
-  if (!["ADMIN", "COACH"].includes(role)) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
 
   if (req.method === "GET") {
-    const { centerId, type, status } = req.query;
+    const centerId = optionalString(req.query, "centerId");
+    const type = optionalString(req.query, "type");
+    const status = optionalString(req.query, "status");
     if (centerId && role !== "ADMIN") {
-      const ok = await hasAccessToCenter(session.user.id, centerId);
-      if (!ok) return res.status(403).json({ error: "Forbidden" });
+      const allowed = await hasAccessToCenter(session.user.id, centerId);
+      if (!allowed) throw forbidden();
     }
 
     const where = {};
@@ -50,18 +57,24 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    const { centerId, type, priority, title, description, dueDate, assignedToId, notes } = req.body;
-
-    if (!centerId || !type || !title) {
-      return res.status(400).json({ error: "centerId, type, and title are required" });
-    }
+    const body = ensureObject(req.body || {});
+    const centerId = requiredString(body, "centerId");
+    const type = requiredString(body, "type");
+    const title = requiredString(body, "title");
     if (!VALID_TYPES.includes(type)) {
-      return res.status(400).json({ error: `type must be one of: ${VALID_TYPES.join(", ")}` });
+      return res.status(400).json({
+        ok: false,
+        message: `type must be one of: ${VALID_TYPES.join(", ")}`,
+        error: {
+          code: "BAD_REQUEST",
+          message: `type must be one of: ${VALID_TYPES.join(", ")}`,
+        },
+      });
     }
 
     if (role !== "ADMIN") {
-      const ok = await hasAccessToCenter(session.user.id, centerId);
-      if (!ok) return res.status(403).json({ error: "Forbidden" });
+      const allowed = await hasAccessToCenter(session.user.id, centerId);
+      if (!allowed) throw forbidden();
     }
 
     const followUp = await prisma.coachFollowUp.create({
@@ -69,12 +82,14 @@ export default async function handler(req, res) {
         centerId,
         createdById: session.user.id,
         type,
-        priority: priority && VALID_PRIORITIES.includes(priority) ? priority : "MEDIUM",
+        priority: VALID_PRIORITIES.includes(optionalString(body, "priority") || "")
+          ? optionalString(body, "priority")
+          : "MEDIUM",
         title,
-        description: description || null,
-        dueDate: dueDate ? new Date(dueDate) : null,
-        assignedToId: assignedToId || null,
-        notes: notes || null,
+        description: optionalString(body, "description", { nullable: true }),
+        dueDate: optionalDate(body, "dueDate", { nullable: true }) ?? null,
+        assignedToId: optionalString(body, "assignedToId", { nullable: true }),
+        notes: optionalString(body, "notes", { nullable: true }),
       },
       include: {
         createdBy: { select: { id: true, name: true, email: true } },
@@ -86,28 +101,39 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "PUT") {
-    const { id, status, priority, title, description, dueDate, assignedToId, notes } = req.body;
-    if (!id) return res.status(400).json({ error: "id is required" });
-
+    const body = ensureObject(req.body || {});
+    const id = requiredString(body, "id");
     const existing = await prisma.coachFollowUp.findUnique({ where: { id } });
-    if (!existing) return res.status(404).json({ error: "Follow-up not found" });
+    if (!existing) throw notFound("Follow-up not found");
 
-    const data = {};
-    if (status && VALID_STATUSES.includes(status)) {
-      data.status = status;
-      if (status === "COMPLETED") data.completedAt = new Date();
-      if (status === "OPEN" || status === "IN_PROGRESS") data.completedAt = null;
-    }
-    if (priority && VALID_PRIORITIES.includes(priority)) data.priority = priority;
-    if (title !== undefined) data.title = title;
-    if (description !== undefined) data.description = description;
-    if (dueDate !== undefined) data.dueDate = dueDate ? new Date(dueDate) : null;
-    if (assignedToId !== undefined) data.assignedToId = assignedToId || null;
-    if (notes !== undefined) data.notes = notes;
+    const status = optionalString(body, "status");
+    const priority = optionalString(body, "priority");
 
     const updated = await prisma.coachFollowUp.update({
       where: { id },
-      data,
+      data: {
+        ...(status && VALID_STATUSES.includes(status)
+          ? {
+              status,
+              completedAt:
+                status === "COMPLETED"
+                  ? new Date()
+                  : status === "OPEN" || status === "IN_PROGRESS"
+                    ? null
+                    : existing.completedAt,
+            }
+          : {}),
+        ...(priority && VALID_PRIORITIES.includes(priority) ? { priority } : {}),
+        ...(body.title !== undefined ? { title: optionalString(body, "title") } : {}),
+        ...(body.description !== undefined
+          ? { description: optionalString(body, "description", { nullable: true }) }
+          : {}),
+        ...(body.dueDate !== undefined ? { dueDate: optionalDate(body, "dueDate", { nullable: true }) } : {}),
+        ...(body.assignedToId !== undefined
+          ? { assignedToId: optionalString(body, "assignedToId", { nullable: true }) }
+          : {}),
+        ...(body.notes !== undefined ? { notes: optionalString(body, "notes", { nullable: true }) } : {}),
+      },
       include: {
         createdBy: { select: { id: true, name: true, email: true } },
         assignedTo: { select: { id: true, name: true, email: true } },
@@ -117,17 +143,17 @@ export default async function handler(req, res) {
     return res.status(200).json(updated);
   }
 
-  if (req.method === "DELETE") {
-    const { id } = req.query;
-    if (!id) return res.status(400).json({ error: "id is required" });
-
-    const existing = await prisma.coachFollowUp.findUnique({ where: { id } });
-    if (!existing) return res.status(404).json({ error: "Follow-up not found" });
-
-    await prisma.coachFollowUp.delete({ where: { id } });
-    return res.status(200).json({ success: true });
+  const id = optionalString(req.query, "id");
+  if (!id) {
+    return res.status(400).json({
+      ok: false,
+      message: "id is required",
+      error: { code: "BAD_REQUEST", message: "id is required" },
+    });
   }
 
-  res.setHeader("Allow", ["GET", "POST", "PUT", "DELETE"]);
-  return res.status(405).end();
-}
+  const existing = await prisma.coachFollowUp.findUnique({ where: { id } });
+  if (!existing) throw notFound("Follow-up not found");
+  await prisma.coachFollowUp.delete({ where: { id } });
+  return res.status(200).json({ success: true });
+}, { methods: ["GET", "POST", "PUT", "DELETE"], logLabel: "coach/follow-ups error:" });

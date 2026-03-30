@@ -1,5 +1,10 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import {
+  buildLegacyEmergencyContact,
+  normalizeEmergencyContacts,
+  normalizeParentContacts,
+} from "@/lib/child-contacts";
 
 function normalizeDocs(value) {
   const arr = Array.isArray(value) ? value : [];
@@ -73,6 +78,8 @@ export default async function handler(req, res) {
       birthDate,
       classRoomId,
       parentId,
+      parentContacts,
+      emergencyContacts,
       emergencyContact,
       allergies,
       healthAssessmentDocuments,
@@ -81,6 +88,14 @@ export default async function handler(req, res) {
       enrollmentStartDate,
       enrollmentEndDate,
     } = req.body;
+
+    const normalizedParentContacts = normalizeParentContacts(parentContacts);
+    const normalizedEmergencyContacts = normalizeEmergencyContacts(emergencyContacts);
+    const legacyEmergencyContact =
+      buildLegacyEmergencyContact(normalizedEmergencyContacts) ||
+      (typeof emergencyContact === "string" && emergencyContact.trim()
+        ? emergencyContact.trim()
+        : null);
 
     const child = await prisma.child.update({
       where: { id },
@@ -92,11 +107,19 @@ export default async function handler(req, res) {
         parentId: Object.prototype.hasOwnProperty.call(req.body, "parentId")
           ? parentId || null
           : undefined,
+        parentContacts: Object.prototype.hasOwnProperty.call(req.body, "parentContacts")
+          ? normalizedParentContacts
+          : undefined,
+        emergencyContacts: Object.prototype.hasOwnProperty.call(req.body, "emergencyContacts")
+          ? normalizedEmergencyContacts
+          : undefined,
         emergencyContact: Object.prototype.hasOwnProperty.call(req.body, "emergencyContact")
           ? typeof emergencyContact === "string" && emergencyContact.trim()
             ? emergencyContact.trim()
             : null
-          : undefined,
+          : Object.prototype.hasOwnProperty.call(req.body, "emergencyContacts")
+            ? legacyEmergencyContact
+            : undefined,
         allergies: Object.prototype.hasOwnProperty.call(req.body, "allergies")
           ? typeof allergies === "string" && allergies.trim()
             ? allergies.trim()

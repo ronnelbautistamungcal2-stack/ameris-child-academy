@@ -14,36 +14,78 @@ const PERMISSION_TYPES = [
     label: "Photo Release",
     description:
       "Allow photos and videos of your child for classroom updates and approved center use.",
+    policySummary:
+      "This permission covers photos and videos taken during classroom routines, daily updates, and other center-approved communication.",
+    policySections: [
+      "Media may be used for secure family updates, classroom documentation, and center communication that follows school policy.",
+      "Staff will avoid sharing sensitive information alongside media and will use reasonable care when handling images or videos.",
+      "Public-facing use outside standard family communication should follow the center's published policy and approval process.",
+    ],
   },
   {
     value: "FIELD_TRIP",
     label: "Field Trip",
     description:
       "Allow off-campus supervised field trips and educational visits.",
+    policySummary:
+      "This permission allows your child to participate in supervised outings connected to classroom learning and center programming.",
+    policySections: [
+      "Trips are planned and supervised by staff, with attendance, transportation, and emergency information managed before departure.",
+      "Families will still receive trip-specific communication when additional details, fees, or preparation are required.",
+      "Granting this permission does not remove the center's responsibility to follow staffing ratios, safety procedures, and sign-out controls.",
+    ],
   },
   {
     value: "MEDICAL_TREATMENT",
     label: "Medical Treatment",
     description:
       "Allow staff to authorize emergency treatment if immediate care is required.",
+    policySummary:
+      "This permission allows staff to act quickly if urgent medical attention is needed and a parent or guardian cannot be reached in time.",
+    policySections: [
+      "Emergency services or urgent care may be contacted when staff believe immediate treatment is necessary for your child's safety.",
+      "The center will continue attempting to contact parents, guardians, and emergency contacts using the information on file.",
+      "This permission is intended for urgent situations and does not replace normal family communication for routine care decisions.",
+    ],
   },
   {
     value: "TRANSPORTATION",
     label: "Transportation",
     description:
       "Allow transport arranged by the center for approved activities.",
+    policySummary:
+      "This permission covers center-arranged transportation for approved activities, outings, or operational needs tied to care.",
+    policySections: [
+      "Transportation will follow center safety procedures, including supervision, seat-belt or restraint expectations, and trip documentation.",
+      "Drivers and staff are expected to follow the center's operating and emergency procedures during transport.",
+      "Families may still receive separate notice when transportation is tied to a special event or schedule change.",
+    ],
   },
   {
     value: "SUNSCREEN_APPLICATION",
     label: "Sunscreen Application",
     description:
       "Allow staff to apply sunscreen during outdoor activities when appropriate.",
+    policySummary:
+      "This permission allows staff to apply sunscreen to help protect your child during outdoor play and other approved activities.",
+    policySections: [
+      "Application should follow the center's care procedures and any written family instructions provided to staff.",
+      "Families should notify the center about allergies, sensitivities, or brand-specific requirements before sunscreen is used.",
+      "Sunscreen use does not replace other outdoor safety practices such as shade, hydration, and routine supervision.",
+    ],
   },
   {
     value: "WATER_ACTIVITIES",
     label: "Water Activities",
     description:
       "Allow supervised participation in splash play and similar activities.",
+    policySummary:
+      "This permission covers supervised water play such as splash pads, sprinklers, and similar center-approved activities.",
+    policySections: [
+      "Water activities must follow the center's staffing, supervision, and safety expectations at all times.",
+      "Children may be excluded from a specific activity if staff determine the setting, behavior, or conditions are not appropriate that day.",
+      "Families should communicate any health or clothing needs that staff should know before participation.",
+    ],
   },
 ];
 
@@ -71,6 +113,17 @@ const PERMISSION_GROUPS = [
   },
 ];
 
+function todayDateValue() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function toDateInputValue(value) {
+  if (!value) return todayDateValue();
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return todayDateValue();
+  return date.toISOString().slice(0, 10);
+}
+
 export default function ParentPermissions() {
   const [children, setChildren] = useState([]);
   const [selectedChildId, setSelectedChildId] = useState("");
@@ -80,6 +133,12 @@ export default function ParentPermissions() {
   const [saving, setSaving] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [activeItem, setActiveItem] = useState(null);
+  const [decisionForm, setDecisionForm] = useState({
+    signatureName: "",
+    decisionDate: todayDateValue(),
+    notes: "",
+  });
 
   useEffect(() => {
     (async () => {
@@ -119,6 +178,10 @@ export default function ParentPermissions() {
     setSuccess("");
     if (selectedChildId) loadPermissions(selectedChildId);
   }, [selectedChildId, loadPermissions]);
+
+  useEffect(() => {
+    setActiveItem(null);
+  }, [selectedChildId]);
 
   const selectedChild = useMemo(
     () => children.find((child) => child.id === selectedChildId) || null,
@@ -165,16 +228,50 @@ export default function ParentPermissions() {
     [],
   );
 
-  async function togglePermission(type, newStatus) {
+  function openDecisionModal(item) {
+    const permission = permMap[item.value];
+    setActiveItem(item);
+    setDecisionForm({
+      signatureName: permission?.signatureName || "",
+      decisionDate: toDateInputValue(permission?.signedAt || permission?.effectiveDate),
+      notes: permission?.notes || "",
+    });
+    setError("");
+    setSuccess("");
+  }
+
+  function closeDecisionModal() {
+    setActiveItem(null);
+    setDecisionForm({
+      signatureName: "",
+      decisionDate: todayDateValue(),
+      notes: "",
+    });
+  }
+
+  async function savePermissionDecision(type, newStatus) {
+    if (!activeItem || !selectedChildId) return;
+    if (!decisionForm.signatureName.trim()) {
+      setError("Signature name is required before you can submit a permission decision.");
+      return;
+    }
+
     setSaving(type);
     setError("");
     setSuccess("");
     try {
       await apiJson(`/api/v1/children/${selectedChildId}/permissions`, {
         method: "POST",
-        body: JSON.stringify({ permissionType: type, status: newStatus }),
+        body: JSON.stringify({
+          permissionType: type,
+          status: newStatus,
+          signatureName: decisionForm.signatureName.trim(),
+          effectiveDate: decisionForm.decisionDate,
+          notes: decisionForm.notes || null,
+        }),
       });
       await loadPermissions(selectedChildId);
+      closeDecisionModal();
       setSuccess("Permissions updated.");
       setTimeout(() => setSuccess(""), 2500);
     } catch (e) {
@@ -200,7 +297,7 @@ export default function ParentPermissions() {
                 Family permissions
               </h1>
               <p className="mt-1.5 text-sm leading-6 text-gray-600 dark:text-gray-300">
-                Manage approvals for the selected child in one place, with compact status tracking and fast yes-or-no actions.
+                Review each policy, add your e-signature, and record a clear grant-or-deny decision for the selected child.
               </p>
             </div>
 
@@ -322,7 +419,7 @@ export default function ParentPermissions() {
                             <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[12px] text-gray-600 dark:text-gray-300">
                               <span>{formatChildAge(selectedChild.birthDate) || "Ready for review"}</span>
                               <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200">
-                                Changes save immediately
+                                Policy review required
                               </span>
                             </div>
                           </div>
@@ -440,8 +537,7 @@ export default function ParentPermissions() {
                           permission={permission}
                           status={status}
                           isSaving={isSaving}
-                          onGrant={() => togglePermission(item.value, "GRANTED")}
-                          onDeny={() => togglePermission(item.value, "DENIED")}
+                          onReview={() => openDecisionModal(item)}
                         />
                       );
                     })}
@@ -451,6 +547,18 @@ export default function ParentPermissions() {
             </div>
           )}
         </ParentSection>
+        {activeItem ? (
+          <PermissionPolicyModal
+            item={activeItem}
+            permission={permMap[activeItem.value]}
+            saving={saving === activeItem.value}
+            form={decisionForm}
+            onChange={setDecisionForm}
+            onClose={closeDecisionModal}
+            onGrant={() => savePermissionDecision(activeItem.value, "GRANTED")}
+            onDeny={() => savePermissionDecision(activeItem.value, "DENIED")}
+          />
+        ) : null}
       </div>
     </ParentLayout>
   );
@@ -461,14 +569,15 @@ function PermissionDecisionCard({
   permission,
   status,
   isSaving,
-  onGrant,
-  onDeny,
+  onReview,
 }) {
   const meta = permissionStatusMeta(status);
   const updatedBy = permission?.grantedBy?.name || permission?.grantedBy?.email || "";
   const updatedAt = formatPermissionTimestamp(
     permission?.updatedAt || permission?.effectiveDate || permission?.createdAt,
   );
+  const signedAt = formatPermissionTimestamp(permission?.signedAt || permission?.effectiveDate);
+  const signatureName = permission?.signatureName || "";
 
   return (
     <div className={`rounded-[20px] border p-3.5 shadow-sm ${meta.cardClassName}`}>
@@ -504,34 +613,21 @@ function PermissionDecisionCard({
         )}
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={isSaving || status === "GRANTED"}
-            onClick={onGrant}
-            className={[
-              "rounded-2xl px-3 py-2 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60",
-              status === "GRANTED"
-                ? "bg-emerald-500 text-white shadow-sm"
-                : "border border-gray-200 bg-white text-gray-800 hover:border-emerald-200 hover:bg-emerald-50 dark:border-gray-700 dark:bg-slate-900 dark:text-gray-200 dark:hover:border-emerald-800 dark:hover:bg-emerald-950/30",
-            ].join(" ")}
-          >
-            {isSaving && status !== "DENIED" ? "Saving..." : "Allow"}
-          </button>
+      {signatureName && signedAt ? (
+        <div className="mt-2 rounded-2xl border border-gray-200 bg-white/80 px-3 py-2 text-[12px] text-gray-600 dark:border-gray-700 dark:bg-slate-900 dark:text-gray-300">
+          Signed by <span className="font-semibold text-gray-900 dark:text-gray-100">{signatureName}</span> on {signedAt}
+        </div>
+      ) : null}
 
-          <button
-            type="button"
-            disabled={isSaving || status === "DENIED"}
-            onClick={onDeny}
-            className={[
-              "rounded-2xl px-3 py-2 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60",
-              status === "DENIED"
-                ? "bg-rose-500 text-white shadow-sm"
-                : "border border-gray-200 bg-white text-gray-800 hover:border-rose-200 hover:bg-rose-50 dark:border-gray-700 dark:bg-slate-900 dark:text-gray-200 dark:hover:border-rose-800 dark:hover:bg-rose-950/30",
-            ].join(" ")}
-          >
-            {isSaving && status !== "GRANTED" ? "Saving..." : "Not now"}
-          </button>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={isSaving}
+          onClick={onReview}
+          className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm font-black text-gray-800 transition hover:border-sky-200 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-slate-900 dark:text-gray-200 dark:hover:border-sky-800 dark:hover:bg-sky-950/30"
+        >
+          {isSaving ? "Saving..." : status === "PENDING" ? "Review details" : "Review / update"}
+        </button>
 
         <div className="ml-auto self-center text-[11px] font-semibold text-gray-500 dark:text-gray-400">
           {status === "PENDING"
@@ -539,6 +635,140 @@ function PermissionDecisionCard({
             : status === "GRANTED"
               ? "Permission is active"
               : "Permission is turned off"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PermissionPolicyModal({ item, permission, form, saving, onChange, onClose, onGrant, onDeny }) {
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") onClose();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-3xl rounded-[28px] border border-white/70 bg-white p-6 shadow-[0_30px_80px_-30px_rgba(15,23,42,0.45)] dark:border-gray-700 dark:bg-gray-900">
+        <div className="flex items-start justify-between gap-4 border-b border-gray-100 pb-4 dark:border-gray-800">
+          <div>
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300">
+              Policy review
+            </div>
+            <div className="mt-1 text-xl font-black tracking-tight text-gray-900 dark:text-gray-100">
+              {item.label}
+            </div>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{item.policySummary}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 text-gray-500 transition hover:bg-gray-50 hover:text-gray-700 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+            aria-label="Close modal"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-4">
+          <div className="rounded-[22px] border border-gray-200 bg-gray-50/80 p-4 dark:border-gray-700 dark:bg-slate-900/70">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+              What you are signing
+            </div>
+            <div className="mt-3 space-y-3">
+              {item.policySections.map((section) => (
+                <div key={section} className="rounded-2xl border border-white bg-white px-4 py-3 text-sm leading-6 text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
+                  {section}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <label className="block">
+              <div className="mb-1.5 text-[11px] font-extrabold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                E-signature
+              </div>
+              <input
+                value={form.signatureName}
+                onChange={(event) => onChange((current) => ({ ...current, signatureName: event.target.value }))}
+                className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 dark:border-gray-700 dark:bg-slate-900 dark:text-gray-100 dark:focus:border-sky-700 dark:focus:ring-sky-900/40"
+                placeholder="Type your full name"
+              />
+            </label>
+            <label className="block">
+              <div className="mb-1.5 text-[11px] font-extrabold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                Decision date
+              </div>
+              <input
+                type="date"
+                value={form.decisionDate}
+                onChange={(event) => onChange((current) => ({ ...current, decisionDate: event.target.value }))}
+                className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 dark:border-gray-700 dark:bg-slate-900 dark:text-gray-100 dark:focus:border-sky-700 dark:focus:ring-sky-900/40"
+              />
+            </label>
+            <label className="block md:col-span-2">
+              <div className="mb-1.5 text-[11px] font-extrabold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                Notes
+              </div>
+              <textarea
+                value={form.notes}
+                onChange={(event) => onChange((current) => ({ ...current, notes: event.target.value }))}
+                rows={4}
+                className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 dark:border-gray-700 dark:bg-slate-900 dark:text-gray-100 dark:focus:border-sky-700 dark:focus:ring-sky-900/40"
+                placeholder="Optional notes about this decision"
+              />
+            </label>
+          </div>
+
+          {permission?.signatureName || permission?.signedAt ? (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-200">
+              Last signed decision: {permission?.signatureName || "Recorded"}{permission?.signedAt ? ` on ${formatPermissionTimestamp(permission.signedAt)}` : ""}
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap justify-end gap-3 border-t border-gray-100 pt-4 dark:border-gray-800">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={onDeny}
+              className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-black text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-800 dark:bg-rose-950/20 dark:text-rose-200 dark:hover:bg-rose-950/30"
+            >
+              {saving ? "Saving..." : "Deny permission"}
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={onGrant}
+              className="rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving ? "Saving..." : "Grant permission"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

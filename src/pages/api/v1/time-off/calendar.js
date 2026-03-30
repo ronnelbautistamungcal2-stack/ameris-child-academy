@@ -15,14 +15,21 @@ export default async function handler(req, res) {
 
     const where = {
       centerId,
-      status: { in: ["APPROVED", "PENDING"] },
+      status: "APPROVED",
     };
 
     if (from || to) {
-      where.OR = [
-        { startDate: { gte: from ? new Date(from) : undefined, lte: to ? new Date(to) : undefined } },
-        { endDate: { gte: from ? new Date(from) : undefined, lte: to ? new Date(to) : undefined } },
-      ];
+      const fromDate = from ? new Date(from) : null;
+      const toDate = to ? new Date(to) : null;
+
+      if (fromDate && toDate) {
+        where.startDate = { lte: toDate };
+        where.endDate = { gte: fromDate };
+      } else if (fromDate) {
+        where.endDate = { gte: fromDate };
+      } else if (toDate) {
+        where.startDate = { lte: toDate };
+      }
     }
 
     const requests = await prisma.timeOffRequest.findMany({

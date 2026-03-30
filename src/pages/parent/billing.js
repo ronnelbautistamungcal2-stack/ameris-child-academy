@@ -20,7 +20,7 @@ function formatDate(value) {
 }
 
 export default function ParentBilling() {
-  const [centers, setCenters] = useState([]);
+  const [billingData, setBillingData] = useState({ centers: [], summary: null });
   const [children, setChildren] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -30,11 +30,14 @@ export default function ParentBilling() {
       setLoading(true);
       setError("");
       try {
-        const [centersRes, childrenRes] = await Promise.all([
-          apiJson("/api/v1/centers"),
+        const [billingRes, childrenRes] = await Promise.all([
+          apiJson("/api/v1/billing/summary"),
           apiJson("/api/v1/children"),
         ]);
-        setCenters(Array.isArray(centersRes) ? centersRes : []);
+        setBillingData({
+          centers: Array.isArray(billingRes?.centers) ? billingRes.centers : [],
+          summary: billingRes?.summary || null,
+        });
         setChildren(Array.isArray(childrenRes) ? childrenRes : []);
       } catch (e) {
         setError(e.message || "Failed to load billing details");
@@ -45,15 +48,21 @@ export default function ParentBilling() {
   }, []);
 
   const summary = useMemo(() => {
-    const subscriptions = centers
-      .map((center) => ({
-        centerId: center.id,
-        centerName: center.name,
-        tier: center.subscription?.tier || "Custom",
-        active: Boolean(center.subscription?.active),
-        expiresAt: center.subscription?.expiresAt || null,
-      }))
-      .filter((item) => item.centerName);
+    const subscriptions = (billingData.centers || []).map((center) => ({
+      centerId: center.centerId,
+      centerName: center.centerName,
+      tier: center.tier || "Custom",
+      active: Boolean(center.active),
+      expiresAt: center.expiresAt || null,
+      billingPortalEnabled: !!center.billingPortalEnabled,
+      paymentLinkEnabled: !!center.paymentLinkEnabled,
+      actions: center.actions || {},
+      provider: center.provider || null,
+      supportEmail: center.supportEmail || null,
+      invoiceEmail: center.invoiceEmail || null,
+      cardLabel: center.cardLabel || null,
+      autopayEnabled: !!center.autopayEnabled,
+    }));
 
     const activeCount = subscriptions.filter((item) => item.active).length;
     const upcomingRenewals = subscriptions.filter((item) => {
@@ -68,7 +77,7 @@ export default function ParentBilling() {
       upcomingRenewals,
       familyCount: children.length,
     };
-  }, [centers, children]);
+  }, [billingData.centers, children]);
 
   const generalBillingHref = buildParentMessageComposeHref({
     subject: "Billing support request",
@@ -158,19 +167,46 @@ export default function ParentBilling() {
                       </div>
 
                       <div className="mt-4 flex flex-wrap gap-2">
-                        <ParentButton
-                          href={buildParentMessageComposeHref({
-                            subject: `Billing support for ${item.centerName}`,
-                            message: `Hello, I need help with billing for ${item.centerName}. Please share the next steps or a payment link when available.`,
-                          })}
-                          variant="soft"
-                        >
-                          Request payment link
-                        </ParentButton>
+                        {item.actions.portalUrl ? (
+                          <ParentButton href={item.actions.portalUrl} variant="soft">
+                            Open billing portal
+                          </ParentButton>
+                        ) : item.actions.paymentLinkUrl ? (
+                          <ParentButton href={item.actions.paymentLinkUrl} variant="soft">
+                            Open payment link
+                          </ParentButton>
+                        ) : (
+                          <ParentButton
+                            href={buildParentMessageComposeHref({
+                              subject: `Billing support for ${item.centerName}`,
+                              message: `Hello, I need help with billing for ${item.centerName}. Please share the next steps or a payment link when available.`,
+                            })}
+                            variant="soft"
+                          >
+                            Request payment link
+                          </ParentButton>
+                        )}
                         <ParentButton href="/parent/forms" variant="secondary">
                           Review forms
                         </ParentButton>
                       </div>
+
+                      {(item.provider || item.cardLabel || item.autopayEnabled) ? (
+                        <div className="mt-4 grid grid-cols-1 gap-2 rounded-2xl border border-white/10 bg-black/10 p-3 text-xs text-slate-200 sm:grid-cols-3">
+                          <div>
+                            <div className="font-bold uppercase tracking-[0.16em] text-slate-300">Provider</div>
+                            <div className="mt-1 text-white">{item.provider || "-"}</div>
+                          </div>
+                          <div>
+                            <div className="font-bold uppercase tracking-[0.16em] text-slate-300">Card</div>
+                            <div className="mt-1 text-white">{item.cardLabel || "-"}</div>
+                          </div>
+                          <div>
+                            <div className="font-bold uppercase tracking-[0.16em] text-slate-300">Autopay</div>
+                            <div className="mt-1 text-white">{item.autopayEnabled ? "Enabled" : "Off"}</div>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -197,6 +233,12 @@ export default function ParentBilling() {
                   tone="emerald"
                 />
                 <ParentQuickAction
+                  href={summary.subscriptions.find((item) => item.actions.portalUrl)?.actions.portalUrl || "/parent/notification-settings"}
+                  title="Open billing portal"
+                  description="Available when your center has a billing portal or hosted payment link configured."
+                  tone="sky"
+                />
+                <ParentQuickAction
                   href="/parent/notification-settings"
                   title="Keep reminders on"
                   description="Make sure billing and account alerts are visible in your portal."
@@ -211,7 +253,7 @@ export default function ParentBilling() {
               className="border-amber-200"
             >
               <div className="rounded-2xl border border-amber-200 bg-amber-50/90 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-                Card checkout, saved payment methods, autopay, and printable invoices are not wired up in the current backend yet. This page surfaces billing context and gives parents a clearer path to resolve issues until the payment stack is completed.
+                Hosted billing links and portal URLs can now be surfaced from the subscription record. Full card checkout orchestration still depends on the payment provider configuration the center uses.
               </div>
             </ParentSection>
           </div>

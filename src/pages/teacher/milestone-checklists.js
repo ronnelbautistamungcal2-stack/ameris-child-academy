@@ -1,4 +1,14 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
+import StatusBadge from "@/components/ui/StatusBadge";
+import {
+  WorkspaceHero,
+  WorkspacePill,
+  WorkspaceState,
+  WorkspaceStat,
+  workspaceInputClass,
+  workspaceSecondaryButtonClass,
+} from "@/components/ui/Workspace";
+import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -120,8 +130,13 @@ export default function TeacherMilestoneChecklists() {
   const [doneItemIds, setDoneItemIds] = useState(new Set());
   const [doneCountByPlanId, setDoneCountByPlanId] = useState(new Map());
 
-  const [loading, setLoading] = useState(true);
+  const [loadingCenters, setLoadingCenters] = useState(true);
+  const [loadingChildren, setLoadingChildren] = useState(false);
+  const [loadingPlans, setLoadingPlans] = useState(false);
+  const [loadingMonthPlans, setLoadingMonthPlans] = useState(false);
   const [error, setError] = useState("");
+
+  useSyncedCenterId(centerId, setCenterId, centers);
 
   const isMonthView = period === "MONTH";
 
@@ -145,17 +160,16 @@ export default function TeacherMilestoneChecklists() {
 
   useEffect(() => {
     (async () => {
-      setLoading(true);
+      setLoadingCenters(true);
       setError("");
       try {
         const c = await apiJson("/api/v1/centers");
         const arr = Array.isArray(c) ? c : [];
         setCenters(arr);
-        if (arr.length === 1) setCenterId(arr[0].id);
       } catch (e) {
         setError(e.message || "Failed to load centers");
       } finally {
-        setLoading(false);
+        setLoadingCenters(false);
       }
     })();
   }, []);
@@ -167,7 +181,7 @@ export default function TeacherMilestoneChecklists() {
         setChildId("");
         return;
       }
-      setLoading(true);
+      setLoadingChildren(true);
       setError("");
       try {
         const kids = await apiJson(
@@ -177,7 +191,7 @@ export default function TeacherMilestoneChecklists() {
       } catch (e) {
         setError(e.message || "Failed to load children");
       } finally {
-        setLoading(false);
+        setLoadingChildren(false);
       }
     })();
   }, [centerId]);
@@ -197,7 +211,7 @@ export default function TeacherMilestoneChecklists() {
       setPlans([]);
       return;
     }
-    setLoading(true);
+    setLoadingPlans(true);
     setError("");
     try {
       const qs = new URLSearchParams({
@@ -213,7 +227,7 @@ export default function TeacherMilestoneChecklists() {
       setError(e.message || "Failed to load milestone plans");
       setPlans([]);
     } finally {
-      setLoading(false);
+      setLoadingPlans(false);
     }
   }
 
@@ -227,7 +241,7 @@ export default function TeacherMilestoneChecklists() {
       setMonthPlans([]);
       return;
     }
-    setLoading(true);
+    setLoadingMonthPlans(true);
     setError("");
     try {
       const qs = new URLSearchParams({
@@ -244,7 +258,7 @@ export default function TeacherMilestoneChecklists() {
       setError(e.message || "Failed to load calendar plans");
       setMonthPlans([]);
     } finally {
-      setLoading(false);
+      setLoadingMonthPlans(false);
     }
   }
 
@@ -346,6 +360,22 @@ export default function TeacherMilestoneChecklists() {
     return [...children].sort((a, b) => byString(a.firstName, b.firstName));
   }, [children]);
 
+  const activeCenterName =
+    centers.find((center) => center.id === centerId)?.name || "";
+  const selectedChild = childOptions.find((child) => child.id === childId) || null;
+  const selectedChildName = selectedChild
+    ? `${selectedChild.firstName || ""} ${selectedChild.lastName || ""}`.trim()
+    : "";
+  const plansInView = isMonthView ? monthPlans.length : plans.length;
+  const itemsInView = useMemo(() => {
+    const source = isMonthView ? monthPlans : plans;
+    return source.reduce(
+      (count, plan) => count + (Array.isArray(plan?.items) ? plan.items.length : 0),
+      0,
+    );
+  }, [isMonthView, monthPlans, plans]);
+  const contentLoading = isMonthView ? loadingMonthPlans : loadingPlans;
+
   const progressByLessonGoal = useMemo(() => {
     const map = new Map();
     for (const pr of progressRows) {
@@ -373,7 +403,11 @@ export default function TeacherMilestoneChecklists() {
         method: "POST",
         body: JSON.stringify({ childId, itemId, completed: next }),
       });
-      await loadCompletions();
+      if (isMonthView) {
+        await loadMonthCompletions();
+      } else {
+        await loadCompletions();
+      }
     } catch (e) {
       setError(e.message || "Failed to update completion");
     }
@@ -431,139 +465,198 @@ export default function TeacherMilestoneChecklists() {
 
   return (
     <TeacherLayout title="Milestone Checklist">
-      <div className="rounded-xl border border-gray-200 bg-white p-5">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-2xl font-extrabold text-gray-900">
-              {headerTitle()}
-            </h2>
-            <p className="mt-1 text-sm text-gray-600">
-              Checklist items can link to policies, procedures, videos, and
-              lessons.
-            </p>
-          </div>
+      <div className="space-y-5">
+        <WorkspaceHero
+          eyebrow="Milestone Checklist"
+          title={headerTitle()}
+          description="Review scheduled lessons, linked resources, and optional child completion tracking without losing the selected center context."
+          meta={
+            <>
+              {activeCenterName ? (
+                <WorkspacePill tone="sky">{activeCenterName}</WorkspacePill>
+              ) : (
+                <WorkspacePill tone="slate">Center not selected</WorkspacePill>
+              )}
+              <WorkspacePill tone="amber">
+                {period === "DAY" ? "Day view" : period === "WEEK" ? "Week view" : "Month view"}
+              </WorkspacePill>
+              <WorkspacePill tone={selectedChildName ? "emerald" : "slate"}>
+                {selectedChildName || "View only"}
+              </WorkspacePill>
+            </>
+          }
+          controls={
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <label className="block">
+                <div className="mb-1.5 text-xs font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                  Center View
+                </div>
+                <select
+                  className={workspaceInputClass}
+                  value={centerId}
+                  onChange={(e) => setCenterId(e.target.value)}
+                  disabled={loadingCenters}
+                >
+                  <option value="">Select a center to load plans</option>
+                  {centers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className="rounded-full border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-60"
-              onClick={goPrev}
-              disabled={!centerId || loading}
-              aria-label="Previous"
-              title="Previous"
-            >
-              Previous
-            </button>
-            <button
-              type="button"
-              className="rounded-full border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-60"
-              onClick={goNext}
-              disabled={!centerId || loading}
-              aria-label="Next"
-              title="Next"
-            >
-              Next
-            </button>
+              <label className="block">
+                <div className="mb-1.5 text-xs font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                  {period === "MONTH"
+                    ? "Month"
+                    : period === "WEEK"
+                      ? "Week of"
+                      : "Day"}
+                </div>
+                {period === "MONTH" ? (
+                  <input
+                    className={workspaceInputClass}
+                    type="month"
+                    value={calendarMonthValue}
+                    onChange={(e) => setCalendarMonthValue(e.target.value)}
+                    disabled={!centerId || loadingCenters || contentLoading}
+                  />
+                ) : (
+                  <input
+                    className={workspaceInputClass}
+                    type="date"
+                    value={anchorDateValue}
+                    onChange={(e) => setAnchorDateValue(e.target.value)}
+                    disabled={!centerId || loadingCenters || contentLoading}
+                  />
+                )}
+              </label>
 
-            <select
-              className="rounded-full border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800"
-              value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-              disabled={!centerId || loading}
-              aria-label="View"
-              title="View"
-            >
-              {PERIODS.map((p) => (
-                <option key={p} value={p}>
-                  {p === "DAY" ? "Day" : p === "WEEK" ? "Week" : "Month"}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+              <label className="block">
+                <div className="mb-1.5 text-xs font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                  Child
+                </div>
+                <select
+                  className={workspaceInputClass}
+                  value={childId}
+                  onChange={(e) => setChildId(e.target.value)}
+                  disabled={!centerId || loadingCenters || loadingChildren}
+                >
+                  <option value="">(view only)</option>
+                  {childOptions.map((ch) => (
+                    <option key={ch.id} value={ch.id}>
+                      {ch.firstName} {ch.lastName || ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          }
+          actions={
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <button
+                type="button"
+                className={workspaceSecondaryButtonClass}
+                onClick={goPrev}
+                disabled={!centerId || loadingCenters || contentLoading}
+                aria-label="Previous"
+                title="Previous"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                className={workspaceSecondaryButtonClass}
+                onClick={goNext}
+                disabled={!centerId || loadingCenters || contentLoading}
+                aria-label="Next"
+                title="Next"
+              >
+                Next
+              </button>
+              <label className="block">
+                <div className="mb-1.5 text-xs font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                  View
+                </div>
+                <select
+                  className={workspaceInputClass}
+                  value={period}
+                  onChange={(e) => setPeriod(e.target.value)}
+                  disabled={!centerId || loadingCenters}
+                  aria-label="View"
+                  title="View"
+                >
+                  {PERIODS.map((p) => (
+                    <option key={p} value={p}>
+                      {p === "DAY" ? "Day" : p === "WEEK" ? "Week" : "Month"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          }
+        />
 
         {error ? (
-          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
             {error}
           </div>
         ) : null}
 
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
-          <label className="block">
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Center
-            </div>
-            <select
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-              value={centerId}
-              onChange={(e) => setCenterId(e.target.value)}
-              disabled={loading}
-            >
-              <option value="">Select a center</option>
-              {centers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-              {period === "MONTH"
-                ? "Month"
-                : period === "WEEK"
-                  ? "Week of"
-                  : "Day"}
-            </div>
-            {period === "MONTH" ? (
-              <input
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                type="month"
-                value={calendarMonthValue}
-                onChange={(e) => setCalendarMonthValue(e.target.value)}
-                disabled={!centerId || loading}
-              />
-            ) : (
-              <input
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                type="date"
-                value={anchorDateValue}
-                onChange={(e) => setAnchorDateValue(e.target.value)}
-                disabled={!centerId || loading}
-              />
-            )}
-          </label>
-
-          <div className="hidden md:block" />
-
-          <label className="block">
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Child
-            </div>
-            <select
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-              value={childId}
-              onChange={(e) => setChildId(e.target.value)}
-              disabled={!centerId || loading}
-            >
-              <option value="">(view only)</option>
-              {childOptions.map((ch) => (
-                <option key={ch.id} value={ch.id}>
-                  {ch.firstName} {ch.lastName || ""}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <WorkspaceStat
+            label="Center"
+            value={activeCenterName || "Not selected"}
+            description={
+              activeCenterName
+                ? "Checklist scope follows the selected center"
+                : "Select a center to load plans and children"
+            }
+            tone={activeCenterName ? "sky" : "slate"}
+          />
+          <WorkspaceStat
+            label="Current View"
+            value={String(plansInView)}
+            description={`${itemsInView} checklist item${itemsInView === 1 ? "" : "s"} in view`}
+            tone="amber"
+          />
+          <WorkspaceStat
+            label="Tracking"
+            value={selectedChildName || "View only"}
+            description={
+              selectedChildName
+                ? "Completion toggles are enabled"
+                : "Select a child to mark items complete"
+            }
+            tone={selectedChildName ? "emerald" : "slate"}
+          />
         </div>
 
-        <div className="mt-4">
-          {loading ? (
-            <div className="text-sm text-gray-600">Loading...</div>
+        <div className="rounded-[1.8rem] border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900/85">
+          {loadingCenters ? (
+            <WorkspaceState
+              title="Loading centers..."
+              description="Preparing the milestone checklist workspace."
+            />
           ) : !centerId ? (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-              Select a center to view milestone plans.
-            </div>
+            <WorkspaceState
+              title="Select a center to view milestone plans."
+              description="Checklist plans, child tracking, and linked lesson resources are all scoped by center."
+            />
+          ) : contentLoading ? (
+            <WorkspaceState
+              title={
+                isMonthView
+                  ? "Loading calendar plans..."
+                  : "Loading milestone plans..."
+              }
+              description={
+                isMonthView
+                  ? "Refreshing the month view and selected day details."
+                  : "Refreshing the checklist view for the selected period."
+              }
+            />
           ) : period === "MONTH" ? (
             <CalendarMonth
               monthStart={calendarMonthStart}
@@ -578,9 +671,10 @@ export default function TeacherMilestoneChecklists() {
               progressByLessonGoal={progressByLessonGoal}
             />
           ) : plans.length === 0 ? (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-              No milestone plans found for this {period.toLowerCase()}.
-            </div>
+            <WorkspaceState
+              title={`No milestone plans scheduled for this ${period.toLowerCase()}.`}
+              description="When an admin publishes a plan for this period, it will appear here with linked resources and completion tracking."
+            />
           ) : (
             <PlanList
               plans={plans}
@@ -608,14 +702,15 @@ function PlanList({
       {plans.map((p) => (
         <div key={p.id} className="rounded-xl border border-gray-200 p-4">
           <div className="flex flex-col gap-1">
-            <div className="text-base font-extrabold text-gray-900">
+            <div className="break-words text-base font-extrabold text-gray-900">
               {p.title}
             </div>
-            <div className="text-sm text-gray-600">
+            <div className="break-words text-sm text-gray-600">
               {p.description || "No description"}
             </div>
             <div className="text-xs text-gray-500">
-              {p.period} | {new Date(p.periodStart).toLocaleDateString()}
+              {p.period} plan - {new Date(p.periodStart).toLocaleDateString()} -{" "}
+              {(p.items || []).length} item{(p.items || []).length === 1 ? "" : "s"}
             </div>
           </div>
 
@@ -634,7 +729,9 @@ function PlanList({
                 ))}
               </ul>
             ) : (
-              <div className="text-sm text-gray-600">No items.</div>
+              <div className="text-sm text-gray-600">
+                No checklist items were added to this plan.
+              </div>
             )}
           </div>
         </div>
@@ -733,12 +830,14 @@ function CalendarMonth({
                       (isToday ? "ring-1 ring-inset ring-blue-300 " : "")
                     }
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <div className="text-sm font-semibold">{d.getDate()}</div>
                       {itemCount ? (
-                        <div className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">
-                          {itemCount} item{itemCount === 1 ? "" : "s"}
-                        </div>
+                        <StatusBadge
+                          status={doneCount && doneCount === itemCount ? "completed" : "pending"}
+                          label={`${itemCount} item${itemCount === 1 ? "" : "s"}`}
+                          className="justify-center"
+                        />
                       ) : null}
                     </div>
 
@@ -781,13 +880,13 @@ function CalendarMonth({
               : "Selected day"}
           </div>
           <div className="mt-1 text-xs text-gray-500">
-            Click a day to see what to teach.
+            Click a day to review the scheduled checklist items.
           </div>
 
           <div className="mt-3 space-y-3">
             {selectedPlans.length === 0 ? (
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                No plans for this day.
+                No plans are scheduled for this date.
               </div>
             ) : (
               selectedPlans.map((p) => (
@@ -795,8 +894,8 @@ function CalendarMonth({
                   key={p.id}
                   className="rounded-lg border border-gray-200 p-3"
                 >
-                  <div className="font-semibold text-gray-900">{p.title}</div>
-                  <div className="mt-1 text-xs text-gray-600">
+                  <div className="break-words font-semibold text-gray-900">{p.title}</div>
+                  <div className="mt-1 break-words text-xs text-gray-600">
                     {p.description || "No description"}
                   </div>
                   <div className="mt-3">
@@ -815,7 +914,9 @@ function CalendarMonth({
                         ))}
                       </ul>
                     ) : (
-                      <div className="text-sm text-gray-600">No items.</div>
+                      <div className="text-sm text-gray-600">
+                        No checklist items were added to this plan.
+                      </div>
                     )}
                   </div>
                 </div>
@@ -850,17 +951,17 @@ function MilestoneItemRow({
   return (
     <li className={compact ? "px-3 py-2" : "px-3 py-3"}>
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-        <div>
-          <div className="font-semibold text-gray-900">{item.title}</div>
+        <div className="min-w-0">
+          <div className="break-words font-semibold text-gray-900">{item.title}</div>
           <div className="mt-1 flex flex-wrap gap-2 text-xs">
             {item.policyDocument?.url ? (
               <a
                 href={item.policyDocument.url}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-full bg-gray-100 px-2 py-1 text-gray-700 hover:bg-gray-200"
+                className="inline-flex"
               >
-                Policy
+                <StatusBadge status="active" label="Policy" />
               </a>
             ) : null}
             {item.url ? (
@@ -868,37 +969,43 @@ function MilestoneItemRow({
                 href={item.url}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-full bg-gray-100 px-2 py-1 text-gray-700 hover:bg-gray-200"
+                className="inline-flex"
               >
-                {item.kind || "Link"}
+                <StatusBadge status="pending" label={item.kind || "Link"} />
               </a>
             ) : null}
             {item.lesson ? (
-              <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-800">
-                Lesson{goalIndex ? ` Step ${goalIndex}` : ""}
-              </span>
+              <StatusBadge
+                status="completed"
+                label={`Lesson${goalIndex ? ` Step ${goalIndex}` : ""}`}
+              />
             ) : null}
           </div>
 
           {goalIndex ? (
-            <div className="mt-2 text-xs text-gray-600">
-              Progress:{" "}
-              <span className="font-semibold text-gray-900">
-                {pr?.status || "NOT_STARTED"}
-              </span>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+              <span>Progress status:</span>
+              <StatusBadge
+                status={String(pr?.status || "NOT_STARTED")}
+                label={formatStatusLabel(pr?.status || "NOT_STARTED")}
+              />
             </div>
+          ) : null}
+
+          {!compact && item.notes ? (
+            <div className="mt-2 break-words text-xs text-gray-600">{item.notes}</div>
           ) : null}
 
           {!compact && recommended.length ? (
             <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
-              <div className="font-semibold">Suggested catch-up lessons</div>
-              <ul className="mt-1 list-disc pl-5">
-                {recommended.slice(0, 5).map((r) => (
-                  <li key={r.id}>{r.title}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+                <div className="font-semibold">Suggested catch-up lessons</div>
+                <ul className="mt-1 list-disc pl-5">
+                  {recommended.slice(0, 5).map((r) => (
+                    <li key={r.id} className="break-words">{r.title}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
         </div>
 
         <div className="flex items-center gap-3">
@@ -909,15 +1016,21 @@ function MilestoneItemRow({
                 checked={done}
                 onChange={(e) => onToggle(e.target.checked)}
               />
-              {done ? "Completed" : "Mark"}
+              {done ? "Completed" : "Mark complete"}
             </label>
           ) : (
             <span className="text-xs text-gray-500">
-              Select a child to track
+              Select a child to mark completion
             </span>
           )}
         </div>
       </div>
     </li>
   );
+}
+
+function formatStatusLabel(status) {
+  return String(status || "NOT_STARTED")
+    .toLowerCase()
+    .replace(/_/g, " ");
 }

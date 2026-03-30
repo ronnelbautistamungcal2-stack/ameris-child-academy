@@ -291,6 +291,8 @@ model Child {
   lastName        String?
   birthDate       DateTime?
   emergencyContact String?
+  emergencyContacts Json?
+  parentContacts   Json?
   allergies       String?
   healthAssessmentDocuments Json?
   enrollmentDocuments Json?
@@ -1008,6 +1010,8 @@ model ChildPermission {
   status           PermissionStatus @default(PENDING)
   grantedBy        User?            @relation("PermissionsGranted", fields: [grantedById], references: [id], onDelete: SetNull)
   grantedById      String?
+  signatureName    String?
+  signedAt         DateTime?
   notes            String?
   effectiveDate    DateTime         @default(now())
   expirationDate   DateTime?

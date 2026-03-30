@@ -2,8 +2,8 @@ const { test, expect } = require("@playwright/test");
 const { loginAsTeacher, waitForLoadingDone } = require("../helpers/e2e");
 
 test.describe("Teacher Workflows", () => {
-  test.beforeEach(async ({ page }) => {
-    await loginAsTeacher(page);
+  test.beforeEach(async ({ page, request }) => {
+    await loginAsTeacher(page, request);
   });
 
   test("can navigate to children page", async ({ page }) => {

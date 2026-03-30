@@ -1,17 +1,37 @@
 const DEFAULT_COLORS = {
-  active: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
-  completed: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-400",
-  passed: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-400",
-  in_progress: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
-  pending: "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400",
-  not_started: "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400",
-  failed: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
-  archived: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400",
+  active:
+    "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300",
+  completed:
+    "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300",
+  passed:
+    "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300",
+  in_progress:
+    "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300",
+  pending:
+    "border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300",
+  not_started:
+    "border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300",
+  failed:
+    "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300",
+  archived:
+    "border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-900/60 dark:bg-purple-950/30 dark:text-purple-300",
+  open:
+    "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300",
+  cancelled:
+    "border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300",
+  low:
+    "border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300",
+  medium:
+    "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300",
+  high:
+    "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300",
+  critical:
+    "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300",
 };
 
 const SIZE_CLASSES = {
-  sm: "px-2 py-0.5 text-[11px]",
-  md: "px-2.5 py-1 text-xs",
+  sm: "px-2.5 py-1 text-[11px]",
+  md: "px-3 py-1 text-xs",
 };
 
 export default function StatusBadge({
@@ -20,6 +40,7 @@ export default function StatusBadge({
   size = "sm",
   colorMap,
   className = "",
+  wrap = true,
 }) {
   const key = (status || "").toLowerCase().replace(/\s+/g, "_");
   const colors = colorMap || DEFAULT_COLORS;
@@ -28,7 +49,15 @@ export default function StatusBadge({
   const displayLabel = label || (status || "").replace(/_/g, " ");
 
   return (
-    <span className={`inline-flex items-center rounded-full font-semibold capitalize ${sizeCls} ${colorCls} ${className}`}>
+    <span
+      className={[
+        "inline-flex max-w-full items-center rounded-full border font-semibold capitalize",
+        wrap ? "break-words text-center" : "truncate whitespace-nowrap",
+        sizeCls,
+        colorCls,
+        className,
+      ].join(" ")}
+    >
       {displayLabel}
     </span>
   );

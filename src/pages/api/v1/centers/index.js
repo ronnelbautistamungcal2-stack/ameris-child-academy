@@ -1,5 +1,13 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { normalizeSubscription } from "@/lib/subscriptions";
+
+function withResolvedSubscription(center) {
+  return {
+    ...center,
+    subscription: normalizeSubscription(center.subscription),
+  };
+}
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -49,7 +57,7 @@ export default async function handler(req, res) {
       });
       centers = (user?.centers || []).map((c) => c.center);
     }
-    return res.status(200).json(centers);
+    return res.status(200).json(centers.map(withResolvedSubscription));
   }
 
   if (req.method === "POST") {

@@ -8,6 +8,7 @@ const { networkInterfaces } = require("os");
 const { parse } = require("url");
 const next = require("next");
 const { initializeSocket } = require("./src/lib/socket.js");
+const { startScheduledJobs } = require("./src/lib/jobs");
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOST || "0.0.0.0";
@@ -65,7 +66,6 @@ async function start() {
 
   // Initialize Socket.io
   initializeSocket(httpServer);
-  const { startScheduledJobs } = await import("./src/lib/jobs/index.js");
   startScheduledJobs();
 
   httpServer.listen(port, hostname, (err) => {

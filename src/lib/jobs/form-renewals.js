@@ -1,7 +1,7 @@
-import prisma from "@/lib/prisma";
-import { emitNotification } from "@/lib/socket";
+const prisma = require("../prisma");
+const { emitNotification } = require("../socket");
 
-export async function runFormRenewalCheck({ initiatedBy = "scheduler" } = {}) {
+async function runFormRenewalCheck({ initiatedBy = "scheduler" } = {}) {
   const todayKey = new Date().toISOString().slice(0, 10);
   const todayStart = new Date(`${todayKey}T00:00:00.000Z`);
 
@@ -151,3 +151,7 @@ export async function runFormRenewalCheck({ initiatedBy = "scheduler" } = {}) {
     },
   };
 }
+
+module.exports = {
+  runFormRenewalCheck,
+};

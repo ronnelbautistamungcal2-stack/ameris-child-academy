@@ -1,5 +1,5 @@
-import { runComplianceAlerts } from "@/lib/jobs/compliance-alerts";
-import { runFormRenewalCheck } from "@/lib/jobs/form-renewals";
+const { runComplianceAlerts } = require("./compliance-alerts");
+const { runFormRenewalCheck } = require("./form-renewals");
 
 const jobState = new Map();
 const runningTimers = [];
@@ -27,7 +27,7 @@ function recordJobFinish(name, status, result) {
   });
 }
 
-export const JOB_DEFINITIONS = [
+const JOB_DEFINITIONS = [
   {
     name: "form-renewals",
     intervalMs: Number(process.env.FORM_RENEWAL_JOB_INTERVAL_MS || 12 * 60 * 60 * 1000),
@@ -40,7 +40,7 @@ export const JOB_DEFINITIONS = [
   },
 ];
 
-export async function runNamedJob(name) {
+async function runNamedJob(name) {
   const job = JOB_DEFINITIONS.find((entry) => entry.name === name);
   if (!job) {
     throw new Error(`Unknown job: ${name}`);
@@ -57,7 +57,7 @@ export async function runNamedJob(name) {
   }
 }
 
-export function getJobStatus() {
+function getJobStatus() {
   return JOB_DEFINITIONS.map((job) => ({
     name: job.name,
     intervalMs: job.intervalMs,
@@ -71,7 +71,7 @@ export function getJobStatus() {
   }));
 }
 
-export function startScheduledJobs() {
+function startScheduledJobs() {
   if (process.env.SCHEDULED_JOBS_ENABLED === "false") {
     return [];
   }
@@ -96,3 +96,10 @@ export function startScheduledJobs() {
 
   return runningTimers;
 }
+
+module.exports = {
+  JOB_DEFINITIONS,
+  runNamedJob,
+  getJobStatus,
+  startScheduledJobs,
+};

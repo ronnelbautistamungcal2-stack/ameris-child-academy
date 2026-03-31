@@ -1,7 +1,7 @@
-import prisma from "@/lib/prisma";
-import { emitComplianceAlert, emitNotification } from "@/lib/socket";
+const prisma = require("../prisma");
+const { emitComplianceAlert, emitNotification } = require("../socket");
 
-export async function runComplianceAlerts({ centerId = null, initiatedBy = "scheduler" } = {}) {
+async function runComplianceAlerts({ centerId = null, initiatedBy = "scheduler" } = {}) {
   const now = new Date();
   const todayKey = now.toISOString().slice(0, 10);
   const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -147,3 +147,7 @@ export async function runComplianceAlerts({ centerId = null, initiatedBy = "sche
     summary: { missedLogging: missedCount, missingAttendance: missingAttCount, overdueProgress: overdueCount },
   };
 }
+
+module.exports = {
+  runComplianceAlerts,
+};

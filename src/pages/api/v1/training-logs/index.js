@@ -75,31 +75,44 @@ export default createApiHandler(async function handler(req, res) {
   }
 
   const description = optionalString(body, "description", { nullable: true });
+  const performedBy = optionalString(body, "performedBy", { nullable: true });
   const category = optionalString(body, "category", { nullable: true });
   const certificateUrl = optionalString(body, "certificateUrl", { nullable: true });
   const certificateFileName = optionalString(body, "certificateFileName", { nullable: true });
-  const targetUserId =
+  const rawUserIds = Array.isArray(body.userIds) ? body.userIds : [];
+  const normalizedUserIds = rawUserIds
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter(Boolean);
+  const fallbackUserId = optionalString(body, "userId", { nullable: true });
+  const targetUserIds =
     session.user.role === "TEACHER"
-      ? session.user.id
-      : optionalString(body, "userId", { nullable: true }) || session.user.id;
+      ? [session.user.id]
+      : normalizedUserIds.length
+        ? [...new Set(normalizedUserIds)]
+        : [fallbackUserId || session.user.id];
 
-  const log = await prisma.trainingLog.create({
-    data: {
-      userId: targetUserId,
-      centerId,
-      topic,
-      description,
-      hours,
-      date,
-      category: category || "Other",
-      certificateUrl,
-      certificateFileName,
-      recordedById: session.user.id,
-    },
-    include: {
-      user: { select: { id: true, name: true, email: true } },
-    },
-  });
+  const createdLogs = await prisma.$transaction(
+    targetUserIds.map((targetUserId) =>
+      prisma.trainingLog.create({
+        data: {
+          userId: targetUserId,
+          centerId,
+          topic,
+          description,
+          performedBy,
+          hours,
+          date,
+          category: category || "Other",
+          certificateUrl,
+          certificateFileName,
+          recordedById: session.user.id,
+        },
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+        },
+      }),
+    ),
+  );
 
-  return res.status(201).json(log);
+  return res.status(201).json(createdLogs.length === 1 ? createdLogs[0] : createdLogs);
 }, { methods: ["GET", "POST"], logLabel: "training-logs error:" });

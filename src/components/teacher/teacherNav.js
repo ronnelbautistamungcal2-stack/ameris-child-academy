@@ -55,6 +55,7 @@ export const TEACHER_NAV_ITEMS = [
     ),
     children: [
       { href: "/teacher/training", label: "My Performance & Training" },
+      { href: "/teacher/metrics", label: "Metrics & Reports" },
       { href: "/teacher/time-off", label: "Time Off Request" },
     ],
   },

@@ -305,6 +305,12 @@ export default function TeacherChildren() {
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">
                           <Link
+                            href={`/teacher/children/${encodeURIComponent(ch.id)}`}
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50"
+                          >
+                            View Profile
+                          </Link>
+                          <Link
                             href={`/teacher/logs?centerId=${encodeURIComponent(
                               centerId || "",
                             )}&childId=${encodeURIComponent(ch.id)}`}

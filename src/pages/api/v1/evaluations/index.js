@@ -5,7 +5,7 @@ import {
   forbidden,
   unauthorized,
 } from "@/lib/api-error";
-import { ensureObject, optionalNumber, optionalString, requiredString } from "@/lib/validation";
+import { ensureObject, optionalDate, optionalNumber, optionalString, requiredString } from "@/lib/validation";
 
 export default createApiHandler(async function handler(req, res) {
   const session = await getSession(req, res);
@@ -16,11 +16,19 @@ export default createApiHandler(async function handler(req, res) {
     const teacherId = optionalString(req.query, "teacherId");
     const period = optionalString(req.query, "period");
     const status = optionalString(req.query, "status");
+    const from = optionalDate(req.query, "from");
+    const to = optionalDate(req.query, "to");
 
     const where = {};
     if (centerId) where.centerId = centerId;
     if (period) where.period = period;
     if (status) where.status = status;
+    if (from || to) {
+      where.createdAt = {
+        ...(from ? { gte: from } : {}),
+        ...(to ? { lte: to } : {}),
+      };
+    }
 
     if (session.user.role === "TEACHER") {
       where.teacherId = session.user.id;

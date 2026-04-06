@@ -28,6 +28,7 @@ export default function ShiftsPage() {
   const [centerId, setCenterId] = useState("");
   const [weekStart, setWeekStart] = useState(getMonday(new Date()));
   const [staff, setStaff] = useState([]);
+  const [selectedStaffIds, setSelectedStaffIds] = useState([]);
   const [shifts, setShifts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -55,10 +56,14 @@ export default function ShiftsPage() {
     if (!centerId) { setStaff([]); return; }
     (async () => {
       try {
-        const users = await apiJson(`/api/v1/users?centerId=${centerId}`);
-        setStaff(Array.isArray(users) ? users.filter(u => u.role === "TEACHER" || u.role === "ADMIN") : []);
+        const users = await apiJson(`/api/v1/users?centerId=${centerId}&staffOnly=true`);
+        setStaff(Array.isArray(users) ? users : []);
       } catch (err) { setError(err.message || "Failed to load staff"); }
     })();
+  }, [centerId]);
+
+  useEffect(() => {
+    setSelectedStaffIds([]);
   }, [centerId]);
 
   const loadShifts = useCallback(async () => {
@@ -100,6 +105,26 @@ export default function ShiftsPage() {
       return weekDays.some((d) => (shiftMap[`${u.id}_${dateKey(d)}`] || []).length > 0);
     });
   }, [staff, staffQuery, showOnlyScheduled, weekDays, shiftMap]);
+
+  const allFilteredSelected = filteredStaff.length > 0 && filteredStaff.every((user) => selectedStaffIds.includes(user.id));
+
+  function toggleStaffSelection(userId) {
+    setSelectedStaffIds((current) =>
+      current.includes(userId)
+        ? current.filter((id) => id !== userId)
+        : [...current, userId],
+    );
+  }
+
+  function toggleAllFilteredStaff() {
+    setSelectedStaffIds((current) => {
+      const filteredIds = filteredStaff.map((user) => user.id);
+      if (filteredIds.every((id) => current.includes(id))) {
+        return current.filter((id) => !filteredIds.includes(id));
+      }
+      return [...new Set([...current, ...filteredIds])];
+    });
+  }
 
   function resetForm() {
     setForm({ userId: "", date: "", startTime: "08:00", endTime: "16:00", position: "Teacher", notes: "" });
@@ -173,11 +198,16 @@ export default function ShiftsPage() {
     setError(""); setSuccess("");
     try {
       const prevShifts = await apiJson(`/api/v1/shifts?centerId=${centerId}&from=${from}&to=${to}`);
-      if (!Array.isArray(prevShifts) || prevShifts.length === 0) {
+      const targetStaffIds = selectedStaffIds.length ? new Set(selectedStaffIds) : null;
+      const shiftsToCopy = Array.isArray(prevShifts)
+        ? prevShifts.filter((shift) => !targetStaffIds || targetStaffIds.has(shift.userId))
+        : [];
+
+      if (shiftsToCopy.length === 0) {
         setError("No shifts found in the previous week to copy"); return;
       }
       let count = 0;
-      for (const s of prevShifts) {
+      for (const s of shiftsToCopy) {
         const newDate = addDays(new Date(s.date), 7);
         try {
           await apiJson("/api/v1/shifts", {
@@ -190,7 +220,7 @@ export default function ShiftsPage() {
           count++;
         } catch {}
       }
-      setSuccess(`Copied ${count} shifts from previous week`);
+      setSuccess(`Copied ${count} shifts from previous week${targetStaffIds ? " for selected staff" : ""}`);
       await loadShifts();
     } catch (err) {
       setError(err.message || "Failed to copy shifts");
@@ -429,10 +459,32 @@ export default function ShiftsPage() {
                 </button>
                 <button type="button" onClick={copyPreviousWeek}
                   style={{ padding: "8px 14px", border: "1px solid var(--admin-border)", borderRadius: 10, background: "var(--admin-bg-secondary)", fontWeight: 700, fontSize: 13, cursor: "pointer", color: "var(--admin-text)" }}>
-                  Copy prev week
+                  {selectedStaffIds.length ? `Copy prev week (${selectedStaffIds.length})` : "Copy prev week"}
                 </button>
               </div>
             </div>
+
+            {filteredStaff.length > 0 && (
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+                marginBottom: 12,
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: "1px solid var(--admin-border)",
+                background: "var(--admin-bg-secondary)",
+              }}>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 700, color: "var(--admin-text-secondary)", cursor: "pointer" }}>
+                  <input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFilteredStaff} />
+                  Select all visible staff
+                </label>
+                <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>
+                  {selectedStaffIds.length ? `${selectedStaffIds.length} staff selected for copy` : "No staff selected. Copy applies to everyone shown in the previous week."}
+                </div>
+              </div>
+            )}
 
             {/* Weekly grid */}
             <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 14, overflow: "auto", boxShadow: "0 10px 24px rgba(15,23,42,0.06)" }}>
@@ -463,7 +515,16 @@ export default function ShiftsPage() {
                   )}
                   {filteredStaff.map(user => (
                     <tr key={user.id} style={{ borderBottom: "1px solid var(--admin-border-light)" }}>
-                      <td style={{ padding: "8px 12px", fontWeight: 600, verticalAlign: "top" }}>{user.name || user.email}</td>
+                      <td style={{ padding: "8px 12px", fontWeight: 600, verticalAlign: "top" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedStaffIds.includes(user.id)}
+                            onChange={() => toggleStaffSelection(user.id)}
+                          />
+                          <span>{user.name || user.email}</span>
+                        </label>
+                      </td>
                       {weekDays.map((d, i) => {
                         const dk = dateKey(d);
                         const cellShifts = shiftMap[`${user.id}_${dk}`] || [];

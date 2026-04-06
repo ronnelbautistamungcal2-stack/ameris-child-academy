@@ -25,10 +25,11 @@ async function handlePut(req, res, session) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
-  const { topic, description, hours, date, category, certificateUrl, certificateFileName } = req.body || {};
+  const { topic, description, performedBy, hours, date, category, certificateUrl, certificateFileName } = req.body || {};
   const data = {};
   if (topic !== undefined) data.topic = topic;
   if (description !== undefined) data.description = description;
+  if (performedBy !== undefined) data.performedBy = performedBy;
   if (hours !== undefined) data.hours = parseFloat(hours);
   if (date !== undefined) data.date = new Date(date);
   if (category !== undefined) data.category = category;

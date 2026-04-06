@@ -16,9 +16,9 @@ export const ADMIN_NAV_ITEMS = [
       </svg>
     ),
     children: [
-      { href: "/admin/users", label: "Employee List" },
-      { href: "/admin/teachers", label: "Teachers" },
-      { href: "/admin/children", label: "Children List" },
+      { href: "/admin/users", label: "Users" },
+      { href: "/admin/teachers", label: "Staff" },
+      { href: "/admin/children", label: "Children" },
       { href: "/admin/staff-management", label: "Staff Management" },
       { href: "/admin/data-import", label: "Data Import" },
     ],
@@ -32,6 +32,7 @@ export const ADMIN_NAV_ITEMS = [
     ),
     children: [
       { href: "/admin/centers", label: "Centers" },
+      { href: "/admin/subscriptions", label: "Subscriptions" },
       { href: "/admin/classes", label: "Classroom List" },
     ],
   },

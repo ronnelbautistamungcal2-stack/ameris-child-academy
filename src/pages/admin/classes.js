@@ -22,6 +22,7 @@ export default function AdminClasses() {
   const [teacherQuery, setTeacherQuery] = useState("");
   const [teacherDropdownOpen, setTeacherDropdownOpen] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [expandedClassId, setExpandedClassId] = useState("");
 
   async function refresh() {
     setError("");
@@ -361,7 +362,7 @@ export default function AdminClasses() {
                 return (
                   <div
                     key={cl.id}
-                    style={cardStyle}
+                    style={{ ...cardStyle, flexWrap: "wrap" }}
                     onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#93C5FD"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(37,99,235,0.08)"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--admin-border)"; e.currentTarget.style.boxShadow = "none"; }}
                   >
@@ -400,6 +401,9 @@ export default function AdminClasses() {
 
                     {/* Actions */}
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <button type="button" style={cardActionBtn} onClick={() => setExpandedClassId(expandedClassId === cl.id ? "" : cl.id)}>
+                        {expandedClassId === cl.id ? "Hide Roster" : "View Roster"}
+                      </button>
                       <button type="button" style={cardActionBtn} onClick={() => openEdit(cl)}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                         Edit
@@ -408,6 +412,47 @@ export default function AdminClasses() {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
                       </button>
                     </div>
+
+                    {expandedClassId === cl.id && (
+                      <div style={{ marginTop: 16, display: "grid", gap: 12, flexBasis: "100%", width: "100%", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+                        <div style={{ border: "1px solid var(--admin-border)", borderRadius: 12, padding: 14, background: "var(--admin-bg-secondary)" }}>
+                          <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--admin-text-muted)" }}>
+                            Assigned Teachers
+                          </div>
+                          <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+                            {teacherNames.length ? teacherNames.map((teacherName) => (
+                              <div key={`${cl.id}-teacher-${teacherName}`} style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid var(--admin-border)", background: "var(--admin-bg)" }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>{teacherName}</div>
+                              </div>
+                            )) : (
+                              <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>No teachers assigned yet.</div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div style={{ border: "1px solid var(--admin-border)", borderRadius: 12, padding: 14, background: "var(--admin-bg-secondary)" }}>
+                          <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--admin-text-muted)" }}>
+                            Assigned Children
+                          </div>
+                          <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+                            {Array.isArray(cl.children) && cl.children.length ? cl.children.map((child) => (
+                              <div key={child.id} style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid var(--admin-border)", background: "var(--admin-bg)" }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>
+                                  {[child.firstName, child.lastName].filter(Boolean).join(" ") || "Unnamed child"}
+                                </div>
+                                {child.birthDate ? (
+                                  <div style={{ marginTop: 2, fontSize: 11, color: "var(--admin-text-muted)" }}>
+                                    DOB: {new Date(child.birthDate).toLocaleDateString()}
+                                  </div>
+                                ) : null}
+                              </div>
+                            )) : (
+                              <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>No children assigned yet.</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}

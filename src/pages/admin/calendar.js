@@ -43,6 +43,14 @@ const FILTER_ITEMS = [
 
 function toDateInput(d) { return d ? new Date(d).toISOString().split("T")[0] : ""; }
 
+function hoursBetween(start, end) {
+  if (!start || !end) return 0;
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  const diff = (endDate - startDate) / (1000 * 60 * 60);
+  return Number.isFinite(diff) && diff > 0 ? diff : 0;
+}
+
 const LEGEND = [
   { label: "Events", cls: "bg-indigo-100" },
   { label: "Shifts", cls: "bg-blue-100" },
@@ -54,6 +62,11 @@ const LEGEND = [
 export default function CalendarPage() {
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
+  const [staffUsers, setStaffUsers] = useState([]);
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [staffSummaryFrom, setStaffSummaryFrom] = useState(toDateInput(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
+  const [staffSummaryTo, setStaffSummaryTo] = useState(toDateInput(new Date()));
+  const [staffSummary, setStaffSummary] = useState(null);
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [calData, setCalData] = useState({ events: [], shifts: [], timeOff: [] });
@@ -98,6 +111,59 @@ export default function CalendarPage() {
   }, [centerId, calYear, calMonth]);
 
   useEffect(() => { loadCalendar(); }, [loadCalendar]);
+
+  useEffect(() => {
+    if (!centerId) {
+      setStaffUsers([]);
+      setSelectedUserId("");
+      setStaffSummary(null);
+      return;
+    }
+    (async () => {
+      try {
+        const users = await apiJson(`/api/v1/users?centerId=${centerId}&staffOnly=true`);
+        setStaffUsers(Array.isArray(users) ? users : []);
+      } catch {
+        setStaffUsers([]);
+      }
+    })();
+  }, [centerId]);
+
+  const loadStaffSummary = useCallback(async () => {
+    if (!centerId || !selectedUserId) {
+      setStaffSummary(null);
+      return;
+    }
+    try {
+      const qs = new URLSearchParams({
+        centerId,
+        userId: selectedUserId,
+        from: staffSummaryFrom,
+        to: staffSummaryTo,
+      });
+      const [attendance, requests] = await Promise.all([
+        apiJson(`/api/v1/staff-attendance/summary?${qs.toString()}`),
+        apiJson(`/api/v1/time-off?centerId=${centerId}&userId=${selectedUserId}`),
+      ]);
+      const filteredRequests = (Array.isArray(requests) ? requests : []).filter((request) => {
+        const requestStart = toDateInput(request.startDate);
+        const requestEnd = toDateInput(request.endDate);
+        return (!staffSummaryFrom || requestEnd >= staffSummaryFrom) && (!staffSummaryTo || requestStart <= staffSummaryTo);
+      });
+      const approvedHours = filteredRequests
+        .filter((request) => request.status === "APPROVED")
+        .reduce((sum, request) => sum + hoursBetween(request.startDate, request.endDate), 0);
+      setStaffSummary({
+        attendance,
+        requests: filteredRequests,
+        approvedHours: Math.round(approvedHours * 100) / 100,
+      });
+    } catch {
+      setStaffSummary(null);
+    }
+  }, [centerId, selectedUserId, staffSummaryFrom, staffSummaryTo]);
+
+  useEffect(() => { loadStaffSummary(); }, [loadStaffSummary]);
 
   const normalizedEvents = (() => {
     const items = [];
@@ -488,6 +554,103 @@ export default function CalendarPage() {
             );
           })}
         </div>
+
+        {centerId && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: "14px 16px",
+              borderRadius: 14,
+              border: "1px solid var(--admin-border)",
+              background: "var(--admin-bg)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "end", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: "var(--admin-text-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  Employee Summary
+                </div>
+                <div style={{ marginTop: 4, fontSize: 13, color: "var(--admin-text-muted)" }}>
+                  View time off, approved hours, lates, and absences for a specific staff member.
+                </div>
+              </div>
+              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", width: "min(720px, 100%)" }}>
+                <label style={{ display: "block" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--admin-text-secondary)", marginBottom: 6 }}>Employee</div>
+                  <select
+                    value={selectedUserId}
+                    onChange={(e) => setSelectedUserId(e.target.value)}
+                    style={{
+                      width: "100%", padding: "10px 12px", border: "1px solid var(--admin-border)",
+                      borderRadius: 10, boxSizing: "border-box", fontSize: 13,
+                      background: "var(--admin-bg)", color: "var(--admin-text)",
+                    }}
+                  >
+                    <option value="">Select employee…</option>
+                    {staffUsers.map((user) => <option key={user.id} value={user.id}>{user.name || user.email}</option>)}
+                  </select>
+                </label>
+                <label style={{ display: "block" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--admin-text-secondary)", marginBottom: 6 }}>From</div>
+                  <input type="date" value={staffSummaryFrom} onChange={(e) => setStaffSummaryFrom(e.target.value)} style={{
+                    width: "100%", padding: "10px 12px", border: "1px solid var(--admin-border)",
+                    borderRadius: 10, boxSizing: "border-box", fontSize: 13,
+                    background: "var(--admin-bg)", color: "var(--admin-text)",
+                  }} />
+                </label>
+                <label style={{ display: "block" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--admin-text-secondary)", marginBottom: 6 }}>To</div>
+                  <input type="date" value={staffSummaryTo} onChange={(e) => setStaffSummaryTo(e.target.value)} style={{
+                    width: "100%", padding: "10px 12px", border: "1px solid var(--admin-border)",
+                    borderRadius: 10, boxSizing: "border-box", fontSize: 13,
+                    background: "var(--admin-bg)", color: "var(--admin-text)",
+                  }} />
+                </label>
+              </div>
+            </div>
+
+            {selectedUserId && staffSummary && (
+              <div style={{ marginTop: 16, display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                <div style={{ border: "1px solid var(--admin-border)", borderRadius: 12, padding: 14, background: "var(--admin-bg-secondary)" }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--admin-text-muted)" }}>Attendance Totals</div>
+                  <div style={{ marginTop: 10, display: "grid", gap: 8, gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+                    <SummaryStat label="Present" value={staffSummary.attendance?.present ?? 0} />
+                    <SummaryStat label="Late" value={staffSummary.attendance?.late ?? 0} />
+                    <SummaryStat label="Absent" value={staffSummary.attendance?.absent ?? 0} />
+                    <SummaryStat label="Late Mins" value={staffSummary.attendance?.totalLateMinutes ?? 0} />
+                  </div>
+                </div>
+
+                <div style={{ border: "1px solid var(--admin-border)", borderRadius: 12, padding: 14, background: "var(--admin-bg-secondary)" }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--admin-text-muted)" }}>Time Off</div>
+                  <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+                    <SummaryStat label="Requests" value={staffSummary.requests.length} />
+                    <SummaryStat label="Approved Hours" value={staffSummary.approvedHours} />
+                  </div>
+                </div>
+
+                <div style={{ border: "1px solid var(--admin-border)", borderRadius: 12, padding: 14, background: "var(--admin-bg-secondary)" }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--admin-text-muted)" }}>Time Off History</div>
+                  <div style={{ marginTop: 10, display: "grid", gap: 8, maxHeight: 220, overflow: "auto" }}>
+                    {staffSummary.requests.length ? staffSummary.requests.map((request) => (
+                      <div key={request.id} style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid var(--admin-border)", background: "var(--admin-bg)" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>{request.type}</div>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--admin-text-muted)" }}>{request.status}</span>
+                        </div>
+                        <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>
+                          {fmtDateTime(request.startDate)} - {fmtDateTime(request.endDate)}
+                        </div>
+                      </div>
+                    )) : (
+                      <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>No time-off requests in this range.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Event form modal overlay */}
         {showForm && (
@@ -912,5 +1075,14 @@ export default function CalendarPage() {
         onCancel={() => setDeleteTarget(null)}
       />
     </AdminLayout>
+  );
+}
+
+function SummaryStat({ label, value }) {
+  return (
+    <div style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--admin-border)", background: "var(--admin-bg)" }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--admin-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+      <div style={{ marginTop: 4, fontSize: 20, fontWeight: 800, color: "var(--admin-text)" }}>{value}</div>
+    </div>
   );
 }

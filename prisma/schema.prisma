@@ -930,6 +930,7 @@ model TrainingLog {
   centerId           String
   topic              String
   description        String?
+  performedBy        String?
   hours              Float
   date               DateTime
   category           String   @default("Other")

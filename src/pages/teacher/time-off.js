@@ -81,6 +81,8 @@ export default function TeacherTimeOff() {
   const [centerId, setCenterId] = useState("");
 
   const [requests, setRequests] = useState([]);
+  const [attendanceSummary, setAttendanceSummary] = useState(null);
+  const [approvedHours, setApprovedHours] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -126,6 +128,31 @@ export default function TeacherTimeOff() {
   }, [centerId]);
 
   useEffect(() => { loadRequests(); }, [loadRequests]);
+
+  useEffect(() => {
+    if (!centerId) {
+      setAttendanceSummary(null);
+      setApprovedHours(0);
+      return;
+    }
+    (async () => {
+      try {
+        const yearStart = `${new Date().getFullYear()}-01-01`;
+        const [attendance, requestRows] = await Promise.all([
+          apiJson(`/api/v1/staff-attendance/summary?centerId=${encodeURIComponent(centerId)}&from=${yearStart}&to=${toDateInputValue(new Date())}`),
+          apiJson(`/api/v1/time-off?centerId=${encodeURIComponent(centerId)}`),
+        ]);
+        setAttendanceSummary(attendance);
+        const usedHours = (Array.isArray(requestRows) ? requestRows : [])
+          .filter((row) => row.status === "APPROVED")
+          .reduce((sum, row) => sum + Math.max(0, (new Date(row.endDate) - new Date(row.startDate)) / (1000 * 60 * 60)), 0);
+        setApprovedHours(Math.round(usedHours * 100) / 100);
+      } catch {
+        setAttendanceSummary(null);
+        setApprovedHours(0);
+      }
+    })();
+  }, [centerId]);
 
   const loadCalendarEvents = useCallback(async () => {
     if (!centerId) { setCalEvents([]); return; }
@@ -240,6 +267,13 @@ export default function TeacherTimeOff() {
             </div>
           ) : (
             <div className="mt-4 space-y-4">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <MiniSummaryCard label="Late" value={attendanceSummary?.late ?? 0} />
+                <MiniSummaryCard label="Absent" value={attendanceSummary?.absent ?? 0} />
+                <MiniSummaryCard label="Late Minutes" value={attendanceSummary?.totalLateMinutes ?? 0} />
+                <MiniSummaryCard label="Approved Hours" value={approvedHours} />
+              </div>
+
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 {/* Submit Form */}
                 <div className="rounded-2xl border border-gray-200 bg-white p-4">
@@ -376,5 +410,14 @@ export default function TeacherTimeOff() {
         onCancel={() => setCancelTarget(null)}
       />
     </TeacherLayout>
+  );
+}
+
+function MiniSummaryCard({ label, value }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{label}</div>
+      <div className="mt-1 text-2xl font-extrabold text-gray-900">{value}</div>
+    </div>
   );
 }

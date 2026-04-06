@@ -39,6 +39,35 @@ function createEmergencyContacts(value = []) {
   });
 }
 
+function childFullName(child) {
+  return `${child?.firstName || ""} ${child?.lastName || ""}`.trim() || "Unnamed child";
+}
+
+function formatDateTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
+}
+
+function extractAssessmentRows(activities) {
+  return (Array.isArray(activities) ? activities : [])
+    .filter((activity) => {
+      const details = activity?.details;
+      return details && typeof details === "object" && details.kind === "DAILY_GRADE";
+    })
+    .map((activity) => {
+      const details = activity.details || {};
+      const grade = Number(details.grade);
+      return {
+        id: activity.id,
+        createdAt: activity.createdAt,
+        grade: Number.isFinite(grade) ? grade : null,
+        domains: details.domains && typeof details.domains === "object" ? details.domains : null,
+        notes: activity.notes || "",
+      };
+    });
+}
+
 export default function AdminChildren() {
   const toast = useToast();
   const [children, setChildren] = useState([]);
@@ -85,6 +114,8 @@ export default function AdminChildren() {
   const [childPermissions, setChildPermissions] = useState([]);
   const [permissionsLoading, setPermissionsLoading] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [profileChild, setProfileChild] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   async function refresh() {
     setError("");
@@ -548,6 +579,24 @@ export default function AdminChildren() {
     }
   }
 
+  async function openProfile(childId) {
+    setProfileLoading(true);
+    setProfileChild(null);
+    try {
+      const data = await apiJson(`/api/v1/children/${childId}`);
+      setProfileChild(data || null);
+    } catch (e) {
+      setError(e.message || "Failed to load child profile");
+    } finally {
+      setProfileLoading(false);
+    }
+  }
+
+  function closeProfile() {
+    setProfileChild(null);
+    setProfileLoading(false);
+  }
+
   async function setChecklistItemCompleted(itemId, completed) {
     if (!editing?.id) return;
     setStepsError("");
@@ -780,6 +829,14 @@ export default function AdminChildren() {
                       <button
                         type="button"
                         style={cardActionButton}
+                        onClick={() => openProfile(ch.id)}
+                        title="View profile"
+                      >
+                        View Profile
+                      </button>
+                      <button
+                        type="button"
+                        style={cardActionButton}
                         onClick={() => openEdit(ch)}
                         title="Edit"
                       >
@@ -808,6 +865,122 @@ export default function AdminChildren() {
           )}
         </div>
       </div>
+
+      {(profileLoading || profileChild) ? (
+        <Modal
+          title={profileLoading ? "Loading Child Profile" : childFullName(profileChild)}
+          onClose={closeProfile}
+        >
+          {profileLoading ? (
+            <div style={{ color: "var(--admin-text-muted)", fontSize: 13 }}>Loading profile…</div>
+          ) : profileChild ? (
+            <div style={{ display: "grid", gap: 16 }}>
+              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+                <div style={infoBoxStyle}>
+                  <div style={fieldLabelStyle}>Center</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>
+                    {centerById[profileChild.centerId]?.name || "—"}
+                  </div>
+                </div>
+                <div style={infoBoxStyle}>
+                  <div style={fieldLabelStyle}>Classroom</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>
+                    {profileChild.classRoomId ? (classById[profileChild.classRoomId]?.name || profileChild.classRoomId) : "Unassigned"}
+                  </div>
+                </div>
+                <div style={infoBoxStyle}>
+                  <div style={fieldLabelStyle}>Birth Date</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>
+                    {profileChild.birthDate ? new Date(profileChild.birthDate).toLocaleDateString() : "—"}
+                  </div>
+                </div>
+                <div style={infoBoxStyle}>
+                  <div style={fieldLabelStyle}>Parent</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>
+                    {profileChild.parent?.name || profileChild.parent?.email || "—"}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+                <div style={infoBoxStyle}>
+                  <SectionHeader icon="📝" title="Recent Logs" />
+                  {(profileChild.activities || []).length ? (
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {profileChild.activities.slice(0, 8).map((activity) => (
+                        <div key={activity.id} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--admin-border)", background: "var(--admin-bg)" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>
+                              {String(activity.type || "OTHER").replace(/_/g, " ")}
+                            </div>
+                            <div style={{ fontSize: 11, color: "var(--admin-text-muted)" }}>{formatDateTime(activity.createdAt)}</div>
+                          </div>
+                          <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>
+                            {activity.notes || "No notes recorded."}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>No activity logs yet.</div>
+                  )}
+                </div>
+
+                <div style={infoBoxStyle}>
+                  <SectionHeader icon="📊" title="Assessments" />
+                  {extractAssessmentRows(profileChild.activities).length ? (
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {extractAssessmentRows(profileChild.activities).slice(0, 8).map((assessment) => (
+                        <div key={assessment.id} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--admin-border)", background: "var(--admin-bg)" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>
+                              {assessment.domains ? "Developmental Assessment" : "Daily Grade"}
+                            </div>
+                            <div style={{ fontSize: 11, color: "var(--admin-text-muted)" }}>{formatDateTime(assessment.createdAt)}</div>
+                          </div>
+                          <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>
+                            {assessment.domains ? Object.entries(assessment.domains).map(([domain, value]) => `${domain}: ${value}`).join(" • ") : assessment.grade !== null ? `Grade: ${assessment.grade}/5` : "Assessment logged"}
+                          </div>
+                          {assessment.notes ? (
+                            <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>{assessment.notes}</div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>No assessments yet.</div>
+                  )}
+                </div>
+              </div>
+
+              <div style={infoBoxStyle}>
+                <SectionHeader icon="📈" title="Progress" />
+                {(profileChild.progress || []).length ? (
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {profileChild.progress.slice(0, 10).map((progress) => (
+                      <div key={progress.id} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--admin-border)", background: "var(--admin-bg)" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>
+                            {progress.lesson?.title || "Lesson progress"}
+                          </div>
+                          <span style={{ ...tagStyle, background: "#EFF6FF", color: "#1D4ED8", borderColor: "#BFDBFE" }}>
+                            {progress.status || "NOT_STARTED"}
+                          </span>
+                        </div>
+                        <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>
+                          Updated {formatDateTime(progress.updatedAt || progress.createdAt)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>No progress records yet.</div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </Modal>
+      ) : null}
 
       {/* Modal */}
       {modalOpen ? (

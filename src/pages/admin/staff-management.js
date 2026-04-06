@@ -83,7 +83,8 @@ export default function StaffManagement() {
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
   const [classes, setClasses] = useState([]);
-  const [teachers, setTeachers] = useState([]);
+  const [staffUsers, setStaffUsers] = useState([]);
+  const [evaluationTeachers, setEvaluationTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -98,15 +99,17 @@ export default function StaffManagement() {
   }, []);
 
   useEffect(() => {
-    if (!centerId) { setClasses([]); setTeachers([]); return; }
+    if (!centerId) { setClasses([]); setStaffUsers([]); setEvaluationTeachers([]); return; }
     (async () => {
       try {
-        const [cls, users] = await Promise.all([
+        const [cls, staff, teachers] = await Promise.all([
           apiJson(`/api/v1/classes?centerId=${centerId}`).catch(() => []),
+          apiJson(`/api/v1/users?centerId=${centerId}&staffOnly=true`).catch(() => []),
           apiJson(`/api/v1/users?centerId=${centerId}&role=TEACHER`).catch(() => []),
         ]);
         setClasses(Array.isArray(cls) ? cls : []);
-        setTeachers(Array.isArray(users) ? users : []);
+        setStaffUsers(Array.isArray(staff) ? staff : []);
+        setEvaluationTeachers(Array.isArray(teachers) ? teachers : []);
       } catch {}
     })();
   }, [centerId]);
@@ -147,7 +150,7 @@ export default function StaffManagement() {
           {selectedCenter && (
             <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800">
               <span className="h-2 w-2 rounded-full bg-blue-500" />
-              {selectedCenter.name} — {teachers.length} teacher{teachers.length !== 1 ? "s" : ""}, {classes.length} classroom{classes.length !== 1 ? "s" : ""}
+              {selectedCenter.name} — {staffUsers.length} staff, {classes.length} classroom{classes.length !== 1 ? "s" : ""}
             </div>
           )}
 
@@ -175,11 +178,11 @@ export default function StaffManagement() {
           <EmptyCard icon="🏫" title="No center selected" msg="Select a center above to manage staff." />
         ) : (
           <>
-            {activeTab === "attendance" && <AttendanceTab centerId={centerId} teachers={teachers} />}
-            {activeTab === "time-off" && <TimeOffTab centerId={centerId} teachers={teachers} />}
-            {activeTab === "training" && <TrainingTab centerId={centerId} teachers={teachers} />}
+            {activeTab === "attendance" && <AttendanceTab centerId={centerId} teachers={staffUsers} />}
+            {activeTab === "time-off" && <TimeOffTab centerId={centerId} teachers={staffUsers} />}
+            {activeTab === "training" && <TrainingTab centerId={centerId} teachers={staffUsers} />}
             {activeTab === "budgets" && <BudgetsTab centerId={centerId} classes={classes} />}
-            {activeTab === "evaluations" && <EvaluationsTab centerId={centerId} teachers={teachers} />}
+            {activeTab === "evaluations" && <EvaluationsTab centerId={centerId} teachers={evaluationTeachers} />}
           </>
         )}
       </div>
@@ -194,6 +197,12 @@ function AttendanceTab({ centerId, teachers }) {
   const [records, setRecords] = useState([]);
   const [summary, setSummary] = useState(null);
   const [summaryUserId, setSummaryUserId] = useState("");
+  const [summaryFrom, setSummaryFrom] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  });
+  const [summaryTo, setSummaryTo] = useState(today());
+  const [summaryRecords, setSummaryRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(ATTENDANCE_INITIAL_FORM);
@@ -210,14 +219,22 @@ function AttendanceTab({ centerId, teachers }) {
   useEffect(() => { loadRecords(); }, [loadRecords]);
 
   const loadSummary = useCallback(async () => {
-    if (!summaryUserId) { setSummary(null); return; }
+    if (!summaryUserId) { setSummary(null); setSummaryRecords([]); return; }
     try {
-      const now = new Date();
-      const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-      const data = await apiJson(`/api/v1/staff-attendance/summary?centerId=${centerId}&userId=${summaryUserId}&from=${from}`);
-      setSummary(data);
+      const qs = new URLSearchParams({
+        centerId,
+        userId: summaryUserId,
+        from: summaryFrom,
+        to: summaryTo,
+      });
+      const [summaryData, reportRecords] = await Promise.all([
+        apiJson(`/api/v1/staff-attendance/summary?${qs.toString()}`),
+        apiJson(`/api/v1/staff-attendance?${qs.toString()}`),
+      ]);
+      setSummary(summaryData);
+      setSummaryRecords(Array.isArray(reportRecords) ? reportRecords : []);
     } catch {}
-  }, [centerId, summaryUserId]);
+  }, [centerId, summaryFrom, summaryTo, summaryUserId]);
 
   useEffect(() => { loadSummary(); }, [loadSummary]);
 
@@ -324,19 +341,52 @@ function AttendanceTab({ centerId, teachers }) {
       {/* Monthly Summary */}
       <Card>
         <SectionTitle icon="📊" title="Monthly Summary" />
-        <div className="mt-3">
-          <FilterSelect label="Teacher" value={summaryUserId} onChange={setSummaryUserId}>
-            <option value="">Select teacher…</option>
+        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <FilterSelect label="Employee" value={summaryUserId} onChange={setSummaryUserId}>
+            <option value="">Select employee…</option>
             {teachers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </FilterSelect>
+          <FilterInput label="From" type="date" value={summaryFrom} onChange={setSummaryFrom} />
+          <FilterInput label="To" type="date" value={summaryTo} onChange={setSummaryTo} />
         </div>
         {summary && (
-          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
-            <KpiCard label="Total Days" value={summary.totalDays} color="gray" />
+          <div className="mt-4 space-y-4">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+              <KpiCard label="Total Days" value={summary.totalDays} color="gray" />
             <KpiCard label="Present" value={summary.present} color="emerald" />
             <KpiCard label="Late" value={summary.late} color="amber" />
             <KpiCard label="Absent" value={summary.absent} color="red" />
             <KpiCard label="Late Minutes" value={summary.totalLateMinutes} color="amber" />
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-gray-100">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50/80 text-left text-xs font-bold uppercase tracking-wider text-gray-400">
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Clock In</th>
+                    <th className="px-4 py-3">Clock Out</th>
+                    <th className="px-4 py-3">Late Minutes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summaryRecords.length ? summaryRecords.map((record) => (
+                    <tr key={record.id} className="border-b border-gray-50">
+                      <td className="px-4 py-3 text-gray-700">{fmtDate(record.date)}</td>
+                      <td className="px-4 py-3 font-semibold text-gray-900">{String(record.status || "").replace(/_/g, " ")}</td>
+                      <td className="px-4 py-3 text-gray-700">{record.clockIn ? new Date(record.clockIn).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</td>
+                      <td className="px-4 py-3 text-gray-700">{record.clockOut ? new Date(record.clockOut).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</td>
+                      <td className="px-4 py-3 text-gray-700">{record.lateMinutes || 0}</td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-6 text-center text-sm text-gray-500">No attendance records in this range.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </Card>
@@ -348,8 +398,8 @@ function AttendanceTab({ centerId, teachers }) {
         >
           <form onSubmit={handleSave} className="space-y-5">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <FilterSelect label="Teacher" value={form.userId} onChange={(v) => setForm({ ...form, userId: v })}>
-                <option value="">Select teacher…</option>
+              <FilterSelect label="Employee" value={form.userId} onChange={(v) => setForm({ ...form, userId: v })}>
+                <option value="">Select employee…</option>
                 {teachers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </FilterSelect>
               <FilterSelect label="Status" value={form.status} onChange={(v) => setForm({ ...form, status: v })}>
@@ -470,7 +520,7 @@ function TimeOffTab({ centerId, teachers }) {
           <div className="mt-4 overflow-x-auto rounded-xl border border-gray-100">
             <table className="min-w-full text-sm">
               <thead><tr className="border-b border-gray-200 bg-gray-50/80 text-left text-xs font-bold uppercase tracking-wider text-gray-400">
-                <th className="px-4 py-3">Teacher</th><th className="px-4 py-3">Type</th>
+                <th className="px-4 py-3">Employee</th><th className="px-4 py-3">Type</th>
                 <th className="px-4 py-3">Dates / Times</th><th className="px-4 py-3">Reason</th>
                 <th className="px-4 py-3">Status</th><th className="px-4 py-3">Reviewed By</th>
               </tr></thead>
@@ -500,45 +550,56 @@ function TrainingTab({ centerId, teachers }) {
   const [logs, setLogs] = useState([]);
   const [summary, setSummary] = useState(null);
   const [userId, setUserId] = useState("");
+  const [reportFrom, setReportFrom] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  });
+  const [reportTo, setReportTo] = useState(today());
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ userId: "", topic: "", description: "", hours: "", date: today(), category: "Other" });
+  const [form, setForm] = useState({ userIds: [], topic: "", description: "", hours: "", date: today(), category: "Other", performedBy: "" });
   const [saving, setSaving] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const qs = `centerId=${centerId}${userId ? `&userId=${userId}` : ""}`;
+      const qs = new URLSearchParams({
+        centerId,
+        ...(userId ? { userId } : {}),
+        ...(reportFrom ? { from: reportFrom } : {}),
+        ...(reportTo ? { to: reportTo } : {}),
+      });
       const [logsData, summaryData] = await Promise.all([
-        apiJson(`/api/v1/training-logs?${qs}`),
-        userId ? apiJson(`/api/v1/training-logs/summary?${qs}`) : Promise.resolve(null),
+        apiJson(`/api/v1/training-logs?${qs.toString()}`),
+        apiJson(`/api/v1/training-logs/summary?${qs.toString()}`),
       ]);
       setLogs(Array.isArray(logsData) ? logsData : []);
       setSummary(summaryData);
     } catch {} finally { setLoading(false); }
-  }, [centerId, userId]);
+  }, [centerId, reportFrom, reportTo, userId]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!form.topic || !form.hours) return;
+    if (!form.topic || !form.hours || !form.userIds.length) return;
     setSaving(true);
     try {
       await apiJson("/api/v1/training-logs", {
         method: "POST",
         body: JSON.stringify({
           centerId,
-          userId: form.userId || undefined,
+          userIds: form.userIds,
           topic: form.topic,
           description: form.description || null,
           hours: parseFloat(form.hours),
           date: form.date,
           category: form.category,
+          performedBy: form.performedBy || null,
         }),
       });
       setShowForm(false);
-      setForm({ userId: "", topic: "", description: "", hours: "", date: today(), category: "Other" });
+      setForm({ userIds: [], topic: "", description: "", hours: "", date: today(), category: "Other", performedBy: "" });
       loadData();
     } catch {} finally { setSaving(false); }
   };
@@ -555,30 +616,74 @@ function TrainingTab({ centerId, teachers }) {
     <div className="space-y-4">
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <FilterSelect label="Teacher" value={userId} onChange={setUserId}>
-              <option value="">All teachers</option>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <FilterSelect label="Employee" value={userId} onChange={setUserId}>
+              <option value="">All employees</option>
               {teachers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </FilterSelect>
+            <FilterInput label="From" type="date" value={reportFrom} onChange={setReportFrom} />
+            <FilterInput label="To" type="date" value={reportTo} onChange={setReportTo} />
           </div>
           <PrimaryButton onClick={() => setShowForm(!showForm)}>
             {showForm ? "Cancel" : "+ Log Training"}
           </PrimaryButton>
         </div>
 
+        {false && (<><div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <FilterSelect label="Teacher" value={filterTeacherId} onChange={setFilterTeacherId}>
+            <option value="">All teachersâ€¦</option>
+            {teachers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </FilterSelect>
+          <FilterInput label="From" type="date" value={filterFrom} onChange={setFilterFrom} />
+          <FilterInput label="To" type="date" value={filterTo} onChange={setFilterTo} />
+        </div>
+
+        {evaluations.length > 0 && (
+          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
+            <KpiCard label="Evaluations" value={evaluationSummary.total} color="gray" />
+            <KpiCard label="Submitted" value={evaluationSummary.submitted} color="sky" />
+            <KpiCard label="Average Score" value={evaluationSummary.scored ? Math.round(evaluationSummary.scoreTotal / evaluationSummary.scored) : "â€”"} color="emerald" />
+          </div>
+        )}</>)}
+
         {showForm && (
-          <form onSubmit={handleSave} className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-blue-100 bg-blue-50/30 p-5 md:grid-cols-3">
-            <FilterSelect label="Teacher" value={form.userId} onChange={(v) => setForm({ ...form, userId: v })}>
-              <option value="">Self</option>
-              {teachers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </FilterSelect>
-            <FilterInput label="Topic" type="text" value={form.topic} onChange={(v) => setForm({ ...form, topic: v })} />
-            <FilterInput label="Hours" type="number" value={form.hours} onChange={(v) => setForm({ ...form, hours: v })} />
-            <FilterInput label="Date" type="date" value={form.date} onChange={(v) => setForm({ ...form, date: v })} />
-            <FilterSelect label="Category" value={form.category} onChange={(v) => setForm({ ...form, category: v })}>
-              {TRAINING_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </FilterSelect>
-            <FilterInput label="Description" type="text" value={form.description} onChange={(v) => setForm({ ...form, description: v })} />
+          <form onSubmit={handleSave} className="mt-4 space-y-4 rounded-xl border border-blue-100 bg-blue-50/30 p-5">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+              <FilterInput label="Performed By" type="text" value={form.performedBy} onChange={(v) => setForm({ ...form, performedBy: v })} />
+              <FilterInput label="Topic" type="text" value={form.topic} onChange={(v) => setForm({ ...form, topic: v })} />
+              <FilterInput label="Hours" type="number" value={form.hours} onChange={(v) => setForm({ ...form, hours: v })} />
+              <FilterInput label="Date" type="date" value={form.date} onChange={(v) => setForm({ ...form, date: v })} />
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <FilterSelect label="Category" value={form.category} onChange={(v) => setForm({ ...form, category: v })}>
+                {TRAINING_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </FilterSelect>
+              <FilterInput label="Description" type="text" value={form.description} onChange={(v) => setForm({ ...form, description: v })} />
+            </div>
+
+            <div>
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">Apply To Employees</div>
+              <div className="grid grid-cols-1 gap-2 rounded-xl border border-blue-100 bg-white p-4 md:grid-cols-2">
+                {teachers.map((teacher) => {
+                  const selected = form.userIds.includes(teacher.id);
+                  return (
+                    <label key={teacher.id} className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-sm ${selected ? "border-blue-200 bg-blue-50 text-blue-900" : "border-gray-200 bg-white text-gray-700"}`}>
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => setForm((current) => ({
+                          ...current,
+                          userIds: selected
+                            ? current.userIds.filter((id) => id !== teacher.id)
+                            : [...current.userIds, teacher.id],
+                        }))}
+                      />
+                      <span className="font-semibold">{teacher.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
             <div className="flex items-end">
               <SaveButton saving={saving} />
             </div>
@@ -587,11 +692,41 @@ function TrainingTab({ centerId, teachers }) {
 
         {/* Summary cards */}
         {summary && (
-          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <KpiCard label="Total Hours" value={summary.totalHours} color="sky" />
-            {Object.entries(summary.byCategory || {}).map(([cat, hrs]) => (
-              <KpiCard key={cat} label={cat} value={hrs} color="blue" />
-            ))}
+          <div className="mt-4 space-y-4">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <KpiCard label="Total Hours" value={summary.totalHours} color="sky" />
+              <KpiCard label="Entries" value={summary.totalEntries || 0} color="gray" />
+              {Object.entries(summary.byCategory || {}).map(([cat, hrs]) => (
+                <KpiCard key={cat} label={cat} value={hrs} color="blue" />
+              ))}
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-gray-100">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50/80 text-left text-xs font-bold uppercase tracking-wider text-gray-400">
+                    <th className="px-4 py-3">Employee</th>
+                    <th className="px-4 py-3">Entries</th>
+                    <th className="px-4 py-3">Hours</th>
+                    <th className="px-4 py-3">Last Completed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(summary.reportByUser || []).length ? summary.reportByUser.map((reportRow) => (
+                    <tr key={reportRow.userId || reportRow.name} className="border-b border-gray-50">
+                      <td className="px-4 py-3 font-semibold text-gray-900">{reportRow.name || "Unknown employee"}</td>
+                      <td className="px-4 py-3 text-gray-700">{reportRow.entries}</td>
+                      <td className="px-4 py-3 text-gray-700">{reportRow.totalHours}</td>
+                      <td className="px-4 py-3 text-gray-700">{reportRow.lastCompletedAt ? fmtDate(reportRow.lastCompletedAt) : "—"}</td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-500">No employee training records in this range.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
@@ -609,7 +744,9 @@ function TrainingTab({ centerId, teachers }) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-bold text-gray-900">{l.topic}</div>
-                  <div className="text-xs text-gray-500">{l.user?.name || "—"} · {fmtDate(l.date)}</div>
+                  <div className="text-xs text-gray-500">
+                    {l.user?.name || "—"} · {fmtDate(l.date)}{l.performedBy ? ` · Performed by ${l.performedBy}` : ""}
+                  </div>
                 </div>
                 <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-800">{l.category}</span>
                 <span className="text-sm font-extrabold text-sky-700">{l.hours}h</span>
@@ -814,6 +951,12 @@ function EvaluationsTab({ centerId, teachers }) {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
+  const [filterTeacherId, setFilterTeacherId] = useState("");
+  const [filterFrom, setFilterFrom] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  });
+  const [filterTo, setFilterTo] = useState(today());
   const [form, setForm] = useState({
     teacherId: "", period: currentMonth(),
     categories: Object.fromEntries(EVAL_CATEGORIES.map((c) => [c, 3])),
@@ -824,10 +967,16 @@ function EvaluationsTab({ centerId, teachers }) {
   const loadEvaluations = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await apiJson(`/api/v1/evaluations?centerId=${centerId}`);
+      const qs = new URLSearchParams({
+        centerId,
+        ...(filterTeacherId ? { teacherId: filterTeacherId } : {}),
+        ...(filterFrom ? { from: filterFrom } : {}),
+        ...(filterTo ? { to: filterTo } : {}),
+      });
+      const data = await apiJson(`/api/v1/evaluations?${qs.toString()}`);
       setEvaluations(Array.isArray(data) ? data : []);
     } catch {} finally { setLoading(false); }
-  }, [centerId]);
+  }, [centerId, filterFrom, filterTeacherId, filterTo]);
 
   useEffect(() => { loadEvaluations(); }, [loadEvaluations]);
 
@@ -877,6 +1026,16 @@ function EvaluationsTab({ centerId, teachers }) {
     return "text-red-700 bg-red-50";
   };
 
+  const evaluationSummary = evaluations.reduce((acc, evaluation) => {
+    acc.total += 1;
+    if (evaluation.status === "SUBMITTED" || evaluation.status === "ACKNOWLEDGED") acc.submitted += 1;
+    if (typeof evaluation.overallScore === "number") {
+      acc.scored += 1;
+      acc.scoreTotal += evaluation.overallScore;
+    }
+    return acc;
+  }, { total: 0, submitted: 0, scored: 0, scoreTotal: 0 });
+
   return (
     <div className="space-y-4">
       <Card>
@@ -886,6 +1045,23 @@ function EvaluationsTab({ centerId, teachers }) {
             {showForm ? "Cancel" : "+ Create Evaluation"}
           </PrimaryButton>
         </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <FilterSelect label="Teacher" value={filterTeacherId} onChange={setFilterTeacherId}>
+            <option value="">All teachersâ€¦</option>
+            {teachers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </FilterSelect>
+          <FilterInput label="From" type="date" value={filterFrom} onChange={setFilterFrom} />
+          <FilterInput label="To" type="date" value={filterTo} onChange={setFilterTo} />
+        </div>
+
+        {evaluations.length > 0 && (
+          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
+            <KpiCard label="Evaluations" value={evaluationSummary.total} color="gray" />
+            <KpiCard label="Submitted" value={evaluationSummary.submitted} color="sky" />
+            <KpiCard label="Average Score" value={evaluationSummary.scored ? Math.round(evaluationSummary.scoreTotal / evaluationSummary.scored) : "â€”"} color="emerald" />
+          </div>
+        )}
 
         {showForm && (
           <form onSubmit={handleCreate} className="mt-4 space-y-5 rounded-xl border border-blue-100 bg-blue-50/30 p-5">

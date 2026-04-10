@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { userRoles } from "@/lib/roles";
 
 const VALID_TYPES = ["CERTIFICATE", "ACHIEVEMENT", "EMPLOYEE_OF_THE_MONTH", "CAREER_LADDER"];
 
@@ -62,7 +63,7 @@ export default async function handler(req, res) {
     }
 
     const teacher = await prisma.user.findUnique({ where: { id: targetTeacherId } });
-    if (!teacher || teacher.role !== "TEACHER") {
+    if (!teacher || !userRoles(teacher).includes("TEACHER")) {
       return res.status(400).json({ error: "Target user is not a teacher" });
     }
 

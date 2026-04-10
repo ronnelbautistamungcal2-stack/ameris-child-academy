@@ -67,6 +67,32 @@ const TAB_CONFIG = [
   { key: "daily", label: "Daily Operations", icon: IconCog, desc: "Opening, closing & routines" },
 ];
 
+function blankTaskRow() {
+  return { title: "", policyLink: "", mediaLink: "", taskTime: "" };
+}
+
+function blankDailyItemRow() {
+  return { title: "", description: "", policyLink: "", mediaLink: "", taskTime: "" };
+}
+
+function formatTaskTime(value) {
+  if (!value) return "";
+  const [hour, minute] = String(value).split(":");
+  const date = new Date();
+  date.setHours(Number(hour), Number(minute || 0), 0, 0);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+function sortByTaskTime(items) {
+  return (Array.isArray(items) ? items : []).slice().sort((a, b) => {
+    const at = a.taskTime || "99:99";
+    const bt = b.taskTime || "99:99";
+    if (at !== bt) return at.localeCompare(bt);
+    return Number(a.sortOrder || 0) - Number(b.sortOrder || 0);
+  });
+}
+
 export default function AdminChecklists() {
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
@@ -204,9 +230,10 @@ function TaskChecklistManager({ centerId }) {
 
   // Create form
   const [showCreate, setShowCreate] = useState(false);
+  const [editingChecklistId, setEditingChecklistId] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
-  const [newTasks, setNewTasks] = useState([{ title: "", policyLink: "", mediaLink: "" }]);
+  const [newTasks, setNewTasks] = useState([blankTaskRow()]);
   const [saving, setSaving] = useState(false);
 
   // Expand to view per-child tracking
@@ -238,33 +265,66 @@ function TaskChecklistManager({ centerId }) {
     setTrackingChildId("");
     setChildCompletions([]);
     setShowCreate(false);
+    setEditingChecklistId("");
     setSuccess("");
     setSearch("");
   }, [centerId, loadData]);
 
-  async function createChecklist(e) {
+  function resetTaskChecklistForm() {
+    setEditingChecklistId("");
+    setNewTitle("");
+    setNewDescription("");
+    setNewTasks([blankTaskRow()]);
+  }
+
+  function cancelTaskChecklistForm() {
+    resetTaskChecklistForm();
+    setShowCreate(false);
+  }
+
+  function startEditChecklist(checklist) {
+    setSuccess("");
+    setError("");
+    setEditingChecklistId(checklist.id);
+    setNewTitle(checklist.title || "");
+    setNewDescription(checklist.description || "");
+    const rows = sortByTaskTime(checklist.tasks).map((task) => ({
+      id: task.id,
+      title: task.title || "",
+      policyLink: task.policyLink || "",
+      mediaLink: task.mediaLink || "",
+      taskTime: task.taskTime || "",
+    }));
+    setNewTasks(rows.length ? rows : [blankTaskRow()]);
+    setShowCreate(true);
+  }
+
+  async function saveChecklist(e) {
     e.preventDefault();
     setSaving(true);
     setError("");
     setSuccess("");
     try {
-      await apiJson("/api/v1/checklists", {
-        method: "POST",
-        body: JSON.stringify({
-          title: newTitle,
-          description: newDescription || null,
-          centerId,
-          tasks: newTasks.filter((t) => t.title.trim()),
-        }),
-      });
-      setNewTitle("");
-      setNewDescription("");
-      setNewTasks([{ title: "", policyLink: "", mediaLink: "" }]);
-      setShowCreate(false);
-      setSuccess("Checklist created successfully.");
+      const payload = {
+        title: newTitle,
+        description: newDescription || null,
+        centerId,
+        tasks: newTasks.filter((t) => t.title.trim()),
+      };
+      await apiJson(
+        editingChecklistId
+          ? `/api/v1/checklists/${encodeURIComponent(editingChecklistId)}`
+          : "/api/v1/checklists",
+        {
+          method: editingChecklistId ? "PUT" : "POST",
+          body: JSON.stringify(payload),
+        },
+      );
+      cancelTaskChecklistForm();
+      setSuccess(editingChecklistId ? "Checklist updated successfully." : "Checklist created successfully.");
       await loadData();
     } catch (e2) {
-      setError(e2.message || "Failed to create checklist");
+      setError(e2.message || "Failed to save checklist");
     } finally {
       setSaving(false);
     }
@@ -324,7 +384,7 @@ function TaskChecklistManager({ centerId }) {
   }
 
   function addTaskRow() {
-    setNewTasks((prev) => [...prev, { title: "", policyLink: "", mediaLink: "" }]);
+    setNewTasks((prev) => [...prev, blankTaskRow()]);
   }
   function removeTaskRow(index) {
     setNewTasks((prev) => prev.filter((_, i) => i !== index));
@@ -383,7 +443,15 @@ function TaskChecklistManager({ centerId }) {
             {/* Create button */}
             <button
               type="button"
-              onClick={() => { setShowCreate(!showCreate); setSuccess(""); }}
+              onClick={() => {
+                if (showCreate) {
+                  cancelTaskChecklistForm();
+                } else {
+                  resetTaskChecklistForm();
+                  setShowCreate(true);
+                }
+                setSuccess("");
+              }}
               className={[
                 "inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all",
                 showCreate
@@ -452,12 +520,12 @@ function TaskChecklistManager({ centerId }) {
 
         {/* Inline create form */}
         {showCreate && (
-          <form onSubmit={createChecklist} className="mt-4 space-y-4 border-t border-gray-100 pt-4">
+          <form onSubmit={saveChecklist} className="mt-4 space-y-4 border-t border-gray-100 pt-4">
             <h3 className="flex items-center gap-2 text-sm font-bold text-gray-900">
               <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-100 text-sky-600">
                 <IconPlus />
               </span>
-              New Task Checklist
+              {editingChecklistId ? "Edit Task Checklist" : "New Task Checklist"}
             </h3>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -490,7 +558,14 @@ function TaskChecklistManager({ centerId }) {
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-200 text-xs font-bold text-gray-600">
                       {i + 1}
                     </span>
-                    <div className="flex-1 grid grid-cols-1 gap-2 md:grid-cols-3">
+                    <div className="flex-1 grid grid-cols-1 gap-2 md:grid-cols-4">
+                      <input
+                        type="time"
+                        className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-sky-300 focus:ring-1 focus:ring-sky-200 focus:outline-none"
+                        value={t.taskTime || ""}
+                        onChange={(e) => updateTaskRow(i, "taskTime", e.target.value)}
+                        aria-label="Task time"
+                      />
                       <input
                         className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-sky-300 focus:ring-1 focus:ring-sky-200 focus:outline-none"
                         value={t.title}
@@ -536,11 +611,11 @@ function TaskChecklistManager({ centerId }) {
                 disabled={saving || !newTitle.trim()}
                 className="rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-sky-700 disabled:opacity-50"
               >
-                {saving ? "Creating..." : "Create Checklist"}
+                {saving ? "Saving..." : editingChecklistId ? "Save Checklist" : "Create Checklist"}
               </button>
               <button
                 type="button"
-                onClick={() => setShowCreate(false)}
+                onClick={cancelTaskChecklistForm}
                 className="rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-100"
               >
                 Cancel
@@ -573,7 +648,7 @@ function TaskChecklistManager({ centerId }) {
         <div className="space-y-3">
           {filteredChecklists.map((cl) => {
             const isExpanded = expandedId === cl.id;
-            const tasks = cl.tasks || [];
+            const tasks = sortByTaskTime(cl.tasks);
             const completedCount = trackingChildId
               ? tasks.filter((t) => completionByTaskId.get(t.id)?.completedAt).length
               : 0;
@@ -634,6 +709,14 @@ function TaskChecklistManager({ centerId }) {
 
                   <div className="flex items-center gap-2">
                     <span
+                      onClick={(e) => { e.stopPropagation(); startEditChecklist(cl); }}
+                      className="rounded-lg px-2 py-1 text-xs font-semibold text-gray-500 transition-colors hover:bg-sky-50 hover:text-sky-700"
+                      role="button"
+                      tabIndex={0}
+                    >
+                      Edit
+                    </span>
+                    <span
                       onClick={(e) => { e.stopPropagation(); deleteChecklist(cl.id); }}
                       className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
                       role="button"
@@ -688,6 +771,11 @@ function TaskChecklistManager({ centerId }) {
                                 </span>
                               )}
                               <div className="min-w-0 flex-1">
+                                {task.taskTime ? (
+                                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-sky-600">
+                                    {formatTaskTime(task.taskTime)}
+                                  </div>
+                                ) : null}
                                 <div
                                   className={[
                                     "text-sm font-semibold",
@@ -789,12 +877,13 @@ function DailyChecklistManager({ centerId }) {
 
   // Create form
   const [showCreate, setShowCreate] = useState(false);
+  const [editingDailyId, setEditingDailyId] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newCategory, setNewCategory] = useState("OTHER");
   const [newFrequency, setNewFrequency] = useState("DAILY");
   const [newClassRoomId, setNewClassRoomId] = useState("");
-  const [newItems, setNewItems] = useState([{ title: "", description: "", policyLink: "", mediaLink: "" }]);
+  const [newItems, setNewItems] = useState([blankDailyItemRow()]);
   const [saving, setSaving] = useState(false);
 
   const [expandedId, setExpandedId] = useState("");
@@ -819,21 +908,59 @@ function DailyChecklistManager({ centerId }) {
   useEffect(() => {
     loadData();
     setShowCreate(false);
+    setEditingDailyId("");
     setExpandedId("");
     setSuccess("");
     setSearch("");
     setFilterCategory("");
   }, [centerId, loadData]);
 
-  async function createChecklist(e) {
+  function resetDailyChecklistForm() {
+    setEditingDailyId("");
+    setNewTitle("");
+    setNewDescription("");
+    setNewCategory("OTHER");
+    setNewFrequency("DAILY");
+    setNewClassRoomId("");
+    setNewItems([blankDailyItemRow()]);
+  }
+
+  function cancelDailyChecklistForm() {
+    resetDailyChecklistForm();
+    setShowCreate(false);
+  }
+
+  function startEditDailyChecklist(checklist) {
+    setSuccess("");
+    setError("");
+    setEditingDailyId(checklist.id);
+    setNewTitle(checklist.title || "");
+    setNewDescription(checklist.description || "");
+    setNewCategory(checklist.category || "OTHER");
+    setNewFrequency(checklist.frequency || "DAILY");
+    setNewClassRoomId(checklist.classRoomId || "");
+    const rows = sortByTaskTime(checklist.items).map((item) => ({
+      id: item.id,
+      title: item.title || "",
+      description: item.description || "",
+      policyLink: item.policyLink || "",
+      mediaLink: item.mediaLink || "",
+      taskTime: item.taskTime || "",
+    }));
+    setNewItems(rows.length ? rows : [blankDailyItemRow()]);
+    setShowCreate(true);
+  }
+
+  async function saveChecklist(e) {
     e.preventDefault();
     setSaving(true);
     setError("");
     setSuccess("");
     try {
       await apiJson("/api/v1/daily-checklists", {
-        method: "POST",
+        method: editingDailyId ? "PUT" : "POST",
         body: JSON.stringify({
+          id: editingDailyId || undefined,
           title: newTitle,
           description: newDescription || null,
           centerId,
@@ -843,17 +970,11 @@ function DailyChecklistManager({ centerId }) {
           items: newItems.filter((t) => t.title.trim()),
         }),
       });
-      setNewTitle("");
-      setNewDescription("");
-      setNewCategory("OTHER");
-      setNewFrequency("DAILY");
-      setNewClassRoomId("");
-      setNewItems([{ title: "", description: "", policyLink: "", mediaLink: "" }]);
-      setShowCreate(false);
-      setSuccess("Daily checklist created successfully.");
+      cancelDailyChecklistForm();
+      setSuccess(editingDailyId ? "Daily checklist updated successfully." : "Daily checklist created successfully.");
       await loadData();
     } catch (e2) {
-      setError(e2.message || "Failed to create checklist");
+      setError(e2.message || "Failed to save checklist");
     } finally {
       setSaving(false);
     }
@@ -886,7 +1007,7 @@ function DailyChecklistManager({ centerId }) {
   }
 
   function addItemRow() {
-    setNewItems((prev) => [...prev, { title: "", description: "", policyLink: "", mediaLink: "" }]);
+    setNewItems((prev) => [...prev, blankDailyItemRow()]);
   }
   function removeItemRow(index) {
     setNewItems((prev) => prev.filter((_, i) => i !== index));
@@ -957,7 +1078,15 @@ function DailyChecklistManager({ centerId }) {
           <div className="flex flex-wrap items-end gap-3">
             <button
               type="button"
-              onClick={() => { setShowCreate(!showCreate); setSuccess(""); }}
+              onClick={() => {
+                if (showCreate) {
+                  cancelDailyChecklistForm();
+                } else {
+                  resetDailyChecklistForm();
+                  setShowCreate(true);
+                }
+                setSuccess("");
+              }}
               className={[
                 "inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all",
                 showCreate
@@ -1023,12 +1152,12 @@ function DailyChecklistManager({ centerId }) {
 
         {/* Create form */}
         {showCreate && (
-          <form onSubmit={createChecklist} className="mt-4 space-y-4 border-t border-gray-100 pt-4">
+          <form onSubmit={saveChecklist} className="mt-4 space-y-4 border-t border-gray-100 pt-4">
             <h3 className="flex items-center gap-2 text-sm font-bold text-gray-900">
               <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-100 text-sky-600">
                 <IconPlus />
               </span>
-              New Daily Operations Checklist
+              {editingDailyId ? "Edit Daily Operations Checklist" : "New Daily Operations Checklist"}
             </h3>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -1098,7 +1227,14 @@ function DailyChecklistManager({ centerId }) {
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-200 text-xs font-bold text-gray-600">
                       {i + 1}
                     </span>
-                    <div className="flex-1 grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4">
+                    <div className="flex-1 grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-5">
+                      <input
+                        type="time"
+                        className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-sky-300 focus:ring-1 focus:ring-sky-200 focus:outline-none"
+                        value={t.taskTime || ""}
+                        onChange={(e) => updateItemRow(i, "taskTime", e.target.value)}
+                        aria-label="Task time"
+                      />
                       <input
                         className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-sky-300 focus:ring-1 focus:ring-sky-200 focus:outline-none"
                         value={t.title}
@@ -1150,11 +1286,11 @@ function DailyChecklistManager({ centerId }) {
                 disabled={saving || !newTitle.trim()}
                 className="rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-sky-700 disabled:opacity-50"
               >
-                {saving ? "Creating..." : "Create Checklist"}
+                {saving ? "Saving..." : editingDailyId ? "Save Checklist" : "Create Checklist"}
               </button>
               <button
                 type="button"
-                onClick={() => setShowCreate(false)}
+                onClick={cancelDailyChecklistForm}
                 className="rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-100"
               >
                 Cancel
@@ -1198,7 +1334,7 @@ function DailyChecklistManager({ centerId }) {
               </div>
               {lists.map((cl) => {
                 const isExpanded = expandedId === cl.id;
-                const items = cl.items || [];
+                const items = sortByTaskTime(cl.items);
                 return (
                   <div
                     key={cl.id}
@@ -1249,6 +1385,13 @@ function DailyChecklistManager({ centerId }) {
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
+                          onClick={() => startEditDailyChecklist(cl)}
+                          className="rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-sky-50 hover:text-sky-700"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => toggleActive(cl.id, cl.active)}
                           className={[
                             "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
@@ -1282,6 +1425,11 @@ function DailyChecklistManager({ centerId }) {
                                   {idx + 1}
                                 </span>
                                 <div className="min-w-0 flex-1">
+                                  {item.taskTime ? (
+                                    <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-sky-600">
+                                      {formatTaskTime(item.taskTime)}
+                                    </div>
+                                  ) : null}
                                   <div className="text-sm font-semibold text-gray-900">{item.title}</div>
                                   {item.description && (
                                     <p className="mt-0.5 text-xs text-gray-500">{item.description}</p>

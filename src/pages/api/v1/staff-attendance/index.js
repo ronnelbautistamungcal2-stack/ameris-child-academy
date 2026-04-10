@@ -19,6 +19,27 @@ export default async function handler(req, res) {
   }
 }
 
+function parseAttendanceTime(date, value) {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  if (/^\d{2}:\d{2}$/.test(raw)) {
+    const [hours, minutes] = raw.split(":").map(Number);
+    const parsed = new Date(date);
+    parsed.setHours(hours, minutes, 0, 0);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 async function handleGet(req, res, session) {
   const { centerId, userId, from, to, date } = req.query;
 
@@ -65,12 +86,14 @@ async function handlePost(req, res, session) {
 
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
+  const parsedClockIn = parseAttendanceTime(d, clockIn);
+  const parsedClockOut = parseAttendanceTime(d, clockOut);
 
   const record = await prisma.staffAttendance.upsert({
     where: { userId_date: { userId, date: d } },
     update: {
-      clockIn: clockIn ? new Date(clockIn) : undefined,
-      clockOut: clockOut ? new Date(clockOut) : undefined,
+      clockIn: parsedClockIn ?? undefined,
+      clockOut: parsedClockOut ?? undefined,
       status: status || undefined,
       lateMinutes: typeof lateMinutes === "number" ? lateMinutes : undefined,
       notes: notes !== undefined ? notes : undefined,
@@ -80,8 +103,8 @@ async function handlePost(req, res, session) {
       userId,
       centerId,
       date: d,
-      clockIn: clockIn ? new Date(clockIn) : null,
-      clockOut: clockOut ? new Date(clockOut) : null,
+      clockIn: parsedClockIn,
+      clockOut: parsedClockOut,
       status: status || "PRESENT",
       lateMinutes: lateMinutes || 0,
       notes: notes || null,

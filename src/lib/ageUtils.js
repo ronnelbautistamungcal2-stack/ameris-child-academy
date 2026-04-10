@@ -28,6 +28,32 @@ export function mapAgeRangeToGroup(ageRangeString) {
   if (!text) return "";
   const exact = AGE_GROUPS.find((g) => g.tags.includes(text));
   if (exact) return exact.key;
+  const monthMatches = [...text.matchAll(/(\d+(?:\.\d+)?)\s*(?:-|to|–|—)?\s*(\d+(?:\.\d+)?)?\s*(months?|mos?|mo|m)\b/g)];
+  if (monthMatches.length) {
+    const nums = monthMatches
+      .flatMap((match) => [match[1], match[2]])
+      .filter(Boolean)
+      .map(Number)
+      .filter(Number.isFinite);
+    if (nums.length) {
+      const min = Math.min(...nums);
+      const max = Math.max(...nums);
+      return AGE_GROUPS.find((g) => max >= g.min && min <= g.max)?.key || "";
+    }
+  }
+  const yearMatches = [...text.matchAll(/(\d+(?:\.\d+)?)\s*(?:-|to|–|—)?\s*(\d+(?:\.\d+)?)?\s*(years?|yrs?|yr|y)\b/g)];
+  if (yearMatches.length) {
+    const nums = yearMatches
+      .flatMap((match) => [match[1], match[2]])
+      .filter(Boolean)
+      .map((n) => Number(n) * 12)
+      .filter(Number.isFinite);
+    if (nums.length) {
+      const min = Math.min(...nums);
+      const max = Math.max(...nums);
+      return AGE_GROUPS.find((g) => max >= g.min && min <= g.max)?.key || "";
+    }
+  }
   return AGE_GROUPS.find((g) => g.tags.some((tag) => text.includes(tag)))?.key || "";
 }
 

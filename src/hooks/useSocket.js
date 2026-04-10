@@ -92,20 +92,29 @@ export function useActivityLogs(callback) {
 /**
  * Hook to listen for progress updates
  */
-export function useProgressUpdates(callback) {
+export function useProgressUpdates(centerId, callback) {
   const socketRef = useRef(null);
 
   useEffect(() => {
+    if (!centerId) return;
+
     socketRef.current = io("/");
+
+    socketRef.current.on("connect", () => {
+      socketRef.current.emit("join-center", centerId);
+    });
 
     socketRef.current.on("progress:updated", (message) => {
       if (callback) callback(message.data);
     });
 
     return () => {
-      if (socketRef.current) socketRef.current.disconnect();
+      if (socketRef.current) {
+        socketRef.current.emit("leave-center", centerId);
+        socketRef.current.disconnect();
+      }
     };
-  }, [callback]);
+  }, [centerId, callback]);
 }
 
 /**

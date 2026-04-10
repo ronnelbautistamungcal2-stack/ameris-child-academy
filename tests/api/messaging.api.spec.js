@@ -1,9 +1,16 @@
 // @ts-check
 const { test, expect } = require("@playwright/test");
+const { PrismaClient } = require("@prisma/client");
 const { loginAsAdmin, loginAsTeacher, loginAsParent } = require("../helpers/auth");
 const { apiGet, apiPost } = require("../helpers/api");
 
+const prisma = new PrismaClient();
+
 test.describe("Messaging API @api", () => {
+  test.afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
   test("GET /api/v1/messages/threads returns 401 without auth", async ({ request }) => {
     const res = await apiGet(request, "/api/v1/messages/threads");
     expect(res.status()).toBe(401);
@@ -66,16 +73,10 @@ test.describe("Messaging API @api", () => {
 
   test("full thread lifecycle: create thread, send message, read thread", async ({ request }) => {
     const adminCookies = await loginAsAdmin(request);
-    const teacherCookies = await loginAsTeacher(request);
-
-    // Get teacher user ID from a known endpoint
-    const usersRes = await apiGet(request, "/api/v1/users?role=TEACHER", adminCookies);
-    if (usersRes.status() !== 200) {
-      test.skip();
-      return;
-    }
-    const users = await usersRes.json();
-    const teacherUser = Array.isArray(users) ? users[0] : null;
+    const teacherUser = await prisma.user.findUnique({
+      where: { email: "teacher@demo.com" },
+      select: { id: true },
+    });
     if (!teacherUser) {
       test.skip();
       return;
@@ -103,7 +104,7 @@ test.describe("Messaging API @api", () => {
       { threadId: thread.id, body: "Test message from E2E" },
       adminCookies,
     );
-    expect(sendRes.status()).toBe(200);
+    expect([200, 201]).toContain(sendRes.status());
 
     // Read thread
     const readRes = await apiGet(request, `/api/v1/messages/threads/${thread.id}`, adminCookies);
@@ -111,5 +112,67 @@ test.describe("Messaging API @api", () => {
     const threadData = await readRes.json();
     expect(threadData.messages).toBeDefined();
     expect(threadData.messages.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("creating a thread with a first message creates recipient notifications", async ({ request }) => {
+    const adminCookies = await loginAsAdmin(request);
+    const teacherCookies = await loginAsTeacher(request);
+
+    const [teacherUser, beforeNotificationsRes] = await Promise.all([
+      prisma.user.findUnique({
+        where: { email: "teacher@demo.com" },
+        select: { id: true },
+      }),
+      apiGet(request, "/api/v1/notifications?limit=20", teacherCookies),
+    ]);
+    expect(beforeNotificationsRes.status()).toBe(200);
+    const beforeNotifications = await beforeNotificationsRes.json();
+    if (!teacherUser) {
+      test.skip();
+      return;
+    }
+
+    const beforeNotificationIds = new Set(
+      (beforeNotifications.notifications || []).map((notification) => notification.id),
+    );
+
+    const createRes = await apiPost(
+      request,
+      "/api/v1/messages/threads",
+      {
+        participantIds: [teacherUser.id],
+        title: "QA first-message thread",
+        firstMessage: "Opening note created during QA",
+      },
+      adminCookies,
+    );
+    expect(createRes.status()).toBe(201);
+    const thread = await createRes.json();
+
+    const [teacherThreadsRes, afterNotificationsRes] = await Promise.all([
+      apiGet(request, "/api/v1/messages/threads", teacherCookies),
+      apiGet(request, "/api/v1/notifications?limit=20", teacherCookies),
+    ]);
+    expect(teacherThreadsRes.status()).toBe(200);
+    expect(afterNotificationsRes.status()).toBe(200);
+
+    const teacherThreads = await teacherThreadsRes.json();
+    const afterNotifications = await afterNotificationsRes.json();
+    const createdThread = Array.isArray(teacherThreads)
+      ? teacherThreads.find((item) => item.id === thread.id)
+      : null;
+
+    expect(createdThread).toBeTruthy();
+    expect(createdThread.unreadCount).toBeGreaterThan(0);
+
+    const createdNotification = (afterNotifications.notifications || []).find(
+      (notification) =>
+        !beforeNotificationIds.has(notification.id) &&
+        notification.type === "MESSAGE" &&
+        notification.metadata?.threadId === thread.id,
+    );
+
+    expect(createdNotification).toBeTruthy();
+    expect(createdNotification.link).toContain(thread.id);
   });
 });

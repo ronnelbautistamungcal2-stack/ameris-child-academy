@@ -24,6 +24,7 @@ enum ActivityType {
   ACTIVITY
   TASK_CHECKLIST
   BEHAVIOR
+  INCIDENT
   OTHER
 }
 
@@ -174,6 +175,7 @@ model User {
   aboutMe            String?
   pictureUrl         String?
   role               Role                @default(PARENT)
+  roles              Role[]              @default([])
   centers            CenterUser[]
   children           Child[]
   guardianships      ChildGuardian[]
@@ -296,6 +298,10 @@ model Child {
   allergies       String?
   healthAssessmentDocuments Json?
   enrollmentDocuments Json?
+  iefDocuments    Json?
+  immunizationDocuments Json?
+  infantDocuments Json?
+  otherDocuments  Json?
   feedingPlan     Json?
   center          Center           @relation(fields: [centerId], references: [id])
   centerId        String
@@ -350,7 +356,7 @@ model LessonCategory {
 
   lessons Lesson[]
 
-  @@unique([centerId, name])
+  @@index([centerId, name, ageRange])
   @@index([centerId, sortOrder])
 }
 
@@ -560,6 +566,7 @@ model Task {
   checklistId String
   policyLink  String?
   mediaLink   String?
+  taskTime    String?
   completed   ChildTask[]
   createdAt   DateTime      @default(now())
 }
@@ -988,6 +995,8 @@ model TeacherEvaluation {
   evaluator             User             @relation("EvaluationsGiven", fields: [evaluatorId], references: [id], onDelete: Cascade)
   evaluatorId           String
   period                String
+  periodStart           DateTime?
+  periodEnd             DateTime?
   status                EvaluationStatus @default(DRAFT)
   overallScore          Float?
   categories            Json?
@@ -1001,6 +1010,7 @@ model TeacherEvaluation {
 
   @@index([teacherId, period])
   @@index([centerId, period])
+  @@index([centerId, periodStart, periodEnd])
 }
 
 model ChildPermission {
@@ -1203,10 +1213,12 @@ model DailyChecklistItem {
   description String?
   policyLink  String?
   mediaLink   String?
+  taskTime    String?
   completions DailyChecklistCompletion[]
   createdAt   DateTime            @default(now())
 
   @@index([checklistId, sortOrder])
+  @@index([checklistId, taskTime])
 }
 
 model DailyChecklistCompletion {

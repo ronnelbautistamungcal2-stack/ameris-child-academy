@@ -1,11 +1,27 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import {
+  badRequest,
   createApiHandler,
   forbidden,
   unauthorized,
 } from "@/lib/api-error";
 import { ensureObject, optionalDate, optionalNumber, optionalString, requiredString } from "@/lib/validation";
+
+function endOfDay(date) {
+  if (!date) return undefined;
+  const value = new Date(date);
+  value.setHours(23, 59, 59, 999);
+  return value;
+}
+
+function periodLabel(start, end, fallback) {
+  if (fallback) return fallback;
+  if (!start && !end) return "";
+  const startLabel = start ? start.toISOString().slice(0, 10) : "Open";
+  const endLabel = end ? end.toISOString().slice(0, 10) : "Open";
+  return `${startLabel} to ${endLabel}`;
+}
 
 export default createApiHandler(async function handler(req, res) {
   const session = await getSession(req, res);
@@ -17,17 +33,27 @@ export default createApiHandler(async function handler(req, res) {
     const period = optionalString(req.query, "period");
     const status = optionalString(req.query, "status");
     const from = optionalDate(req.query, "from");
-    const to = optionalDate(req.query, "to");
+    const to = endOfDay(optionalDate(req.query, "to"));
 
     const where = {};
     if (centerId) where.centerId = centerId;
     if (period) where.period = period;
     if (status) where.status = status;
     if (from || to) {
-      where.createdAt = {
-        ...(from ? { gte: from } : {}),
-        ...(to ? { lte: to } : {}),
-      };
+      where.OR = [
+        {
+          AND: [
+            from ? { periodEnd: { gte: from } } : {},
+            to ? { periodStart: { lte: to } } : {},
+          ],
+        },
+        {
+          createdAt: {
+            ...(from ? { gte: from } : {}),
+            ...(to ? { lte: to } : {}),
+          },
+        },
+      ];
     }
 
     if (session.user.role === "TEACHER") {
@@ -56,7 +82,12 @@ export default createApiHandler(async function handler(req, res) {
   const body = ensureObject(req.body || {});
   const centerId = requiredString(body, "centerId");
   const teacherId = requiredString(body, "teacherId");
-  const period = requiredString(body, "period");
+  const periodStart = optionalDate(body, "periodStart", { nullable: true });
+  const periodEnd = optionalDate(body, "periodEnd", { nullable: true });
+  const period = periodLabel(periodStart, periodEnd, optionalString(body, "period"));
+  if (!period) {
+    throw badRequest("Evaluation period start/end is required");
+  }
   const overallScore = optionalNumber(body, "overallScore", { min: 0 });
   const categories = body.categories ?? {};
   const strengths = optionalString(body, "strengths", { nullable: true });
@@ -70,6 +101,8 @@ export default createApiHandler(async function handler(req, res) {
       centerId,
       evaluatorId: session.user.id,
       period,
+      periodStart,
+      periodEnd,
       overallScore: overallScore ?? null,
       categories,
       strengths,

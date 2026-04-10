@@ -32,7 +32,10 @@ export default async function handler(req, res) {
 
     const lists = await prisma.taskChecklist.findMany({
       where,
-      include: { tasks: true, center: true },
+      include: {
+        tasks: { orderBy: [{ taskTime: "asc" }, { createdAt: "asc" }] },
+        center: true,
+      },
       orderBy: { createdAt: "desc" },
     });
     return res.status(200).json(lists);
@@ -61,11 +64,15 @@ export default async function handler(req, res) {
                   title: t.title,
                   policyLink: t.policyLink || null,
                   mediaLink: t.mediaLink || null,
+                  taskTime: t.taskTime || null,
                 })),
             }
           : undefined,
       },
-      include: { tasks: true, center: true },
+      include: {
+        tasks: { orderBy: [{ taskTime: "asc" }, { createdAt: "asc" }] },
+        center: true,
+      },
     });
 
     return res.status(201).json(created);
@@ -74,4 +81,3 @@ export default async function handler(req, res) {
   res.setHeader("Allow", ["GET", "POST"]);
   res.status(405).end();
 }
-

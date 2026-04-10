@@ -22,6 +22,20 @@ function startOfWeekMonday(date = new Date()) {
   return d;
 }
 
+function formatDateLabel(value, options) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString(undefined, options || { month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatEvaluationStatus(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 export default function TeacherTraining() {
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
@@ -36,6 +50,9 @@ export default function TeacherTraining() {
   const [tab, setTab] = useState("training");
   const [records, setRecords] = useState([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
+  const [evaluations, setEvaluations] = useState([]);
+  const [loadingEvaluations, setLoadingEvaluations] = useState(false);
+  const [acknowledgingId, setAcknowledgingId] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -109,6 +126,25 @@ export default function TeacherTraining() {
     })();
   }, [tab]);
 
+  const loadEvaluations = useCallback(async () => {
+    setLoadingEvaluations(true);
+    setError("");
+    try {
+      const qs = centerId ? `?centerId=${encodeURIComponent(centerId)}` : "";
+      const data = await apiJson(`/api/v1/evaluations${qs}`);
+      setEvaluations(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setError(e.message || "Failed to load evaluations");
+    } finally {
+      setLoadingEvaluations(false);
+    }
+  }, [centerId]);
+
+  useEffect(() => {
+    if (tab !== "evaluations") return;
+    loadEvaluations();
+  }, [loadEvaluations, tab]);
+
   const sortedPlans = useMemo(() => {
     return (plans || [])
       .slice()
@@ -120,6 +156,26 @@ export default function TeacherTraining() {
       .slice(0, 6);
   }, [plans]);
 
+  const visibleEvaluations = useMemo(
+    () => evaluations.filter((evaluation) => evaluation.status !== "DRAFT"),
+    [evaluations],
+  );
+
+  const handleAcknowledgeEvaluation = async (evaluationId) => {
+    setAcknowledgingId(evaluationId);
+    setError("");
+    try {
+      await apiJson(`/api/v1/evaluations/${evaluationId}/acknowledge`, { method: "POST" });
+      await loadEvaluations();
+      const refreshedMetrics = await apiJson("/api/v1/metrics/me").catch(() => null);
+      if (refreshedMetrics) setMetrics(refreshedMetrics);
+    } catch (e) {
+      setError(e.message || "Failed to acknowledge evaluation");
+    } finally {
+      setAcknowledgingId("");
+    }
+  };
+
   return (
     <TeacherLayout title="My Performance & Training">
       <div className="space-y-4">
@@ -130,11 +186,11 @@ export default function TeacherTraining() {
                 My Performance & Training
               </h2>
               <p className="mt-1 text-sm text-gray-600">
-                Teacher metrics, training pathway, and career ladder.
+                Teacher metrics, training pathway, evaluations, and career ladder.
               </p>
             </div>
 
-            {tab === "training" ? (
+            {tab !== "career-ladder" ? (
               <label className="block">
                 <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Center
@@ -145,7 +201,7 @@ export default function TeacherTraining() {
                   className="mt-1 w-72 max-w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   disabled={loading}
                 >
-                  <option value="">Select a center…</option>
+                  <option value="">All centers</option>
                   {centers.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
@@ -168,6 +224,18 @@ export default function TeacherTraining() {
               ].join(" ")}
             >
               Performance & Training
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("evaluations")}
+              className={[
+                "px-4 py-2 text-sm font-semibold border-b-2 transition",
+                tab === "evaluations"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700",
+              ].join(" ")}
+            >
+              Evaluations
             </button>
             <button
               type="button"
@@ -287,6 +355,15 @@ export default function TeacherTraining() {
             <CareerLadderPanel records={records} loading={loadingRecords} />
           )}
 
+          {tab === "evaluations" && (
+            <EvaluationsPanel
+              evaluations={visibleEvaluations}
+              loading={loadingEvaluations}
+              acknowledgingId={acknowledgingId}
+              onAcknowledge={handleAcknowledgeEvaluation}
+            />
+          )}
+
           {tab === "training-hours" && (
             <TrainingHoursPanel centerId={centerId} />
           )}
@@ -398,6 +475,127 @@ function CareerLadderPanel({ records, loading }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function EvaluationsPanel({ evaluations, loading, acknowledgingId, onAcknowledge }) {
+  const submittedCount = evaluations.filter((evaluation) => evaluation.status === "SUBMITTED").length;
+  const acknowledgedCount = evaluations.filter((evaluation) => evaluation.status === "ACKNOWLEDGED").length;
+  const scoredEvaluations = evaluations.filter((evaluation) => Number.isFinite(evaluation.overallScore));
+  const averageScore = scoredEvaluations.length
+    ? Math.round((scoredEvaluations.reduce((sum, evaluation) => sum + evaluation.overallScore, 0) / scoredEvaluations.length) * 10) / 10
+    : null;
+
+  if (loading) return <div className="mt-4"><Skeleton count={4} /></div>;
+
+  return (
+    <div className="mt-5 space-y-4">
+        <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+          Submitted Evaluations
+        </div>
+        <p className="mt-1 text-sm text-blue-900">
+          Submitted evaluations appear here after an administrator sends them. Review the details, then acknowledge the evaluation once you have read it.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Metric label="Visible Evaluations" value={evaluations.length} />
+        <Metric label="Awaiting Acknowledgement" value={submittedCount} />
+        <Metric label="Acknowledged" value={acknowledgedCount} />
+        <Metric label="Average Score" value={averageScore ?? "-"} />
+      </div>
+
+      {!evaluations.length ? (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+          No submitted evaluations are available yet.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {evaluations.map((evaluation) => {
+            const canAcknowledge = evaluation.status === "SUBMITTED";
+            return (
+              <div key={evaluation.id} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-base font-extrabold text-gray-900">{evaluation.period || "Evaluation"}</div>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                        evaluation.status === "ACKNOWLEDGED"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-blue-100 text-blue-800"
+                      }`}>
+                        {formatEvaluationStatus(evaluation.status)}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-sm text-gray-500">
+                      By {evaluation.evaluator?.name || "Administrator"} • Created {formatDateLabel(evaluation.createdAt)}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className={`rounded-xl px-3 py-2 text-sm font-extrabold ${
+                      evaluation.overallScore >= 80
+                        ? "bg-emerald-50 text-emerald-700"
+                        : evaluation.overallScore >= 60
+                          ? "bg-amber-50 text-amber-700"
+                          : "bg-red-50 text-red-700"
+                    }`}>
+                      {Number.isFinite(evaluation.overallScore) ? `${evaluation.overallScore}%` : "No score"}
+                    </div>
+                    {canAcknowledge ? (
+                      <button
+                        type="button"
+                        onClick={() => onAcknowledge(evaluation.id)}
+                        disabled={acknowledgingId === evaluation.id}
+                        className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {acknowledgingId === evaluation.id ? "Acknowledging..." : "Acknowledge"}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                {evaluation.categories && Object.keys(evaluation.categories).length > 0 ? (
+                  <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5">
+                    {Object.entries(evaluation.categories).map(([category, score]) => (
+                      <div key={category} className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-center">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">{category}</div>
+                        <div className="mt-1 text-xl font-extrabold text-gray-800">
+                          {score}
+                          <span className="text-sm text-gray-400">/5</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {evaluation.strengths ? (
+                    <DetailCard label="Strengths" value={evaluation.strengths} />
+                  ) : null}
+                  {evaluation.areasForImprovement ? (
+                    <DetailCard label="Areas for Improvement" value={evaluation.areasForImprovement} />
+                  ) : null}
+                  {evaluation.goals ? (
+                    <DetailCard label="Goals" value={evaluation.goals} />
+                  ) : null}
+                  {evaluation.notes ? (
+                    <DetailCard label="Notes" value={evaluation.notes} />
+                  ) : null}
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-3 text-xs text-gray-500">
+                  <span>Score: {Number.isFinite(evaluation.overallScore) ? `${evaluation.overallScore}%` : "Not scored"}</span>
+                  <span>Status: {formatEvaluationStatus(evaluation.status)}</span>
+                  <span>Acknowledged: {evaluation.teacherAcknowledgedAt ? formatDateLabel(evaluation.teacherAcknowledgedAt) : "Pending"}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -542,6 +740,15 @@ function Metric({ label, value }) {
         {label}
       </div>
       <div className="mt-1 text-2xl font-extrabold text-gray-900">{value}</div>
+    </div>
+  );
+}
+
+function DetailCard({ label, value }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</div>
+      <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">{value}</p>
     </div>
   );
 }

@@ -1,8 +1,9 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
 import ActiveGoalsPanel from "@/components/progression/ActiveGoalsPanel";
-import { AGE_GROUPS, ageGroupKeyFromBirthDate } from "@/lib/ageUtils";
+import { useProgressUpdates } from "@/hooks/useSocket";
+import { AGE_GROUPS, ageGroupKeyFromBirthDate, mapAgeRangeToGroup } from "@/lib/ageUtils";
 import { apiJson } from "@/lib/api";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const STATUSES = ["NOT_STARTED", "IN_PROGRESS", "PASSED", "FAILED", "COMPLETED"];
 
@@ -15,6 +16,28 @@ const STAGE_FILTERS = [
 
 function byString(a, b) {
   return String(a || "").localeCompare(String(b || ""));
+}
+
+function getLessonAgeGroups(lesson) {
+  const set = new Set();
+  const categoryAge = mapAgeRangeToGroup(lesson?.category?.ageRange);
+  if (categoryAge) set.add(categoryAge);
+  for (const goal of Array.isArray(lesson?.goals) ? lesson.goals : []) {
+    const pc = goal?.passingCriteria && typeof goal.passingCriteria === "object" ? goal.passingCriteria : {};
+    const ageKey = mapAgeRangeToGroup(pc.age || pc.childAge || pc.ageRange);
+    if (ageKey) set.add(ageKey);
+  }
+  return [...set];
+}
+
+function getNextGoalSuggestion(lesson, progress, recommended) {
+  const goals = Array.isArray(lesson?.goals) ? lesson.goals : [];
+  const nextIndex = Number(progress?.goalIndex || 0) + 1;
+  const nextGoal = goals.find((g) => Number(g.goalIndex || 0) === nextIndex);
+  if (nextGoal?.title) return nextGoal.title;
+  if (recommended?.[0]?.title) return recommended[0].title;
+  const firstGoal = goals[0];
+  return firstGoal?.title || lesson?.title || "";
 }
 
 function formatDate(value) {
@@ -42,6 +65,7 @@ export default function TeacherProgress() {
 
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
+  const [lessonAgeGroup, setLessonAgeGroup] = useState("");
   const [stage, setStage] = useState("all");
   const [ageGroup, setAgeGroup] = useState("");
   const [visibleCount, setVisibleCount] = useState(100);
@@ -80,6 +104,7 @@ export default function TeacherProgress() {
         setProgressRows([]);
         setQuery("");
         setCategory("");
+        setLessonAgeGroup("");
         setStage("all");
         setAgeGroup("");
         setVisibleCount(100);
@@ -125,6 +150,25 @@ export default function TeacherProgress() {
     })();
   }, [childId]);
 
+  const loadChildProgress = useCallback(async (targetChildId) => {
+    if (!targetChildId) return;
+    const progress = await apiJson(
+      `/api/v1/progress?childId=${encodeURIComponent(targetChildId)}`,
+    );
+    setProgressRows(Array.isArray(progress) ? progress : []);
+  }, []);
+
+  const loadOverviewProgress = useCallback(async (targetCenterId) => {
+    if (!targetCenterId) {
+      setOverviewProgress([]);
+      return;
+    }
+    const allProgress = await apiJson(
+      `/api/v1/progress?centerId=${encodeURIComponent(targetCenterId)}`,
+    );
+    setOverviewProgress(Array.isArray(allProgress) ? allProgress : []);
+  }, []);
+
   // Filter children by class and age group
   const filteredChildren = useMemo(() => {
     let result = children;
@@ -152,6 +196,19 @@ export default function TeacherProgress() {
   const selectedChild = useMemo(() => {
     return children.find((ch) => ch.id === childId) || null;
   }, [children, childId]);
+
+  useEffect(() => {
+    if (!selectedChild) return;
+    setLessonAgeGroup(ageGroupKeyFromBirthDate(selectedChild.birthDate));
+  }, [selectedChild?.id, selectedChild?.birthDate]);
+
+  const lessonAgeOptions = useMemo(() => {
+    const set = new Set();
+    for (const lesson of lessons) {
+      for (const key of getLessonAgeGroups(lesson)) set.add(key);
+    }
+    return AGE_GROUPS.filter((g) => set.has(g.key));
+  }, [lessons]);
 
   const remediationMap = useMemo(() => {
     const map = new Map();
@@ -195,7 +252,7 @@ export default function TeacherProgress() {
   const lessonRows = useMemo(() => {
     const rows = lessons.map((l) => {
       const pr = currentProgressByLessonId.get(l.id) || null;
-      const draft = drafts[l.id] || { status: "IN_PROGRESS", notes: "" };
+      const draft = drafts[l.id] || { status: "IN_PROGRESS", notes: "", nextGoal: "" };
       const recommended = remediationMap.get(l.id) || [];
 
       return {
@@ -221,6 +278,10 @@ export default function TeacherProgress() {
       if (stage === "completed" && !flags?.hasCompleted) return false;
       if (stage === "failed" && !flags?.hasFailed) return false;
       if (category && (lesson?.category?.name || "") !== category) return false;
+      if (lessonAgeGroup) {
+        const lessonGroups = getLessonAgeGroups(lesson);
+        if (lessonGroups.length && !lessonGroups.includes(lessonAgeGroup)) return false;
+      }
       if (!q) return true;
       const haystack = [
         lesson?.title,
@@ -242,6 +303,7 @@ export default function TeacherProgress() {
     lessonStatusFlags,
     query,
     category,
+    lessonAgeGroup,
     stage,
   ]);
 
@@ -287,12 +349,13 @@ export default function TeacherProgress() {
         body: JSON.stringify({
           status: draft.status,
           notes: draft.notes || null,
+          details: draft.nextGoal ? { nextGoal: draft.nextGoal } : null,
         }),
       });
 
       const refreshed = await apiJson(`/api/v1/progress?childId=${encodeURIComponent(childId)}`);
       setProgressRows(Array.isArray(refreshed) ? refreshed : []);
-      setDraft(lessonId, { notes: "" });
+      setDraft(lessonId, { notes: "", nextGoal: "" });
     } catch (e) {
       setError(e.message || "Failed to record progress");
     } finally {
@@ -303,8 +366,7 @@ export default function TeacherProgress() {
   async function refreshProgress() {
     if (!childId) return;
     try {
-      const p = await apiJson(`/api/v1/progress?childId=${encodeURIComponent(childId)}`);
-      setProgressRows(Array.isArray(p) ? p : []);
+      await loadChildProgress(childId);
     } catch {
       // silent
     }
@@ -319,15 +381,33 @@ export default function TeacherProgress() {
     (async () => {
       setOverviewLoading(true);
       try {
-        const allProgress = await apiJson("/api/v1/progress");
-        setOverviewProgress(Array.isArray(allProgress) ? allProgress : []);
+        await loadOverviewProgress(centerId);
       } catch {
         setOverviewProgress([]);
       } finally {
         setOverviewLoading(false);
       }
     })();
-  }, [centerId, childId]);
+  }, [centerId, childId, loadOverviewProgress]);
+
+  useProgressUpdates(
+    centerId,
+    useCallback(
+      (updatedProgress) => {
+        if (!updatedProgress || !centerId) return;
+
+        if (childId) {
+          if (updatedProgress.childId === childId) {
+            loadChildProgress(childId).catch(() => null);
+          }
+          return;
+        }
+
+        loadOverviewProgress(centerId).catch(() => null);
+      },
+      [centerId, childId, loadChildProgress, loadOverviewProgress],
+    ),
+  );
 
   const classById = useMemo(() => {
     const map = new Map();
@@ -478,7 +558,7 @@ export default function TeacherProgress() {
 
               <div>
                 <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">Stage</div>
-                <div className="flex gap-1 rounded-xl border border-gray-200 bg-gray-100/80 p-1">
+                <div className="flex flex-wrap gap-1 rounded-xl border border-gray-200 bg-gray-100/80 p-1">
                   {STAGE_FILTERS.map((s) => {
                     const Icon = s.icon;
                     const active = stage === s.value;
@@ -486,12 +566,12 @@ export default function TeacherProgress() {
                       <button
                         key={s.value}
                         type="button"
-                        className={`flex flex-1 items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-[10px] font-bold transition-all ${active ? "bg-white text-sky-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                        className={`flex min-w-[5.5rem] flex-1 items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-[10px] font-bold transition-all ${active ? "bg-white text-sky-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
                         onClick={() => { setStage(s.value); setVisibleCount(100); }}
                         title={s.label}
                       >
                         <Icon />
-                        <span className="hidden xl:inline">{s.label.split(" ")[0]}</span>
+                        <span>{s.label.split(" ")[0]}</span>
                       </button>
                     );
                   })}
@@ -548,7 +628,7 @@ export default function TeacherProgress() {
               <div className="mt-3 text-sm text-gray-600">No lessons found.</div>
             ) : (
               <div className="mt-3 space-y-3">
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                   <div>
                     <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">Search</div>
                     <div className="relative">
@@ -581,19 +661,37 @@ export default function TeacherProgress() {
                       </option>
                     ))}
                   </FilterSelect>
+                  <FilterSelect
+                    label="Lesson Age Group"
+                    value={lessonAgeGroup}
+                    onChange={(v) => {
+                      setLessonAgeGroup(v);
+                      setVisibleCount(100);
+                    }}
+                    disabled={false}
+                    placeholder="All ages"
+                    icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                  >
+                    {(lessonAgeOptions.length ? lessonAgeOptions : AGE_GROUPS).map((g) => (
+                      <option key={g.key} value={g.key}>
+                        {g.label}
+                      </option>
+                    ))}
+                  </FilterSelect>
                 </div>
 
                 <div className="text-xs text-gray-600">
                   Showing {Math.min(visibleCount, lessonRows.length)} of {lessonRows.length} lessons.
                 </div>
 
-                <div className="overflow-hidden rounded-2xl border border-gray-200">
+                <div className="overflow-auto rounded-2xl border border-gray-200">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-gray-50/80 text-xs font-bold uppercase tracking-wider text-gray-400">
                     <tr>
                       <th className="px-4 py-3">Lesson</th>
                       <th className="px-4 py-3">Current Step</th>
                       <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Next Goal</th>
                       <th className="px-4 py-3">Notes</th>
                       <th className="px-4 py-3">Action</th>
                     </tr>
@@ -661,6 +759,26 @@ export default function TeacherProgress() {
                                 </option>
                               ))}
                             </select>
+                          </td>
+
+                          <td className="px-4 py-3 align-top">
+                            <div className="flex min-w-[14rem] flex-col gap-1.5">
+                              <input
+                                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm shadow-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"
+                                placeholder="Type next goal..."
+                                value={draft.nextGoal || ""}
+                                onChange={(e) => setDraft(lesson.id, { nextGoal: e.target.value })}
+                                disabled={savingLessonId === lesson.id}
+                              />
+                              <button
+                                type="button"
+                                className="self-start rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700 hover:bg-sky-100 disabled:opacity-60"
+                                onClick={() => setDraft(lesson.id, { nextGoal: getNextGoalSuggestion(lesson, progress, recommended) })}
+                                disabled={savingLessonId === lesson.id}
+                              >
+                                Use next step
+                              </button>
+                            </div>
                           </td>
 
                           <td className="px-4 py-3 align-top">

@@ -14,6 +14,7 @@ const ACTIVITY_TYPES = [
   "ACTIVITY",
   "TASK_CHECKLIST",
   "BEHAVIOR",
+  "INCIDENT",
   "OTHER",
 ];
 
@@ -43,6 +44,9 @@ export default function TeacherChildren() {
   const [logsLoading, setLogsLoading] = useState(false);
   const [logsError, setLogsError] = useState("");
   const [logsSuccess, setLogsSuccess] = useState("");
+  const [logFilterType, setLogFilterType] = useState("");
+  const [logDateMode, setLogDateMode] = useState("all");
+  const [logDate, setLogDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [editingLogId, setEditingLogId] = useState("");
   const [editType, setEditType] = useState("OTHER");
   const [editNotes, setEditNotes] = useState("");
@@ -153,7 +157,34 @@ export default function TeacherChildren() {
     setEditNotes("");
     setSavingLogId("");
     setDeletingLogId("");
+    setLogFilterType("");
+    setLogDateMode("all");
   }
+
+  const filteredLogs = useMemo(() => {
+    const selectedDate = logDate ? new Date(`${logDate}T00:00:00`) : null;
+    return logs.filter((log) => {
+      if (logFilterType && log.type !== logFilterType) return false;
+      if (logDateMode === "all" || !selectedDate || Number.isNaN(selectedDate.getTime())) return true;
+      const created = new Date(log.createdAt);
+      if (Number.isNaN(created.getTime())) return false;
+      const start = new Date(selectedDate);
+      const end = new Date(selectedDate);
+      if (logDateMode === "day") {
+        end.setDate(end.getDate() + 1);
+      } else if (logDateMode === "week") {
+        const day = start.getDay();
+        start.setDate(start.getDate() - day);
+        end.setTime(start.getTime());
+        end.setDate(end.getDate() + 7);
+      } else if (logDateMode === "month") {
+        start.setDate(1);
+        end.setTime(start.getTime());
+        end.setMonth(end.getMonth() + 1);
+      }
+      return created >= start && created < end;
+    });
+  }, [logs, logDate, logDateMode, logFilterType]);
 
   function startEditLog(log) {
     setEditingLogId(log.id);
@@ -391,12 +422,55 @@ export default function TeacherChildren() {
               </div>
             ) : null}
 
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+              <label className="block">
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Activity Type</div>
+                <select
+                  value={logFilterType}
+                  onChange={(e) => setLogFilterType(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                >
+                  <option value="">All types</option>
+                  {ACTIVITY_TYPES.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Date Filter</div>
+                <select
+                  value={logDateMode}
+                  onChange={(e) => setLogDateMode(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                >
+                  <option value="all">All dates</option>
+                  <option value="day">Day</option>
+                  <option value="week">Week</option>
+                  <option value="month">Month</option>
+                </select>
+              </label>
+              <label className="block">
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Date</div>
+                <input
+                  type="date"
+                  value={logDate}
+                  onChange={(e) => setLogDate(e.target.value)}
+                  disabled={logDateMode === "all"}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm disabled:opacity-50"
+                />
+              </label>
+            </div>
+
             <div className="mt-4">
               {logsLoading ? (
                 <div className="text-sm text-gray-600">Loading logs…</div>
               ) : logs.length === 0 ? (
                 <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
                   No logs found for this child.
+                </div>
+              ) : filteredLogs.length === 0 ? (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                  No logs match the selected filters.
                 </div>
               ) : (
                 <div className="overflow-hidden rounded-xl border border-gray-200">
@@ -411,7 +485,7 @@ export default function TeacherChildren() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {logs.map((log) => {
+                      {filteredLogs.map((log) => {
                         const isEditing = editingLogId === log.id;
                         const isSaving = savingLogId === log.id;
                         const isDeleting = deletingLogId === log.id;

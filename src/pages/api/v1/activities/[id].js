@@ -59,11 +59,22 @@ export default async function handler(req, res) {
       if (!hasClassAccess) return res.status(403).json({ error: "Forbidden" });
     }
 
-    const { type, notes, details } = req.body || {};
+    const { type, notes, details, createdAt } = req.body || {};
     const data = {};
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "type")) data.type = type;
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "notes")) data.notes = notes;
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "details")) data.details = details;
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "createdAt")) {
+      if (session.user.role !== "ADMIN") {
+        return res.status(403).json({ error: "Only admins can change activity dates" });
+      }
+      const parsed = createdAt ? new Date(createdAt) : null;
+      if (!parsed || Number.isNaN(parsed.getTime())) {
+        return res.status(400).json({ error: "Invalid activity time" });
+      }
+      data.createdAt = parsed;
+      data.isBackdated = parsed.toDateString() !== new Date().toDateString();
+    }
 
     if (!Object.keys(data).length) {
       return res.status(400).json({ error: "No changes submitted" });

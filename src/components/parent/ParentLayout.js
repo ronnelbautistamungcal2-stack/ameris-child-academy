@@ -3,7 +3,7 @@ import AppShell from "@/components/shell/AppShell";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import { PARENT_NAV_ITEMS } from "@/components/parent/parentNav";
 import { apiJson } from "@/lib/api";
-import { useUserSocket, useNotifications } from "@/hooks/useSocket";
+import { useNewMessages, useUserSocket } from "@/hooks/useSocket";
 
 export default function ParentLayout({ title, children }) {
   const { session, status, allowed } = useRequireRole(["PARENT"], "/dashboard");
@@ -11,20 +11,28 @@ export default function ParentLayout({ title, children }) {
   const userId = session?.user?.id;
   const socket = useUserSocket(userId);
 
-  // Fetch unread count on mount
-  useEffect(() => {
+  const refreshUnreadCount = useCallback(async () => {
     if (!userId) return;
-    apiJson("/api/v1/notifications?limit=1")
-      .then((data) => setUnreadCount(data.unreadCount || 0))
-      .catch(() => {});
+    const threads = await apiJson("/api/v1/messages/threads");
+    const totalUnread = Array.isArray(threads)
+      ? threads.reduce((sum, thread) => sum + (thread.unreadCount || 0), 0)
+      : 0;
+    setUnreadCount(totalUnread);
   }, [userId]);
 
-  // Update count on real-time notifications
-  useNotifications(
+  useEffect(() => {
+    refreshUnreadCount().catch(() => {});
+  }, [refreshUnreadCount]);
+
+  useNewMessages(
     socket,
-    useCallback((notification) => {
-      setUnreadCount((prev) => prev + 1);
-    }, []),
+    useCallback(
+      (message) => {
+        if (message?.senderId === userId) return;
+        refreshUnreadCount().catch(() => {});
+      },
+      [refreshUnreadCount, userId],
+    ),
   );
 
   // Inject badge into Messages nav item

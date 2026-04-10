@@ -7,6 +7,7 @@ import {
   ParentSurface,
 } from "@/components/parent/ParentUI";
 import ProgressEntryTimeline from "@/components/progression/ProgressEntryTimeline";
+import { useProgressUpdates } from "@/hooks/useSocket";
 import { apiJson } from "@/lib/api";
 import { ageInMonths, formatAge } from "@/lib/ageUtils";
 import { buildParentMessageComposeHref } from "@/lib/parentSupport";
@@ -278,6 +279,17 @@ export default function ParentProgress() {
   const selectedChild = useMemo(
     () => children.find((child) => child.id === selectedChildId) || null,
     [children, selectedChildId],
+  );
+
+  useProgressUpdates(
+    selectedChild?.centerId,
+    useCallback(
+      (updatedProgress) => {
+        if (!selectedChildId || updatedProgress?.childId !== selectedChildId) return;
+        loadChildRecords(selectedChildId, { keepExisting: true }).catch(() => null);
+      },
+      [loadChildRecords, selectedChildId],
+    ),
   );
 
   const currentView = useMemo(

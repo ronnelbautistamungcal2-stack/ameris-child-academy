@@ -129,6 +129,10 @@ export default function AdminReports() {
     })();
   }, [centerId]);
 
+  function printActiveReport() {
+    window.print();
+  }
+
   return (
     <AdminLayout title="Reports & Analytics">
       <div className="space-y-4">
@@ -141,6 +145,13 @@ export default function AdminReports() {
                 Charts, behavior tracking, teacher performance, and custom queries.
               </p>
             </div>
+            <button
+              type="button"
+              onClick={printActiveReport}
+              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-800 shadow-sm hover:bg-gray-50"
+            >
+              Print Report
+            </button>
           </div>
 
           {/* Filters row */}

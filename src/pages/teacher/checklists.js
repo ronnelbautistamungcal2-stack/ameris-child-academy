@@ -4,6 +4,24 @@ import WeeklyLessonPlanner from "@/components/planning/WeeklyLessonPlanner";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
+function formatTaskTime(value) {
+  if (!value) return "";
+  const [hour, minute] = String(value).split(":");
+  const date = new Date();
+  date.setHours(Number(hour), Number(minute || 0), 0, 0);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+function sortByTaskTime(items) {
+  return (Array.isArray(items) ? items : []).slice().sort((a, b) => {
+    const at = a.taskTime || "99:99";
+    const bt = b.taskTime || "99:99";
+    if (at !== bt) return at.localeCompare(bt);
+    return Number(a.sortOrder || 0) - Number(b.sortOrder || 0);
+  });
+}
+
 export default function TeacherChecklists() {
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
@@ -435,7 +453,7 @@ function TaskChecklistTracker({ centerId, children }) {
         <div className="space-y-3">
           {checklists.map((cl) => {
             const isExpanded = expandedId === cl.id;
-            const tasks = cl.tasks || [];
+            const tasks = sortByTaskTime(cl.tasks);
             const completedCount = trackingChildId
               ? tasks.filter((t) => completionByTaskId.get(t.id)?.completedAt).length
               : 0;
@@ -488,6 +506,11 @@ function TaskChecklistTracker({ centerId, children }) {
                         {tasks.map((task) => (
                           <div key={task.id} className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
                             <div className="min-w-0 flex-1">
+                              {task.taskTime ? (
+                                <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-sky-600">
+                                  {formatTaskTime(task.taskTime)}
+                                </div>
+                              ) : null}
                               <div className="text-sm font-semibold text-gray-900">{task.title}</div>
                               <div className="mt-1 flex flex-wrap gap-2">
                                 {task.policyLink && (
@@ -526,6 +549,11 @@ function TaskChecklistTracker({ centerId, children }) {
                                 className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
                               />
                               <div className="min-w-0 flex-1">
+                                {task.taskTime ? (
+                                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-sky-600">
+                                    {formatTaskTime(task.taskTime)}
+                                  </div>
+                                ) : null}
                                 <div className={["text-sm font-semibold", isDone ? "text-emerald-800 line-through" : "text-gray-900"].join(" ")}>
                                   {task.title}
                                 </div>
@@ -672,7 +700,7 @@ function TeacherDailyChecklist({ centerId }) {
         </div>
       ) : (
         checklists.map((cl) => {
-          const items = cl.items || [];
+          const items = sortByTaskTime(cl.items);
           const done = items.filter((it) => (it.completions || []).length > 0).length;
           const allDone = done === items.length && items.length > 0;
 
@@ -718,6 +746,11 @@ function TeacherDailyChecklist({ centerId }) {
                           )}
                         </button>
                         <div className="min-w-0 flex-1">
+                          {item.taskTime ? (
+                            <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-sky-600">
+                              {formatTaskTime(item.taskTime)}
+                            </div>
+                          ) : null}
                           <div className={`text-sm font-medium ${isDone ? "text-gray-400 line-through" : "text-gray-900"}`}>
                             {item.title}
                           </div>

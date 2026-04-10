@@ -10,7 +10,12 @@ export default async function handler(req, res) {
 
   if (req.method === "GET") {
     const teachers = await prisma.user.findMany({
-      where: { role: "TEACHER" },
+      where: {
+        OR: [
+          { role: "TEACHER" },
+          { roles: { has: "TEACHER" } },
+        ],
+      },
       orderBy: { createdAt: "desc" },
       include: {
         centers: { include: { center: true } },
@@ -23,4 +28,3 @@ export default async function handler(req, res) {
   res.setHeader("Allow", ["GET"]);
   res.status(405).end();
 }
-

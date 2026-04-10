@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { userRoles } from "@/lib/roles";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -12,7 +13,7 @@ export default async function handler(req, res) {
 
   const teacher = await prisma.user.findUnique({ where: { id } });
   if (!teacher) return res.status(404).json({ error: "Teacher not found" });
-  if (teacher.role !== "TEACHER") {
+  if (!userRoles(teacher).includes("TEACHER")) {
     return res.status(400).json({ error: "User is not a teacher" });
   }
 
@@ -86,4 +87,3 @@ export default async function handler(req, res) {
   res.setHeader("Allow", ["PUT"]);
   res.status(405).end();
 }
-

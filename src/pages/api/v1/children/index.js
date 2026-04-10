@@ -18,6 +18,8 @@ function normalizeDocs(value) {
       mimeType: typeof d.mimeType === "string" ? d.mimeType : null,
       size: Number.isFinite(Number(d.size)) ? Number(d.size) : null,
       uploadedAt: d.uploadedAt ? String(d.uploadedAt) : null,
+      expirationDate: d.expirationDate ? String(d.expirationDate) : null,
+      documentType: typeof d.documentType === "string" ? d.documentType : null,
     }))
     .filter((d) => d.url);
 }
@@ -127,6 +129,10 @@ export default async function handler(req, res) {
       allergies,
       healthAssessmentDocuments,
       enrollmentDocuments,
+      iefDocuments,
+      immunizationDocuments,
+      infantDocuments,
+      otherDocuments,
       feedingPlan,
       enrollmentStartDate,
       enrollmentEndDate,
@@ -164,6 +170,10 @@ export default async function handler(req, res) {
             : null,
         healthAssessmentDocuments: normalizeDocs(healthAssessmentDocuments),
         enrollmentDocuments: normalizeDocs(enrollmentDocuments),
+        iefDocuments: normalizeDocs(iefDocuments),
+        immunizationDocuments: normalizeDocs(immunizationDocuments),
+        infantDocuments: normalizeDocs(infantDocuments),
+        otherDocuments: normalizeDocs(otherDocuments),
         feedingPlan: normalizeFeedingPlan(feedingPlan),
         enrollmentStartDate: enrollmentStartDate ? new Date(enrollmentStartDate) : null,
         enrollmentEndDate: enrollmentEndDate ? new Date(enrollmentEndDate) : null,

@@ -1,6 +1,23 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { emitProgressUpdate } from "@/lib/socket";
+import { hasAccessToCenter } from "@/lib/auth";
+import { teacherCanAccessClass } from "@/lib/teacherScope";
+
+async function canAccessProgress(user, progress) {
+  if (!user || !progress?.child) return false;
+  if (user.role === "ADMIN") return true;
+  if (user.role === "PARENT") return progress.child.parentId === user.id;
+
+  const hasCenterAccess = await hasAccessToCenter(user.id, progress.child.centerId);
+  if (!hasCenterAccess) return false;
+
+  if (user.role === "TEACHER") {
+    return teacherCanAccessClass(user.id, progress.child.classRoomId);
+  }
+
+  return user.role === "COACH";
+}
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -24,6 +41,9 @@ export default async function handler(req, res) {
     });
 
     if (!progress) return res.status(404).json({ error: "Progress not found" });
+    if (!(await canAccessProgress(session.user, progress))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     return res.status(200).json(progress);
   }
 
@@ -33,6 +53,18 @@ export default async function handler(req, res) {
     }
 
     const { status, achievedAt } = req.body;
+
+    const existing = await prisma.progress.findUnique({
+      where: { id },
+      include: {
+        child: true,
+        lesson: true,
+      },
+    });
+    if (!existing) return res.status(404).json({ error: "Progress not found" });
+    if (!(await canAccessProgress(session.user, existing))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
 
     const progress = await prisma.progress.update({
       where: { id },
@@ -87,6 +119,12 @@ export default async function handler(req, res) {
         .status(403)
         .json({ error: "Only admins can delete progress records" });
     }
+
+    const progress = await prisma.progress.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!progress) return res.status(404).json({ error: "Progress not found" });
 
     await prisma.progress.delete({ where: { id } });
     return res.status(204).end();

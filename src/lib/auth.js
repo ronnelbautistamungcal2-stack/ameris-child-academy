@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth-options";
+import { hasAnyRole } from "@/lib/roles";
 
 /**
  * Get session on server-side with full user context.
@@ -18,7 +19,7 @@ export async function withAuth(handler, requiredRole = null) {
     if (!session) return res.status(401).json({ error: "Unauthorized" });
 
     const user = session.user;
-    if (requiredRole && user.role !== requiredRole && user.role !== "ADMIN") {
+    if (requiredRole && !hasAnyRole(user, [requiredRole, "ADMIN"])) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
@@ -37,6 +38,6 @@ export async function hasAccessToCenter(userId, centerId) {
     include: { centers: true },
   });
   if (!user) return false;
-  if (user.role === "ADMIN") return true;
+  if (hasAnyRole(user, ["ADMIN"])) return true;
   return (user.centers || []).some((c) => c.centerId === centerId);
 }

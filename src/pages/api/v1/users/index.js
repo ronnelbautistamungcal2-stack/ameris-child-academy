@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { hasEmployeeRole, normalizeRoles, primaryRoleFromRoles, userRoles } from "@/lib/roles";
 
 const STAFF_ROLES = ["ADMIN", "TEACHER", "COACH"];
 
@@ -14,6 +15,7 @@ function parseOptionalDate(value) {
 function sanitizeUser(user) {
   if (!user) return user;
   const { password, ...safeUser } = user;
+  safeUser.roles = userRoles(safeUser);
   return safeUser;
 }
 
@@ -44,7 +46,10 @@ export default async function handler(req, res) {
       where.centers = { some: { centerId: String(centerId) } };
     }
     if (roleFilter.length) {
-      where.role = { in: roleFilter };
+      where.OR = [
+        { role: { in: roleFilter } },
+        { roles: { hasSome: roleFilter } },
+      ];
     }
 
     const users = await prisma.user.findMany({
@@ -57,10 +62,18 @@ export default async function handler(req, res) {
 
   if (req.method === "POST") {
     // Create new user
-    const { email, name, password, role, centerId, dob, hireDate, aboutMe, pictureUrl } = req.body;
+    const { email, name, password, role, roles, centerId, dob, hireDate, aboutMe, pictureUrl } = req.body;
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password required" });
     }
+    const assignedRoles = normalizeRoles(roles || role, role || "PARENT");
+    const primaryRole = primaryRoleFromRoles(assignedRoles, "PARENT");
+    const centerRole = assignedRoles.includes("TEACHER")
+      ? "TEACHER"
+      : assignedRoles.includes("COACH")
+        ? "COACH"
+        : primaryRole;
+    const isEmployee = hasEmployeeRole(assignedRoles);
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing)
@@ -72,16 +85,17 @@ export default async function handler(req, res) {
         email,
         name,
         password: passwordHash,
-        dob: parseOptionalDate(dob),
-        hireDate: parseOptionalDate(hireDate),
-        aboutMe: aboutMe ? String(aboutMe).slice(0, 5000) : null,
-        pictureUrl: pictureUrl ? String(pictureUrl).slice(0, 2000) : null,
-        role: role || "PARENT",
+        dob: isEmployee ? parseOptionalDate(dob) : null,
+        hireDate: isEmployee ? parseOptionalDate(hireDate) : null,
+        aboutMe: isEmployee && aboutMe ? String(aboutMe).slice(0, 5000) : null,
+        pictureUrl: isEmployee && pictureUrl ? String(pictureUrl).slice(0, 2000) : null,
+        role: primaryRole,
+        roles: assignedRoles,
         centers: centerId
           ? {
               create: {
                 center: { connect: { id: centerId } },
-                role: role || "PARENT",
+                role: centerRole,
               },
             }
           : undefined,

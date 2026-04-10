@@ -382,6 +382,11 @@ function CategoriesTab({ centerId }) {
 
 /* ── Lessons & Goals Tab ─────────────────────────────── */
 
+function lessonCategoryLabel(category) {
+  if (!category) return "Uncategorized";
+  return category.ageRange ? `${category.name} (${category.ageRange})` : category.name;
+}
+
 function LessonsTab({ centerId }) {
   const [lessons, setLessons] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -393,6 +398,7 @@ function LessonsTab({ centerId }) {
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState({});
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [ageFilter, setAgeFilter] = useState("");
   const [query, setQuery] = useState("");
 
   async function load() {
@@ -419,10 +425,19 @@ function LessonsTab({ centerId }) {
     const q = query.trim().toLowerCase();
     return lessons.filter((l) => {
       if (categoryFilter && (l.category?.id || "") !== categoryFilter) return false;
+      if (ageFilter && (l.category?.ageRange || "") !== ageFilter) return false;
       if (!q) return true;
-      return (l.title || "").toLowerCase().includes(q) || (l.category?.name || "").toLowerCase().includes(q);
+      return (
+        (l.title || "").toLowerCase().includes(q) ||
+        (l.category?.name || "").toLowerCase().includes(q) ||
+        (l.category?.ageRange || "").toLowerCase().includes(q)
+      );
     });
-  }, [lessons, categoryFilter, query]);
+  }, [lessons, ageFilter, categoryFilter, query]);
+
+  const ageOptions = useMemo(() => {
+    return Array.from(new Set(categories.map((cat) => cat.ageRange || "").filter(Boolean))).sort();
+  }, [categories]);
 
   function openCreate() {
     setEditing("new");
@@ -565,7 +580,7 @@ function LessonsTab({ centerId }) {
                 <FormField label="Category">
                   <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
                     <option value="">None</option>
-                    {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {categories.map((c) => <option key={c.id} value={c.id}>{lessonCategoryLabel(c)}</option>)}
                   </select>
                 </FormField>
                 <FormField label="Linked Policy">
@@ -623,7 +638,16 @@ function LessonsTab({ centerId }) {
             <div className="relative md:w-56">
               <select className="w-full appearance-none rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 pr-10 text-sm transition focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
                 <option value="">All categories</option>
-                {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {categories.map((c) => <option key={c.id} value={c.id}>{lessonCategoryLabel(c)}</option>)}
+              </select>
+              <svg className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+            <div className="relative md:w-48">
+              <select className="w-full appearance-none rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 pr-10 text-sm transition focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100" value={ageFilter} onChange={(e) => setAgeFilter(e.target.value)}>
+                <option value="">All ages</option>
+                {ageOptions.map((age) => <option key={age} value={age}>{age}</option>)}
               </select>
               <svg className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -637,9 +661,9 @@ function LessonsTab({ centerId }) {
           ) : filtered.length === 0 ? (
             <EmptyState
               icon={<svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>}
-              title={query || categoryFilter ? "No lessons match your filters" : "No lessons yet"}
-              description={query || categoryFilter ? "Try adjusting your search or category filter" : "Create your first lesson to build your curriculum"}
-              action={!query && !categoryFilter ? <button type="button" className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700" onClick={openCreate}>Create First Lesson</button> : null}
+              title={query || categoryFilter || ageFilter ? "No lessons match your filters" : "No lessons yet"}
+              description={query || categoryFilter || ageFilter ? "Try adjusting your search, category, or age filter" : "Create your first lesson to build your curriculum"}
+              action={!query && !categoryFilter && !ageFilter ? <button type="button" className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700" onClick={openCreate}>Create First Lesson</button> : null}
             />
           ) : (
             <div className="space-y-3">
@@ -660,6 +684,11 @@ function LessonsTab({ centerId }) {
                           <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700">
                             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
                             {lesson.category.name}
+                          </span>
+                        )}
+                        {lesson.category?.ageRange && (
+                          <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-semibold text-gray-700">
+                            {lesson.category.ageRange}
                           </span>
                         )}
                         {lesson.policyDocument && (

@@ -1,6 +1,7 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
+import { userRoles } from "@/lib/roles";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
@@ -62,7 +63,7 @@ export default function AdminTeacherDetail() {
       setError("");
       try {
         const user = await apiJson(`/api/v1/users/${encodeURIComponent(teacherId)}`);
-        if (!user || user.role !== "TEACHER") {
+        if (!user || !userRoles(user).includes("TEACHER")) {
           setError("User is not a teacher or was not found.");
           setTeacher(null);
           setLoading(false);

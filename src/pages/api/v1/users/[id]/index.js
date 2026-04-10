@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { hasEmployeeRole, normalizeRoles, primaryRoleFromRoles, userRoles } from "@/lib/roles";
 
 function parseDateOrNull(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -12,6 +13,7 @@ function parseDateOrNull(value) {
 function sanitizeUser(user) {
   if (!user) return user;
   const { password, ...safeUser } = user;
+  safeUser.roles = userRoles(safeUser);
   return safeUser;
 }
 
@@ -43,31 +45,43 @@ export default async function handler(req, res) {
     }
 
     const body = req.body || {};
-    const { name, role, dob, hireDate, aboutMe, pictureUrl, password } = body;
+    const { name, role, roles, dob, hireDate, aboutMe, pictureUrl, password } = body;
     const updateData = {};
+    const assignedRoles = "roles" in body || "role" in body
+      ? normalizeRoles(roles || role, role || "PARENT")
+      : null;
+    const isEmployee = assignedRoles ? hasEmployeeRole(assignedRoles) : true;
 
     if ("name" in body) updateData.name = name ? String(name) : null;
-    if ("role" in body && session.user.role === "ADMIN" && role)
-      updateData.role = role;
+    if (assignedRoles && session.user.role === "ADMIN") {
+      updateData.roles = assignedRoles;
+      updateData.role = primaryRoleFromRoles(assignedRoles, "PARENT");
+      if (!hasEmployeeRole(assignedRoles)) {
+        updateData.dob = null;
+        updateData.hireDate = null;
+        updateData.aboutMe = null;
+        updateData.pictureUrl = null;
+      }
+    }
 
     if ("dob" in body) {
       const parsed = parseDateOrNull(dob);
       if (parsed === undefined) return res.status(400).json({ error: "Invalid dob" });
-      updateData.dob = parsed;
+      updateData.dob = isEmployee ? parsed : null;
     }
 
     if ("hireDate" in body) {
       const parsed = parseDateOrNull(hireDate);
       if (parsed === undefined)
         return res.status(400).json({ error: "Invalid hireDate" });
-      updateData.hireDate = parsed;
+      updateData.hireDate = isEmployee ? parsed : null;
     }
 
     if ("aboutMe" in body)
-      updateData.aboutMe = aboutMe ? String(aboutMe).slice(0, 5000) : null;
+      updateData.aboutMe = isEmployee && aboutMe ? String(aboutMe).slice(0, 5000) : null;
 
     if ("pictureUrl" in body)
-      updateData.pictureUrl = pictureUrl ? String(pictureUrl).slice(0, 2000) : null;
+      updateData.pictureUrl = isEmployee && pictureUrl ? String(pictureUrl).slice(0, 2000) : null;
 
     if ("password" in body && password) {
       if (session.user.role !== "ADMIN") {

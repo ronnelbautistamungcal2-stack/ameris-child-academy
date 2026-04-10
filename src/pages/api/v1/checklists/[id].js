@@ -14,7 +14,10 @@ export default async function handler(req, res) {
 
   const checklist = await prisma.taskChecklist.findUnique({
     where: { id },
-    include: { tasks: true, center: true },
+    include: {
+      tasks: { orderBy: [{ taskTime: "asc" }, { createdAt: "asc" }] },
+      center: true,
+    },
   });
   if (!checklist) return res.status(404).json({ error: "Checklist not found" });
 
@@ -31,14 +34,55 @@ export default async function handler(req, res) {
     if (role !== "ADMIN") {
       return res.status(403).json({ error: "Only admins can update checklists" });
     }
-    const { title, description } = req.body || {};
-    const updated = await prisma.taskChecklist.update({
+    const { title, description, tasks } = req.body || {};
+
+    await prisma.$transaction(async (tx) => {
+      await tx.taskChecklist.update({
+        where: { id },
+        data: {
+          title: title ?? undefined,
+          description: description === undefined ? undefined : description || null,
+        },
+      });
+
+      if (Array.isArray(tasks)) {
+        const existing = await tx.task.findMany({
+          where: { checklistId: id },
+          select: { id: true },
+        });
+        const existingIds = new Set(existing.map((task) => task.id));
+        const validTasks = tasks.filter((task) => task && String(task.title || "").trim());
+        const keepIds = new Set(validTasks.filter((task) => task.id && existingIds.has(task.id)).map((task) => task.id));
+        const deleteIds = existing.filter((task) => !keepIds.has(task.id)).map((task) => task.id);
+
+        if (deleteIds.length) {
+          await tx.childTask.deleteMany({ where: { taskId: { in: deleteIds } } });
+          await tx.task.deleteMany({ where: { id: { in: deleteIds } } });
+        }
+
+        for (const task of validTasks) {
+          const data = {
+            title: String(task.title).trim(),
+            policyLink: task.policyLink || null,
+            mediaLink: task.mediaLink || null,
+            taskTime: task.taskTime || null,
+          };
+
+          if (task.id && existingIds.has(task.id)) {
+            await tx.task.update({ where: { id: task.id }, data });
+          } else {
+            await tx.task.create({ data: { ...data, checklistId: id } });
+          }
+        }
+      }
+    });
+
+    const updated = await prisma.taskChecklist.findUnique({
       where: { id },
-      data: {
-        title: title ?? undefined,
-        description: description ?? undefined,
+      include: {
+        tasks: { orderBy: [{ taskTime: "asc" }, { createdAt: "asc" }] },
+        center: true,
       },
-      include: { tasks: true, center: true },
     });
     return res.status(200).json(updated);
   }

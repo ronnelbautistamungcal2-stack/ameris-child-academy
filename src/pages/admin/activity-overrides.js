@@ -2,7 +2,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useRouter } from "next/router";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { Fragment, useEffect, useMemo, useState, useCallback } from "react";
 
 const TYPES = [
   "DIAPER_CHANGE",
@@ -13,10 +13,12 @@ const TYPES = [
   "ACTIVITY",
   "TASK_CHECKLIST",
   "BEHAVIOR",
+  "INCIDENT",
   "OTHER",
 ];
 
 const TYPE_META = {
+  INCIDENT:      { label: "Incident",      icon: "!", color: "#dc2626" },
   DIAPER_CHANGE: { label: "Diaper Change", icon: "🧷", color: "#8b5cf6" },
   NAP:           { label: "Nap",           icon: "😴", color: "#6366f1" },
   BOTTLE:        { label: "Bottle",        icon: "🍼", color: "#0ea5e9" },
@@ -42,6 +44,14 @@ function relativeTime(dateStr) {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
 }
 
+function toLocalDateTimeInput(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function AdminActivityOverrides() {
   const router = useRouter();
   const [centers, setCenters] = useState([]);
@@ -55,6 +65,7 @@ export default function AdminActivityOverrides() {
   const [activities, setActivities] = useState([]);
   const [type, setType] = useState("MEAL");
   const [notes, setNotes] = useState("");
+  const [detailsText, setDetailsText] = useState("");
   const [createdAt, setCreatedAt] = useState("");
   const [showBackdate, setShowBackdate] = useState(false);
 
@@ -64,6 +75,11 @@ export default function AdminActivityOverrides() {
   const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("");
+  const [editingId, setEditingId] = useState("");
+  const [editType, setEditType] = useState("OTHER");
+  const [editNotes, setEditNotes] = useState("");
+  const [editDetailsText, setEditDetailsText] = useState("");
+  const [editCreatedAt, setEditCreatedAt] = useState("");
 
   async function loadCenters() {
     setLoading(true);
@@ -97,15 +113,18 @@ export default function AdminActivityOverrides() {
     }
   }
 
-  async function loadActivities(id) {
-    if (!id) {
+  async function loadActivities() {
+    if (!centerId && !childId) {
       setActivities([]);
       return;
     }
     setLoading(true);
     setError("");
     try {
-      const list = await apiJson(`/api/v1/activities?childId=${encodeURIComponent(id)}`);
+      const qs = new URLSearchParams();
+      if (childId) qs.set("childId", childId);
+      else if (centerId) qs.set("centerId", centerId);
+      const list = await apiJson(`/api/v1/activities?${qs.toString()}`);
       setActivities(Array.isArray(list) ? list : []);
     } catch (e) {
       setError(e.message || "Failed to load activities");
@@ -125,8 +144,8 @@ export default function AdminActivityOverrides() {
 
   useEffect(() => {
     setSuccess("");
-    loadActivities(childId);
-  }, [childId]);
+    loadActivities();
+  }, [childId, centerId]);
 
   const childLabel = useMemo(() => {
     const ch = children.find((c) => c.id === childId);
@@ -155,17 +174,26 @@ export default function AdminActivityOverrides() {
     setError("");
     setSuccess("");
     try {
-      const payload = { childId, type, notes };
+      let details = null;
+      if (detailsText.trim()) {
+        try {
+          details = JSON.parse(detailsText);
+        } catch {
+          details = { note: detailsText.trim() };
+        }
+      }
+      const payload = { childId, type, notes, details };
       if (createdAt) payload.createdAt = new Date(createdAt).toISOString();
       await apiJson("/api/v1/activities", {
         method: "POST",
         body: JSON.stringify(payload),
       });
       setNotes("");
+      setDetailsText("");
       setCreatedAt("");
       setShowBackdate(false);
       setSuccess(`Activity "${TYPE_META[type]?.label || type}" created for ${childLabel || "child"}.`);
-      await loadActivities(childId);
+      await loadActivities();
     } catch (e2) {
       setError(e2.message || "Failed to create activity");
     } finally {
@@ -179,9 +207,55 @@ export default function AdminActivityOverrides() {
     setSuccess("");
     try {
       await apiJson(`/api/v1/activities/${id}`, { method: "DELETE" });
-      await loadActivities(childId);
+      await loadActivities();
     } catch (e) {
       setError(e.message || "Failed to delete activity");
+    }
+  }
+
+  function startEditActivity(activity) {
+    setEditingId(activity.id);
+    setEditType(activity.type || "OTHER");
+    setEditNotes(activity.notes || "");
+    setEditDetailsText(activity.details ? JSON.stringify(activity.details, null, 2) : "");
+    setEditCreatedAt(toLocalDateTimeInput(activity.createdAt));
+  }
+
+  function cancelEditActivity() {
+    setEditingId("");
+    setEditType("OTHER");
+    setEditNotes("");
+    setEditDetailsText("");
+    setEditCreatedAt("");
+  }
+
+  async function saveActivity(id) {
+    setError("");
+    setSuccess("");
+    try {
+      let details = null;
+      if (editDetailsText.trim()) {
+        try {
+          details = JSON.parse(editDetailsText);
+        } catch {
+          setError("Details must be valid JSON.");
+          return;
+        }
+      }
+      await apiJson(`/api/v1/activities/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          type: editType,
+          notes: editNotes,
+          details,
+          createdAt: editCreatedAt ? new Date(editCreatedAt).toISOString() : undefined,
+        }),
+      });
+      cancelEditActivity();
+      setSuccess("Activity log updated.");
+      await loadActivities();
+    } catch (e) {
+      setError(e.message || "Failed to update activity");
     }
   }
 
@@ -292,6 +366,17 @@ export default function AdminActivityOverrides() {
               </button>
             </div>
 
+            <div style={{ marginTop: 12 }}>
+              <Field label="Details JSON or note (optional)">
+                <textarea
+                  value={detailsText}
+                  onChange={(e) => setDetailsText(e.target.value)}
+                  placeholder='Example: {"time":"09:30","behaviorLevel":"2"}'
+                  style={{ ...inputStyle, minHeight: 70, resize: "vertical" }}
+                />
+              </Field>
+            </div>
+
             {/* Backdate toggle */}
             <div style={{ marginTop: 10 }}>
               {!showBackdate ? (
@@ -370,11 +455,11 @@ export default function AdminActivityOverrides() {
 
         {loading ? (
           <SkeletonTable rows={4} cols={4} />
-        ) : !childId ? (
+        ) : !centerId ? (
           <EmptyState
             icon="👆"
-            title="No child selected"
-            description="Select a center and child above to view and manage their activity logs."
+            title="No center selected"
+            description="Select a center above to view and manage activity logs."
           />
         ) : filteredActivities.length === 0 && activities.length === 0 ? (
           <EmptyState
@@ -394,6 +479,7 @@ export default function AdminActivityOverrides() {
               <thead>
                 <tr>
                   <th style={thStyle}>Type</th>
+                  <th style={thStyle}>Child</th>
                   <th style={thStyle}>When</th>
                   <th style={thStyle}>Notes</th>
                   <th style={{ ...thStyle, width: 90, textAlign: "center" }}>Actions</th>
@@ -403,7 +489,8 @@ export default function AdminActivityOverrides() {
                 {filteredActivities.map((a) => {
                   const meta = TYPE_META[a.type] || TYPE_META.OTHER;
                   return (
-                    <tr key={a.id} style={{ transition: "background 0.15s" }}
+                    <Fragment key={a.id}>
+                    <tr style={{ transition: "background 0.15s" }}
                       onMouseEnter={(e) => e.currentTarget.style.background = "var(--admin-bg-secondary)"}
                       onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
                       <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
@@ -416,6 +503,9 @@ export default function AdminActivityOverrides() {
                           <span style={{ fontSize: 15 }}>{meta.icon}</span>
                           {meta.label}
                         </span>
+                      </td>
+                      <td style={tdStyle}>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{a.child ? `${a.child.firstName || ""} ${a.child.lastName || ""}`.trim() : childLabel || "—"}</div>
                       </td>
                       <td style={tdStyle}>
                         <div style={{ fontSize: 13, fontWeight: 500 }}>{relativeTime(a.createdAt)}</div>
@@ -435,20 +525,52 @@ export default function AdminActivityOverrides() {
                         {a.notes || "No notes"}
                       </td>
                       <td style={{ ...tdStyle, textAlign: "center" }}>
-                        <button
-                          type="button"
-                          onClick={() => deleteActivity(a.id)}
-                          title="Delete this log"
-                          style={deleteIconButton}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.color = "#dc2626"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--admin-text-muted)"; }}
-                        >
-                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                            <path d="M3 4.5h10M6.5 4.5V3a1 1 0 011-1h1a1 1 0 011 1v1.5M5 4.5l.5 8.5h5l.5-8.5M7 7v3.5M9 7v3.5" />
-                          </svg>
-                        </button>
+                        <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
+                          <button type="button" onClick={() => startEditActivity(a)} style={smallActionButton}>Edit</button>
+                          <button
+                            type="button"
+                            onClick={() => deleteActivity(a.id)}
+                            title="Delete this log"
+                            style={deleteIconButton}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.color = "#dc2626"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--admin-text-muted)"; }}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                              <path d="M3 4.5h10M6.5 4.5V3a1 1 0 011-1h1a1 1 0 011 1v1.5M5 4.5l.5 8.5h5l.5-8.5M7 7v3.5M9 7v3.5" />
+                            </svg>
+                          </button>
+                        </div>
                       </td>
                     </tr>
+                    {editingId === a.id && (
+                      <tr>
+                        <td colSpan={5} style={{ ...tdStyle, background: "var(--admin-bg-secondary)" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "180px 220px 1fr", gap: 10, alignItems: "start" }}>
+                            <Field label="Type">
+                              <select value={editType} onChange={(e) => setEditType(e.target.value)} style={inputStyle}>
+                                {TYPES.map((t) => <option key={t} value={t}>{TYPE_META[t]?.label || t}</option>)}
+                              </select>
+                            </Field>
+                            <Field label="Date & Time">
+                              <input type="datetime-local" value={editCreatedAt} onChange={(e) => setEditCreatedAt(e.target.value)} style={inputStyle} />
+                            </Field>
+                            <Field label="Notes">
+                              <input value={editNotes} onChange={(e) => setEditNotes(e.target.value)} style={inputStyle} />
+                            </Field>
+                          </div>
+                          <div style={{ marginTop: 10 }}>
+                            <Field label="Details JSON">
+                              <textarea value={editDetailsText} onChange={(e) => setEditDetailsText(e.target.value)} style={{ ...inputStyle, minHeight: 80, resize: "vertical" }} />
+                            </Field>
+                          </div>
+                          <div style={{ marginTop: 10, display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                            <button type="button" onClick={cancelEditActivity} style={secondaryButton}>Cancel</button>
+                            <button type="button" onClick={() => saveActivity(a.id)} style={primaryButton}>Save Changes</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -603,6 +725,23 @@ const primaryButton = {
   fontSize: 14,
   whiteSpace: "nowrap",
   transition: "background 0.15s, opacity 0.15s",
+};
+
+const secondaryButton = {
+  padding: "9px 14px",
+  background: "var(--admin-bg)",
+  color: "var(--admin-text)",
+  border: "1px solid var(--admin-border)",
+  borderRadius: 8,
+  cursor: "pointer",
+  fontWeight: 700,
+  fontSize: 13,
+};
+
+const smallActionButton = {
+  ...secondaryButton,
+  padding: "6px 10px",
+  fontSize: 12,
 };
 
 const deleteIconButton = {

@@ -1,8 +1,9 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import ActiveGoalsPanel from "@/components/progression/ActiveGoalsPanel";
+import { useProgressUpdates } from "@/hooks/useSocket";
 import { AGE_GROUPS, ageGroupKeyFromBirthDate } from "@/lib/ageUtils";
 import { apiJson } from "@/lib/api";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const STATUSES = ["NOT_STARTED", "IN_PROGRESS", "PASSED", "FAILED", "COMPLETED"];
 
@@ -140,6 +141,25 @@ export default function AdminProgress() {
       }
     })();
   }, [childId]);
+
+  const loadChildProgress = useCallback(async (targetChildId) => {
+    if (!targetChildId) return;
+    const progress = await apiJson(
+      `/api/v1/progress?childId=${encodeURIComponent(targetChildId)}`,
+    );
+    setProgressRows(Array.isArray(progress) ? progress : []);
+  }, []);
+
+  const loadOverviewProgress = useCallback(async (targetCenterId) => {
+    if (!targetCenterId) {
+      setOverviewProgress([]);
+      return;
+    }
+    const allProgress = await apiJson(
+      `/api/v1/progress?centerId=${encodeURIComponent(targetCenterId)}`,
+    );
+    setOverviewProgress(Array.isArray(allProgress) ? allProgress : []);
+  }, []);
 
   const filteredChildren = useMemo(() => {
     let result = children;
@@ -282,8 +302,7 @@ export default function AdminProgress() {
   async function refreshProgress() {
     if (!childId) return;
     try {
-      const p = await apiJson(`/api/v1/progress?childId=${encodeURIComponent(childId)}`);
-      setProgressRows(Array.isArray(p) ? p : []);
+      await loadChildProgress(childId);
     } catch {
       // silent
     }
@@ -297,15 +316,33 @@ export default function AdminProgress() {
     (async () => {
       setOverviewLoading(true);
       try {
-        const allProgress = await apiJson("/api/v1/progress");
-        setOverviewProgress(Array.isArray(allProgress) ? allProgress : []);
+        await loadOverviewProgress(centerId);
       } catch {
         setOverviewProgress([]);
       } finally {
         setOverviewLoading(false);
       }
     })();
-  }, [centerId, childId]);
+  }, [centerId, childId, loadOverviewProgress]);
+
+  useProgressUpdates(
+    centerId,
+    useCallback(
+      (updatedProgress) => {
+        if (!updatedProgress || !centerId) return;
+
+        if (childId) {
+          if (updatedProgress.childId === childId) {
+            loadChildProgress(childId).catch(() => null);
+          }
+          return;
+        }
+
+        loadOverviewProgress(centerId).catch(() => null);
+      },
+      [centerId, childId, loadChildProgress, loadOverviewProgress],
+    ),
+  );
 
   const classById = useMemo(() => {
     const map = new Map();

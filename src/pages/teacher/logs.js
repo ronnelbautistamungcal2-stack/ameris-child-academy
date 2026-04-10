@@ -13,6 +13,7 @@ const TYPES = [
   "ACTIVITY",
   "TASK_CHECKLIST",
   "BEHAVIOR",
+  "INCIDENT",
   "OTHER",
 ];
 
@@ -25,6 +26,7 @@ const TYPE_LABELS = {
   ACTIVITY: "Activity",
   TASK_CHECKLIST: "Task Checklist",
   BEHAVIOR: "Behavior",
+  INCIDENT: "Incident",
   OTHER: "Other",
 };
 
@@ -52,6 +54,22 @@ const BOTTLE_PORTION_OPTIONS = [
   { value: "NONE", label: "None" },
 ];
 
+const BEHAVIOR_TYPE_OPTIONS = [
+  { value: "PHYSICAL_VIOLENCE", label: "Physical violence" },
+  { value: "VIRTUE", label: "Virtue" },
+  { value: "RESPECT", label: "Respect" },
+  { value: "OBEDIENCE", label: "Obedience" },
+  { value: "OTHER", label: "Other" },
+];
+
+const BEHAVIOR_LEVEL_OPTIONS = ["1", "2", "3", "4"];
+
+const DIAPER_TYPE_OPTIONS = [
+  { value: "BM", label: "BM" },
+  { value: "W", label: "W" },
+  { value: "D", label: "D" },
+];
+
 function toTimeInputValue(date) {
   const value = date instanceof Date ? date : new Date(date || Date.now());
   if (Number.isNaN(value.getTime())) return "";
@@ -76,11 +94,14 @@ function buildCreatedAtForToday(timeValue) {
 function defaultActivityFields(nextType) {
   return {
     activityTime: toTimeInputValue(new Date()),
-    napStartTime: nextType === "NAP" ? toTimeInputValue(new Date()) : "",
+    napStartTime: "",
     napEndTime: "",
     mealType: nextType === "SNACK" ? "AM_SNACK" : "BREAKFAST",
     quantity: "ALL",
     bottleQuantity: "FULL",
+    diaperType: "W",
+    behaviorType: "OTHER",
+    behaviorLevel: "1",
   };
 }
 
@@ -425,8 +446,11 @@ export default function TeacherLogs() {
       return {
         ...defaults,
         activityTime: current.activityTime || defaults.activityTime,
-        napStartTime: nextType === "NAP" ? current.napStartTime || defaults.napStartTime : "",
+        napStartTime: nextType === "NAP" ? current.napStartTime : "",
         napEndTime: nextType === "NAP" ? current.napEndTime : "",
+        diaperType: nextType === "DIAPER_CHANGE" ? current.diaperType || defaults.diaperType : defaults.diaperType,
+        behaviorType: ["BEHAVIOR", "INCIDENT"].includes(nextType) ? current.behaviorType || defaults.behaviorType : defaults.behaviorType,
+        behaviorLevel: ["BEHAVIOR", "INCIDENT"].includes(nextType) ? current.behaviorLevel || defaults.behaviorLevel : defaults.behaviorLevel,
       };
     });
   }
@@ -711,7 +735,7 @@ export default function TeacherLogs() {
     if (payloadType === "NAP") {
       details = {
         ...(details || {}),
-        time: activityFields.napStartTime || timeValue,
+        time: activityFields.napStartTime || activityFields.napEndTime || timeValue,
         startTime: activityFields.napStartTime || "",
         endTime: activityFields.napEndTime || "",
       };
@@ -733,6 +757,19 @@ export default function TeacherLogs() {
         time: timeValue,
         quantity: activityFields.bottleQuantity || "FULL",
       };
+    } else if (payloadType === "DIAPER_CHANGE") {
+      details = {
+        ...(details || {}),
+        time: timeValue,
+        diaperType: activityFields.diaperType || "W",
+      };
+    } else if (["BEHAVIOR", "INCIDENT"].includes(payloadType)) {
+      details = {
+        ...(details || {}),
+        time: timeValue,
+        behaviorType: activityFields.behaviorType || "OTHER",
+        behaviorLevel: activityFields.behaviorLevel || "1",
+      };
     } else {
       details = {
         ...(details || {}),
@@ -746,7 +783,7 @@ export default function TeacherLogs() {
 
     const createdAtSource =
       payloadType === "NAP"
-        ? activityFields.napStartTime || activityFields.activityTime
+        ? activityFields.napStartTime || activityFields.napEndTime || activityFields.activityTime
         : activityFields.activityTime;
     const createdAt = buildCreatedAtForToday(createdAtSource);
 
@@ -1194,7 +1231,7 @@ export default function TeacherLogs() {
                   ))}
                 </select>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {["MEAL", "NAP", "DIAPER_CHANGE", "ACTIVITY", "BEHAVIOR", "OTHER"].map((t) => (
+                  {["MEAL", "NAP", "DIAPER_CHANGE", "ACTIVITY", "BEHAVIOR", "INCIDENT", "OTHER"].map((t) => (
                     <button
                       key={t}
                       type="button"
@@ -1315,14 +1352,74 @@ export default function TeacherLogs() {
                       </select>
                     </label>
                   ) : null}
+
+                  {type === "DIAPER_CHANGE" ? (
+                    <label className="block">
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Type
+                      </div>
+                      <select
+                        value={activityFields.diaperType}
+                        onChange={(e) => updateActivityField("diaperType", e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      >
+                        {DIAPER_TYPE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+
+                  {["BEHAVIOR", "INCIDENT"].includes(type) ? (
+                    <>
+                      <label className="block">
+                        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          Type
+                        </div>
+                        <select
+                          value={activityFields.behaviorType}
+                          onChange={(e) => updateActivityField("behaviorType", e.target.value)}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        >
+                          {BEHAVIOR_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block">
+                        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          Level
+                        </div>
+                        <select
+                          value={activityFields.behaviorLevel}
+                          onChange={(e) => updateActivityField("behaviorLevel", e.target.value)}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        >
+                          {BEHAVIOR_LEVEL_OPTIONS.map((level) => (
+                            <option key={level} value={level}>
+                              Level {level}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </>
+                  ) : null}
                 </div>
                 <div className="mt-3 text-xs text-gray-600">
                   {type === "NAP"
-                    ? "Nap entries capture a start time, end time, and description."
+                    ? "Nap entries can capture a start time, an end time, or both."
                     : ["MEAL", "SNACK"].includes(type)
                       ? "Meal entries capture the time, meal type, quantity, and description."
                       : type === "BOTTLE"
                         ? "Bottle entries capture the time, quantity, and description."
+                        : type === "DIAPER_CHANGE"
+                          ? "Diaper entries capture the time, diaper type, and description."
+                          : ["BEHAVIOR", "INCIDENT"].includes(type)
+                            ? "Behavior and incident entries capture type, level, time, and description."
                         : "Other entries capture the time and description."}
                 </div>
               </div>

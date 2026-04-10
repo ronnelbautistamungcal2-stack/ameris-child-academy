@@ -36,6 +36,24 @@ const CATEGORY_TONES = {
   OTHER: "slate",
 };
 
+function formatTaskTime(value) {
+  if (!value) return "";
+  const [hour, minute] = String(value).split(":");
+  const date = new Date();
+  date.setHours(Number(hour), Number(minute || 0), 0, 0);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+function sortByTaskTime(items) {
+  return (Array.isArray(items) ? items : []).slice().sort((a, b) => {
+    const at = a.taskTime || "99:99";
+    const bt = b.taskTime || "99:99";
+    if (at !== bt) return at.localeCompare(bt);
+    return Number(a.sortOrder || 0) - Number(b.sortOrder || 0);
+  });
+}
+
 export default function CoachChecklists() {
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
@@ -370,7 +388,7 @@ export default function CoachChecklists() {
 function ChecklistCard({ checklist, onToggle, completing }) {
   const [expanded, setExpanded] = useState(true);
 
-  const items = checklist.items || [];
+  const items = sortByTaskTime(checklist.items);
   const completedCount = items.filter((item) => (item.completions || []).length > 0).length;
   const percent = items.length > 0 ? Math.round((completedCount / items.length) * 100) : 0;
   const allDone = items.length > 0 && completedCount === items.length;
@@ -481,6 +499,11 @@ function ChecklistCard({ checklist, onToggle, completing }) {
                     </button>
 
                     <div className="min-w-0 flex-1">
+                      {item.taskTime ? (
+                        <div className="mb-1 text-xs font-black uppercase tracking-[0.12em] text-sky-700 dark:text-sky-300">
+                          {formatTaskTime(item.taskTime)}
+                        </div>
+                      ) : null}
                       <div className={`text-sm font-bold ${done ? "text-emerald-800 dark:text-emerald-200" : "text-gray-900 dark:text-gray-100"}`}>
                         {item.title}
                       </div>

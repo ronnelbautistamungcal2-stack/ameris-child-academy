@@ -1,7 +1,8 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { emitNewMessage, emitNotification } from "@/lib/socket";
+import { emitNewMessage } from "@/lib/socket";
 import { assertSubscriptionFeature } from "@/lib/subscriptions";
+import { notifyMessageRecipients } from "@/lib/messaging";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -87,58 +88,14 @@ export default async function handler(req, res) {
   const participantIds = thread.participants.map((p) => p.userId);
   emitNewMessage(participantIds, { ...message, threadId });
 
-  // Create notifications for non-sender participants (respecting preferences)
   const otherParticipantIds = participantIds.filter((id) => id !== user.id);
   if (otherParticipantIds.length > 0) {
-    const [prefs, recipientUsers] = await Promise.all([
-      prisma.notificationPreference.findMany({
-        where: { userId: { in: otherParticipantIds }, type: "MESSAGE" },
-      }),
-      prisma.user.findMany({
-        where: { id: { in: otherParticipantIds } },
-        select: { id: true, role: true },
-      }),
-    ]);
-    const disabledSet = new Set(prefs.filter((p) => !p.enabled).map((p) => p.userId));
-    const roleMap = Object.fromEntries(recipientUsers.map((u) => [u.id, u.role]));
-
-    const senderName = user.name || user.email;
-    const preview = String(body).slice(0, 100);
-
-    const rolePaths = {
-      ADMIN: "/admin/messages",
-      TEACHER: "/teacher/messages",
-      PARENT: "/parent/messages",
-      COACH: "/coach/messages",
-    };
-
-    const notificationsToCreate = otherParticipantIds
-      .filter((id) => !disabledSet.has(id))
-      .map((recipientId) => {
-        const basePath = rolePaths[roleMap[recipientId]] || "/parent/messages";
-        return {
-          recipientId,
-          type: "MESSAGE",
-          title: `New message from ${senderName}`,
-          body: preview,
-          link: `${basePath}?threadId=${threadId}`,
-          metadata: { threadId, senderId: user.id },
-        };
-      });
-
-    if (notificationsToCreate.length > 0) {
-      const created = await prisma.notification.createManyAndReturn({
-        data: notificationsToCreate,
-      }).catch(() => {
-        // Fallback: createMany without return for older Prisma
-        return prisma.notification.createMany({ data: notificationsToCreate }).then(() => notificationsToCreate);
-      });
-
-      // Emit real-time notification to each recipient
-      for (const n of Array.isArray(created) ? created : notificationsToCreate) {
-        emitNotification(n.recipientId, n);
-      }
-    }
+    await notifyMessageRecipients({
+      sender: user,
+      recipientIds: otherParticipantIds,
+      threadId,
+      body,
+    });
   }
 
   return res.status(201).json(message);

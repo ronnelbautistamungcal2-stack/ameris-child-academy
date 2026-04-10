@@ -9,12 +9,17 @@ function normalizeSpaces(value) {
     .replace(/\s+/g, " ");
 }
 
-async function getOrCreateCategory({ centerId, name }) {
+async function getOrCreateCategory({ centerId, name, ageRange }) {
   const canonical = canonicalizeLessonCategoryName(name);
   if (!canonical) return null;
+  const normalizedAgeRange = normalizeSpaces(ageRange) || null;
 
   const matches = await prisma.lessonCategory.findMany({
-    where: { centerId, name: { equals: canonical, mode: "insensitive" } },
+    where: {
+      centerId,
+      name: { equals: canonical, mode: "insensitive" },
+      ageRange: normalizedAgeRange,
+    },
     orderBy: { createdAt: "asc" },
   });
   if (matches.length) {
@@ -23,7 +28,7 @@ async function getOrCreateCategory({ centerId, name }) {
   }
 
   return prisma.lessonCategory.create({
-    data: { centerId, name: canonical, kind: "PACKAGE" },
+    data: { centerId, name: canonical, kind: "PACKAGE", ageRange: normalizedAgeRange },
   });
 }
 
@@ -92,7 +97,7 @@ export default async function handler(req, res) {
   if (!center) return res.status(404).json({ error: "Center not found" });
 
   const categoryRecord = category
-    ? await getOrCreateCategory({ centerId, name: category })
+    ? await getOrCreateCategory({ centerId, name: category, ageRange: childAge })
     : null;
 
   const lesson = await getOrCreateLesson({

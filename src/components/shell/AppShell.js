@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import NotificationBell from "@/components/notifications/NotificationBell";
 import { useTheme } from "@/contexts/ThemeContext";
 import AmerisLogo from "@/components/ui/AmerisLogo";
+import { roleHomePath, roleLabel } from "@/lib/roles";
 
 export default function AppShell({
   title,
@@ -21,6 +22,7 @@ export default function AppShell({
   showFooter = false,
 }) {
   const router = useRouter();
+  const { data: session, update } = useSession();
   const { theme, toggleTheme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
   const menuButtonRef = useRef(null);
@@ -47,6 +49,12 @@ export default function AppShell({
     return findInItems(navItems) || "Account Settings";
   }, [navItems]);
   const avatarUrl = typeof userImageUrl === "string" && userImageUrl.trim() ? userImageUrl.trim() : "";
+  const activeRole = session?.user?.role || "";
+  const availableRoles = Array.isArray(session?.user?.roles)
+    ? session.user.roles.filter(Boolean)
+    : activeRole
+      ? [activeRole]
+      : [];
 
   const initials = useMemo(() => {
     const src = (userName || userLabel || "").trim();
@@ -57,6 +65,16 @@ export default function AppShell({
     if (single.includes("@")) return single.slice(0, 2).toUpperCase();
     return single.slice(0, 2).toUpperCase();
   }, [userName, userLabel]);
+
+  const handleRoleSwitch = useCallback(
+    async (nextRole) => {
+      const role = String(nextRole || "").toUpperCase();
+      if (!role || role === activeRole) return;
+      await update({ user: { role } });
+      router.push(roleHomePath(role));
+    },
+    [activeRole, router, update],
+  );
 
   useEffect(() => {
     setMobileOpen(false);
@@ -208,6 +226,23 @@ export default function AppShell({
 
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <NotificationBell userId={userId} />
+                {availableRoles.length > 1 ? (
+                  <label className="hidden items-center gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 md:flex">
+                    <span className="text-gray-400 dark:text-gray-500">Role</span>
+                    <select
+                      value={activeRole}
+                      onChange={(e) => handleRoleSwitch(e.target.value)}
+                      className="border-0 bg-transparent text-xs font-extrabold text-gray-900 outline-none dark:text-gray-100"
+                      aria-label="Switch role"
+                    >
+                      {availableRoles.map((role) => (
+                        <option key={role} value={role}>
+                          {roleLabel(role)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 <button
                   type="button"
                   className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"

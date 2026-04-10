@@ -44,7 +44,7 @@ async function handlePut(req, res, session) {
   const evaluation = await prisma.teacherEvaluation.findUnique({ where: { id } });
   if (!evaluation) return res.status(404).json({ error: "Evaluation not found" });
 
-  const { status, overallScore, categories, strengths, areasForImprovement, goals, notes } = req.body || {};
+  const { status, overallScore, categories, strengths, areasForImprovement, goals, notes, periodStart, periodEnd, period } = req.body || {};
   const data = {};
   if (status !== undefined) data.status = status;
   if (overallScore !== undefined) data.overallScore = overallScore ? parseFloat(overallScore) : null;
@@ -53,6 +53,16 @@ async function handlePut(req, res, session) {
   if (areasForImprovement !== undefined) data.areasForImprovement = areasForImprovement;
   if (goals !== undefined) data.goals = goals;
   if (notes !== undefined) data.notes = notes;
+  if (periodStart !== undefined) data.periodStart = periodStart ? new Date(periodStart) : null;
+  if (periodEnd !== undefined) data.periodEnd = periodEnd ? new Date(periodEnd) : null;
+  if (period !== undefined) data.period = period;
+  if (period === undefined && (periodStart !== undefined || periodEnd !== undefined)) {
+    const start = data.periodStart || evaluation.periodStart;
+    const end = data.periodEnd || evaluation.periodEnd;
+    const startLabel = start ? new Date(start).toISOString().slice(0, 10) : "Open";
+    const endLabel = end ? new Date(end).toISOString().slice(0, 10) : "Open";
+    data.period = `${startLabel} to ${endLabel}`;
+  }
 
   const updated = await prisma.teacherEvaluation.update({
     where: { id },

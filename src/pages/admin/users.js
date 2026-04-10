@@ -1,10 +1,11 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
+import { hasEmployeeRole, ROLE_OPTIONS, userRoles } from "@/lib/roles";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const ROLES = ["ADMIN", "TEACHER", "PARENT", "COACH", "SUBSCRIBER"];
+const ROLES = ROLE_OPTIONS;
 
 const ROLE_CONFIG = {
   ADMIN: { color: "#7c3aed", bg: "#f5f3ff", darkBg: "rgba(124,58,237,0.18)", label: "Admin", icon: "shield" },
@@ -29,7 +30,7 @@ export default function AdminUsers() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("PARENT");
+  const [roles, setRoles] = useState(["PARENT"]);
   const [centerId, setCenterId] = useState("");
   const [dob, setDob] = useState("");
   const [hireDate, setHireDate] = useState("");
@@ -70,7 +71,7 @@ export default function AdminUsers() {
   const [roleTab, setRoleTab] = useState("ALL");
 
   const sorted = useMemo(() => {
-    let filtered = roleTab === "ALL" ? users : users.filter((u) => u.role === roleTab);
+    let filtered = roleTab === "ALL" ? users : users.filter((u) => userRoles(u).includes(roleTab));
     if (search.trim()) {
       const q = search.toLowerCase();
       filtered = filtered.filter(
@@ -93,17 +94,31 @@ export default function AdminUsers() {
   const roleCounts = useMemo(() => {
     const counts = { ALL: users.length };
     for (const u of users) {
-      counts[u.role] = (counts[u.role] || 0) + 1;
+      for (const r of userRoles(u)) {
+        counts[r] = (counts[r] || 0) + 1;
+      }
     }
     return counts;
   }, [users]);
+
+  const employeeProfileNeeded = useMemo(() => hasEmployeeRole(roles), [roles]);
+
+  function toggleRole(roleKey, checked) {
+    setRoles((current) => {
+      const existing = Array.isArray(current) ? current : [];
+      const next = checked
+        ? [...existing, roleKey]
+        : existing.filter((r) => r !== roleKey);
+      return next.length ? next : ["PARENT"];
+    });
+  }
 
   const resetForm = useCallback(() => {
     setEditing(null);
     setName("");
     setEmail("");
     setPassword("");
-    setRole("PARENT");
+    setRoles(["PARENT"]);
     setCenterId("");
     setDob("");
     setHireDate("");
@@ -115,7 +130,7 @@ export default function AdminUsers() {
     setEditing(user);
     setName(user.name || "");
     setEmail(user.email || "");
-    setRole(user.role || "PARENT");
+    setRoles(userRoles(user));
     setPassword("");
     setCenterId("");
     setDob(user.dob ? String(user.dob).slice(0, 10) : "");
@@ -173,12 +188,12 @@ export default function AdminUsers() {
           email,
           name: name || null,
           password,
-          role,
+          roles,
           centerId: centerId || undefined,
-          dob: dob || null,
-          hireDate: hireDate || null,
-          aboutMe: aboutMe || null,
-          pictureUrl: pictureUrl || null,
+          dob: employeeProfileNeeded ? dob || null : null,
+          hireDate: employeeProfileNeeded ? hireDate || null : null,
+          aboutMe: employeeProfileNeeded ? aboutMe || null : null,
+          pictureUrl: employeeProfileNeeded ? pictureUrl || null : null,
         }),
       });
       resetForm();
@@ -202,12 +217,12 @@ export default function AdminUsers() {
         method: "PUT",
         body: JSON.stringify({
           name: name || null,
-          role,
+          roles,
           password: password || undefined,
-          dob: dob || null,
-          hireDate: hireDate || null,
-          aboutMe: aboutMe || null,
-          pictureUrl: pictureUrl || null,
+          dob: employeeProfileNeeded ? dob || null : null,
+          hireDate: employeeProfileNeeded ? hireDate || null : null,
+          aboutMe: employeeProfileNeeded ? aboutMe || null : null,
+          pictureUrl: employeeProfileNeeded ? pictureUrl || null : null,
         }),
       });
       resetForm();
@@ -298,6 +313,30 @@ export default function AdminUsers() {
           >
             {error ? <ErrorBanner message={error} /> : null}
             <form onSubmit={editing ? saveEdit : createUser}>
+              {/* Section: Roles */}
+              <FormSection title="Select Role First">
+                <Field label="Roles">
+                  <div style={rolePickerStyle}>
+                    {ROLES.map((r) => {
+                      const checked = roles.includes(r);
+                      return (
+                        <label key={r} style={{ ...roleCheckStyle, ...(checked ? roleCheckActiveStyle : {}) }}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => toggleRole(r, e.target.checked)}
+                          />
+                          <span>{ROLE_CONFIG[r]?.label || r}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div style={{ marginTop: 6, fontSize: 11, color: "var(--admin-text-muted)" }}>
+                    Users with more than one role can switch roles from the app header.
+                  </div>
+                </Field>
+              </FormSection>
+
               {/* Section: Account */}
               <FormSection title="Account Information">
                 <div style={formGrid}>
@@ -334,7 +373,8 @@ export default function AdminUsers() {
               </FormSection>
 
               {/* Section: Profile */}
-              <FormSection title="Profile Details">
+              {employeeProfileNeeded ? (
+              <FormSection title="Employee Profile Details">
                 <div style={formGrid}>
                   <Field label="Date of Birth">
                     <input
@@ -367,23 +407,17 @@ export default function AdminUsers() {
                   </Field>
                 </div>
               </FormSection>
+              ) : (
+                <FormSection title="Parent Profile">
+                  <div style={helperBoxStyle}>
+                    Parent-only users only need account and assignment details. Employee profile fields are hidden unless an employee role is selected.
+                  </div>
+                </FormSection>
+              )}
 
               {/* Section: Access */}
-              <FormSection title="Access & Assignment">
+              <FormSection title="Center Assignment">
                 <div style={formGrid}>
-                  <Field label="Role">
-                    <select
-                      value={role}
-                      onChange={(e) => setRole(e.target.value)}
-                      style={inputStyle}
-                    >
-                      {ROLES.map((r) => (
-                        <option key={r} value={r}>
-                          {ROLE_CONFIG[r]?.label || r}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
                   <Field label={editing ? "Assign Center (create only)" : "Assign Center"}>
                     <select
                       value={centerId}
@@ -524,7 +558,9 @@ export default function AdminUsers() {
 
 function UserRow({ user, onEdit, onDelete }) {
   const [hovered, setHovered] = useState(false);
-  const rc = ROLE_CONFIG[user.role] || ROLE_CONFIG.SUBSCRIBER;
+  const roles = userRoles(user);
+  const primaryRole = roles[0] || user.role || "SUBSCRIBER";
+  const rc = ROLE_CONFIG[primaryRole] || ROLE_CONFIG.SUBSCRIBER;
   const initials = getInitials(user.name || user.email);
 
   return (
@@ -562,7 +598,7 @@ function UserRow({ user, onEdit, onDelete }) {
           )}
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {user.role === "TEACHER" ? (
+              {roles.includes("TEACHER") ? (
                 <Link href={`/admin/teachers/${encodeURIComponent(user.id)}`} style={teacherLink}>
                   {user.name || "Unnamed"}
                 </Link>
@@ -577,23 +613,31 @@ function UserRow({ user, onEdit, onDelete }) {
         </div>
       </td>
       <td style={tdStyle}>
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 5,
-            padding: "3px 10px",
-            borderRadius: 999,
-            fontSize: 12,
-            fontWeight: 700,
-            color: rc.color,
-            background: rc.bg,
-            border: `1px solid ${rc.color}22`,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {rc.label}
-        </span>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+          {roles.map((role) => {
+            const roleConfig = ROLE_CONFIG[role] || ROLE_CONFIG.SUBSCRIBER;
+            return (
+              <span
+                key={role}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "3px 10px",
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: roleConfig.color,
+                  background: roleConfig.bg,
+                  border: `1px solid ${roleConfig.color}22`,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {roleConfig.label}
+              </span>
+            );
+          })}
+        </div>
       </td>
       <td style={{ ...tdStyle, fontSize: 13, color: "var(--admin-text-muted)" }}>
         {user.createdAt ? new Date(user.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
@@ -975,6 +1019,40 @@ const formGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
   gap: 12,
+};
+
+const rolePickerStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+  gap: 8,
+};
+
+const roleCheckStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "9px 10px",
+  border: "1px solid var(--admin-border)",
+  borderRadius: 8,
+  background: "var(--admin-bg-secondary)",
+  fontSize: 13,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const roleCheckActiveStyle = {
+  borderColor: "#2563eb",
+  background: "#eff6ff",
+  color: "#1d4ed8",
+};
+
+const helperBoxStyle = {
+  border: "1px solid var(--admin-border)",
+  borderRadius: 8,
+  background: "var(--admin-bg-secondary)",
+  color: "var(--admin-text-muted)",
+  padding: 12,
+  fontSize: 13,
 };
 
 const tableStyle = {

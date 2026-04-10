@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
 
-  const { childId, type } = req.query;
+  const { childId, centerId, type, from, to } = req.query;
 
   if (req.method === "GET") {
     // List activity logs for a child
@@ -35,13 +35,34 @@ export default async function handler(req, res) {
       }
     }
 
+    const createdAt = {};
+    if (from) {
+      const fromDate = new Date(from);
+      if (!Number.isNaN(fromDate.getTime())) createdAt.gte = fromDate;
+    }
+    if (to) {
+      const toDate = new Date(to);
+      if (!Number.isNaN(toDate.getTime())) {
+        toDate.setHours(23, 59, 59, 999);
+        createdAt.lte = toDate;
+      }
+    }
+
+    if (centerId && session.user.role !== "ADMIN") {
+      const ok = await hasAccessToCenter(session.user.id, centerId);
+      if (!ok) return res.status(403).json({ error: "Forbidden" });
+    }
+
     const activities = await prisma.activityLog.findMany({
       where: {
         childId: childId || undefined,
         type: type || undefined,
+        createdAt: Object.keys(createdAt).length ? createdAt : undefined,
         child:
           session.user.role === "TEACHER"
             ? teacherChildFilter(session.user.id)
+            : centerId
+              ? { centerId }
             : undefined,
       },
       include: { child: true, recordedBy: true },

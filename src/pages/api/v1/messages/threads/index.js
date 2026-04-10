@@ -1,5 +1,7 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { emitNewMessage } from "@/lib/socket";
+import { notifyMessageRecipients } from "@/lib/messaging";
 
 async function getAllowedCenterIdsForUser(user) {
   if (user.role === "ADMIN") {
@@ -56,25 +58,26 @@ export default async function handler(req, res) {
       take: 50,
     });
 
-    // Compute unread counts per thread for the current user
-    const enriched = threads.map((t) => {
-      const myParticipant = t.participants.find((p) => p.userId === user.id);
-      const lastReadAt = myParticipant?.lastReadAt;
-      // Count messages after lastReadAt that weren't sent by the current user
-      let unreadCount = 0;
-      if (!lastReadAt) {
-        // Never read: all messages from others are unread
-        unreadCount = t._count.messages;
-      } else {
-        // We'll fetch this with a separate approach: use the total count and last message timestamp
-        // For efficiency, just mark as unread if last message is after lastReadAt
-        const lastMsg = t.messages[0];
-        if (lastMsg && new Date(lastMsg.createdAt) > new Date(lastReadAt) && lastMsg.senderId !== user.id) {
-          unreadCount = 1; // At least 1 unread
+    const enriched = await Promise.all(
+      threads.map(async (thread) => {
+        const myParticipant = thread.participants.find((participant) => participant.userId === user.id);
+        if (!myParticipant) {
+          return { ...thread, unreadCount: 0 };
         }
-      }
-      return { ...t, unreadCount };
-    });
+
+        const unreadCount = await prisma.message.count({
+          where: {
+            threadId: thread.id,
+            senderId: { not: user.id },
+            ...(myParticipant.lastReadAt
+              ? { createdAt: { gt: myParticipant.lastReadAt } }
+              : {}),
+          },
+        });
+
+        return { ...thread, unreadCount };
+      }),
+    );
 
     return res.status(200).json(enriched);
   }
@@ -147,6 +150,18 @@ export default async function handler(req, res) {
         },
       },
     });
+
+    const firstThreadMessage = thread.messages?.[0] || null;
+    if (firstThreadMessage) {
+      emitNewMessage(unique, { ...firstThreadMessage, threadId: thread.id });
+
+      await notifyMessageRecipients({
+        sender: user,
+        recipientIds: unique.filter((participantId) => participantId !== user.id),
+        threadId: thread.id,
+        body: firstThreadMessage.body,
+      });
+    }
 
     return res.status(201).json(thread);
   }

@@ -105,6 +105,10 @@ export default function ShiftsPage() {
       return weekDays.some((d) => (shiftMap[`${u.id}_${dateKey(d)}`] || []).length > 0);
     });
   }, [staff, staffQuery, showOnlyScheduled, weekDays, shiftMap]);
+  const selectedStaff = useMemo(
+    () => staff.filter((user) => selectedStaffIds.includes(user.id)),
+    [selectedStaffIds, staff],
+  );
 
   const allFilteredSelected = filteredStaff.length > 0 && filteredStaff.every((user) => selectedStaffIds.includes(user.id));
 
@@ -124,6 +128,10 @@ export default function ShiftsPage() {
       }
       return [...new Set([...current, ...filteredIds])];
     });
+  }
+
+  function clearSelectedStaff() {
+    setSelectedStaffIds([]);
   }
 
   function resetForm() {
@@ -204,7 +212,7 @@ export default function ShiftsPage() {
         : [];
 
       if (shiftsToCopy.length === 0) {
-        setError("No shifts found in the previous week to copy"); return;
+        setError(targetStaffIds ? "No previous-week shifts were found for the selected staff" : "No shifts found in the previous week to copy"); return;
       }
       let count = 0;
       for (const s of shiftsToCopy) {
@@ -220,7 +228,7 @@ export default function ShiftsPage() {
           count++;
         } catch {}
       }
-      setSuccess(`Copied ${count} shifts from previous week${targetStaffIds ? " for selected staff" : ""}`);
+      setSuccess(`Copied ${count} shifts from the previous week${targetStaffIds ? " for the selected staff" : ""}`);
       await loadShifts();
     } catch (err) {
       setError(err.message || "Failed to copy shifts");
@@ -458,31 +466,83 @@ export default function ShiftsPage() {
                   {showOnlyScheduled ? "Showing scheduled" : "All staff"}
                 </button>
                 <button type="button" onClick={copyPreviousWeek}
-                  style={{ padding: "8px 14px", border: "1px solid var(--admin-border)", borderRadius: 10, background: "var(--admin-bg-secondary)", fontWeight: 700, fontSize: 13, cursor: "pointer", color: "var(--admin-text)" }}>
-                  {selectedStaffIds.length ? `Copy prev week (${selectedStaffIds.length})` : "Copy prev week"}
+                  style={{ padding: "8px 14px", border: "1px solid var(--admin-border)", borderRadius: 10, background: selectedStaffIds.length ? "var(--admin-accent-bg)" : "var(--admin-bg-secondary)", fontWeight: 700, fontSize: 13, cursor: "pointer", color: "var(--admin-text)" }}>
+                  {selectedStaffIds.length ? `Copy selected staff (${selectedStaffIds.length})` : "Copy all from previous week"}
                 </button>
               </div>
             </div>
 
             {filteredStaff.length > 0 && (
               <div style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 10,
                 marginBottom: 12,
-                padding: "10px 12px",
-                borderRadius: 12,
+                padding: 14,
+                borderRadius: 16,
                 border: "1px solid var(--admin-border)",
-                background: "var(--admin-bg-secondary)",
+                background: "linear-gradient(180deg, var(--admin-bg-secondary), var(--admin-bg))",
+                boxShadow: "0 8px 20px rgba(15,23,42,0.05)",
               }}>
-                <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 700, color: "var(--admin-text-secondary)", cursor: "pointer" }}>
-                  <input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFilteredStaff} />
-                  Select all visible staff
-                </label>
-                <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>
-                  {selectedStaffIds.length ? `${selectedStaffIds.length} staff selected for copy` : "No staff selected. Copy applies to everyone shown in the previous week."}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                  <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 700, color: "var(--admin-text-secondary)", cursor: "pointer" }}>
+                    <input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFilteredStaff} />
+                    Select all visible staff
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{
+                      padding: "6px 10px",
+                      borderRadius: 999,
+                      background: selectedStaffIds.length ? "var(--admin-accent-bg)" : "var(--admin-bg)",
+                      border: "1px solid var(--admin-border)",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "var(--admin-text-secondary)",
+                    }}>
+                      {selectedStaffIds.length ? `${selectedStaffIds.length} staff selected for copy` : "All staff from the previous week will be copied"}
+                    </span>
+                    {selectedStaffIds.length ? (
+                      <button
+                        type="button"
+                        onClick={clearSelectedStaff}
+                        style={{ padding: "6px 10px", borderRadius: 999, border: "1px solid var(--admin-border)", background: "var(--admin-bg)", fontSize: 12, fontWeight: 700, cursor: "pointer", color: "var(--admin-text-secondary)" }}
+                      >
+                        Clear selection
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
+
+                <div style={{ marginTop: 10, fontSize: 12, color: "var(--admin-text-muted)" }}>
+                  {selectedStaffIds.length
+                    ? "Only the selected staff below will be copied from the previous week."
+                    : "Leave everyone unchecked to copy the entire previous week's staffing pattern."}
+                </div>
+
+                {selectedStaff.length ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                    {selectedStaff.map((user) => (
+                      <button
+                        key={user.id}
+                        type="button"
+                        onClick={() => toggleStaffSelection(user.id)}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "6px 10px",
+                          borderRadius: 999,
+                          border: "1px solid #bfdbfe",
+                          background: "#eff6ff",
+                          color: "#1d4ed8",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <span>{user.name || user.email}</span>
+                        <span style={{ color: "#60a5fa" }}>x</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             )}
 

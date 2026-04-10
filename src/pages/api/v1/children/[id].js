@@ -17,6 +17,8 @@ function normalizeDocs(value) {
       mimeType: typeof d.mimeType === "string" ? d.mimeType : null,
       size: Number.isFinite(Number(d.size)) ? Number(d.size) : null,
       uploadedAt: d.uploadedAt ? String(d.uploadedAt) : null,
+      expirationDate: d.expirationDate ? String(d.expirationDate) : null,
+      documentType: typeof d.documentType === "string" ? d.documentType : null,
     }))
     .filter((d) => d.url);
 }
@@ -84,6 +86,10 @@ export default async function handler(req, res) {
       allergies,
       healthAssessmentDocuments,
       enrollmentDocuments,
+      iefDocuments,
+      immunizationDocuments,
+      infantDocuments,
+      otherDocuments,
       feedingPlan,
       enrollmentStartDate,
       enrollmentEndDate,
@@ -136,6 +142,18 @@ export default async function handler(req, res) {
           "enrollmentDocuments",
         )
           ? normalizeDocs(enrollmentDocuments)
+          : undefined,
+        iefDocuments: Object.prototype.hasOwnProperty.call(req.body, "iefDocuments")
+          ? normalizeDocs(iefDocuments)
+          : undefined,
+        immunizationDocuments: Object.prototype.hasOwnProperty.call(req.body, "immunizationDocuments")
+          ? normalizeDocs(immunizationDocuments)
+          : undefined,
+        infantDocuments: Object.prototype.hasOwnProperty.call(req.body, "infantDocuments")
+          ? normalizeDocs(infantDocuments)
+          : undefined,
+        otherDocuments: Object.prototype.hasOwnProperty.call(req.body, "otherDocuments")
+          ? normalizeDocs(otherDocuments)
           : undefined,
         feedingPlan: Object.prototype.hasOwnProperty.call(req.body, "feedingPlan")
           ? normalizeFeedingPlan(feedingPlan)

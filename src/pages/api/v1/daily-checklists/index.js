@@ -18,7 +18,7 @@ export default async function handler(req, res) {
       if (!ok) return res.status(403).json({ error: "Forbidden" });
     }
 
-    let where = { active: true };
+    let where = role === "ADMIN" && !date ? {} : { active: true };
     if (centerId) where.centerId = centerId;
     if (category) where.category = category;
     if (classRoomId) where.classRoomId = classRoomId;
@@ -38,7 +38,7 @@ export default async function handler(req, res) {
       where,
       include: {
         items: {
-          orderBy: { sortOrder: "asc" },
+          orderBy: [{ taskTime: "asc" }, { sortOrder: "asc" }],
           include: {
             completions: completionWhere
               ? { where: completionWhere, include: { completedBy: { select: { id: true, name: true, email: true } } } }
@@ -85,13 +85,14 @@ export default async function handler(req, res) {
                   description: it.description || null,
                   policyLink: it.policyLink || null,
                   mediaLink: it.mediaLink || null,
+                  taskTime: it.taskTime || null,
                   sortOrder: i,
                 })),
             }
           : undefined,
       },
       include: {
-        items: { orderBy: { sortOrder: "asc" } },
+        items: { orderBy: [{ taskTime: "asc" }, { sortOrder: "asc" }] },
         classRoom: { select: { id: true, name: true } },
         center: { select: { id: true, name: true } },
       },
@@ -120,7 +121,7 @@ export default async function handler(req, res) {
       where: { id },
       data,
       include: {
-        items: { orderBy: { sortOrder: "asc" } },
+        items: { orderBy: [{ taskTime: "asc" }, { sortOrder: "asc" }] },
         classRoom: { select: { id: true, name: true } },
         center: { select: { id: true, name: true } },
       },
@@ -140,11 +141,11 @@ export default async function handler(req, res) {
         if (it.id) {
           await prisma.dailyChecklistItem.update({
             where: { id: it.id },
-            data: { title: it.title, description: it.description || null, policyLink: it.policyLink || null, mediaLink: it.mediaLink || null, sortOrder: i },
+            data: { title: it.title, description: it.description || null, policyLink: it.policyLink || null, mediaLink: it.mediaLink || null, taskTime: it.taskTime || null, sortOrder: i },
           });
         } else if (it.title) {
           await prisma.dailyChecklistItem.create({
-            data: { checklistId: id, title: it.title, description: it.description || null, policyLink: it.policyLink || null, mediaLink: it.mediaLink || null, sortOrder: i },
+            data: { checklistId: id, title: it.title, description: it.description || null, policyLink: it.policyLink || null, mediaLink: it.mediaLink || null, taskTime: it.taskTime || null, sortOrder: i },
           });
         }
       }
@@ -154,7 +155,7 @@ export default async function handler(req, res) {
     const result = await prisma.dailyChecklist.findUnique({
       where: { id },
       include: {
-        items: { orderBy: { sortOrder: "asc" } },
+        items: { orderBy: [{ taskTime: "asc" }, { sortOrder: "asc" }] },
         classRoom: { select: { id: true, name: true } },
         center: { select: { id: true, name: true } },
       },

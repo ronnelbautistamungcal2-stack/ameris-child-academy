@@ -2,6 +2,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import prisma from "@/lib/prisma";
+import { normalizeRoles, primaryRoleFromRoles } from "@/lib/roles";
 
 export const authOptions = {
   adapter: PrismaAdapter(prisma),
@@ -28,7 +29,8 @@ export const authOptions = {
             id: user.id,
             name: user.name,
             email: user.email,
-            role: user.role,
+            role: primaryRoleFromRoles(user.roles, user.role),
+            roles: normalizeRoles(user.roles, user.role),
             pictureUrl: user.pictureUrl,
           };
         } catch (error) {
@@ -44,7 +46,8 @@ export const authOptions = {
   callbacks: {
     async jwt({ token, user, trigger, session }) {
       if (user) {
-        token.role = user.role;
+        token.roles = normalizeRoles(user.roles, user.role);
+        token.role = token.roles.includes(user.role) ? user.role : token.roles[0];
         token.id = user.id;
         token.pictureUrl = user.pictureUrl || null;
         token.pictureUrlFetchedAt = Date.now();
@@ -54,6 +57,11 @@ export const authOptions = {
       if (trigger === "update" && session?.user) {
         if ("pictureUrl" in session.user) token.pictureUrl = session.user.pictureUrl || null;
         if ("name" in session.user) token.name = session.user.name || token.name;
+        if ("role" in session.user) {
+          const requestedRole = String(session.user.role || "").toUpperCase();
+          const allowedRoles = normalizeRoles(token.roles, token.role);
+          if (allowedRoles.includes(requestedRole)) token.role = requestedRole;
+        }
         token.pictureUrlFetchedAt = Date.now();
         return token;
       }
@@ -62,6 +70,11 @@ export const authOptions = {
         // Some callers may send top-level fields.
         if ("pictureUrl" in session) token.pictureUrl = session.pictureUrl || null;
         if ("name" in session) token.name = session.name || token.name;
+        if ("role" in session) {
+          const requestedRole = String(session.role || "").toUpperCase();
+          const allowedRoles = normalizeRoles(token.roles, token.role);
+          if (allowedRoles.includes(requestedRole)) token.role = requestedRole;
+        }
         token.pictureUrlFetchedAt = Date.now();
         return token;
       }
@@ -75,11 +88,12 @@ export const authOptions = {
 
       const dbUser = await prisma.user.findUnique({
         where: { id: String(userId) },
-        select: { role: true, pictureUrl: true, name: true, email: true },
+        select: { role: true, roles: true, pictureUrl: true, name: true, email: true },
       });
       if (!dbUser) return token;
 
-      token.role = dbUser.role;
+      token.roles = normalizeRoles(dbUser.roles, dbUser.role);
+      token.role = token.roles.includes(token.role) ? token.role : token.roles[0];
       token.pictureUrl = dbUser.pictureUrl || null;
       token.name = dbUser.name || token.name;
       token.email = dbUser.email || token.email;
@@ -91,6 +105,7 @@ export const authOptions = {
       if (token) {
         session.user.id = token.id;
         session.user.role = token.role;
+        session.user.roles = normalizeRoles(token.roles, token.role);
         session.user.pictureUrl = token.pictureUrl || null;
       }
       return session;

@@ -4,6 +4,7 @@ import { SkeletonTable } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import { childAgeGroup, ageInMonths } from "@/lib/ageUtils";
 import { apiJson } from "@/lib/api";
+import { userRoles } from "@/lib/roles";
 import {
   MAX_EMERGENCY_CONTACTS,
   MAX_PARENT_CONTACTS,
@@ -42,6 +43,24 @@ function createEmergencyContacts(value = []) {
 function childFullName(child) {
   return `${child?.firstName || ""} ${child?.lastName || ""}`.trim() || "Unnamed child";
 }
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+const CHILD_DOCUMENT_TYPES = [
+  { field: "healthAssessmentDocuments", label: "Health Assessment", setter: "setHealthAssessmentDocuments", filesSetter: "setHealthAssessmentFiles" },
+  { field: "enrollmentDocuments", label: "Enrollment Documents", setter: "setEnrollmentDocuments", filesSetter: "setEnrollmentFiles" },
+  { field: "iefDocuments", label: "IEF", setter: "setIefDocuments", filesSetter: "setIefFiles" },
+  { field: "immunizationDocuments", label: "Immunizations", setter: "setImmunizationDocuments", filesSetter: "setImmunizationFiles" },
+  { field: "infantDocuments", label: "Infant Documents", setter: "setInfantDocuments", filesSetter: "setInfantFiles" },
+  { field: "otherDocuments", label: "Other", setter: "setOtherDocuments", filesSetter: "setOtherFiles" },
+];
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -102,8 +121,28 @@ export default function AdminChildren() {
 
   const [healthAssessmentDocuments, setHealthAssessmentDocuments] = useState([]);
   const [enrollmentDocuments, setEnrollmentDocuments] = useState([]);
+  const [iefDocuments, setIefDocuments] = useState([]);
+  const [immunizationDocuments, setImmunizationDocuments] = useState([]);
+  const [infantDocuments, setInfantDocuments] = useState([]);
+  const [otherDocuments, setOtherDocuments] = useState([]);
   const [healthAssessmentFiles, setHealthAssessmentFiles] = useState([]);
   const [enrollmentFiles, setEnrollmentFiles] = useState([]);
+  const [iefFiles, setIefFiles] = useState([]);
+  const [immunizationFiles, setImmunizationFiles] = useState([]);
+  const [infantFiles, setInfantFiles] = useState([]);
+  const [otherFiles, setOtherFiles] = useState([]);
+  const [documentExpirations, setDocumentExpirations] = useState({
+    healthAssessmentDocuments: "",
+    enrollmentDocuments: "",
+    iefDocuments: "",
+    immunizationDocuments: "",
+    infantDocuments: "",
+    otherDocuments: "",
+  });
+  const [docReportType, setDocReportType] = useState("");
+  const [docReportExpirationFrom, setDocReportExpirationFrom] = useState("");
+  const [docReportExpirationTo, setDocReportExpirationTo] = useState("");
+  const [docReportFamily, setDocReportFamily] = useState("");
 
   const [stepsLoading, setStepsLoading] = useState(false);
   const [stepsError, setStepsError] = useState("");
@@ -143,7 +182,7 @@ export default function AdminChildren() {
   }, []);
 
   const parents = useMemo(() => {
-    return users.filter((u) => u.role === "PARENT").sort((a, b) => (a.email || "").localeCompare(b.email || ""));
+    return users.filter((u) => userRoles(u).includes("PARENT")).sort((a, b) => (a.email || "").localeCompare(b.email || ""));
   }, [users]);
 
   const userById = useMemo(() => {
@@ -164,6 +203,52 @@ export default function AdminChildren() {
       .filter((ch) => (ageFilter ? childAgeGroup(ch) === ageFilter : true))
       .sort((a, b) => (a.firstName || "").localeCompare(b.firstName || ""));
   }, [children, q, ageFilter]);
+
+  const documentReportRows = useMemo(() => {
+    const rows = [];
+    for (const child of children) {
+      const family = child.parent?.name || child.parent?.email || "";
+      for (const type of CHILD_DOCUMENT_TYPES) {
+        const docs = Array.isArray(child[type.field]) ? child[type.field] : [];
+        for (const doc of docs) {
+          const expiration = doc.expirationDate || "";
+          if (docReportType && type.field !== docReportType) continue;
+          if (docReportFamily) {
+            const haystack = `${family} ${childFullName(child)}`.toLowerCase();
+            if (!haystack.includes(docReportFamily.toLowerCase())) continue;
+          }
+          if (docReportExpirationFrom && (!expiration || new Date(expiration) < new Date(docReportExpirationFrom))) continue;
+          if (docReportExpirationTo && (!expiration || new Date(expiration) > new Date(docReportExpirationTo))) continue;
+          rows.push({
+            child: childFullName(child),
+            family,
+            type: type.label,
+            name: doc.originalName || doc.url,
+            expiration,
+          });
+        }
+      }
+    }
+    return rows.sort((a, b) => String(a.expiration || "9999").localeCompare(String(b.expiration || "9999")));
+  }, [children, docReportExpirationFrom, docReportExpirationTo, docReportFamily, docReportType]);
+
+  function printDocumentReport() {
+    const html = `
+      <html><head><title>Child Documents Report</title>
+      <style>body{font-family:Arial,sans-serif;padding:24px;color:#111827}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #d1d5db;padding:8px;text-align:left}th{background:#f3f4f6}</style>
+      </head><body>
+      <h1>Child Documents Report</h1>
+      <table><thead><tr><th>Child</th><th>Family</th><th>Document</th><th>File</th><th>Expiration</th></tr></thead>
+      <tbody>${documentReportRows.map((row) => `<tr><td>${escapeHtml(row.child)}</td><td>${escapeHtml(row.family)}</td><td>${escapeHtml(row.type)}</td><td>${escapeHtml(row.name)}</td><td>${escapeHtml(row.expiration || "")}</td></tr>`).join("")}</tbody></table>
+      </body></html>
+    `;
+    const win = window.open("", "_blank", "width=1000,height=800");
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    win.print();
+  }
 
   const completedAtByItemId = useMemo(() => {
     return Object.fromEntries(
@@ -247,8 +332,24 @@ export default function AdminChildren() {
 
     setHealthAssessmentDocuments([]);
     setEnrollmentDocuments([]);
+    setIefDocuments([]);
+    setImmunizationDocuments([]);
+    setInfantDocuments([]);
+    setOtherDocuments([]);
     setHealthAssessmentFiles([]);
     setEnrollmentFiles([]);
+    setIefFiles([]);
+    setImmunizationFiles([]);
+    setInfantFiles([]);
+    setOtherFiles([]);
+    setDocumentExpirations({
+      healthAssessmentDocuments: "",
+      enrollmentDocuments: "",
+      iefDocuments: "",
+      immunizationDocuments: "",
+      infantDocuments: "",
+      otherDocuments: "",
+    });
   }, []);
 
   const startEdit = useCallback((child) => {
@@ -283,8 +384,24 @@ export default function AdminChildren() {
     setEnrollmentDocuments(
       Array.isArray(child.enrollmentDocuments) ? child.enrollmentDocuments : [],
     );
+    setIefDocuments(Array.isArray(child.iefDocuments) ? child.iefDocuments : []);
+    setImmunizationDocuments(Array.isArray(child.immunizationDocuments) ? child.immunizationDocuments : []);
+    setInfantDocuments(Array.isArray(child.infantDocuments) ? child.infantDocuments : []);
+    setOtherDocuments(Array.isArray(child.otherDocuments) ? child.otherDocuments : []);
     setHealthAssessmentFiles([]);
     setEnrollmentFiles([]);
+    setIefFiles([]);
+    setImmunizationFiles([]);
+    setInfantFiles([]);
+    setOtherFiles([]);
+    setDocumentExpirations({
+      healthAssessmentDocuments: "",
+      enrollmentDocuments: "",
+      iefDocuments: "",
+      immunizationDocuments: "",
+      infantDocuments: "",
+      otherDocuments: "",
+    });
   }, []);
 
   const openCreate = useCallback(() => {
@@ -389,6 +506,16 @@ export default function AdminChildren() {
     return out;
   }
 
+  function withDocumentMeta(docs, field) {
+    const type = CHILD_DOCUMENT_TYPES.find((item) => item.field === field);
+    const expirationDate = documentExpirations[field] || null;
+    return (Array.isArray(docs) ? docs : []).map((doc) => ({
+      ...doc,
+      documentType: type?.label || field,
+      expirationDate,
+    }));
+  }
+
   function planEndDate(plan) {
     const start = plan?.periodStart ? new Date(plan.periodStart) : null;
     if (!start || Number.isNaN(start.getTime())) return null;
@@ -473,8 +600,12 @@ export default function AdminChildren() {
     setError("");
     try {
       const bottlesPerDay = parseOptionalWholeNumber(feedingBottlesPerDay);
-      const newHealthDocs = await uploadFiles(healthAssessmentFiles);
-      const newEnrollDocs = await uploadFiles(enrollmentFiles);
+      const newHealthDocs = withDocumentMeta(await uploadFiles(healthAssessmentFiles), "healthAssessmentDocuments");
+      const newEnrollDocs = withDocumentMeta(await uploadFiles(enrollmentFiles), "enrollmentDocuments");
+      const newIefDocs = withDocumentMeta(await uploadFiles(iefFiles), "iefDocuments");
+      const newImmunizationDocs = withDocumentMeta(await uploadFiles(immunizationFiles), "immunizationDocuments");
+      const newInfantDocs = withDocumentMeta(await uploadFiles(infantFiles), "infantDocuments");
+      const newOtherDocs = withDocumentMeta(await uploadFiles(otherFiles), "otherDocuments");
       await apiJson("/api/v1/children", {
         method: "POST",
         body: JSON.stringify({
@@ -499,6 +630,10 @@ export default function AdminChildren() {
             ...(Array.isArray(enrollmentDocuments) ? enrollmentDocuments : []),
             ...newEnrollDocs,
           ],
+          iefDocuments: [...(Array.isArray(iefDocuments) ? iefDocuments : []), ...newIefDocs],
+          immunizationDocuments: [...(Array.isArray(immunizationDocuments) ? immunizationDocuments : []), ...newImmunizationDocs],
+          infantDocuments: [...(Array.isArray(infantDocuments) ? infantDocuments : []), ...newInfantDocs],
+          otherDocuments: [...(Array.isArray(otherDocuments) ? otherDocuments : []), ...newOtherDocs],
           feedingPlan: isInfant
             ? {
                 foods: feedingFoods || null,
@@ -524,8 +659,12 @@ export default function AdminChildren() {
     setError("");
     try {
       const bottlesPerDay = parseOptionalWholeNumber(feedingBottlesPerDay);
-      const newHealthDocs = await uploadFiles(healthAssessmentFiles);
-      const newEnrollDocs = await uploadFiles(enrollmentFiles);
+      const newHealthDocs = withDocumentMeta(await uploadFiles(healthAssessmentFiles), "healthAssessmentDocuments");
+      const newEnrollDocs = withDocumentMeta(await uploadFiles(enrollmentFiles), "enrollmentDocuments");
+      const newIefDocs = withDocumentMeta(await uploadFiles(iefFiles), "iefDocuments");
+      const newImmunizationDocs = withDocumentMeta(await uploadFiles(immunizationFiles), "immunizationDocuments");
+      const newInfantDocs = withDocumentMeta(await uploadFiles(infantFiles), "infantDocuments");
+      const newOtherDocs = withDocumentMeta(await uploadFiles(otherFiles), "otherDocuments");
       await apiJson(`/api/v1/children/${editing.id}`, {
         method: "PUT",
         body: JSON.stringify({
@@ -548,6 +687,10 @@ export default function AdminChildren() {
             ...(Array.isArray(enrollmentDocuments) ? enrollmentDocuments : []),
             ...newEnrollDocs,
           ],
+          iefDocuments: [...(Array.isArray(iefDocuments) ? iefDocuments : []), ...newIefDocs],
+          immunizationDocuments: [...(Array.isArray(immunizationDocuments) ? immunizationDocuments : []), ...newImmunizationDocs],
+          infantDocuments: [...(Array.isArray(infantDocuments) ? infantDocuments : []), ...newInfantDocs],
+          otherDocuments: [...(Array.isArray(otherDocuments) ? otherDocuments : []), ...newOtherDocs],
           feedingPlan: isInfant
             ? {
                 foods: feedingFoods || null,
@@ -724,6 +867,77 @@ export default function AdminChildren() {
             {q && <> matching &quot;{q}&quot;</>}
           </div>
         )}
+
+        <div style={{ marginTop: 16, padding: 14, borderRadius: 12, border: "1px solid var(--admin-border)", background: "var(--admin-bg-secondary)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "var(--admin-text)" }}>Document Report</div>
+              <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginTop: 2 }}>
+                Filter by document type, expiration date, and family before printing.
+              </div>
+            </div>
+            <button type="button" style={secondaryButtonStyle} onClick={printDocumentReport}>
+              Print Report
+            </button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10, marginTop: 12 }}>
+            <div>
+              <div style={filterLabelStyle}>Document Type</div>
+              <select value={docReportType} onChange={(e) => setDocReportType(e.target.value)} style={inputStyle}>
+                <option value="">All documents</option>
+                {CHILD_DOCUMENT_TYPES.map((type) => (
+                  <option key={type.field} value={type.field}>{type.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <div style={filterLabelStyle}>Family</div>
+              <input
+                value={docReportFamily}
+                onChange={(e) => setDocReportFamily(e.target.value)}
+                style={inputStyle}
+                placeholder="Family or child name"
+              />
+            </div>
+            <div>
+              <div style={filterLabelStyle}>Expiration From</div>
+              <input
+                type="date"
+                value={docReportExpirationFrom}
+                onChange={(e) => setDocReportExpirationFrom(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <div style={filterLabelStyle}>Expiration To</div>
+              <input
+                type="date"
+                value={docReportExpirationTo}
+                onChange={(e) => setDocReportExpirationTo(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+          </div>
+          <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: "var(--admin-text-muted)", fontWeight: 700 }}>
+              {documentReportRows.length} matching document{documentReportRows.length === 1 ? "" : "s"}
+            </span>
+            {(docReportType || docReportFamily || docReportExpirationFrom || docReportExpirationTo) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDocReportType("");
+                  setDocReportFamily("");
+                  setDocReportExpirationFrom("");
+                  setDocReportExpirationTo("");
+                }}
+                style={{ ...secondaryButtonStyle, fontSize: 12, padding: "7px 10px" }}
+              >
+                Clear Report Filters
+              </button>
+            )}
+          </div>
+        </div>
 
         {error && !modalOpen ? <ErrorBanner message={error} /> : null}
 
@@ -1230,10 +1444,18 @@ export default function AdminChildren() {
               <Field label="Health Assessment">
                 <input
                   type="file"
+                  multiple
                   onChange={(e) =>
                     setHealthAssessmentFiles(Array.from(e.target.files || []))
                   }
                   style={inputStyle}
+                />
+                <input
+                  type="date"
+                  value={documentExpirations.healthAssessmentDocuments}
+                  onChange={(e) => setDocumentExpirations((cur) => ({ ...cur, healthAssessmentDocuments: e.target.value }))}
+                  style={{ ...inputStyle, marginTop: 6 }}
+                  title="Expiration date"
                 />
                 {healthAssessmentDocuments.length > 0 && (
                   <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
@@ -1261,6 +1483,13 @@ export default function AdminChildren() {
                   }
                   style={inputStyle}
                 />
+                <input
+                  type="date"
+                  value={documentExpirations.enrollmentDocuments}
+                  onChange={(e) => setDocumentExpirations((cur) => ({ ...cur, enrollmentDocuments: e.target.value }))}
+                  style={{ ...inputStyle, marginTop: 6 }}
+                  title="Expiration date"
+                />
                 {enrollmentDocuments.length > 0 && (
                   <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
                     {enrollmentDocuments.map((d, idx) => (
@@ -1277,6 +1506,38 @@ export default function AdminChildren() {
                   </div>
                 )}
               </Field>
+              <DocumentUploadField
+                label="IEF"
+                filesSetter={setIefFiles}
+                docs={iefDocuments}
+                onRemove={(idx) => setIefDocuments((cur) => cur.filter((_, i) => i !== idx))}
+                expirationValue={documentExpirations.iefDocuments}
+                onExpirationChange={(value) => setDocumentExpirations((cur) => ({ ...cur, iefDocuments: value }))}
+              />
+              <DocumentUploadField
+                label="Immunizations"
+                filesSetter={setImmunizationFiles}
+                docs={immunizationDocuments}
+                onRemove={(idx) => setImmunizationDocuments((cur) => cur.filter((_, i) => i !== idx))}
+                expirationValue={documentExpirations.immunizationDocuments}
+                onExpirationChange={(value) => setDocumentExpirations((cur) => ({ ...cur, immunizationDocuments: value }))}
+              />
+              <DocumentUploadField
+                label="Infant Documents"
+                filesSetter={setInfantFiles}
+                docs={infantDocuments}
+                onRemove={(idx) => setInfantDocuments((cur) => cur.filter((_, i) => i !== idx))}
+                expirationValue={documentExpirations.infantDocuments}
+                onExpirationChange={(value) => setDocumentExpirations((cur) => ({ ...cur, infantDocuments: value }))}
+              />
+              <DocumentUploadField
+                label="Other"
+                filesSetter={setOtherFiles}
+                docs={otherDocuments}
+                onRemove={(idx) => setOtherDocuments((cur) => cur.filter((_, i) => i !== idx))}
+                expirationValue={documentExpirations.otherDocuments}
+                onExpirationChange={(value) => setDocumentExpirations((cur) => ({ ...cur, otherDocuments: value }))}
+              />
             </div>
 
             {/* Steps of Progression (edit only) */}
@@ -1446,13 +1707,51 @@ function SectionHeader({ icon, title, style: extraStyle }) {
 function DocRow({ doc, onRemove }) {
   return (
     <div style={docRowStyle}>
-      <a href={doc.url} target="_blank" rel="noreferrer" style={docLinkStyle}>
-        📎 {doc.originalName || doc.url}
-      </a>
+      <div style={{ minWidth: 0 }}>
+        <a href={doc.url} target="_blank" rel="noreferrer" style={docLinkStyle}>
+          📎 {doc.originalName || doc.url}
+        </a>
+        {doc.expirationDate ? (
+          <div style={{ fontSize: 11, color: "var(--admin-text-muted)", marginTop: 2 }}>
+            Expires {new Date(doc.expirationDate).toLocaleDateString()}
+          </div>
+        ) : null}
+      </div>
       <button type="button" style={miniDangerButtonStyle} onClick={onRemove}>
         Remove
       </button>
     </div>
+  );
+}
+
+function DocumentUploadField({ label, filesSetter, docs, onRemove, expirationValue, onExpirationChange }) {
+  return (
+    <Field label={label}>
+      <input
+        type="file"
+        multiple
+        onChange={(e) => filesSetter(Array.from(e.target.files || []))}
+        style={inputStyle}
+      />
+      <input
+        type="date"
+        value={expirationValue}
+        onChange={(e) => onExpirationChange(e.target.value)}
+        style={{ ...inputStyle, marginTop: 6 }}
+        title="Expiration date"
+      />
+      {docs.length > 0 && (
+        <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
+          {docs.map((d, idx) => (
+            <DocRow
+              key={`${d?.url || "doc"}-${idx}`}
+              doc={d}
+              onRemove={() => onRemove(idx)}
+            />
+          ))}
+        </div>
+      )}
+    </Field>
   );
 }
 

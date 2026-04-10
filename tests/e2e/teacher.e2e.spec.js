@@ -7,7 +7,9 @@ test.describe("Teacher Workflows", () => {
   });
 
   test("can navigate to children page", async ({ page }) => {
-    await page.click("text=Children");
+    const sidebar = page.locator("aside").first();
+    await sidebar.getByRole("button", { name: "Child Progress" }).click();
+    await sidebar.getByRole("link", { name: "Children" }).click();
     await waitForLoadingDone(page);
     await expect(page).toHaveURL(/\/teacher\/children/);
   });
@@ -55,9 +57,10 @@ test.describe("Teacher Workflows", () => {
   });
 
   test("can close notification dropdown with escape", async ({ page }) => {
+    const menu = page.locator('[role="menu"]');
     await page.click('[aria-label="Notifications"]');
-    await expect(page.locator('[role="menu"]')).toBeVisible();
+    await menu.waitFor({ state: "visible", timeout: 10000 });
     await page.keyboard.press("Escape");
-    await expect(page.locator('[role="menu"]')).not.toBeVisible();
+    await expect(menu).not.toBeVisible();
   });
 });

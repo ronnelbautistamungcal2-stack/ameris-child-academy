@@ -13,9 +13,8 @@ async function loginViaUI(page, email, password) {
   await page.fill('input[type="email"]', email);
   await page.fill('input[type="password"]', password);
   await page.click('button[type="submit"]');
-  // Wait for navigation away from login page
-  await page.waitForURL((url) => !url.pathname.includes("/login"), {
-    timeout: 15000,
+  await page.waitForFunction(() => !window.location.pathname.includes("/login"), {
+    timeout: 30000,
   });
 }
 

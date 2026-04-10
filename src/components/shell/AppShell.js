@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 import NotificationBell from "@/components/notifications/NotificationBell";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -50,11 +50,15 @@ export default function AppShell({
   }, [navItems]);
   const avatarUrl = typeof userImageUrl === "string" && userImageUrl.trim() ? userImageUrl.trim() : "";
   const activeRole = session?.user?.role || "";
-  const availableRoles = Array.isArray(session?.user?.roles)
-    ? session.user.roles.filter(Boolean)
-    : activeRole
-      ? [activeRole]
-      : [];
+  const availableRoles = Array.from(
+    new Set(
+      Array.isArray(session?.user?.roles)
+        ? session.user.roles.filter(Boolean)
+        : activeRole
+          ? [activeRole]
+          : [],
+    ),
+  );
 
   const initials = useMemo(() => {
     const src = (userName || userLabel || "").trim();
@@ -226,23 +230,11 @@ export default function AppShell({
 
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <NotificationBell userId={userId} />
-                {availableRoles.length > 1 ? (
-                  <label className="hidden items-center gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 md:flex">
-                    <span className="text-gray-400 dark:text-gray-500">Role</span>
-                    <select
-                      value={activeRole}
-                      onChange={(e) => handleRoleSwitch(e.target.value)}
-                      className="border-0 bg-transparent text-xs font-extrabold text-gray-900 outline-none dark:text-gray-100"
-                      aria-label="Switch role"
-                    >
-                      {availableRoles.map((role) => (
-                        <option key={role} value={role}>
-                          {roleLabel(role)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
+                <RoleSwitcher
+                  activeRole={activeRole}
+                  availableRoles={availableRoles}
+                  onSwitch={handleRoleSwitch}
+                />
                 <button
                   type="button"
                   className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -482,6 +474,162 @@ function FooterCol({ title, items }) {
   );
 }
 
+function RoleSwitcher({ activeRole, availableRoles, onSwitch }) {
+  const [open, setOpen] = useState(false);
+  const [pendingRole, setPendingRole] = useState("");
+  const buttonRef = useRef(null);
+  const panelRef = useRef(null);
+  const panelId = useId();
+  const activeLabel = roleLabel(activeRole);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [activeRole]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    function handlePointerDown(event) {
+      const target = event.target;
+      if (panelRef.current?.contains(target) || buttonRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+
+    function handleKeyDown(event) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setOpen(false);
+      buttonRef.current?.focus();
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  const handleSelect = useCallback(
+    async (nextRole) => {
+      const role = String(nextRole || "").toUpperCase();
+      if (!role || role === activeRole || pendingRole) return;
+
+      setPendingRole(role);
+      try {
+        await onSwitch(role);
+        setOpen(false);
+      } catch (error) {
+        console.error("Failed to switch role", error);
+      } finally {
+        setPendingRole("");
+      }
+    },
+    [activeRole, onSwitch, pendingRole],
+  );
+
+  if (availableRoles.length <= 1) return null;
+
+  return (
+    <div className="relative hidden md:block">
+      <button
+        ref={buttonRef}
+        type="button"
+        className="inline-flex h-10 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-800 shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-controls={panelId}
+        aria-label={`Switch role. Current role: ${activeLabel}.`}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <span
+            className={[
+              "h-2.5 w-2.5 shrink-0 rounded-full",
+              getRoleDotClass(activeRole),
+            ].join(" ")}
+          />
+          <span className="hidden text-xs font-medium text-gray-500 dark:text-gray-400 lg:inline">
+            Role
+          </span>
+          <span className="max-w-[7rem] truncate">
+            {activeLabel}
+          </span>
+        </span>
+        <svg
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className={[
+            "h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200 dark:text-gray-500",
+            open ? "rotate-180" : "",
+          ].join(" ")}
+        >
+          <path
+            fillRule="evenodd"
+            d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </button>
+
+      {open ? (
+        <div
+          id={panelId}
+          ref={panelRef}
+          role="menu"
+          aria-label="Switch role"
+          className="absolute right-0 top-[calc(100%+0.5rem)] z-30 min-w-[11rem] rounded-2xl border border-gray-200 bg-white p-1 shadow-lg animate-[fadeIn_0.14s_ease-out] dark:border-gray-700 dark:bg-gray-900"
+        >
+          {availableRoles.map((role) => {
+            const current = role === activeRole;
+            const busy = pendingRole === role;
+
+            return (
+              <button
+                key={role}
+                type="button"
+                role="menuitemradio"
+                aria-checked={current}
+                onClick={() => handleSelect(role)}
+                disabled={Boolean(pendingRole)}
+                className={[
+                  "flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
+                  current
+                    ? "bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100",
+                  busy ? "cursor-wait opacity-70" : "",
+                ].join(" ")}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <span
+                    className={[
+                      "h-2.5 w-2.5 shrink-0 rounded-full",
+                      getRoleDotClass(role),
+                    ].join(" ")}
+                  />
+                  <span className="truncate">{roleLabel(role)}</span>
+                </span>
+                {current ? (
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
+                    <path
+                      fillRule="evenodd"
+                      d="M16.704 5.29a1 1 0 010 1.42l-7.24 7.24a1 1 0 01-1.414 0l-3.26-3.26a1 1 0 111.414-1.414l2.553 2.553 6.533-6.533a1 1 0 011.414 0z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function MobileSidebar({ onClose, children, triggerRef }) {
   const sidebarRef = useRef(null);
   const closeButtonRef = useRef(null);
@@ -546,4 +694,21 @@ function MobileSidebar({ onClose, children, triggerRef }) {
       </div>
     </div>
   );
+}
+
+function getRoleDotClass(role) {
+  switch (String(role || "").toUpperCase()) {
+    case "ADMIN":
+      return "bg-sky-500";
+    case "TEACHER":
+      return "bg-emerald-500";
+    case "COACH":
+      return "bg-amber-500";
+    case "PARENT":
+      return "bg-rose-500";
+    case "SUBSCRIBER":
+      return "bg-cyan-500";
+    default:
+      return "bg-gray-400";
+  }
 }

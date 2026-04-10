@@ -4,7 +4,7 @@ import MessageInbox from "@/components/messages/MessageInbox";
 export default function TeacherMessages() {
   return (
     <TeacherLayout title="Messages">
-      <MessageInbox />
+      <MessageInbox embedded />
     </TeacherLayout>
   );
 }

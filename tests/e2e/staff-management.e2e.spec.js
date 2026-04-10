@@ -298,7 +298,7 @@ test.describe("Staff management browser QA", () => {
     }
     await page.getByRole("button", { name: "Evaluations" }).click();
 
-    await expect(page.getByText("Submitted Evaluations")).toBeVisible();
+    await expect(page.getByText("Submitted Evaluations", { exact: true })).toBeVisible();
     await expect(metricCard(page, "Visible Evaluations")).toContainText("1");
     await expect(metricCard(page, "Awaiting Acknowledgement")).toContainText("1");
     await expect(metricCard(page, "Acknowledged")).toContainText("0");
@@ -322,7 +322,7 @@ test.describe("Staff management browser QA", () => {
     expect(refreshedEvaluation?.teacherAcknowledgedAt).toBeTruthy();
     await expect(metricCard(page, "Awaiting Acknowledgement")).toContainText("0");
     await expect(metricCard(page, "Acknowledged")).toContainText("1");
-    await expect(page.getByText("Acknowledged")).toBeVisible();
+    await expect(page.locator("span").filter({ hasText: /^Acknowledged$/ }).first()).toBeVisible();
     await expect(page.getByText("Pending")).toHaveCount(0);
   });
 });

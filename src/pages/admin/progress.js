@@ -478,32 +478,17 @@ export default function AdminProgress() {
                 {childOptions.map((ch) => <option key={ch.id} value={ch.id}>{ch.firstName} {ch.lastName || ""}</option>)}
               </FilterSelect>
 
-              {/* Stage pills instead of select */}
-              <div>
-                <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">Stage</div>
-                <div className="flex gap-1 rounded-xl border border-gray-200 bg-gray-100/80 p-1">
-                  {STAGE_FILTERS.map((s) => {
-                    const Icon = s.icon;
-                    const active = stage === s.value;
-                    return (
-                      <button
-                        key={s.value}
-                        type="button"
-                        className={`flex flex-1 items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-[10px] font-bold transition-all ${
-                          active
-                            ? "bg-white text-violet-700 shadow-sm"
-                            : "text-gray-500 hover:text-gray-700"
-                        }`}
-                        onClick={() => { setStage(s.value); setVisibleCount(100); }}
-                        title={s.label}
-                      >
-                        <Icon />
-                        <span className="hidden xl:inline">{s.label.split(" ")[0]}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <FilterSelect
+                label="Stage"
+                value={stage}
+                onChange={(v) => { setStage(v); setVisibleCount(100); }}
+                disabled={!centerId || loading}
+                placeholder="All goals"
+                includePlaceholder={false}
+                icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
+              >
+                {STAGE_FILTERS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </FilterSelect>
             </div>
           </div>
         </div>
@@ -1079,7 +1064,7 @@ function StatusCount({ value, color }) {
   );
 }
 
-function FilterSelect({ label, value, onChange, disabled, placeholder, icon, children }) {
+function FilterSelect({ label, value, onChange, disabled, placeholder, icon, children, includePlaceholder = true }) {
   return (
     <div>
       <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">{label}</div>
@@ -1091,7 +1076,7 @@ function FilterSelect({ label, value, onChange, disabled, placeholder, icon, chi
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
         >
-          <option value="">{placeholder}</option>
+          {includePlaceholder ? <option value="">{placeholder}</option> : null}
           {children}
         </select>
         <svg className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

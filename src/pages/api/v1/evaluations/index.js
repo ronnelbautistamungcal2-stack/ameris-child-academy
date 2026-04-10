@@ -6,7 +6,16 @@ import {
   forbidden,
   unauthorized,
 } from "@/lib/api-error";
-import { ensureObject, optionalDate, optionalNumber, optionalString, requiredString } from "@/lib/validation";
+import {
+  ensureObject,
+  optionalDate,
+  optionalEnum,
+  optionalNumber,
+  optionalString,
+  requiredString,
+} from "@/lib/validation";
+
+const EVALUATION_STATUSES = ["DRAFT", "SUBMITTED", "ACKNOWLEDGED"];
 
 function endOfDay(date) {
   if (!date) return undefined;
@@ -23,6 +32,49 @@ function periodLabel(start, end, fallback) {
   return `${startLabel} to ${endLabel}`;
 }
 
+function validateRangeOrder(start, end, label) {
+  if (start && end && end < start) {
+    throw badRequest(`${label} end date must be on or after the start date`);
+  }
+}
+
+function validatePeriodRange(start, end) {
+  if ((start && !end) || (!start && end)) {
+    throw badRequest("Evaluation period start and end dates are both required");
+  }
+  validateRangeOrder(start, end, "Evaluation period");
+}
+
+function buildEvaluationHistoryFilter(from, to) {
+  if (!from && !to) return undefined;
+
+  const scheduledPeriodFilters = [
+    { periodStart: { not: null } },
+    { periodEnd: { not: null } },
+  ];
+
+  if (from) scheduledPeriodFilters.push({ periodEnd: { gte: from } });
+  if (to) scheduledPeriodFilters.push({ periodStart: { lte: to } });
+
+  return {
+    OR: [
+      { AND: scheduledPeriodFilters },
+      {
+        AND: [
+          { periodStart: null },
+          { periodEnd: null },
+          {
+            createdAt: {
+              ...(from ? { gte: from } : {}),
+              ...(to ? { lte: to } : {}),
+            },
+          },
+        ],
+      },
+    ],
+  };
+}
+
 export default createApiHandler(async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) throw unauthorized();
@@ -31,30 +83,17 @@ export default createApiHandler(async function handler(req, res) {
     const centerId = optionalString(req.query, "centerId");
     const teacherId = optionalString(req.query, "teacherId");
     const period = optionalString(req.query, "period");
-    const status = optionalString(req.query, "status");
+    const status = optionalEnum(req.query, "status", EVALUATION_STATUSES);
     const from = optionalDate(req.query, "from");
     const to = endOfDay(optionalDate(req.query, "to"));
+    validateRangeOrder(from, to, "Filter");
 
     const where = {};
     if (centerId) where.centerId = centerId;
     if (period) where.period = period;
     if (status) where.status = status;
-    if (from || to) {
-      where.OR = [
-        {
-          AND: [
-            from ? { periodEnd: { gte: from } } : {},
-            to ? { periodStart: { lte: to } } : {},
-          ],
-        },
-        {
-          createdAt: {
-            ...(from ? { gte: from } : {}),
-            ...(to ? { lte: to } : {}),
-          },
-        },
-      ];
-    }
+    const historyFilter = buildEvaluationHistoryFilter(from, to);
+    if (historyFilter) where.AND = [historyFilter];
 
     if (session.user.role === "TEACHER") {
       where.teacherId = session.user.id;
@@ -84,12 +123,13 @@ export default createApiHandler(async function handler(req, res) {
   const teacherId = requiredString(body, "teacherId");
   const periodStart = optionalDate(body, "periodStart", { nullable: true });
   const periodEnd = optionalDate(body, "periodEnd", { nullable: true });
+  validatePeriodRange(periodStart, periodEnd);
   const period = periodLabel(periodStart, periodEnd, optionalString(body, "period"));
   if (!period) {
-    throw badRequest("Evaluation period start/end is required");
+    throw badRequest("Evaluation period is required");
   }
   const overallScore = optionalNumber(body, "overallScore", { min: 0 });
-  const categories = body.categories ?? {};
+  const categories = ensureObject(body.categories ?? {}, "categories");
   const strengths = optionalString(body, "strengths", { nullable: true });
   const areasForImprovement = optionalString(body, "areasForImprovement", { nullable: true });
   const goals = optionalString(body, "goals", { nullable: true });

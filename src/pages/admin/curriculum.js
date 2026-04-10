@@ -399,6 +399,7 @@ function LessonsTab({ centerId }) {
   const [expanded, setExpanded] = useState({});
   const [categoryFilter, setCategoryFilter] = useState("");
   const [ageFilter, setAgeFilter] = useState("");
+  const [formAgeRange, setFormAgeRange] = useState("");
   const [query, setQuery] = useState("");
 
   async function load() {
@@ -439,9 +440,20 @@ function LessonsTab({ centerId }) {
     return Array.from(new Set(categories.map((cat) => cat.ageRange || "").filter(Boolean))).sort();
   }, [categories]);
 
+  const formCategoryOptions = useMemo(() => {
+    if (!formAgeRange) return categories;
+    return categories.filter((cat) => (cat.ageRange || "") === formAgeRange);
+  }, [categories, formAgeRange]);
+
+  const categoryFilterOptions = useMemo(() => {
+    if (!ageFilter) return categories;
+    return categories.filter((cat) => (cat.ageRange || "") === ageFilter);
+  }, [categories, ageFilter]);
+
   function openCreate() {
     setEditing("new");
     setForm({ title: "", description: "", categoryId: "", policyDocumentId: "", media: [] });
+    setFormAgeRange(ageFilter || "");
   }
 
   function openEdit(lesson) {
@@ -453,24 +465,80 @@ function LessonsTab({ centerId }) {
       policyDocumentId: lesson.policyDocumentId || "",
       media: lesson.media || [],
     });
+    setFormAgeRange(lesson.category?.ageRange || "");
+  }
+
+  function handleAgeFilterChange(nextAgeRange) {
+    setAgeFilter(nextAgeRange);
+    setCategoryFilter((prev) => {
+      if (!prev) return prev;
+      const selectedCategory = categories.find((cat) => cat.id === prev);
+      if (!selectedCategory) return "";
+      return !nextAgeRange || (selectedCategory.ageRange || "") === nextAgeRange
+        ? prev
+        : "";
+    });
+  }
+
+  function handleFormAgeRangeChange(nextAgeRange) {
+    setFormAgeRange(nextAgeRange);
+    setForm((prev) => {
+      if (!prev.categoryId) return prev;
+      const selectedCategory = categories.find((cat) => cat.id === prev.categoryId);
+      if (!selectedCategory) return { ...prev, categoryId: "" };
+      return (selectedCategory.ageRange || "") === nextAgeRange
+        ? prev
+        : { ...prev, categoryId: "" };
+    });
+  }
+
+  function handleFormCategoryChange(nextCategoryId) {
+    setForm((prev) => ({ ...prev, categoryId: nextCategoryId }));
+    const selectedCategory = categories.find((cat) => cat.id === nextCategoryId);
+    if (selectedCategory?.ageRange) {
+      setFormAgeRange(selectedCategory.ageRange);
+    }
   }
 
   async function save() {
+    const selectedCategory = form.categoryId
+      ? categories.find((cat) => cat.id === form.categoryId)
+      : null;
+
+    if (formAgeRange && !form.categoryId) {
+      setError("Select a category for the chosen age group, or clear the age group.");
+      return;
+    }
+
+    if (form.categoryId && !selectedCategory) {
+      setError("Selected category could not be found. Reload and try again.");
+      return;
+    }
+
     setSaving(true);
     setError("");
     try {
+      const payload = {
+        title: form.title,
+        description: form.description,
+        media: form.media,
+        categoryId: form.categoryId || null,
+        policyDocumentId: form.policyDocumentId || null,
+      };
+
       if (editing === "new") {
         await apiJson("/api/v1/lessons", {
           method: "POST",
-          body: JSON.stringify({ centerId, ...form, categoryId: form.categoryId || null, policyDocumentId: form.policyDocumentId || null }),
+          body: JSON.stringify({ centerId, ...payload }),
         });
       } else {
         await apiJson(`/api/v1/lessons/${encodeURIComponent(editing)}`, {
           method: "PUT",
-          body: JSON.stringify({ ...form, categoryId: form.categoryId || null, policyDocumentId: form.policyDocumentId || null }),
+          body: JSON.stringify(payload),
         });
       }
       setEditing(null);
+      setFormAgeRange("");
       await load();
     } catch (e) {
       setError(e.message || "Failed to save");
@@ -577,11 +645,27 @@ function LessonsTab({ centerId }) {
                 <FormField label="Title" required>
                   <input className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Counting to 10" />
                 </FormField>
-                <FormField label="Category">
-                  <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
-                    <option value="">None</option>
-                    {categories.map((c) => <option key={c.id} value={c.id}>{lessonCategoryLabel(c)}</option>)}
+                <FormField label="Age Group">
+                  <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={formAgeRange} onChange={(e) => handleFormAgeRangeChange(e.target.value)}>
+                    <option value="">No age group selected</option>
+                    {ageOptions.map((age) => <option key={age} value={age}>{age}</option>)}
                   </select>
+                </FormField>
+                <FormField label="Category">
+                  <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={form.categoryId} onChange={(e) => handleFormCategoryChange(e.target.value)}>
+                    <option value="">None</option>
+                    {formCategoryOptions.map((c) => <option key={c.id} value={c.id}>{lessonCategoryLabel(c)}</option>)}
+                  </select>
+                  {formAgeRange && formCategoryOptions.length === 0 && (
+                    <div className="mt-1 text-xs font-medium text-amber-700">
+                      No categories exist for {formAgeRange} yet. Create one in the Categories tab first.
+                    </div>
+                  )}
+                  {!formAgeRange && ageOptions.length > 0 && (
+                    <div className="mt-1 text-xs text-gray-500">
+                      Pick an age group first when category names repeat across ages.
+                    </div>
+                  )}
                 </FormField>
                 <FormField label="Linked Policy">
                   <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={form.policyDocumentId} onChange={(e) => setForm({ ...form, policyDocumentId: e.target.value })}>
@@ -635,19 +719,19 @@ function LessonsTab({ centerId }) {
               </svg>
               <input className="w-full rounded-xl border border-gray-200 bg-gray-50/50 pl-10 pr-4 py-2.5 text-sm transition focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100" placeholder="Search lessons..." value={query} onChange={(e) => setQuery(e.target.value)} />
             </div>
-            <div className="relative md:w-56">
-              <select className="w-full appearance-none rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 pr-10 text-sm transition focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-                <option value="">All categories</option>
-                {categories.map((c) => <option key={c.id} value={c.id}>{lessonCategoryLabel(c)}</option>)}
+            <div className="relative md:w-48">
+              <select className="w-full appearance-none rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 pr-10 text-sm transition focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100" value={ageFilter} onChange={(e) => handleAgeFilterChange(e.target.value)}>
+                <option value="">All ages</option>
+                {ageOptions.map((age) => <option key={age} value={age}>{age}</option>)}
               </select>
               <svg className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
             </div>
-            <div className="relative md:w-48">
-              <select className="w-full appearance-none rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 pr-10 text-sm transition focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100" value={ageFilter} onChange={(e) => setAgeFilter(e.target.value)}>
-                <option value="">All ages</option>
-                {ageOptions.map((age) => <option key={age} value={age}>{age}</option>)}
+            <div className="relative md:w-56">
+              <select className="w-full appearance-none rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 pr-10 text-sm transition focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+                <option value="">All categories</option>
+                {categoryFilterOptions.map((c) => <option key={c.id} value={c.id}>{lessonCategoryLabel(c)}</option>)}
               </select>
               <svg className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />

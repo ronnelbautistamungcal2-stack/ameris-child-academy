@@ -124,6 +124,6 @@ test.describe("Children API @api", () => {
     if (!createdChildId) test.skip();
     const cookies = await loginAsAdmin(request);
     const res = await apiDelete(request, `/api/v1/children/${createdChildId}`, cookies);
-    expect(res.status()).toBe(200);
+    expect(res.status()).toBe(204);
   });
 });

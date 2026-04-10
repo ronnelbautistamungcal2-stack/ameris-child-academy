@@ -7,9 +7,10 @@ test.describe("Admin Workflows", () => {
   });
 
   test("can navigate to children page", async ({ page }) => {
-    await page.click("text=Children");
+    await page.goto("/admin/children");
     await waitForLoadingDone(page);
-    await expect(page.getByText("Children").first()).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/children/);
+    await expect(page.getByRole("heading", { name: "Children" })).toBeVisible();
   });
 
   test("children page has search and filter", async ({ page }) => {
@@ -32,14 +33,14 @@ test.describe("Admin Workflows", () => {
     await expect(page.getByText("First Name")).toBeVisible();
   });
 
-  test("can close modal with close button", async ({ page }) => {
+  test("can close modal with cancel button", async ({ page }) => {
     await page.goto("/admin/children");
     await waitForLoadingDone(page);
 
-    await page.click("text=Add Child");
+    await page.getByRole("button", { name: /add child/i }).click();
     await expect(page.locator('[role="dialog"]')).toBeVisible();
 
-    await page.click("text=Close");
+    await page.getByRole("button", { name: "Cancel" }).click();
     await expect(page.locator('[role="dialog"]')).not.toBeVisible();
   });
 

@@ -120,7 +120,7 @@ function threadTypeLabel(isGroup) {
   return isGroup ? "Group conversation" : "Direct conversation";
 }
 
-export default function MessageInbox({ centerId, isAdmin }) {
+export default function MessageInbox({ centerId, isAdmin, embedded = false, toolbar = null }) {
   const { data: session } = useSession();
   const router = useRouter();
   const toast = useToast();
@@ -149,7 +149,7 @@ export default function MessageInbox({ centerId, isAdmin }) {
   const [adminFilter, setAdminFilter] = useState("all");
   const [mobilePanel, setMobilePanel] = useState(queryThreadId ? "thread" : "list");
 
-  const messagesEndRef = useRef(null);
+  const messagesViewportRef = useRef(null);
   const queryThreadIdRef = useRef(queryThreadId);
   const socket = useUserSocket(userId);
 
@@ -308,8 +308,11 @@ export default function MessageInbox({ centerId, isAdmin }) {
   }, [activeThreadId]);
 
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    if (messagesViewportRef.current) {
+      messagesViewportRef.current.scrollTo({
+        top: messagesViewportRef.current.scrollHeight,
+        behavior: "smooth",
+      });
     }
   }, [activeThread?.messages]);
 
@@ -637,6 +640,10 @@ export default function MessageInbox({ centerId, isAdmin }) {
       ? `${Math.max(activeMeta.participantCount - 1, 1)} recipients`
       : "1 recipient"
     : "";
+  const showIntro = !embedded;
+  const panelHeightClass = embedded
+    ? "min-h-[34rem] md:h-[74dvh] xl:h-[78dvh] md:max-h-[56rem]"
+    : "min-h-[32rem] md:h-[70dvh] md:max-h-[52rem]";
 
   function resetThreadFilters() {
     setThreadQuery("");
@@ -652,117 +659,57 @@ export default function MessageInbox({ centerId, isAdmin }) {
         : "No conversations found yet.";
 
   return (
-    <div className="relative overflow-hidden rounded-[2rem] border border-sky-100 bg-white/95 p-5 shadow-[0_24px_70px_-36px_rgba(14,165,233,0.5)] dark:border-gray-700 dark:bg-gray-800/95 sm:p-6">
+    <div
+      className={[
+        "relative overflow-hidden rounded-[2rem] border border-sky-100 bg-white/95 shadow-[0_24px_70px_-36px_rgba(14,165,233,0.5)] dark:border-gray-700 dark:bg-gray-800/95",
+        embedded ? "p-4 sm:p-5" : "p-5 sm:p-6",
+      ].join(" ")}
+    >
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.16),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(250,204,21,0.10),transparent_28%)]" />
 
-      {isAdmin ? (
-        <>
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-sky-700 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
-                Admin inbox
-              </div>
-              <h2 className="mt-2 text-2xl font-extrabold text-gray-900 dark:text-gray-100">
-                Messages
-              </h2>
-              <p className="mt-1 max-w-2xl text-sm text-gray-600 dark:text-gray-400">
-                Triage parent and staff conversations across your centers, spot unread
-                threads fast, and jump into the right reply lane.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                  {threads.length} threads
-                </span>
-                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                  {unreadTotal} unread
-                </span>
-                {centerId ? (
-                  <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
-                    Center scoped
+      {showIntro ? (
+        isAdmin ? (
+          <>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-sky-700 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                  Admin inbox
+                </div>
+                <h2 className="mt-2 text-2xl font-extrabold text-gray-900 dark:text-gray-100">
+                  Messages
+                </h2>
+                <p className="mt-1 max-w-2xl text-sm text-gray-600 dark:text-gray-400">
+                  Triage parent and staff conversations across your centers, spot unread
+                  threads fast, and jump into the right reply lane.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                    {threads.length} threads
                   </span>
-                ) : null}
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                    {unreadTotal} unread
+                  </span>
+                  {centerId ? (
+                    <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                      Center scoped
+                    </span>
+                  ) : null}
+                </div>
               </div>
-            </div>
-            <button
-              type="button"
-              onClick={startBlankCompose}
-              className="rounded-2xl bg-gradient-to-r from-sky-600 to-cyan-500 px-5 py-2.5 text-sm font-extrabold text-white shadow-sm transition hover:from-sky-700 hover:to-cyan-600"
-            >
-              New Conversation
-            </button>
-          </div>
-
-          <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-            {inboxSummary.map((item) => (
-              <div
-                key={item.label}
-                className={["rounded-2xl border px-4 py-3", summaryCardTone(item.tone)].join(" ")}
+              <button
+                type="button"
+                onClick={startBlankCompose}
+                className="rounded-2xl bg-gradient-to-r from-sky-600 to-cyan-500 px-5 py-2.5 text-sm font-extrabold text-white shadow-sm transition hover:from-sky-700 hover:to-cyan-600"
               >
-                <div className="text-[11px] font-bold uppercase tracking-[0.16em] opacity-75">
-                  {item.label}
-                </div>
-                <div className="mt-2 text-2xl font-extrabold">{item.value}</div>
-                {item.detail ? (
-                  <div className="mt-1 text-xs opacity-80">{item.detail}</div>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </>
-      ) : (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.02fr)_minmax(360px,0.98fr)] xl:items-start">
-          <div className="min-w-0">
-            <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-sky-700 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
-              Inbox
-            </div>
-            <h2 className="mt-3 text-3xl font-black tracking-tight text-gray-900 dark:text-gray-100">
-              Keep the classroom conversation moving.
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600 dark:text-gray-400">
-              Parent updates, teacher follow-through, and quick staff replies stay in one
-              thread-aware workspace so you can respond without losing context.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                {threads.length} threads
-              </span>
-              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                {unreadTotal} unread
-              </span>
-              {activeMeta ? (
-                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
-                  {threadTypeLabel(activeMeta.isGroup)}
-                </span>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="rounded-[1.6rem] border border-sky-100 bg-white/80 p-4 shadow-sm dark:border-sky-900/40 dark:bg-gray-900/70">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="text-[11px] font-black uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">
-                    Teacher workflow
-                  </div>
-                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                    Start a new thread or jump straight into the current conversation.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={startBlankCompose}
-                  className="rounded-2xl bg-gradient-to-r from-sky-600 to-cyan-500 px-5 py-2.5 text-sm font-extrabold text-white shadow-sm transition hover:from-sky-700 hover:to-cyan-600"
-                >
-                  New Conversation
-                </button>
-              </div>
+                New Conversation
+              </button>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
               {inboxSummary.map((item) => (
                 <div
                   key={item.label}
-                  className={["rounded-[1.4rem] border px-4 py-3", summaryCardTone(item.tone)].join(" ")}
+                  className={["rounded-2xl border px-4 py-3", summaryCardTone(item.tone)].join(" ")}
                 >
                   <div className="text-[11px] font-bold uppercase tracking-[0.16em] opacity-75">
                     {item.label}
@@ -774,7 +721,90 @@ export default function MessageInbox({ centerId, isAdmin }) {
                 </div>
               ))}
             </div>
+          </>
+        ) : (
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.02fr)_minmax(360px,0.98fr)] xl:items-start">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-sky-700 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                Inbox
+              </div>
+              <h2 className="mt-3 text-3xl font-black tracking-tight text-gray-900 dark:text-gray-100">
+                Keep the classroom conversation moving.
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600 dark:text-gray-400">
+                Parent updates, teacher follow-through, and quick staff replies stay in one
+                thread-aware workspace so you can respond without losing context.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                  {threads.length} threads
+                </span>
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                  {unreadTotal} unread
+                </span>
+                {activeMeta ? (
+                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
+                    {threadTypeLabel(activeMeta.isGroup)}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="rounded-[1.6rem] border border-sky-100 bg-white/80 p-4 shadow-sm dark:border-sky-900/40 dark:bg-gray-900/70">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="text-[11px] font-black uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">
+                      Teacher workflow
+                    </div>
+                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                      Start a new thread or jump straight into the current conversation.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={startBlankCompose}
+                    className="rounded-2xl bg-gradient-to-r from-sky-600 to-cyan-500 px-5 py-2.5 text-sm font-extrabold text-white shadow-sm transition hover:from-sky-700 hover:to-cyan-600"
+                  >
+                    New Conversation
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {inboxSummary.map((item) => (
+                  <div
+                    key={item.label}
+                    className={["rounded-[1.4rem] border px-4 py-3", summaryCardTone(item.tone)].join(" ")}
+                  >
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] opacity-75">
+                      {item.label}
+                    </div>
+                    <div className="mt-2 text-2xl font-extrabold">{item.value}</div>
+                    {item.detail ? (
+                      <div className="mt-1 text-xs opacity-80">{item.detail}</div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
+        )
+      ) : (
+        <div
+          className={[
+            "flex flex-wrap items-center gap-3",
+            toolbar ? "justify-between" : "justify-end",
+          ].join(" ")}
+        >
+          {toolbar ? <div className="min-w-0 flex-1">{toolbar}</div> : null}
+          <button
+            type="button"
+            onClick={startBlankCompose}
+            className="rounded-xl bg-gradient-to-r from-sky-600 to-cyan-500 px-4 py-2 text-sm font-extrabold text-white shadow-sm transition hover:from-sky-700 hover:to-cyan-600"
+          >
+            New Conversation
+          </button>
         </div>
       )}
 
@@ -932,7 +962,7 @@ export default function MessageInbox({ centerId, isAdmin }) {
         </div>
       ) : null}
 
-      <div className="mt-5 flex gap-2 lg:hidden">
+      <div className={`${showIntro ? "mt-5" : "mt-4"} flex gap-2 xl:hidden`}>
         <button
           type="button"
           onClick={() => setMobilePanel("list")}
@@ -960,37 +990,49 @@ export default function MessageInbox({ centerId, isAdmin }) {
         </button>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-[380px_minmax(0,1fr)]">
+      <div
+        className={[
+          showIntro ? "mt-6" : "mt-3",
+          embedded
+            ? "grid grid-cols-1 gap-3 xl:grid-cols-[minmax(280px,320px)_minmax(0,1fr)]"
+            : "grid grid-cols-1 gap-4 xl:grid-cols-[minmax(320px,360px)_minmax(0,1fr)]",
+        ].join(" ")}
+      >
         <div
           className={[
-            "min-h-[620px] rounded-[1.8rem] border border-gray-200 bg-gray-50/90 p-4 dark:border-gray-700 dark:bg-gray-900/50",
-            mobilePanel === "thread" ? "hidden lg:flex lg:flex-col" : "flex flex-col",
+            panelHeightClass,
+            embedded
+              ? "rounded-[1.5rem] border border-gray-200 bg-gray-50/90 p-3 dark:border-gray-700 dark:bg-gray-900/50"
+              : "rounded-[1.8rem] border border-gray-200 bg-gray-50/90 p-4 dark:border-gray-700 dark:bg-gray-900/50",
+            mobilePanel === "thread" ? "hidden xl:flex xl:flex-col" : "flex flex-col",
           ].join(" ")}
         >
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="text-[11px] font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
-                Conversations
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                  {filteredPreview.length} visible
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="text-[11px] font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                  Conversations
+                </div>
+                <span className="rounded-full border border-gray-200 bg-white px-2.5 py-0.5 text-[11px] font-semibold text-gray-700 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                  {filteredPreview.length}
                 </span>
-                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                  {visibleUnreadCount} unread
-                </span>
+                {visibleUnreadCount > 0 ? (
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700 shadow-sm dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                    {visibleUnreadCount} unread
+                  </span>
+                ) : null}
               </div>
             </div>
             <button
               type="button"
               onClick={() => refreshThreads()}
-              className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-extrabold text-gray-800 shadow-sm transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-extrabold text-gray-800 shadow-sm transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
             >
               Refresh
             </button>
           </div>
 
-          <div className="mt-4 space-y-3">
+          <div className={`${embedded ? "mt-3" : "mt-4"} space-y-2`}>
             <label className="relative block">
               <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400 dark:text-gray-500">
                 <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -1000,7 +1042,10 @@ export default function MessageInbox({ centerId, isAdmin }) {
               <input
                 value={threadQuery}
                 onChange={(e) => setThreadQuery(e.target.value)}
-                className="w-full rounded-2xl border border-gray-200 bg-white py-3 pl-10 pr-10 text-sm shadow-sm transition focus:border-sky-300 focus:outline-none focus:ring-4 focus:ring-sky-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-sky-700 dark:focus:ring-sky-900/40"
+                className={[
+                  "w-full border border-gray-200 bg-white pl-10 pr-10 text-sm shadow-sm transition focus:border-sky-300 focus:outline-none focus:ring-4 focus:ring-sky-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-sky-700 dark:focus:ring-sky-900/40",
+                  embedded ? "rounded-xl py-2.5" : "rounded-2xl py-3",
+                ].join(" ")}
                 placeholder={
                   isAdmin
                     ? "Search names, centers, roles, or message text..."
@@ -1032,7 +1077,7 @@ export default function MessageInbox({ centerId, isAdmin }) {
                     : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700",
                 ].join(" ")}
               >
-                {showUnreadOnly ? "Unread only" : "All conversations"}
+                {showUnreadOnly ? "Unread" : "All"}
               </button>
               {hasActiveFilters ? (
                 <button
@@ -1042,16 +1087,12 @@ export default function MessageInbox({ centerId, isAdmin }) {
                 >
                   Reset filters
                 </button>
-              ) : (
-                <span className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400">
-                  Search names, participants, and recent replies
-                </span>
-              )}
+              ) : null}
             </div>
           </div>
 
           {isAdmin ? (
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className={`${embedded ? "mt-3" : "mt-4"} flex flex-wrap gap-2`}>
               {ADMIN_FILTERS.map((filter) => (
                 <button
                   key={filter.id}
@@ -1083,25 +1124,32 @@ export default function MessageInbox({ centerId, isAdmin }) {
               ))}
             </div>
           ) : filteredPreview.length === 0 ? (
-            <div className="mt-6 rounded-[1.6rem] border border-dashed border-gray-300 bg-white px-4 py-10 text-center text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400">
+            <div className={`${embedded ? "mt-4" : "mt-6"} rounded-[1.4rem] border border-dashed border-gray-300 bg-white px-4 py-8 text-center text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400`}>
               {listEmptyMessage}
             </div>
           ) : (
-            <div className="mt-4 flex-1 space-y-2 overflow-auto pr-1">
+            <div className={`${embedded ? "mt-3" : "mt-4"} flex-1 space-y-2 overflow-auto pr-1`}>
               {filteredPreview.map((thread) => (
                 <button
                   key={thread.id}
                   type="button"
                   onClick={() => selectThread(thread.id)}
                   className={[
-                    "w-full rounded-[1.4rem] border px-3 py-3 text-left transition duration-200",
+                    embedded
+                      ? "w-full rounded-[1.15rem] border px-3 py-2.5 text-left transition duration-200"
+                      : "w-full rounded-[1.4rem] border px-3 py-3 text-left transition duration-200",
                     activeThreadId === thread.id
                       ? "border-sky-200 bg-white shadow-[0_18px_40px_-28px_rgba(14,165,233,0.7)] ring-2 ring-sky-100 dark:border-sky-800 dark:bg-gray-800 dark:ring-sky-900/40"
                       : "border-gray-200 bg-white/95 hover:-translate-y-0.5 hover:border-sky-100 hover:bg-white dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700",
                   ].join(" ")}
                 >
                   <div className="flex items-start gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-100 to-cyan-100 text-sm font-extrabold text-sky-700 dark:from-sky-900/40 dark:to-cyan-900/30 dark:text-sky-200">
+                    <div
+                      className={[
+                        "flex shrink-0 items-center justify-center bg-gradient-to-br from-sky-100 to-cyan-100 text-sm font-extrabold text-sky-700 dark:from-sky-900/40 dark:to-cyan-900/30 dark:text-sky-200",
+                        embedded ? "h-10 w-10 rounded-xl" : "h-11 w-11 rounded-2xl",
+                      ].join(" ")}
+                    >
                       {thread.avatar}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -1116,35 +1164,45 @@ export default function MessageInbox({ centerId, isAdmin }) {
                             <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-[10px] font-extrabold text-gray-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
                               {thread.isGroup ? "Group" : "Direct"}
                             </span>
+                            <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                              {thread.participantCount}
+                            </span>
                             {thread.unreadCount > 0 ? (
                               <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-extrabold text-white">
                                 {thread.unreadCount}
                               </span>
                             ) : null}
                           </div>
-                          <div className="mt-1 line-clamp-2 break-words text-sm font-extrabold text-gray-900 dark:text-gray-100">
+                          <div className={`${embedded ? "mt-0.5 line-clamp-1" : "mt-1 line-clamp-2"} break-words text-sm font-extrabold text-gray-900 dark:text-gray-100`}>
                             {thread.title}
                           </div>
                         </div>
                         <span className="shrink-0 text-[11px] text-gray-400">{thread.time}</span>
                       </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                        {thread.participantRoles.slice(0, 3).map((role) => (
-                          <span
-                            key={`${thread.id}-${role}`}
-                            className={[
-                              "rounded-full px-1.5 py-0.5 text-[9px] font-extrabold",
-                              roleBadgeColor(role),
-                            ].join(" ")}
-                          >
-                            {role}
+                      {!embedded ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          {thread.participantRoles.slice(0, 3).map((role) => (
+                            <span
+                              key={`${thread.id}-${role}`}
+                              className={[
+                                "rounded-full px-1.5 py-0.5 text-[9px] font-extrabold",
+                                roleBadgeColor(role),
+                              ].join(" ")}
+                            >
+                              {role}
+                            </span>
+                          ))}
+                          <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                            {thread.participantCount} participants
                           </span>
-                        ))}
-                        <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                          {thread.participantCount} participants
-                        </span>
-                      </div>
-                      <div className="mt-2 line-clamp-2 break-words text-xs leading-5 text-gray-600 dark:text-gray-400">
+                        </div>
+                      ) : null}
+                      <div
+                        className={[
+                          embedded ? "mt-1 line-clamp-1" : "mt-2 line-clamp-2",
+                          "break-words text-xs leading-5 text-gray-600 dark:text-gray-400",
+                        ].join(" ")}
+                      >
                         {thread.last}
                       </div>
                     </div>
@@ -1154,7 +1212,7 @@ export default function MessageInbox({ centerId, isAdmin }) {
             </div>
           )}
 
-          {!isAdmin ? (
+          {!isAdmin && !embedded ? (
             <div className="mt-3 rounded-[1.4rem] border border-sky-100 bg-gradient-to-br from-sky-50 to-white p-4 dark:border-sky-900/40 dark:from-sky-950/30 dark:to-gray-900">
               <div className="text-[11px] font-black uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">
                 {activeMeta ? "Current focus" : "Teacher messaging tip"}
@@ -1178,8 +1236,11 @@ export default function MessageInbox({ centerId, isAdmin }) {
 
         <div
           className={[
-            "min-h-[620px] rounded-[1.8rem] border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800",
-            mobilePanel === "list" ? "hidden lg:flex lg:flex-col" : "flex flex-col",
+            panelHeightClass,
+            embedded
+              ? "rounded-[1.5rem] border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
+              : "rounded-[1.8rem] border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800",
+            mobilePanel === "list" ? "hidden xl:flex xl:flex-col" : "flex flex-col",
           ].join(" ")}
         >
           {!activeThread || !activeMeta ? (
@@ -1219,11 +1280,11 @@ export default function MessageInbox({ centerId, isAdmin }) {
             </div>
           ) : (
             <>
-              <div className="border-b border-gray-100 pb-4 dark:border-gray-700">
+              <div className={`border-b border-gray-100 ${embedded ? "pb-3" : "pb-4"} dark:border-gray-700`}>
                 <button
                   type="button"
                   onClick={() => setMobilePanel("list")}
-                  className="mb-3 inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.14em] text-gray-500 shadow-sm lg:hidden"
+                  className="mb-3 inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.14em] text-gray-500 shadow-sm xl:hidden"
                 >
                   <svg
                     className="h-3.5 w-3.5"
@@ -1237,17 +1298,22 @@ export default function MessageInbox({ centerId, isAdmin }) {
                   Back
                 </button>
 
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div className={`flex flex-col ${embedded ? "gap-3" : "gap-4"} xl:flex-row xl:items-start xl:justify-between`}>
                   <div className="min-w-0">
                     <div className="flex items-start gap-3">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-100 to-cyan-100 text-sm font-extrabold text-sky-700 dark:from-sky-900/40 dark:to-cyan-900/30 dark:text-sky-200">
+                      <div
+                        className={[
+                          "flex shrink-0 items-center justify-center bg-gradient-to-br from-sky-100 to-cyan-100 text-sm font-extrabold text-sky-700 dark:from-sky-900/40 dark:to-cyan-900/30 dark:text-sky-200",
+                          embedded ? "h-10 w-10 rounded-xl" : "h-12 w-12 rounded-2xl",
+                        ].join(" ")}
+                      >
                         {activeMeta.avatar}
                       </div>
                       <div className="min-w-0">
-                        <h3 className="break-words text-base font-extrabold text-gray-900 dark:text-gray-100">
+                        <h3 className={`${embedded ? "text-[15px]" : "text-base"} break-words font-extrabold text-gray-900 dark:text-gray-100`}>
                           {activeMeta.title}
                         </h3>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
+                        <div className={`${embedded ? "mt-1.5" : "mt-2"} flex flex-wrap gap-1.5`}>
                           {isAdmin && activeMeta.centerName ? (
                             <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-sky-700 dark:border-sky-700 dark:bg-sky-900/20 dark:text-sky-200">
                               {activeMeta.centerName}
@@ -1259,14 +1325,16 @@ export default function MessageInbox({ centerId, isAdmin }) {
                           <span className="rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-gray-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
                             {activeMeta.participantCount} participants
                           </span>
-                          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-200">
-                            Live updates
-                          </span>
+                          {!embedded ? (
+                            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-200">
+                              Live updates
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                     </div>
 
-                    <div className="mt-3 flex flex-wrap gap-1.5">
+                    <div className={`${embedded ? "mt-2" : "mt-3"} flex flex-wrap gap-1.5`}>
                       {(activeThread.participants || []).map((participant) => (
                         <span
                           key={participant.userId}
@@ -1287,49 +1355,47 @@ export default function MessageInbox({ centerId, isAdmin }) {
                     </div>
                   </div>
 
-                  <div className="grid gap-2 sm:grid-cols-2 xl:w-[300px] xl:min-w-[300px]">
-                    <div className="rounded-[1.4rem] border border-sky-100 bg-sky-50/80 px-4 py-3 text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-100">
-                      <div className="text-[11px] font-black uppercase tracking-[0.16em] opacity-75">
-                        Messages
-                      </div>
-                      <div className="mt-2 text-2xl font-extrabold">{activeMessages.length}</div>
-                      <div className="mt-1 text-xs opacity-80">Current thread history</div>
-                    </div>
-                    <div className="rounded-[1.4rem] border border-emerald-100 bg-emerald-50/80 px-4 py-3 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-100">
-                      <div className="text-[11px] font-black uppercase tracking-[0.16em] opacity-75">
-                        Last activity
-                      </div>
-                      <div className="mt-2 text-2xl font-extrabold">
-                        {activeLastMessage ? timeAgo(activeLastMessage.createdAt) : "Waiting"}
-                      </div>
-                      <div className="mt-1 text-xs opacity-80">
+                  <div className={`${embedded ? "mt-1" : "mt-3"} flex flex-wrap gap-1.5 xl:max-w-[320px] xl:justify-end`}>
+                    <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-sky-700 dark:border-sky-700 dark:bg-sky-900/20 dark:text-sky-200">
+                      {activeMessages.length} messages
+                    </span>
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-200">
+                      {activeLastMessage ? timeAgo(activeLastMessage.createdAt) : "Waiting"}
+                    </span>
+                    {!embedded ? (
+                      <span className="rounded-full border border-white/80 bg-white/90 px-2.5 py-1 text-[10px] font-bold text-gray-600 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
                         {activeLastMessage
                           ? formatMessageTimestamp(activeLastMessage.createdAt)
                           : "New messages appear live"}
-                      </div>
-                    </div>
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               </div>
 
               <div className="mt-4 flex flex-1 flex-col overflow-hidden rounded-[1.6rem] border border-gray-200 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.10),transparent_34%),linear-gradient(to_bottom,rgba(248,250,252,0.98),rgba(255,255,255,0.98))] dark:border-gray-700 dark:bg-[linear-gradient(to_bottom,rgba(17,24,39,0.96),rgba(31,41,55,0.96))]">
-                <div className="flex items-center justify-between gap-3 border-b border-white/70 px-4 py-3 dark:border-gray-700">
+                <div className={`border-b border-white/70 ${embedded ? "px-3 py-2" : "px-4 py-3"} dark:border-gray-700`}>
                   <div>
                     <div className="text-[11px] font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
                       Conversation timeline
                     </div>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                      {isAdmin
-                        ? "Reply without leaving the current thread."
-                        : "Reply in-thread so earlier context stays attached to the conversation."}
-                    </p>
+                    {!embedded ? (
+                      <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400 sm:text-sm">
+                        {isAdmin
+                          ? "Reply without leaving the current thread."
+                          : "Reply in-thread so earlier context stays attached to the conversation."}
+                      </p>
+                    ) : null}
                   </div>
-                  <span className="rounded-full border border-white/80 bg-white/90 px-3 py-1 text-[11px] font-bold text-gray-600 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                    {activeMessages.length} messages
-                  </span>
                 </div>
 
-                <div className="flex-1 space-y-3 overflow-auto px-3 py-4 scrollbar-hide sm:px-4">
+                <div
+                  ref={messagesViewportRef}
+                  className={[
+                    "flex-1 space-y-3 overflow-auto scrollbar-hide",
+                    embedded ? "px-3 py-3" : "px-3 py-4 sm:px-4",
+                  ].join(" ")}
+                >
                   {activeMessages.length === 0 ? (
                     <div className="py-10 text-center text-sm text-gray-500 dark:text-gray-400">
                       No messages yet
@@ -1372,13 +1438,13 @@ export default function MessageInbox({ centerId, isAdmin }) {
 
                             <div
                               className={[
-                                "rounded-[1.4rem] px-4 py-3 shadow-sm",
+                                embedded ? "rounded-[1.2rem] px-3 py-2.5 shadow-sm" : "rounded-[1.4rem] px-4 py-3 shadow-sm",
                                 isOwn
                                   ? "bg-gradient-to-br from-sky-600 to-cyan-500 text-white"
                                   : "border border-gray-200 bg-white/90 text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100",
                               ].join(" ")}
                             >
-                              <p className="break-words whitespace-pre-wrap text-sm leading-6">
+                              <p className={`break-words whitespace-pre-wrap text-sm ${embedded ? "leading-5" : "leading-6"}`}>
                                 {item.body}
                               </p>
                             </div>
@@ -1397,26 +1463,30 @@ export default function MessageInbox({ centerId, isAdmin }) {
                       );
                     })
                   )}
-                  <div ref={messagesEndRef} />
                 </div>
               </div>
 
               <form
                 onSubmit={send}
-                className="mt-4 rounded-[1.6rem] border border-sky-100 bg-sky-50/70 p-3 dark:border-sky-900/40 dark:bg-sky-950/20"
+                className={[
+                  embedded ? "mt-3 rounded-[1.4rem] p-2.5" : "mt-4 rounded-[1.6rem] p-3",
+                  "border border-sky-100 bg-sky-50/70 dark:border-sky-900/40 dark:bg-sky-950/20",
+                ].join(" ")}
               >
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
                   <div className="min-w-0 flex-1">
                     <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <div className="text-[11px] font-black uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">
-                          Reply in thread
+                          {embedded ? "Reply" : "Reply in thread"}
                         </div>
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          {isAdmin
-                            ? "Send a response without leaving the current conversation."
-                            : "Replies stay attached to the thread so everyone keeps the same context."}
-                        </p>
+                        {!embedded ? (
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {isAdmin
+                              ? "Send a response without leaving the current conversation."
+                              : "Replies stay attached to the thread so everyone keeps the same context."}
+                          </p>
+                        ) : null}
                       </div>
                       {replyAudienceLabel ? (
                         <span className="rounded-full border border-white/80 bg-white/90 px-3 py-1 text-[11px] font-bold text-gray-600 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
@@ -1427,7 +1497,10 @@ export default function MessageInbox({ centerId, isAdmin }) {
                     <textarea
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
-                      className="min-h-[112px] w-full resize-none rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm transition focus:border-sky-300 focus:outline-none focus:ring-4 focus:ring-sky-100 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:focus:border-sky-700 dark:focus:ring-sky-900/40"
+                      className={[
+                        "w-full resize-none border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm transition focus:border-sky-300 focus:outline-none focus:ring-4 focus:ring-sky-100 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:focus:border-sky-700 dark:focus:ring-sky-900/40",
+                        embedded ? "min-h-[80px] rounded-xl" : "min-h-[96px] rounded-2xl",
+                      ].join(" ")}
                       placeholder="Type a message..."
                       rows={3}
                     />
@@ -1435,9 +1508,12 @@ export default function MessageInbox({ centerId, isAdmin }) {
                   <button
                     type="submit"
                     disabled={sending || !message.trim()}
-                    className="w-full rounded-2xl bg-gradient-to-r from-sky-600 to-cyan-500 px-5 py-3 text-sm font-extrabold text-white shadow-sm transition hover:from-sky-700 hover:to-cyan-600 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto lg:min-w-[132px]"
+                    className={[
+                      "w-full bg-gradient-to-r from-sky-600 to-cyan-500 text-sm font-extrabold text-white shadow-sm transition hover:from-sky-700 hover:to-cyan-600 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto",
+                      embedded ? "rounded-xl px-4 py-2.5 lg:min-w-[108px]" : "rounded-2xl px-5 py-3 lg:min-w-[132px]",
+                    ].join(" ")}
                   >
-                    {sending ? "Sending..." : "Send reply"}
+                    {sending ? "Sending..." : embedded ? "Send" : "Send reply"}
                   </button>
                 </div>
               </form>

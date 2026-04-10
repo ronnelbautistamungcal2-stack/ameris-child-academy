@@ -9,17 +9,16 @@ test.describe("Parent Workflows", () => {
   test("can navigate to children page", async ({ page }) => {
     await page.goto("/parent/children");
     await waitForLoadingDone(page);
-    await expect(page.getByText("My Children")).toBeVisible();
+    await expect(page).toHaveURL(/\/parent\/children/);
+    await expect(page.getByText("Switch child", { exact: true })).toBeVisible();
   });
 
-  test("children page shows child list or empty state", async ({ page }) => {
+  test("children page renders the parent report workspace", async ({ page }) => {
     await page.goto("/parent/children");
     await waitForLoadingDone(page);
 
-    // Either children buttons or empty state should be visible
-    const hasChildren = await page.locator("button", { hasText: /View details|Selected/ }).first().isVisible().catch(() => false);
-    const hasEmpty = await page.getByText(/No children found/).isVisible().catch(() => false);
-    expect(hasChildren || hasEmpty).toBe(true);
+    await expect(page.getByRole("heading", { name: "Switch child" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
   });
 
   test("tab navigation shows correct roles", async ({ page }) => {
@@ -66,6 +65,13 @@ test.describe("Parent Workflows", () => {
     await expect(page.locator("main")).toBeVisible();
   });
 
+  test("messages page keeps the conversation switcher visible on laptop widths", async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 900 });
+    await page.goto("/parent/messages");
+    await waitForLoadingDone(page);
+    await expect(page.getByRole("button", { name: "Conversations", exact: true })).toBeVisible();
+  });
+
   test("billing request opens prefilled compose flow", async ({ page }) => {
     await page.goto("/parent/billing");
     await waitForLoadingDone(page);
@@ -84,6 +90,10 @@ test.describe("Parent Workflows", () => {
 
   test("sign out works from parent portal", async ({ page }) => {
     await page.click("text=Sign Out");
+    await page.waitForURL(/\/(login|api\/auth\/signout)/, { timeout: 10000 });
+    if (/\/api\/auth\/signout/.test(page.url())) {
+      await page.getByRole("button", { name: "Sign out" }).click();
+    }
     await expect(page).toHaveURL(/\/login/, { timeout: 10000 });
   });
 });

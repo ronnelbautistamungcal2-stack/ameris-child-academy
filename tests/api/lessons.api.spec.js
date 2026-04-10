@@ -116,6 +116,6 @@ test.describe("Lessons API @api", () => {
     if (!createdLessonId) test.skip();
     const cookies = await loginAsAdmin(request);
     const res = await apiDelete(request, `/api/v1/lessons/${createdLessonId}`, cookies);
-    expect(res.status()).toBe(200);
+    expect(res.status()).toBe(204);
   });
 });

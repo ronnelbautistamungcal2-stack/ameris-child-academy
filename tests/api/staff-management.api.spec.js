@@ -281,7 +281,8 @@ test.describe("Staff Management API @api", () => {
         {
           centerId,
           teacherId: teacherUserId,
-          period: "2026-02",
+          periodStart: "2026-02-01",
+          periodEnd: "2026-02-14",
           categories: {
             "Classroom Management": 4,
             "Communication": 3,
@@ -297,6 +298,86 @@ test.describe("Staff Management API @api", () => {
         cookies,
       );
       expect([200, 201]).toContain(res.status());
+      const data = await res.json();
+      expect(data.periodStart).toBeTruthy();
+      expect(data.periodEnd).toBeTruthy();
+      expect(data.period).toContain("2026-02-01");
+      expect(data.period).toContain("2026-02-14");
+    });
+
+    test("POST /api/v1/evaluations rejects an invalid period range", async ({ request }) => {
+      if (!centerId || !teacherUserId) test.skip();
+      const cookies = await loginAsAdmin(request);
+      const res = await apiPost(
+        request,
+        "/api/v1/evaluations",
+        {
+          centerId,
+          teacherId: teacherUserId,
+          periodStart: "2026-02-14",
+          periodEnd: "2026-02-01",
+          categories: {},
+        },
+        cookies,
+      );
+      expect(res.status()).toBe(400);
+    });
+
+    test("GET /api/v1/evaluations filters by employee, status, and period date range", async ({ request }) => {
+      if (!centerId || !teacherUserId) test.skip();
+      const cookies = await loginAsAdmin(request);
+      const now = new Date();
+      const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      const currentMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+      const currentMonthEnd = `${lastDayOfMonth.getFullYear()}-${String(lastDayOfMonth.getMonth() + 1).padStart(2, "0")}-${String(lastDayOfMonth.getDate()).padStart(2, "0")}`;
+
+      const createRes = await apiPost(
+        request,
+        "/api/v1/evaluations",
+        {
+          centerId,
+          teacherId: teacherUserId,
+          periodStart: "2031-07-01",
+          periodEnd: "2031-07-14",
+          categories: {
+            "Classroom Management": 4,
+            "Communication": 4,
+            "Curriculum Delivery": 4,
+            "Child Engagement": 5,
+            "Professionalism": 4,
+          },
+          notes: "API filter coverage",
+        },
+        cookies,
+      );
+      expect([200, 201]).toContain(createRes.status());
+      const created = await createRes.json();
+
+      const submitRes = await apiPut(
+        request,
+        `/api/v1/evaluations/${created.id}`,
+        { status: "SUBMITTED" },
+        cookies,
+      );
+      expect(submitRes.status()).toBe(200);
+
+      const filteredRes = await apiGet(
+        request,
+        `/api/v1/evaluations?centerId=${centerId}&teacherId=${teacherUserId}&status=SUBMITTED&from=2031-07-01&to=2031-07-14`,
+        cookies,
+      );
+      expect(filteredRes.status()).toBe(200);
+      const filtered = await filteredRes.json();
+      expect(filtered.some((evaluation) => evaluation.id === created.id)).toBe(true);
+
+      const currentMonthRes = await apiGet(
+        request,
+        `/api/v1/evaluations?centerId=${centerId}&teacherId=${teacherUserId}&from=${currentMonthStart}&to=${currentMonthEnd}`,
+        cookies,
+      );
+      expect(currentMonthRes.status()).toBe(200);
+      const currentMonth = await currentMonthRes.json();
+      expect(currentMonth.some((evaluation) => evaluation.id === created.id)).toBe(false);
     });
 
     test("teacher cannot create evaluations", async ({ request }) => {

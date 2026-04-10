@@ -150,7 +150,12 @@ export default function MessageInbox({ centerId, isAdmin }) {
   const [mobilePanel, setMobilePanel] = useState(queryThreadId ? "thread" : "list");
 
   const messagesEndRef = useRef(null);
+  const queryThreadIdRef = useRef(queryThreadId);
   const socket = useUserSocket(userId);
+
+  useEffect(() => {
+    queryThreadIdRef.current = queryThreadId;
+  }, [queryThreadId]);
 
   function resetComposeForm() {
     setSelectedUsers([]);
@@ -164,11 +169,15 @@ export default function MessageInbox({ centerId, isAdmin }) {
     if (!router.isReady) return;
 
     const nextQuery = { ...router.query };
+    let hasComposeQuery = false;
     COMPOSE_QUERY_KEYS.forEach((key) => {
+      if (key in nextQuery) hasComposeQuery = true;
       delete nextQuery[key];
     });
 
-    router.replace(
+    if (!hasComposeQuery) return;
+
+    void router.replace(
       {
         pathname: router.pathname,
         query: nextQuery,
@@ -195,6 +204,28 @@ export default function MessageInbox({ centerId, isAdmin }) {
     clearComposeQuery();
   }
 
+  function replaceThreadQuery(nextThreadId) {
+    if (!router.isReady) return;
+
+    const currentThreadId =
+      typeof router.query.threadId === "string" ? router.query.threadId : "";
+    const normalizedNextThreadId = String(nextThreadId || "");
+    if (currentThreadId === normalizedNextThreadId) return;
+
+    const nextQuery = { ...router.query };
+    if (normalizedNextThreadId) nextQuery.threadId = normalizedNextThreadId;
+    else delete nextQuery.threadId;
+
+    void router.replace(
+      {
+        pathname: router.pathname,
+        query: nextQuery,
+      },
+      undefined,
+      { shallow: true },
+    );
+  }
+
   const refreshThreads = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -207,7 +238,10 @@ export default function MessageInbox({ centerId, isAdmin }) {
       setThreads(arr);
       setActiveThreadId((currentThreadId) => {
         if (currentThreadId || arr.length === 0) return currentThreadId;
-        const match = queryThreadId && arr.find((thread) => thread.id === queryThreadId);
+        const preferredThreadId = queryThreadIdRef.current;
+        const match =
+          preferredThreadId &&
+          arr.find((thread) => thread.id === preferredThreadId);
         if (match) setMobilePanel("thread");
         return match ? match.id : arr[0].id;
       });
@@ -216,19 +250,19 @@ export default function MessageInbox({ centerId, isAdmin }) {
     } finally {
       setLoading(false);
     }
-  }, [centerId, isAdmin, queryThreadId]);
+  }, [centerId, isAdmin]);
 
   useEffect(() => {
     refreshThreads();
   }, [refreshThreads]);
 
   useEffect(() => {
-    if (!queryThreadId) return;
+    if (!router.isReady || !queryThreadId) return;
     if (queryThreadId !== activeThreadId) {
       setActiveThreadId(queryThreadId);
     }
     setMobilePanel("thread");
-  }, [queryThreadId, activeThreadId]);
+  }, [router.isReady, queryThreadId, activeThreadId]);
 
   useEffect(() => {
     if (router.query.compose !== "1") return;
@@ -251,26 +285,6 @@ export default function MessageInbox({ centerId, isAdmin }) {
     router.query.recipientRole,
     router.query.subject,
   ]);
-
-  useEffect(() => {
-    if (!router.isReady) return;
-    const queryThreadId =
-      typeof router.query.threadId === "string" ? router.query.threadId : "";
-    if (queryThreadId === activeThreadId) return;
-
-    const nextQuery = { ...router.query };
-    if (activeThreadId) nextQuery.threadId = activeThreadId;
-    else delete nextQuery.threadId;
-
-    router.replace(
-      {
-        pathname: router.pathname,
-        query: nextQuery,
-      },
-      undefined,
-      { shallow: true },
-    );
-  }, [activeThreadId, router]);
 
   useEffect(() => {
     if (!activeThreadId) {
@@ -420,6 +434,7 @@ export default function MessageInbox({ centerId, isAdmin }) {
       closeCompose();
       await refreshThreads();
       setActiveThreadId(thread.id);
+      replaceThreadQuery(thread.id);
       setMobilePanel("thread");
       toast.success(
         selectedUsers.length > 1
@@ -437,6 +452,7 @@ export default function MessageInbox({ centerId, isAdmin }) {
 
   function selectThread(threadId) {
     setActiveThreadId(threadId);
+    replaceThreadQuery(threadId);
     setMobilePanel("thread");
   }
 

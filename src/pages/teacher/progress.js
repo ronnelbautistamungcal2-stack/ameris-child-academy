@@ -280,7 +280,7 @@ export default function TeacherProgress() {
       if (category && (lesson?.category?.name || "") !== category) return false;
       if (lessonAgeGroup) {
         const lessonGroups = getLessonAgeGroups(lesson);
-        if (lessonGroups.length && !lessonGroups.includes(lessonAgeGroup)) return false;
+        if (!lessonGroups.includes(lessonAgeGroup)) return false;
       }
       if (!q) return true;
       const haystack = [

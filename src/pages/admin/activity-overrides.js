@@ -2,7 +2,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useRouter } from "next/router";
-import { Fragment, useEffect, useMemo, useState, useCallback } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const TYPES = [
   "DIAPER_CHANGE",
@@ -17,79 +17,639 @@ const TYPES = [
   "OTHER",
 ];
 
+const QUICK_TYPE_OPTIONS = ["MEAL", "NAP", "DIAPER_CHANGE", "ACTIVITY", "BEHAVIOR", "INCIDENT", "OTHER"];
+
 const TYPE_META = {
-  INCIDENT:      { label: "Incident",      icon: "!", color: "#dc2626" },
-  DIAPER_CHANGE: { label: "Diaper Change", icon: "🧷", color: "#8b5cf6" },
-  NAP:           { label: "Nap",           icon: "😴", color: "#6366f1" },
-  BOTTLE:        { label: "Bottle",        icon: "🍼", color: "#0ea5e9" },
-  MEAL:          { label: "Meal",          icon: "🍽️", color: "#f59e0b" },
-  SNACK:         { label: "Snack",         icon: "🍎", color: "#10b981" },
-  ACTIVITY:      { label: "Activity",      icon: "🎨", color: "#ec4899" },
-  TASK_CHECKLIST:{ label: "Task / Checklist", icon: "✅", color: "#14b8a6" },
-  BEHAVIOR:      { label: "Behavior",      icon: "📋", color: "#f97316" },
-  OTHER:         { label: "Other",         icon: "📝", color: "#64748b" },
+  INCIDENT: { label: "Incident", color: "#b91c1c", tint: "#fee2e2" },
+  DIAPER_CHANGE: { label: "Diaper Change", color: "#7c3aed", tint: "#f3e8ff" },
+  NAP: { label: "Nap", color: "#4338ca", tint: "#e0e7ff" },
+  BOTTLE: { label: "Bottle", color: "#0369a1", tint: "#e0f2fe" },
+  MEAL: { label: "Meal", color: "#b45309", tint: "#fef3c7" },
+  SNACK: { label: "Snack", color: "#047857", tint: "#d1fae5" },
+  ACTIVITY: { label: "Activity", color: "#be185d", tint: "#fce7f3" },
+  TASK_CHECKLIST: { label: "Task / Checklist", color: "#0f766e", tint: "#ccfbf1" },
+  BEHAVIOR: { label: "Behavior", color: "#c2410c", tint: "#ffedd5" },
+  OTHER: { label: "Other", color: "#475569", tint: "#e2e8f0" },
 };
+
+const MEAL_OCCASIONS = [
+  { value: "BREAKFAST", label: "Breakfast" },
+  { value: "AM_SNACK", label: "AM snack" },
+  { value: "LUNCH", label: "Lunch" },
+  { value: "PM_SNACK", label: "PM snack" },
+  { value: "DINNER", label: "Dinner" },
+  { value: "EVENING_SNACK", label: "Evening snack" },
+];
+
+const PORTION_OPTIONS = [
+  { value: "ALL", label: "All" },
+  { value: "MOST", label: "Most" },
+  { value: "SOME", label: "Some" },
+  { value: "NONE", label: "None" },
+];
+
+const BOTTLE_PORTION_OPTIONS = [
+  { value: "FULL", label: "Full" },
+  { value: "MOST", label: "Most" },
+  { value: "HALF", label: "Half" },
+  { value: "SOME", label: "Some" },
+  { value: "NONE", label: "None" },
+];
+
+const BEHAVIOR_TYPE_OPTIONS = [
+  { value: "PHYSICAL_VIOLENCE", label: "Physical violence" },
+  { value: "VIRTUE", label: "Virtue" },
+  { value: "RESPECT", label: "Respect" },
+  { value: "OBEDIENCE", label: "Obedience" },
+  { value: "OTHER", label: "Other" },
+];
+
+const BEHAVIOR_LEVEL_OPTIONS = ["1", "2", "3", "4"];
+
+const DIAPER_TYPE_OPTIONS = [
+  { value: "BM", label: "BM" },
+  { value: "W", label: "W" },
+  { value: "D", label: "D" },
+];
+
+const ASSESSMENT_DOMAINS = [
+  {
+    key: "cognitive",
+    label: "Cognitive Development",
+    description: "Problem-solving, curiosity, focus & memory",
+    badge: "CG",
+    tint: "#dbeafe",
+    color: "#1d4ed8",
+    borderColor: "#bfdbfe",
+  },
+  {
+    key: "social",
+    label: "Social-Emotional",
+    description: "Sharing, empathy, self-regulation & cooperation",
+    badge: "SE",
+    tint: "#e0f2fe",
+    color: "#0369a1",
+    borderColor: "#bae6fd",
+  },
+  {
+    key: "physical",
+    label: "Physical Development",
+    description: "Motor skills, coordination & physical activity",
+    badge: "PD",
+    tint: "#dcfce7",
+    color: "#15803d",
+    borderColor: "#bbf7d0",
+  },
+  {
+    key: "language",
+    label: "Language & Communication",
+    description: "Vocabulary, expression, listening & comprehension",
+    badge: "LC",
+    tint: "#fef3c7",
+    color: "#b45309",
+    borderColor: "#fde68a",
+  },
+  {
+    key: "creative",
+    label: "Creative Expression",
+    description: "Art, music, imaginative play & self-expression",
+    badge: "CE",
+    tint: "#ffe4e6",
+    color: "#be123c",
+    borderColor: "#fecdd3",
+  },
+];
+
+const RUBRIC_LEVELS = [
+  { value: 1, label: "Emerging", background: "#fef3c7", color: "#92400e", borderColor: "#fcd34d" },
+  { value: 2, label: "Developing", background: "#e0f2fe", color: "#0c4a6e", borderColor: "#7dd3fc" },
+  { value: 3, label: "Proficient", background: "#dcfce7", color: "#166534", borderColor: "#86efac" },
+  { value: 4, label: "Advanced", background: "#dbeafe", color: "#1e3a8a", borderColor: "#93c5fd" },
+];
+
+const MANAGED_DETAIL_KEYS = new Set([
+  "kind",
+  "grade",
+  "domains",
+  "domainAvg",
+  "media",
+  "photos",
+  "time",
+  "startTime",
+  "endTime",
+  "meal",
+  "mealType",
+  "quantity",
+  "diaperType",
+  "behaviorType",
+  "behaviorLevel",
+]);
+
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+
+function arr(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function asObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function fullChildName(child) {
+  return `${child?.firstName || ""}${child?.lastName ? ` ${child.lastName}` : ""}`.trim();
+}
 
 function relativeTime(dateStr) {
   const now = new Date();
-  const d = new Date(dateStr);
-  const diffMs = now - d;
+  const value = new Date(dateStr);
+  if (Number.isNaN(value.getTime())) return "-";
+  const diffMs = now - value;
   const mins = Math.floor(diffMs / 60000);
   if (mins < 1) return "Just now";
   if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
+  return value.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: value.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+  });
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString();
 }
 
 function toLocalDateTimeInput(value) {
   if (!value) return "";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function defaultDateTimeInput() {
+  return toLocalDateTimeInput(new Date());
+}
+
+function formatClock(value) {
+  const date = value instanceof Date ? value : new Date(value || Date.now());
+  if (Number.isNaN(date.getTime())) return "";
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function combineDateAndTime(dateLike, timeValue) {
+  const base = dateLike instanceof Date ? new Date(dateLike) : new Date(dateLike);
+  if (Number.isNaN(base.getTime())) return null;
+  const [hoursRaw, minutesRaw] = String(timeValue || "").split(":");
+  const hours = Number(hoursRaw);
+  const minutes = Number(minutesRaw);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return new Date(base);
+  base.setHours(hours, minutes, 0, 0);
+  return base;
+}
+
+function defaultActivityFields(nextType) {
+  return {
+    napStartTime: "",
+    napEndTime: "",
+    mealType: nextType === "SNACK" ? "AM_SNACK" : "BREAKFAST",
+    quantity: "ALL",
+    bottleQuantity: "FULL",
+    diaperType: "W",
+    behaviorType: "OTHER",
+    behaviorLevel: "1",
+  };
+}
+
+function createEmptyForm(nextType = "MEAL", createdAt = defaultDateTimeInput()) {
+  return {
+    type: nextType,
+    notes: "",
+    createdAt,
+    fields: defaultActivityFields(nextType),
+    dailyGrade: "",
+    domainScores: {},
+    mediaUrls: [],
+    extraDetailsText: "",
+  };
+}
+
+function applyTypeChange(form, nextType) {
+  const defaults = defaultActivityFields(nextType);
+  const currentFields = asObject(form?.fields);
+  return {
+    ...form,
+    type: nextType,
+    fields: {
+      ...defaults,
+      napStartTime: nextType === "NAP" ? currentFields.napStartTime || "" : "",
+      napEndTime: nextType === "NAP" ? currentFields.napEndTime || "" : "",
+      mealType:
+        ["MEAL", "SNACK"].includes(nextType)
+          ? currentFields.mealType || defaults.mealType
+          : defaults.mealType,
+      quantity:
+        ["MEAL", "SNACK"].includes(nextType)
+          ? currentFields.quantity || defaults.quantity
+          : defaults.quantity,
+      bottleQuantity:
+        nextType === "BOTTLE"
+          ? currentFields.bottleQuantity || defaults.bottleQuantity
+          : defaults.bottleQuantity,
+      diaperType:
+        nextType === "DIAPER_CHANGE"
+          ? currentFields.diaperType || defaults.diaperType
+          : defaults.diaperType,
+      behaviorType:
+        ["BEHAVIOR", "INCIDENT"].includes(nextType)
+          ? currentFields.behaviorType || defaults.behaviorType
+          : defaults.behaviorType,
+      behaviorLevel:
+        ["BEHAVIOR", "INCIDENT"].includes(nextType)
+          ? currentFields.behaviorLevel || defaults.behaviorLevel
+          : defaults.behaviorLevel,
+    },
+  };
+}
+
+function extractActivityMediaUrls(activity) {
+  const details = asObject(activity?.details);
+  const raw = [...arr(details.media), ...arr(details.photos)];
+  return [...new Set(
+    raw
+      .map((item) => {
+        if (typeof item === "string") return item.trim();
+        if (item && typeof item === "object" && typeof item.url === "string") {
+          return item.url.trim();
+        }
+        return "";
+      })
+      .filter(Boolean),
+  )];
+}
+
+function extractDailyGrade(details) {
+  const safe = asObject(details);
+  if (safe.kind !== "DAILY_GRADE" || safe.domains) return "";
+  const grade = Number(safe.grade);
+  return Number.isFinite(grade) ? String(grade) : "";
+}
+
+function extractDomainScores(details) {
+  const safe = asObject(details);
+  return safe.kind === "DAILY_GRADE" && safe.domains ? safe.domains : {};
+}
+
+function stripManagedDetails(details) {
+  const safe = asObject(details);
+  return Object.fromEntries(
+    Object.entries(safe).filter(([key]) => !MANAGED_DETAIL_KEYS.has(key)),
+  );
+}
+
+function buildFormFromActivity(activity) {
+  const details = asObject(activity?.details);
+  const nextType = activity?.type || "OTHER";
+  const extraDetails = stripManagedDetails(details);
+  return {
+    type: nextType,
+    notes: activity?.notes || "",
+    createdAt: toLocalDateTimeInput(activity?.createdAt) || defaultDateTimeInput(),
+    fields: {
+      ...defaultActivityFields(nextType),
+      napStartTime: details.startTime || "",
+      napEndTime: details.endTime || "",
+      mealType: details.mealType || (nextType === "SNACK" ? "AM_SNACK" : "BREAKFAST"),
+      quantity: details.quantity || "ALL",
+      bottleQuantity: details.quantity || "FULL",
+      diaperType: details.diaperType || "W",
+      behaviorType: details.behaviorType || "OTHER",
+      behaviorLevel: details.behaviorLevel || "1",
+    },
+    dailyGrade: extractDailyGrade(details),
+    domainScores: extractDomainScores(details),
+    mediaUrls: extractActivityMediaUrls(activity),
+    extraDetailsText: Object.keys(extraDetails).length ? JSON.stringify(extraDetails, null, 2) : "",
+  };
+}
+
+function parseExtraDetails(extraDetailsText) {
+  const trimmed = String(extraDetailsText || "").trim();
+  if (!trimmed) return {};
+  const parsed = JSON.parse(trimmed);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Extra details must be a JSON object.");
+  }
+  return parsed;
+}
+
+function buildPayloadFromForm(form) {
+  const baseDate = form?.createdAt ? new Date(form.createdAt) : new Date();
+  if (Number.isNaN(baseDate.getTime())) {
+    throw new Error("Select a valid date and time.");
+  }
+
+  const extraDetails = parseExtraDetails(form?.extraDetailsText);
+  const fields = asObject(form?.fields);
+  const hasDomainScores = Object.keys(asObject(form?.domainScores)).length > 0;
+  const gradeNum = form?.dailyGrade === "" ? null : Number(form?.dailyGrade);
+  const hasLegacyGrade = form?.dailyGrade !== "" && Number.isFinite(gradeNum);
+  const payloadType = hasDomainScores || hasLegacyGrade ? "OTHER" : form?.type || "OTHER";
+  const entryTime = formatClock(baseDate);
+  const mediaUrls = [...new Set(arr(form?.mediaUrls).filter(Boolean))];
+
+  let details = { ...extraDetails };
+
+  if (hasDomainScores) {
+    const scores = Object.values(form.domainScores).filter((value) => Number(value) > 0);
+    const avg = scores.length
+      ? Math.round((scores.reduce((sum, value) => sum + Number(value), 0) / scores.length) * 10) / 10
+      : null;
+    const grade = avg !== null ? Math.round((avg / 4) * 5) : null;
+    details.kind = "DAILY_GRADE";
+    details.grade = grade;
+    details.domains = { ...form.domainScores };
+    details.domainAvg = avg;
+  } else if (hasLegacyGrade) {
+    details.kind = "DAILY_GRADE";
+    details.grade = gradeNum;
+  }
+
+  if (payloadType === "NAP") {
+    details.time = fields.napStartTime || fields.napEndTime || entryTime;
+    details.startTime = fields.napStartTime || "";
+    details.endTime = fields.napEndTime || "";
+  } else if (["MEAL", "SNACK"].includes(payloadType)) {
+    const options =
+      payloadType === "SNACK"
+        ? MEAL_OCCASIONS.filter((option) => option.value.includes("SNACK"))
+        : MEAL_OCCASIONS;
+    const mealType = fields.mealType || (payloadType === "SNACK" ? "AM_SNACK" : "BREAKFAST");
+    const selectedOption = options.find((option) => option.value === mealType);
+    details.time = entryTime;
+    details.meal = selectedOption?.label || mealType;
+    details.mealType = mealType;
+    details.quantity = fields.quantity || "ALL";
+  } else if (payloadType === "BOTTLE") {
+    details.time = entryTime;
+    details.quantity = fields.bottleQuantity || "FULL";
+  } else if (payloadType === "DIAPER_CHANGE") {
+    details.time = entryTime;
+    details.diaperType = fields.diaperType || "W";
+  } else if (["BEHAVIOR", "INCIDENT"].includes(payloadType)) {
+    details.time = entryTime;
+    details.behaviorType = fields.behaviorType || "OTHER";
+    details.behaviorLevel = fields.behaviorLevel || "1";
+  } else {
+    details.time = entryTime;
+  }
+
+  if (mediaUrls.length) details.media = mediaUrls;
+  else delete details.media;
+  delete details.photos;
+
+  const createdAt =
+    payloadType === "NAP" && (fields.napStartTime || fields.napEndTime)
+      ? combineDateAndTime(baseDate, fields.napStartTime || fields.napEndTime)
+      : new Date(baseDate);
+
+  if (!createdAt || Number.isNaN(createdAt.getTime())) {
+    throw new Error("Select a valid date and time.");
+  }
+
+  if (!Object.keys(details).length) details = null;
+
+  return {
+    type: payloadType,
+    notes: String(form?.notes || "").trim() || null,
+    details,
+    createdAt: createdAt.toISOString(),
+  };
+}
+
+function formatActivitySummary(activity) {
+  const details = asObject(activity?.details);
+  const mediaCount = extractActivityMediaUrls(activity).length;
+
+  if (details.kind === "DAILY_GRADE" && details.domains) {
+    const domainSummary = Object.entries(details.domains)
+      .slice(0, 2)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join(", ");
+    return `${domainSummary || "Assessment logged"}${mediaCount ? ` | ${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : ""}`;
+  }
+  if (details.kind === "DAILY_GRADE" && details.grade != null) {
+    return `Daily grade ${details.grade}/5${mediaCount ? ` | ${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : ""}`;
+  }
+  if (activity?.type === "NAP") {
+    if (details.startTime || details.endTime) {
+      return `Rest ${details.startTime || "?"} - ${details.endTime || "?"}`;
+    }
+    return mediaCount ? `${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : "Rest entry";
+  }
+  if (["MEAL", "SNACK"].includes(activity?.type)) {
+    const parts = [details.meal || details.mealType || "", details.quantity || ""].filter(Boolean);
+    if (mediaCount) parts.push(`${mediaCount} photo${mediaCount === 1 ? "" : "s"}`);
+    return parts.join(" | ") || "Meal entry";
+  }
+  if (activity?.type === "BOTTLE") {
+    const parts = [details.quantity || ""].filter(Boolean);
+    if (mediaCount) parts.push(`${mediaCount} photo${mediaCount === 1 ? "" : "s"}`);
+    return parts.join(" | ") || "Bottle entry";
+  }
+  if (activity?.type === "DIAPER_CHANGE") {
+    return `${details.diaperType || "Routine"}${mediaCount ? ` | ${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : ""}`;
+  }
+  if (["BEHAVIOR", "INCIDENT"].includes(activity?.type)) {
+    const parts = [details.behaviorType || "", details.behaviorLevel ? `Level ${details.behaviorLevel}` : ""].filter(Boolean);
+    if (mediaCount) parts.push(`${mediaCount} photo${mediaCount === 1 ? "" : "s"}`);
+    return parts.join(" | ") || "Behavior entry";
+  }
+  return mediaCount ? `${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : "Logged entry";
+}
+
+function hasAssessment(activity) {
+  return asObject(activity?.details).kind === "DAILY_GRADE";
+}
+
+function buildActivityMetaPills(activity) {
+  const details = asObject(activity?.details);
+  const mediaCount = extractActivityMediaUrls(activity).length;
+  const pills = [];
+
+  if (activity?.recordedBy?.name || activity?.recordedBy?.email) {
+    pills.push({
+      label: activity.recordedBy?.name || activity.recordedBy?.email,
+      tone: "slate",
+    });
+  }
+
+  if (activity?.isBackdated) {
+    pills.push({ label: "Backdated", tone: "amber" });
+  }
+
+  if (hasAssessment(activity)) {
+    pills.push({
+      label: details.domains ? "Domain Assessment" : "Daily Grade",
+      tone: "sky",
+    });
+  }
+
+  if (mediaCount) {
+    pills.push({
+      label: `${mediaCount} photo${mediaCount === 1 ? "" : "s"}`,
+      tone: "emerald",
+    });
+  }
+
+  return pills;
+}
+
+function composerHelperText(type) {
+  if (type === "NAP") {
+    return "Nap entries can capture a start time, an end time, or both.";
+  }
+  if (["MEAL", "SNACK"].includes(type)) {
+    return "Meal entries capture the time, meal type, quantity, and description.";
+  }
+  if (type === "BOTTLE") {
+    return "Bottle entries capture the time, quantity, and description.";
+  }
+  if (type === "DIAPER_CHANGE") {
+    return "Diaper entries capture the time, diaper type, and description.";
+  }
+  if (["BEHAVIOR", "INCIDENT"].includes(type)) {
+    return "Behavior and incident entries capture type, level, time, and description.";
+  }
+  return "Other entries capture the time and description.";
+}
+
+function composerDescriptionPlaceholder(type) {
+  if (type === "NAP") return "Add a short rest-time note";
+  if (["MEAL", "SNACK", "BOTTLE"].includes(type)) return "Add meal or feeding details";
+  return "Add a short note about the activity";
+}
+
+function getAssessmentOverall(domainScores) {
+  const entries = Object.entries(asObject(domainScores)).filter(([, value]) => Number(value) > 0);
+  if (!entries.length) return null;
+
+  const average = entries.reduce((sum, [, value]) => sum + Number(value), 0) / entries.length;
+  const level = RUBRIC_LEVELS.find((item) => item.value === Math.round(average));
+
+  return {
+    label: level ? level.label : `${average.toFixed(1)}/4`,
+    count: entries.length,
+    average,
+  };
+}
+
+function fileToBase64(file, timeoutMs = 15000) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    const timer = setTimeout(() => {
+      try {
+        reader.abort();
+      } catch {}
+      reject(new Error(`File read timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    reader.onerror = () => {
+      clearTimeout(timer);
+      reject(new Error("Failed to read file"));
+    };
+
+    reader.onload = () => {
+      clearTimeout(timer);
+      const result = String(reader.result || "");
+      const commaIndex = result.indexOf(",");
+      if (commaIndex === -1) {
+        reject(new Error("Invalid file encoding"));
+        return;
+      }
+      resolve(result.slice(commaIndex + 1));
+    };
+
+    reader.onabort = () => {
+      clearTimeout(timer);
+      reject(new Error("File read aborted"));
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadFilesToUrls(files) {
+  const uploadedUrls = [];
+  const issues = [];
+  for (const file of Array.from(files || [])) {
+    if (Number(file?.size || 0) > MAX_PHOTO_BYTES) {
+      issues.push(`${file.name} exceeds 10MB`);
+      continue;
+    }
+    try {
+      const dataBase64 = await fileToBase64(file, 12000);
+      const result = await apiJson("/api/v1/uploads", {
+        method: "POST",
+        timeoutMs: 25000,
+        body: JSON.stringify({
+          filename: file.name,
+          mimeType: file.type,
+          dataBase64,
+        }),
+      });
+      if (result?.url) uploadedUrls.push(result.url);
+      else issues.push(`${file.name} upload did not return a URL`);
+    } catch {
+      issues.push(`${file.name} failed to upload`);
+    }
+  }
+  return { uploadedUrls, issues };
 }
 
 export default function AdminActivityOverrides() {
   const router = useRouter();
   const [centers, setCenters] = useState([]);
   const [children, setChildren] = useState([]);
-  const initialCenterId =
-    typeof router.query.centerId === "string" ? router.query.centerId : "";
-  const initialChildId =
-    typeof router.query.childId === "string" ? router.query.childId : "";
+  const initialCenterId = typeof router.query.centerId === "string" ? router.query.centerId : "";
+  const initialChildId = typeof router.query.childId === "string" ? router.query.childId : "";
   const [centerId, setCenterId] = useState(initialCenterId);
   const [childId, setChildId] = useState(initialChildId);
   const [activities, setActivities] = useState([]);
-  const [type, setType] = useState("MEAL");
-  const [notes, setNotes] = useState("");
-  const [detailsText, setDetailsText] = useState("");
-  const [createdAt, setCreatedAt] = useState("");
-  const [showBackdate, setShowBackdate] = useState(false);
-
+  const [createForm, setCreateForm] = useState(() => createEmptyForm("MEAL"));
+  const [editingId, setEditingId] = useState("");
+  const [editForm, setEditForm] = useState(() => createEmptyForm("OTHER"));
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingCreate, setSavingCreate] = useState(false);
+  const [savingActivityId, setSavingActivityId] = useState("");
+  const [uploadingCreatePhotos, setUploadingCreatePhotos] = useState(false);
+  const [uploadingEditPhotos, setUploadingEditPhotos] = useState(false);
+  const [deletingActivityId, setDeletingActivityId] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("");
-  const [editingId, setEditingId] = useState("");
-  const [editType, setEditType] = useState("OTHER");
-  const [editNotes, setEditNotes] = useState("");
-  const [editDetailsText, setEditDetailsText] = useState("");
-  const [editCreatedAt, setEditCreatedAt] = useState("");
+  const createPhotoInputRef = useRef(null);
+  const editPhotoInputRef = useRef(null);
 
   async function loadCenters() {
     setLoading(true);
     setError("");
     try {
-      const c = await apiJson("/api/v1/centers");
-      setCenters(Array.isArray(c) ? c : []);
-      if (Array.isArray(c) && c.length === 1) setCenterId(c[0].id);
-    } catch (e) {
-      setError(e.message || "Failed to load centers");
+      const data = await apiJson("/api/v1/centers");
+      setCenters(Array.isArray(data) ? data : []);
+      if (!centerId && Array.isArray(data) && data.length === 1) {
+        setCenterId(data[0].id);
+      }
+    } catch (loadError) {
+      setError(loadError.message || "Failed to load centers");
     } finally {
       setLoading(false);
     }
@@ -104,10 +664,10 @@ export default function AdminActivityOverrides() {
     setLoading(true);
     setError("");
     try {
-      const kids = await apiJson(`/api/v1/children?centerId=${encodeURIComponent(id)}`);
-      setChildren(Array.isArray(kids) ? kids : []);
-    } catch (e) {
-      setError(e.message || "Failed to load children");
+      const data = await apiJson(`/api/v1/children?centerId=${encodeURIComponent(id)}`);
+      setChildren(Array.isArray(data) ? data : []);
+    } catch (loadError) {
+      setError(loadError.message || "Failed to load children");
     } finally {
       setLoading(false);
     }
@@ -121,13 +681,13 @@ export default function AdminActivityOverrides() {
     setLoading(true);
     setError("");
     try {
-      const qs = new URLSearchParams();
-      if (childId) qs.set("childId", childId);
-      else if (centerId) qs.set("centerId", centerId);
-      const list = await apiJson(`/api/v1/activities?${qs.toString()}`);
-      setActivities(Array.isArray(list) ? list : []);
-    } catch (e) {
-      setError(e.message || "Failed to load activities");
+      const params = new URLSearchParams();
+      if (childId) params.set("childId", childId);
+      else if (centerId) params.set("centerId", centerId);
+      const data = await apiJson(`/api/v1/activities?${params.toString()}`);
+      setActivities(Array.isArray(data) ? data : []);
+    } catch (loadError) {
+      setError(loadError.message || "Failed to load activities");
     } finally {
       setLoading(false);
     }
@@ -135,446 +695,527 @@ export default function AdminActivityOverrides() {
 
   useEffect(() => {
     loadCenters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     setSuccess("");
     loadChildren(centerId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [centerId]);
 
   useEffect(() => {
     setSuccess("");
     loadActivities();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [childId, centerId]);
 
+  useEffect(() => {
+    setCreateForm((current) => createEmptyForm(current.type || "MEAL"));
+  }, [childId]);
+
   const childLabel = useMemo(() => {
-    const ch = children.find((c) => c.id === childId);
-    if (!ch) return "";
-    return `${ch.firstName}${ch.lastName ? ` ${ch.lastName}` : ""}`;
+    const child = children.find((entry) => entry.id === childId);
+    return child ? fullChildName(child) : "";
+  }, [children, childId]);
+
+  const selectedCenterName = useMemo(() => {
+    return centers.find((center) => center.id === centerId)?.name || "";
+  }, [centers, centerId]);
+
+  useEffect(() => {
+    if (!childId) return;
+    if (!children.some((child) => child.id === childId)) {
+      setChildId("");
+    }
   }, [children, childId]);
 
   const filteredActivities = useMemo(() => {
     let list = activities;
-    if (filterType) list = list.filter((a) => a.type === filterType);
+    if (filterType) list = list.filter((activity) => activity.type === filterType);
     if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(
-        (a) =>
-          (a.notes || "").toLowerCase().includes(q) ||
-          (TYPE_META[a.type]?.label || a.type).toLowerCase().includes(q) ||
-          (a.recordedBy?.name || "").toLowerCase().includes(q)
-      );
+      const query = search.trim().toLowerCase();
+      list = list.filter((activity) => {
+        const childName = fullChildName(activity?.child).toLowerCase();
+        const recordedBy = String(activity?.recordedBy?.name || activity?.recordedBy?.email || "").toLowerCase();
+        const summary = formatActivitySummary(activity).toLowerCase();
+        return (
+          String(activity?.notes || "").toLowerCase().includes(query) ||
+          String(TYPE_META[activity?.type]?.label || activity?.type || "").toLowerCase().includes(query) ||
+          childName.includes(query) ||
+          recordedBy.includes(query) ||
+          summary.includes(query)
+        );
+      });
     }
     return list;
   }, [activities, filterType, search]);
 
-  async function createOverride(e) {
-    e.preventDefault();
-    setSaving(true);
+  const activityStats = useMemo(() => {
+    const total = activities.length;
+    const backdated = activities.filter((activity) => activity.isBackdated).length;
+    const withPhotos = activities.filter((activity) => extractActivityMediaUrls(activity).length > 0).length;
+    const assessments = activities.filter((activity) => hasAssessment(activity)).length;
+    return { total, backdated, withPhotos, assessments };
+  }, [activities]);
+
+  const dismissError = useCallback(() => setError(""), []);
+  const dismissSuccess = useCallback(() => setSuccess(""), []);
+
+  function setFormField(setter, key, value) {
+    setter((current) => ({ ...current, [key]: value }));
+  }
+
+  function setNestedField(setter, field, value) {
+    setter((current) => ({
+      ...current,
+      fields: {
+        ...current.fields,
+        [field]: value,
+      },
+    }));
+  }
+
+  function toggleDomain(setter, domainKey, value) {
+    setter((current) => {
+      const nextScores = { ...asObject(current.domainScores) };
+      if (nextScores[domainKey] === value) delete nextScores[domainKey];
+      else nextScores[domainKey] = value;
+      return { ...current, domainScores: nextScores };
+    });
+  }
+
+  function clearDomains(setter) {
+    setter((current) => ({ ...current, domainScores: {} }));
+  }
+
+  function removeMedia(setter, index) {
+    setter((current) => ({
+      ...current,
+      mediaUrls: arr(current.mediaUrls).filter((_, currentIndex) => currentIndex !== index),
+    }));
+  }
+
+  async function handlePhotoUpload(list, mode) {
+    const files = Array.from(list || []);
+    if (!files.length) return;
+
+    if (mode === "create") setUploadingCreatePhotos(true);
+    else setUploadingEditPhotos(true);
+
     setError("");
     setSuccess("");
+
     try {
-      let details = null;
-      if (detailsText.trim()) {
-        try {
-          details = JSON.parse(detailsText);
-        } catch {
-          details = { note: detailsText.trim() };
-        }
+      const { uploadedUrls, issues } = await uploadFilesToUrls(files);
+      if (uploadedUrls.length) {
+        const setter = mode === "create" ? setCreateForm : setEditForm;
+        setter((current) => ({
+          ...current,
+          mediaUrls: [...new Set([...(current.mediaUrls || []), ...uploadedUrls])],
+        }));
       }
-      const payload = { childId, type, notes, details };
-      if (createdAt) payload.createdAt = new Date(createdAt).toISOString();
-      await apiJson("/api/v1/activities", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      setNotes("");
-      setDetailsText("");
-      setCreatedAt("");
-      setShowBackdate(false);
-      setSuccess(`Activity "${TYPE_META[type]?.label || type}" created for ${childLabel || "child"}.`);
-      await loadActivities();
-    } catch (e2) {
-      setError(e2.message || "Failed to create activity");
+      if (issues.length) {
+        setError(`Some photos were skipped: ${issues.slice(0, 2).join("; ")}`);
+      }
     } finally {
-      setSaving(false);
+      if (mode === "create" && createPhotoInputRef.current) createPhotoInputRef.current.value = "";
+      if (mode === "edit" && editPhotoInputRef.current) editPhotoInputRef.current.value = "";
+      if (mode === "create") setUploadingCreatePhotos(false);
+      else setUploadingEditPhotos(false);
     }
   }
 
-  async function deleteActivity(id) {
-    if (!confirm("Delete this activity log? This cannot be undone.")) return;
+  async function createActivity(event) {
+    event.preventDefault();
+    if (!childId) {
+      setError("Select a child before creating a log.");
+      return;
+    }
+
+    setSavingCreate(true);
     setError("");
     setSuccess("");
+
     try {
-      await apiJson(`/api/v1/activities/${id}`, { method: "DELETE" });
+      const payload = buildPayloadFromForm(createForm);
+      await apiJson("/api/v1/activities", {
+        method: "POST",
+        body: JSON.stringify({
+          childId,
+          type: payload.type,
+          notes: payload.notes,
+          details: payload.details,
+          createdAt: payload.createdAt,
+        }),
+      });
+      setCreateForm((current) => createEmptyForm(current.type || "MEAL"));
+      setSuccess(`Activity "${TYPE_META[payload.type]?.label || payload.type}" created for ${childLabel || "child"}.`);
       await loadActivities();
-    } catch (e) {
-      setError(e.message || "Failed to delete activity");
+    } catch (saveError) {
+      setError(saveError.message || "Failed to create activity");
+    } finally {
+      setSavingCreate(false);
     }
   }
 
   function startEditActivity(activity) {
-    setEditingId(activity.id);
-    setEditType(activity.type || "OTHER");
-    setEditNotes(activity.notes || "");
-    setEditDetailsText(activity.details ? JSON.stringify(activity.details, null, 2) : "");
-    setEditCreatedAt(toLocalDateTimeInput(activity.createdAt));
+    setEditingId(activity?.id || "");
+    setEditForm(buildFormFromActivity(activity));
+    setError("");
+    setSuccess("");
   }
 
   function cancelEditActivity() {
     setEditingId("");
-    setEditType("OTHER");
-    setEditNotes("");
-    setEditDetailsText("");
-    setEditCreatedAt("");
+    setEditForm(createEmptyForm("OTHER"));
+    if (editPhotoInputRef.current) editPhotoInputRef.current.value = "";
   }
 
-  async function saveActivity(id) {
+  async function saveActivity(activityId) {
+    if (!activityId) return;
+    setSavingActivityId(activityId);
     setError("");
     setSuccess("");
+
     try {
-      let details = null;
-      if (editDetailsText.trim()) {
-        try {
-          details = JSON.parse(editDetailsText);
-        } catch {
-          setError("Details must be valid JSON.");
-          return;
-        }
-      }
-      await apiJson(`/api/v1/activities/${encodeURIComponent(id)}`, {
+      const payload = buildPayloadFromForm(editForm);
+      await apiJson(`/api/v1/activities/${encodeURIComponent(activityId)}`, {
         method: "PUT",
         body: JSON.stringify({
-          type: editType,
-          notes: editNotes,
-          details,
-          createdAt: editCreatedAt ? new Date(editCreatedAt).toISOString() : undefined,
+          type: payload.type,
+          notes: payload.notes,
+          details: payload.details,
+          createdAt: payload.createdAt,
         }),
       });
       cancelEditActivity();
       setSuccess("Activity log updated.");
       await loadActivities();
-    } catch (e) {
-      setError(e.message || "Failed to update activity");
+    } catch (saveError) {
+      setError(saveError.message || "Failed to update activity");
+    } finally {
+      setSavingActivityId("");
     }
   }
 
-  const dismissError = useCallback(() => setError(""), []);
-  const dismissSuccess = useCallback(() => setSuccess(""), []);
+  async function deleteActivity(id) {
+    if (!id) return;
+    if (!confirm("Delete this activity log? This cannot be undone.")) return;
+
+    setDeletingActivityId(id);
+    setError("");
+    setSuccess("");
+
+    try {
+      await apiJson(`/api/v1/activities/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (editingId === id) cancelEditActivity();
+      setSuccess("Activity log deleted.");
+      await loadActivities();
+    } catch (deleteError) {
+      setError(deleteError.message || "Failed to delete activity");
+    } finally {
+      setDeletingActivityId("");
+    }
+  }
 
   return (
     <AdminLayout title="Activity Overrides">
-      {/* Page Header */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
-          <div style={{
-            width: 40, height: 40, borderRadius: 10,
-            background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 20, flexShrink: 0,
-          }}>
-            📝
+      <Panel style={heroPanelStyle}>
+        <div style={{ display: "grid", gap: 18 }}>
+          <div style={heroTopRowStyle}>
+            <div style={heroIdentityStyle}>
+              <div style={heroIconStyle}>AL</div>
+              <div>
+                <div style={heroEyebrowStyle}>Admin Activity Overrides</div>
+                <h2 style={{ margin: "6px 0 0", fontSize: 24, fontWeight: 800, color: "var(--admin-text)" }}>
+                  {childLabel || selectedCenterName || "Center activity control"}
+                </h2>
+                <p style={{ margin: "10px 0 0", maxWidth: 700, fontSize: 13, lineHeight: 1.65, color: "var(--admin-text-muted)" }}>
+                  Review logs, correct timestamps, and create admin entries using the same structured logging flow as teachers.
+                </p>
+              </div>
+            </div>
+            <div style={simpleHeaderMetaStyle}>
+              <HeroPill tone="indigo">{selectedCenterName || "Select a center"}</HeroPill>
+              <HeroPill tone={childLabel ? "emerald" : "slate"}>{childLabel || "Center-wide review"}</HeroPill>
+            </div>
           </div>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Activity Overrides</h2>
-            <p style={{ margin: 0, fontSize: 13, color: "var(--admin-text-muted)" }}>
-              Create backdated activity logs or remove incorrect entries for any child.
-            </p>
+          <div style={heroMetricsGridStyle}>
+            <div style={heroMetricCardStyle}>
+              <div style={heroMetricLabelStyle}>Logs in view</div>
+              <div style={heroMetricValueStyle}>{activityStats.total}</div>
+              <div style={heroMetricHintStyle}>Current scope</div>
+            </div>
+            <div style={heroMetricCardStyle}>
+              <div style={heroMetricLabelStyle}>Backdated</div>
+              <div style={heroMetricValueStyle}>{activityStats.backdated}</div>
+              <div style={heroMetricHintStyle}>Adjusted timestamps</div>
+            </div>
+            <div style={heroMetricCardStyle}>
+              <div style={heroMetricLabelStyle}>Assessments</div>
+              <div style={heroMetricValueStyle}>{activityStats.assessments}</div>
+              <div style={heroMetricHintStyle}>Grade or domain scoring</div>
+            </div>
           </div>
-        </div>
-      </div>
-
-      {/* Alerts */}
-      {error && <AlertBanner kind="error" message={error} onDismiss={dismissError} />}
-      {success && <AlertBanner kind="success" message={success} onDismiss={dismissSuccess} />}
-
-      {/* Selector Row */}
-      <Panel>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-          <span style={{ fontSize: 15, fontWeight: 600 }}>Select Child</span>
-          <span style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>Choose a center and child to manage their activity logs</span>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Center" icon="🏫">
-            <select value={centerId} onChange={(e) => setCenterId(e.target.value)} style={inputStyle}>
-              <option value="">Select a center…</option>
-              {centers.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Child" icon="👶">
-            <select
-              value={childId}
-              onChange={(e) => setChildId(e.target.value)}
-              style={{ ...inputStyle, opacity: centerId ? 1 : 0.5 }}
-              disabled={!centerId}
-            >
-              <option value="">{centerId ? "Select a child…" : "Select a center first"}</option>
-              {children
-                .slice()
-                .sort((a, b) => (a.firstName || "").localeCompare(b.firstName || ""))
-                .map((ch) => (
-                  <option key={ch.id} value={ch.id}>
-                    {ch.firstName} {ch.lastName || ""}
-                  </option>
-                ))}
-            </select>
-          </Field>
         </div>
       </Panel>
 
-      {/* Create Form */}
-      {childId && (
-        <Panel style={{ marginTop: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-            <span style={{ fontSize: 15, fontWeight: 600 }}>New Activity Log</span>
-            <Chip>{childLabel}</Chip>
-          </div>
-          <form onSubmit={createOverride}>
-            <div style={{ display: "grid", gridTemplateColumns: "200px 1fr auto", gap: 12, alignItems: "end" }}>
-              <Field label="Activity Type">
-                <select value={type} onChange={(e) => setType(e.target.value)} style={inputStyle}>
-                  {TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {TYPE_META[t]?.icon} {TYPE_META[t]?.label || t}
+      {error ? <AlertBanner kind="error" message={error} onDismiss={dismissError} /> : null}
+      {success ? <AlertBanner kind="success" message={success} onDismiss={dismissSuccess} /> : null}
+
+      <Panel>
+        <div style={scopeLayoutStyle}>
+          <div style={{ minWidth: 0 }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Scope</div>
+              <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.6, color: "var(--admin-text-muted)" }}>
+                Choose a center and optionally narrow the page to one child before creating a log.
+              </div>
+            </div>
+            <div style={{ ...responsiveTwoColStyle, marginTop: 14 }}>
+              <Field label="Center" style={{ minWidth: 0 }}>
+                <select value={centerId} onChange={(event) => setCenterId(event.target.value)} style={inputStyle}>
+                  <option value="">Select a center...</option>
+                  {centers.map((center) => (
+                    <option key={center.id} value={center.id}>
+                      {center.name}
                     </option>
                   ))}
                 </select>
               </Field>
-              <Field label="Notes (optional)">
-                <input
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add any details about this activity…"
-                  style={inputStyle}
-                />
-              </Field>
-              <button type="submit" className="admin-btn-primary" style={primaryButton} disabled={saving || !childId}>
-                {saving ? (
-                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <Spinner /> Saving…
-                  </span>
-                ) : (
-                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />
-                    </svg>
-                    Create Log
-                  </span>
-                )}
-              </button>
-            </div>
-
-            <div style={{ marginTop: 12 }}>
-              <Field label="Details JSON or note (optional)">
-                <textarea
-                  value={detailsText}
-                  onChange={(e) => setDetailsText(e.target.value)}
-                  placeholder='Example: {"time":"09:30","behaviorLevel":"2"}'
-                  style={{ ...inputStyle, minHeight: 70, resize: "vertical" }}
-                />
-              </Field>
-            </div>
-
-            {/* Backdate toggle */}
-            <div style={{ marginTop: 10 }}>
-              {!showBackdate ? (
-                <button
-                  type="button"
-                  onClick={() => setShowBackdate(true)}
-                  style={{ background: "none", border: "none", color: "var(--admin-text-muted)", fontSize: 13, cursor: "pointer", padding: 0, textDecoration: "underline", textUnderlineOffset: 3 }}
+              <Field label="Child" style={{ minWidth: 0 }}>
+                <select
+                  value={childId}
+                  onChange={(event) => setChildId(event.target.value)}
+                  style={{ ...inputStyle, opacity: centerId ? 1 : 0.55 }}
+                  disabled={!centerId}
                 >
-                  + Backdate this entry
-                </button>
-              ) : (
-                <div style={{ display: "flex", alignItems: "end", gap: 12, padding: 12, background: "var(--admin-bg-tertiary)", borderRadius: 8, marginTop: 4 }}>
-                  <Field label="Backdate To">
-                    <input
-                      type="datetime-local"
-                      value={createdAt}
-                      onChange={(e) => setCreatedAt(e.target.value)}
-                      style={{ ...inputStyle, maxWidth: 260 }}
-                    />
-                  </Field>
-                  <button
-                    type="button"
-                    onClick={() => { setShowBackdate(false); setCreatedAt(""); }}
-                    style={{ background: "none", border: "none", color: "var(--admin-text-muted)", fontSize: 13, cursor: "pointer", padding: "10px 0", textDecoration: "underline", textUnderlineOffset: 3 }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
+                  <option value="">{centerId ? "All children in this center" : "Select a center first"}</option>
+                  {children
+                    .slice()
+                    .sort((left, right) => fullChildName(left).localeCompare(fullChildName(right)))
+                    .map((child) => (
+                      <option key={child.id} value={child.id}>
+                        {fullChildName(child)}
+                      </option>
+                    ))}
+                </select>
+              </Field>
             </div>
-          </form>
-        </Panel>
-      )}
+          </div>
+          <div style={scopeSummaryCardStyle}>
+            <div style={scopeSummaryLabelStyle}>Current view</div>
+            <div style={scopeSummaryTitleStyle}>
+              {childLabel || selectedCenterName || "Center activity control"}
+            </div>
+            <div style={scopeNoteStyle}>
+              {childLabel
+                ? `New entries will attach to ${childLabel}.`
+                : selectedCenterName
+                  ? "The list shows every child log in this center. Select a child to create a new entry."
+                  : "Pick a center first so logs and children stay aligned."}
+            </div>
+            <div style={{ ...simpleHeaderMetaStyle, marginTop: 12 }}>
+              <HeroPill tone="sky">{activityStats.total} logs</HeroPill>
+              <HeroPill tone="amber">{activityStats.backdated} backdated</HeroPill>
+              <HeroPill tone="slate">{childLabel ? "Entry enabled" : "Review mode"}</HeroPill>
+            </div>
+          </div>
+        </div>
+      </Panel>
 
-      {/* Activity Logs Table */}
+      {childId ? (
+        <Panel style={{ marginTop: 16 }}>
+          <ActivityComposer
+            title="New Activity Log"
+            description="This form matches the teacher flow, with admin control over the full entry date and time."
+            childLabel={childLabel}
+            form={createForm}
+            onTypeChange={(nextType) => setCreateForm((current) => applyTypeChange(current, nextType))}
+            onFormFieldChange={(key, value) => setFormField(setCreateForm, key, value)}
+            onNestedFieldChange={(field, value) => setNestedField(setCreateForm, field, value)}
+            onDomainToggle={(domainKey, value) => toggleDomain(setCreateForm, domainKey, value)}
+            onClearDomains={() => clearDomains(setCreateForm)}
+            onUploadPhotos={(files) => handlePhotoUpload(files, "create")}
+            onRemoveMedia={(index) => removeMedia(setCreateForm, index)}
+            photoInputRef={createPhotoInputRef}
+            uploadingPhotos={uploadingCreatePhotos}
+            busy={savingCreate}
+            onSubmit={createActivity}
+            submitLabel="Create Log"
+          />
+        </Panel>
+      ) : null}
+
       <Panel style={{ marginTop: 16 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 15, fontWeight: 600 }}>Activity Logs</span>
-            {childId && activities.length > 0 && (
-              <span style={{
-                fontSize: 11, fontWeight: 700, background: "var(--admin-bg-tertiary)",
-                color: "var(--admin-text-muted)", padding: "2px 8px", borderRadius: 999,
-              }}>
-                {filteredActivities.length}{filteredActivities.length !== activities.length ? ` / ${activities.length}` : ""}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Activity Logs</span>
+            {activities.length ? (
+              <span style={countChipStyle}>
+                {filteredActivities.length}
+                {filteredActivities.length !== activities.length ? ` / ${activities.length}` : ""}
               </span>
-            )}
+            ) : null}
+            {filterType ? <HeroPill tone="sky">{TYPE_META[filterType]?.label || filterType}</HeroPill> : null}
           </div>
-          {childId && activities.length > 0 && (
-            <div style={{ display: "flex", gap: 8 }}>
+          {activities.length ? (
+            <div style={toolbarCardStyle}>
               <select
                 value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
+                onChange={(event) => setFilterType(event.target.value)}
                 style={{ ...inputStyle, width: "auto", padding: "6px 10px", fontSize: 13 }}
               >
                 <option value="">All types</option>
-                {TYPES.map((t) => (
-                  <option key={t} value={t}>{TYPE_META[t]?.icon} {TYPE_META[t]?.label || t}</option>
+                {TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {TYPE_META[type]?.label || type}
+                  </option>
                 ))}
               </select>
-              <div style={{ position: "relative" }}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--admin-text-muted)" strokeWidth="1.5" strokeLinecap="round"
-                  style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
-                  <circle cx="7" cy="7" r="4.5" /><line x1="10.5" y1="10.5" x2="14" y2="14" />
-                </svg>
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search notes…"
-                  style={{ ...inputStyle, padding: "6px 10px 6px 32px", fontSize: 13, width: 180 }}
-                />
-              </div>
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search notes, child, teacher, or summary"
+                style={{ ...inputStyle, fontSize: 13, minWidth: 260 }}
+              />
             </div>
-          )}
+          ) : null}
         </div>
 
         {loading ? (
-          <SkeletonTable rows={4} cols={4} />
+          <SkeletonTable rows={4} cols={5} />
         ) : !centerId ? (
           <EmptyState
-            icon="👆"
             title="No center selected"
-            description="Select a center above to view and manage activity logs."
+            description="Select a center above to review and manage activity logs."
           />
         ) : filteredActivities.length === 0 && activities.length === 0 ? (
           <EmptyState
-            icon="📭"
             title="No activity logs yet"
-            description={`No logs found for ${childLabel || "this child"}. Use the form above to create one.`}
+            description={`No logs found for ${childLabel || "this center"}. Use the composer above to create one once a child is selected.`}
           />
         ) : filteredActivities.length === 0 ? (
           <EmptyState
-            icon="🔍"
             title="No matching logs"
-            description="Try adjusting your search or filter."
+            description="Adjust the filter or search text to find the logs you need."
           />
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={tableStyle}>
+          <div style={tableShellStyle}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={tableStyle}>
               <thead>
                 <tr>
                   <th style={thStyle}>Type</th>
                   <th style={thStyle}>Child</th>
                   <th style={thStyle}>When</th>
-                  <th style={thStyle}>Notes</th>
-                  <th style={{ ...thStyle, width: 90, textAlign: "center" }}>Actions</th>
+                  <th style={thStyle}>Details</th>
+                  <th style={{ ...thStyle, width: 110, textAlign: "center" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredActivities.map((a) => {
-                  const meta = TYPE_META[a.type] || TYPE_META.OTHER;
+                {filteredActivities.map((activity) => {
+                  const meta = TYPE_META[activity.type] || TYPE_META.OTHER;
+                  const isEditing = editingId === activity.id;
+                  const isDeleting = deletingActivityId === activity.id;
                   return (
-                    <Fragment key={a.id}>
-                    <tr style={{ transition: "background 0.15s" }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = "var(--admin-bg-secondary)"}
-                      onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
-                      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                        <span style={{
-                          display: "inline-flex", alignItems: "center", gap: 6,
-                          padding: "3px 10px 3px 6px", borderRadius: 999,
-                          background: meta.color + "14", color: meta.color,
-                          fontSize: 13, fontWeight: 600,
-                        }}>
-                          <span style={{ fontSize: 15 }}>{meta.icon}</span>
-                          {meta.label}
-                        </span>
-                      </td>
-                      <td style={tdStyle}>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{a.child ? `${a.child.firstName || ""} ${a.child.lastName || ""}`.trim() : childLabel || "—"}</div>
-                      </td>
-                      <td style={tdStyle}>
-                        <div style={{ fontSize: 13, fontWeight: 500 }}>{relativeTime(a.createdAt)}</div>
-                        <div style={{ fontSize: 11, color: "var(--admin-text-muted)" }}>
-                          {new Date(a.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-                          {a.isBackdated && (
-                            <span style={{
-                              marginLeft: 6, padding: "1px 6px", borderRadius: 999, fontSize: 10,
-                              background: "#f59e0b22", color: "#b45309", fontWeight: 600,
-                            }}>
-                              Backdated
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td style={{ ...tdStyle, color: a.notes ? "var(--admin-text)" : "var(--admin-text-muted)", fontStyle: a.notes ? "normal" : "italic" }}>
-                        {a.notes || "No notes"}
-                      </td>
-                      <td style={{ ...tdStyle, textAlign: "center" }}>
-                        <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
-                          <button type="button" onClick={() => startEditActivity(a)} style={smallActionButton}>Edit</button>
-                          <button
-                            type="button"
-                            onClick={() => deleteActivity(a.id)}
-                            title="Delete this log"
-                            style={deleteIconButton}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.color = "#dc2626"; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--admin-text-muted)"; }}
-                          >
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                              <path d="M3 4.5h10M6.5 4.5V3a1 1 0 011-1h1a1 1 0 011 1v1.5M5 4.5l.5 8.5h5l.5-8.5M7 7v3.5M9 7v3.5" />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                    {editingId === a.id && (
-                      <tr>
-                        <td colSpan={5} style={{ ...tdStyle, background: "var(--admin-bg-secondary)" }}>
-                          <div style={{ display: "grid", gridTemplateColumns: "180px 220px 1fr", gap: 10, alignItems: "start" }}>
-                            <Field label="Type">
-                              <select value={editType} onChange={(e) => setEditType(e.target.value)} style={inputStyle}>
-                                {TYPES.map((t) => <option key={t} value={t}>{TYPE_META[t]?.label || t}</option>)}
-                              </select>
-                            </Field>
-                            <Field label="Date & Time">
-                              <input type="datetime-local" value={editCreatedAt} onChange={(e) => setEditCreatedAt(e.target.value)} style={inputStyle} />
-                            </Field>
-                            <Field label="Notes">
-                              <input value={editNotes} onChange={(e) => setEditNotes(e.target.value)} style={inputStyle} />
-                            </Field>
+                    <Fragment key={activity.id}>
+                      <tr style={rowStyle}>
+                        <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                          <span style={{ ...badgeStyle, background: meta.tint, color: meta.color }}>
+                            {meta.label}
+                          </span>
+                        </td>
+                        <td style={tdStyle}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>
+                            {fullChildName(activity.child) || childLabel || "-"}
                           </div>
-                          <div style={{ marginTop: 10 }}>
-                            <Field label="Details JSON">
-                              <textarea value={editDetailsText} onChange={(e) => setEditDetailsText(e.target.value)} style={{ ...inputStyle, minHeight: 80, resize: "vertical" }} />
-                            </Field>
+                          <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>
+                            {buildActivityMetaPills(activity)
+                              .slice(0, 2)
+                              .map((pill) => pill.label)
+                              .join(" | ") || " "}
                           </div>
-                          <div style={{ marginTop: 10, display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                            <button type="button" onClick={cancelEditActivity} style={secondaryButton}>Cancel</button>
-                            <button type="button" onClick={() => saveActivity(a.id)} style={primaryButton}>Save Changes</button>
+                        </td>
+                        <td style={tdStyle}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>
+                            {relativeTime(activity.createdAt)}
+                          </div>
+                          <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>
+                            {formatDateTime(activity.createdAt)}
+                          </div>
+                        </td>
+                        <td style={tdStyle}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>
+                            {activity.notes || "No notes"}
+                          </div>
+                          <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>
+                            {formatActivitySummary(activity)}
+                          </div>
+                          <div style={{ marginTop: 6, fontSize: 12, color: "var(--admin-text-muted)" }}>
+                            {buildActivityMetaPills(activity)
+                              .slice(2)
+                              .map((pill) => pill.label)
+                              .join(" | ") || " "}
+                          </div>
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: "center" }}>
+                          <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
+                            <button
+                              type="button"
+                              onClick={() => startEditActivity(activity)}
+                              style={smallActionButton}
+                              disabled={isDeleting}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteActivity(activity.id)}
+                              style={deleteIconButton}
+                              disabled={isDeleting}
+                              title="Delete activity log"
+                            >
+                              {isDeleting ? "..." : "Delete"}
+                            </button>
                           </div>
                         </td>
                       </tr>
-                    )}
+                      {isEditing ? (
+                        <tr>
+                          <td colSpan={5} style={{ ...tdStyle, background: "var(--admin-bg-secondary)" }}>
+                            <ActivityComposer
+                              title="Edit Activity Log"
+                              description="Update the structured details, photos, and admin-controlled timestamp for this log."
+                              childLabel={fullChildName(activity.child)}
+                              form={editForm}
+                              onTypeChange={(nextType) => setEditForm((current) => applyTypeChange(current, nextType))}
+                              onFormFieldChange={(key, value) => setFormField(setEditForm, key, value)}
+                              onNestedFieldChange={(field, value) => setNestedField(setEditForm, field, value)}
+                              onDomainToggle={(domainKey, value) => toggleDomain(setEditForm, domainKey, value)}
+                              onClearDomains={() => clearDomains(setEditForm)}
+                              onUploadPhotos={(files) => handlePhotoUpload(files, "edit")}
+                              onRemoveMedia={(index) => removeMedia(setEditForm, index)}
+                              photoInputRef={editPhotoInputRef}
+                              uploadingPhotos={uploadingEditPhotos}
+                              busy={savingActivityId === activity.id}
+                              onSubmit={(event) => {
+                                event.preventDefault();
+                                saveActivity(activity.id);
+                              }}
+                              onCancel={cancelEditActivity}
+                              submitLabel="Save Changes"
+                            />
+                          </td>
+                        </tr>
+                      ) : null}
                     </Fragment>
                   );
                 })}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
         )}
       </Panel>
@@ -582,16 +1223,478 @@ export default function AdminActivityOverrides() {
   );
 }
 
-/* ── Sub-components ─────────────────────────────────────────── */
+function ActivityComposer({
+  title,
+  description,
+  childLabel,
+  form,
+  onTypeChange,
+  onFormFieldChange,
+  onNestedFieldChange,
+  onDomainToggle,
+  onClearDomains,
+  onUploadPhotos,
+  onRemoveMedia,
+  photoInputRef,
+  uploadingPhotos,
+  busy,
+  onSubmit,
+  onCancel,
+  submitLabel,
+}) {
+  const selectedMealOptions = useMemo(() => {
+    if (form.type === "SNACK") {
+      return MEAL_OCCASIONS.filter((option) => option.value.includes("SNACK"));
+    }
+    return MEAL_OCCASIONS;
+  }, [form.type]);
+  const helperText = useMemo(() => composerHelperText(form.type), [form.type]);
+  const descriptionPlaceholder = useMemo(() => composerDescriptionPlaceholder(form.type), [form.type]);
+  const domainScores = useMemo(() => asObject(form.domainScores), [form.domainScores]);
+  const domainScoreCount = useMemo(
+    () => Object.values(domainScores).filter((value) => Number(value) > 0).length,
+    [domainScores],
+  );
+  const overallAssessment = useMemo(() => getAssessmentOverall(domainScores), [domainScores]);
+  const hasAssessmentValue = domainScoreCount > 0 || form.dailyGrade !== "";
+  const [assessmentOpen, setAssessmentOpen] = useState(hasAssessmentValue);
+
+  useEffect(() => {
+    if (hasAssessmentValue) setAssessmentOpen(true);
+  }, [hasAssessmentValue]);
+
+  return (
+    <form onSubmit={onSubmit}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>{title}</div>
+          {description ? (
+            <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>{description}</div>
+          ) : null}
+        </div>
+        {childLabel ? <Chip>{childLabel}</Chip> : null}
+      </div>
+
+      <div style={composerGridStyle}>
+        <div style={{ ...sectionCardStyle, gridColumn: "1 / -1" }}>
+          <SectionHeading
+            title="1. Admin Timestamp"
+            description="Set the date and time for this entry."
+          />
+          <div style={{ ...responsiveTwoColStyle, alignItems: "start" }}>
+            <Field label="Date & Time" style={{ minWidth: 0 }}>
+              <input
+                type="datetime-local"
+                value={form.createdAt}
+                onChange={(event) => onFormFieldChange("createdAt", event.target.value)}
+                style={inputStyle}
+                disabled={busy}
+              />
+            </Field>
+            <div style={sectionHintStyle}>
+              This timestamp is editable for new logs and inline edits. Structured log types below reuse this time unless a nap range is entered.
+            </div>
+          </div>
+        </div>
+
+        <div style={{ ...sectionCardStyle, gridColumn: "1 / -1" }}>
+          <SectionHeading
+            title="2. Log details"
+            description="Choose an activity type and add a short note if needed."
+          />
+          <div style={detailSplitLayoutStyle}>
+            <div style={subSectionCardStyle}>
+              <Field label="Type" style={{ minWidth: 0 }}>
+                <select
+                  value={form.type}
+                  onChange={(event) => onTypeChange(event.target.value)}
+                  style={inputStyle}
+                  disabled={busy}
+                >
+                  {TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {TYPE_META[type]?.label || type}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {QUICK_TYPE_OPTIONS.map((type) => {
+                  const active = form.type === type;
+                  const meta = TYPE_META[type] || TYPE_META.OTHER;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => onTypeChange(type)}
+                      style={{
+                        ...typeChipButtonStyle,
+                        background: active ? meta.tint : "var(--admin-bg)",
+                        borderColor: active ? meta.color : "var(--admin-border)",
+                        color: active ? meta.color : "var(--admin-text-muted)",
+                        boxShadow: active ? "inset 0 0 0 1px rgba(255,255,255,0.45)" : "none",
+                      }}
+                      disabled={busy}
+                    >
+                      {TYPE_META[type]?.label || type}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={inlineNoteStyle}>
+                Daily grade uses type <strong>OTHER</strong> automatically.
+              </div>
+            </div>
+
+            <div style={subSectionCardStyle}>
+              <div style={subSectionEyebrowStyle}>Activity requirements</div>
+              <div style={{ ...responsiveTwoColStyle, marginTop: 10 }}>
+                {form.type === "NAP" ? (
+                  <>
+                    <Field label="Start time" style={{ minWidth: 0 }}>
+                      <input
+                        type="time"
+                        value={form.fields.napStartTime}
+                        onChange={(event) => onNestedFieldChange("napStartTime", event.target.value)}
+                        style={inputStyle}
+                        disabled={busy}
+                      />
+                    </Field>
+                    <Field label="End time" style={{ minWidth: 0 }}>
+                      <input
+                        type="time"
+                        value={form.fields.napEndTime}
+                        onChange={(event) => onNestedFieldChange("napEndTime", event.target.value)}
+                        style={inputStyle}
+                        disabled={busy}
+                      />
+                    </Field>
+                  </>
+                ) : null}
+
+                {["MEAL", "SNACK"].includes(form.type) ? (
+                  <>
+                    <Field label="Meal type" style={{ minWidth: 0 }}>
+                      <select
+                        value={form.fields.mealType}
+                        onChange={(event) => onNestedFieldChange("mealType", event.target.value)}
+                        style={inputStyle}
+                        disabled={busy}
+                      >
+                        {selectedMealOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Quantity" style={{ minWidth: 0 }}>
+                      <select
+                        value={form.fields.quantity}
+                        onChange={(event) => onNestedFieldChange("quantity", event.target.value)}
+                        style={inputStyle}
+                        disabled={busy}
+                      >
+                        {PORTION_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  </>
+                ) : null}
+
+                {form.type === "BOTTLE" ? (
+                  <Field label="Quantity" style={{ minWidth: 0 }}>
+                    <select
+                      value={form.fields.bottleQuantity}
+                      onChange={(event) => onNestedFieldChange("bottleQuantity", event.target.value)}
+                      style={inputStyle}
+                      disabled={busy}
+                    >
+                      {BOTTLE_PORTION_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                ) : null}
+
+                {form.type === "DIAPER_CHANGE" ? (
+                  <Field label="Diaper type" style={{ minWidth: 0 }}>
+                    <select
+                      value={form.fields.diaperType}
+                      onChange={(event) => onNestedFieldChange("diaperType", event.target.value)}
+                      style={inputStyle}
+                      disabled={busy}
+                    >
+                      {DIAPER_TYPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                ) : null}
+
+                {["BEHAVIOR", "INCIDENT"].includes(form.type) ? (
+                  <>
+                    <Field label="Behavior type" style={{ minWidth: 0 }}>
+                      <select
+                        value={form.fields.behaviorType}
+                        onChange={(event) => onNestedFieldChange("behaviorType", event.target.value)}
+                        style={inputStyle}
+                        disabled={busy}
+                      >
+                        {BEHAVIOR_TYPE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Behavior level" style={{ minWidth: 0 }}>
+                      <select
+                        value={form.fields.behaviorLevel}
+                        onChange={(event) => onNestedFieldChange("behaviorLevel", event.target.value)}
+                        style={inputStyle}
+                        disabled={busy}
+                      >
+                        {BEHAVIOR_LEVEL_OPTIONS.map((level) => (
+                          <option key={level} value={level}>
+                            Level {level}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  </>
+                ) : null}
+              </div>
+              {!["NAP", "MEAL", "SNACK", "BOTTLE", "DIAPER_CHANGE", "BEHAVIOR", "INCIDENT"].includes(form.type) ? (
+                <div style={inlineHelperStyle}>
+                  This activity type only needs the timestamp and description unless you want to attach assessment, photos, or custom JSON.
+                </div>
+              ) : null}
+              <div style={inlineHelperStyle}>{helperText}</div>
+            </div>
+          </div>
+          <Field label="Description" style={{ gridColumn: "1 / -1" }}>
+            <textarea
+              value={form.notes}
+              onChange={(event) => onFormFieldChange("notes", event.target.value)}
+              style={textareaStyle}
+              disabled={busy}
+              placeholder={descriptionPlaceholder}
+            />
+          </Field>
+        </div>
+
+        <div style={{ ...sectionCardStyle, gridColumn: "1 / -1" }}>
+          <button
+            type="button"
+            onClick={() => setAssessmentOpen((current) => !current)}
+            style={assessmentToggleButtonStyle}
+            disabled={busy}
+          >
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "var(--admin-text)" }}>
+                Step 3 - Developmental Assessment (optional)
+              </div>
+              <div style={sectionSummaryStyle}>
+                {domainScoreCount > 0
+                  ? `${domainScoreCount} domain(s) rated`
+                  : form.dailyGrade !== ""
+                    ? `Quick daily grade ${form.dailyGrade}/5 selected`
+                    : "Rate child across developmental domains"}
+              </div>
+            </div>
+            <span style={assessmentToggleTextStyle}>{assessmentOpen ? "Collapse" : "Expand"}</span>
+          </button>
+
+          {assessmentOpen ? (
+            <div style={assessmentPanelBodyStyle}>
+              <div style={assessmentQuickGradeCardStyle}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--admin-text)" }}>Quick daily grade</div>
+                  <div style={assessmentQuickGradeTextStyle}>
+                    Use this for single-score entries. Domain ratings override the quick grade on save.
+                  </div>
+                </div>
+                <div style={{ minWidth: 160 }}>
+                  <select
+                    value={form.dailyGrade}
+                    onChange={(event) => onFormFieldChange("dailyGrade", event.target.value)}
+                    style={inputStyle}
+                    disabled={busy || domainScoreCount > 0}
+                  >
+                    <option value="">None</option>
+                    {[1, 2, 3, 4, 5].map((grade) => (
+                      <option key={grade} value={String(grade)}>
+                        {grade}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={domainGridStyle}>
+                {ASSESSMENT_DOMAINS.map((domain) => {
+                  const current = Number(domainScores[domain.key] || 0);
+                  return (
+                    <div key={domain.key} style={domainCardStyle}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span
+                          style={{
+                            ...domainBadgeStyle,
+                            background: domain.tint,
+                            color: domain.color,
+                            borderColor: domain.borderColor,
+                          }}
+                        >
+                          {domain.badge}
+                        </span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>{domain.label}</div>
+                          <div style={{ marginTop: 2, fontSize: 12, lineHeight: 1.45, color: "var(--admin-text-muted)" }}>
+                            {domain.description}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={rubricButtonRowStyle}>
+                        {RUBRIC_LEVELS.map((level) => {
+                          const active = current === level.value;
+                          return (
+                            <button
+                              key={level.value}
+                              type="button"
+                              onClick={() => onDomainToggle(domain.key, level.value)}
+                              style={{
+                                ...rubricButtonStyle,
+                                background: active ? level.background : "var(--admin-bg)",
+                                borderColor: active ? level.borderColor : "var(--admin-border)",
+                                color: active ? level.color : "var(--admin-text-muted)",
+                              }}
+                              disabled={busy}
+                            >
+                              {level.value} {level.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {overallAssessment ? (
+                <div style={assessmentSummaryCardStyle}>
+                  <div style={{ fontSize: 12, color: "#0f3b66" }}>
+                    <strong>Overall:</strong> {overallAssessment.label}
+                    <span style={{ marginLeft: 8, color: "#2563eb" }}>
+                      ({overallAssessment.count}/{ASSESSMENT_DOMAINS.length} domains)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onClearDomains}
+                    style={clearDomainsButtonStyle}
+                    disabled={busy}
+                  >
+                    Clear all
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        <div style={{ ...sectionCardStyle, gridColumn: "1 / -1" }}>
+          <SectionHeading
+            title="4. Photos"
+            description="Upload optional activity photos. Files are uploaded immediately and can be removed before saving."
+          />
+          <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(event) => onUploadPhotos(event.target.files)}
+            />
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              style={secondaryButton}
+              disabled={busy || uploadingPhotos}
+            >
+              {uploadingPhotos ? "Uploading..." : "Add Photos"}
+            </button>
+          </div>
+          {arr(form.mediaUrls).length ? (
+            <div style={mediaGridStyle}>
+              {arr(form.mediaUrls).map((url, index) => (
+                <div key={`${url}-${index}`} style={mediaCardStyle}>
+                  <img src={url} alt={`Activity media ${index + 1}`} style={mediaImageStyle} />
+                  <button
+                    type="button"
+                    onClick={() => onRemoveMedia(index)}
+                    style={mediaRemoveButtonStyle}
+                    disabled={busy}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ marginTop: 10, fontSize: 12, color: "var(--admin-text-muted)" }}>
+              No photos attached.
+            </div>
+          )}
+        </div>
+
+        <div style={{ ...sectionCardStyle, gridColumn: "1 / -1" }}>
+          <SectionHeading
+            title="5. Advanced Details"
+            description="Only use extra JSON when you need to preserve custom detail beyond the structured fields above."
+          />
+          <Field label="Extra Details JSON" style={{ gridColumn: "1 / -1" }}>
+            <textarea
+              value={form.extraDetailsText}
+              onChange={(event) => onFormFieldChange("extraDetailsText", event.target.value)}
+              style={textareaStyle}
+              disabled={busy}
+              placeholder='{"customField":"value"}'
+            />
+          </Field>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
+        {onCancel ? (
+          <button type="button" onClick={onCancel} style={secondaryButton} disabled={busy}>
+            Cancel
+          </button>
+        ) : null}
+        <button type="submit" style={primaryButton} disabled={busy}>
+          {busy ? "Saving..." : submitLabel}
+        </button>
+      </div>
+    </form>
+  );
+}
 
 function Panel({ children, style }) {
   return (
     <div
       style={{
         background: "var(--admin-bg)",
-        border: "1px solid var(--admin-border)",
-        borderRadius: 12,
-        padding: 20,
+        border: "1px solid #e5e7eb",
+        borderRadius: 16,
+        padding: 24,
         ...style,
       }}
     >
@@ -600,11 +1703,10 @@ function Panel({ children, style }) {
   );
 }
 
-function Field({ label, icon, children }) {
+function Field({ label, children, style }) {
   return (
-    <label style={{ display: "block" }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--admin-text-muted)", marginBottom: 6, display: "flex", alignItems: "center", gap: 4 }}>
-        {icon && <span style={{ fontSize: 13 }}>{icon}</span>}
+    <label style={{ display: "block", ...style }}>
+      <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--admin-text-muted)", marginBottom: 8 }}>
         {label}
       </div>
       {children}
@@ -613,88 +1715,505 @@ function Field({ label, icon, children }) {
 }
 
 function AlertBanner({ message, kind, onDismiss }) {
-  const isSuccess = kind === "success";
-  const bg = isSuccess ? "var(--admin-success-bg)" : "var(--admin-error-bg)";
-  const color = isSuccess ? "var(--admin-success-text)" : "var(--admin-error-text)";
-  const border = isSuccess ? "var(--admin-success-border)" : "var(--admin-error-border)";
-  const icon = isSuccess ? "✓" : "!";
-
+  const success = kind === "success";
+  const background = success ? "var(--admin-success-bg)" : "var(--admin-error-bg)";
+  const color = success ? "var(--admin-success-text)" : "var(--admin-error-text)";
+  const border = success ? "var(--admin-success-border)" : "var(--admin-error-border)";
   return (
-    <div style={{
-      padding: "10px 14px", borderRadius: 10, marginBottom: 14,
-      background: bg, color: color, border: `1px solid ${border}`,
-      display: "flex", alignItems: "center", gap: 10, fontSize: 14,
-    }}>
-      <span style={{
-        width: 22, height: 22, borderRadius: 999,
-        background: color, color: bg,
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        fontSize: 12, fontWeight: 800, flexShrink: 0,
-      }}>
-        {icon}
-      </span>
+    <div
+      style={{
+        padding: "10px 14px",
+        borderRadius: 10,
+        marginBottom: 14,
+        background,
+        color,
+        border: `1px solid ${border}`,
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        fontSize: 14,
+      }}
+    >
       <span style={{ flex: 1 }}>{message}</span>
-      {onDismiss && (
-        <button onClick={onDismiss} style={{
-          background: "none", border: "none", cursor: "pointer", color, fontSize: 18,
-          lineHeight: 1, padding: 0, opacity: 0.6,
-        }}>×</button>
-      )}
+      {onDismiss ? (
+        <button
+          type="button"
+          onClick={onDismiss}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            color,
+            fontSize: 18,
+            lineHeight: 1,
+            padding: 0,
+            opacity: 0.6,
+          }}
+        >
+          x
+        </button>
+      ) : null}
     </div>
   );
 }
 
-function EmptyState({ icon, title, description }) {
+function EmptyState({ title, description }) {
   return (
-    <div style={{
-      textAlign: "center", padding: "40px 20px",
-      color: "var(--admin-text-muted)",
-    }}>
-      <div style={{ fontSize: 36, marginBottom: 8 }}>{icon}</div>
-      <div style={{ fontSize: 15, fontWeight: 600, color: "var(--admin-text)", marginBottom: 4 }}>{title}</div>
+    <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--admin-text-muted)" }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)", marginBottom: 4 }}>{title}</div>
       <div style={{ fontSize: 13 }}>{description}</div>
     </div>
   );
 }
 
 function Chip({ children }) {
+  return <span style={chipStyle}>{children}</span>;
+}
+
+function HeroPill({ children, tone = "slate" }) {
+  const toneStyle = pillToneStyles[tone] || pillToneStyles.slate;
+  return <span style={{ ...heroPillStyle, ...toneStyle }}>{children}</span>;
+}
+
+function SectionHeading({ title, description }) {
   return (
-    <span style={{
-      fontSize: 12, fontWeight: 600, padding: "2px 10px",
-      borderRadius: 999, background: "#6366f114", color: "#6366f1",
-    }}>
-      {children}
-    </span>
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: "var(--admin-text)" }}>{title}</div>
+      {description ? (
+        <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.6, color: "var(--admin-text-muted)" }}>
+          {description}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
-function Spinner() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" style={{ animation: "spin 1s linear infinite" }}>
-      <circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="20 12" strokeLinecap="round" />
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </svg>
-  );
-}
+const heroPanelStyle = {
+  marginBottom: 16,
+  padding: 22,
+  background: "linear-gradient(135deg, #eff6ff 0%, #ffffff 58%, #f8fafc 100%)",
+  boxShadow: "0 12px 32px rgba(15, 23, 42, 0.05)",
+};
 
-/* ── Styles ──────────────────────────────────────────────────── */
+const heroEyebrowStyle = {
+  fontSize: 11,
+  fontWeight: 800,
+  textTransform: "uppercase",
+  letterSpacing: "0.14em",
+  color: "var(--admin-text-muted)",
+};
+
+const heroIdentityStyle = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: 14,
+};
+
+const heroIconStyle = {
+  width: 44,
+  height: 44,
+  borderRadius: 14,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "linear-gradient(135deg, #2563eb, #3b82f6)",
+  color: "white",
+  fontSize: 13,
+  fontWeight: 800,
+  boxShadow: "0 12px 22px rgba(37, 99, 235, 0.18)",
+  flexShrink: 0,
+};
+
+const simpleHeaderMetaStyle = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const heroTopRowStyle = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: 16,
+  flexWrap: "wrap",
+};
+
+const heroMetricsGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+  gap: 12,
+};
+
+const heroMetricCardStyle = {
+  padding: 14,
+  borderRadius: 12,
+  border: "1px solid #e2e8f0",
+  background: "rgba(255,255,255,0.88)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.7)",
+};
+
+const heroMetricLabelStyle = {
+  fontSize: 11,
+  fontWeight: 800,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  color: "var(--admin-text-muted)",
+};
+
+const heroMetricValueStyle = {
+  marginTop: 8,
+  fontSize: 28,
+  lineHeight: 1,
+  fontWeight: 800,
+  color: "var(--admin-text)",
+};
+
+const heroMetricHintStyle = {
+  marginTop: 8,
+  fontSize: 12,
+  lineHeight: 1.5,
+  color: "var(--admin-text-muted)",
+};
+
+const heroPillStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "7px 11px",
+  borderRadius: 999,
+  fontSize: 12,
+  fontWeight: 700,
+  border: "1px solid transparent",
+};
+
+const pillToneStyles = {
+  slate: { background: "#f8fafc", color: "#475569", borderColor: "#e2e8f0" },
+  indigo: { background: "#dbeafe", color: "#1d4ed8", borderColor: "#bfdbfe" },
+  sky: { background: "#e0f2fe", color: "#0369a1", borderColor: "#bae6fd" },
+  emerald: { background: "#dcfce7", color: "#166534", borderColor: "#bbf7d0" },
+  amber: { background: "#fef3c7", color: "#b45309", borderColor: "#fde68a" },
+  rose: { background: "#ffe4e6", color: "#be123c", borderColor: "#fecdd3" },
+};
+
+const responsiveTwoColStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 12,
+};
+
+const scopeLayoutStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+  gap: 16,
+  alignItems: "stretch",
+};
+
+const scopeSummaryCardStyle = {
+  padding: 16,
+  borderRadius: 12,
+  border: "1px solid var(--admin-border)",
+  background: "linear-gradient(180deg, #fcfdff 0%, var(--admin-bg) 100%)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
+};
+
+const scopeSummaryLabelStyle = {
+  fontSize: 11,
+  fontWeight: 800,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  color: "var(--admin-text-muted)",
+};
+
+const scopeSummaryTitleStyle = {
+  marginTop: 6,
+  fontSize: 18,
+  lineHeight: 1.2,
+  fontWeight: 800,
+  color: "var(--admin-text)",
+};
+
+const scopeNoteStyle = {
+  marginTop: 8,
+  fontSize: 12,
+  lineHeight: 1.6,
+  color: "var(--admin-text-muted)",
+};
+
+const composerGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 12,
+};
+
+const toolbarCardStyle = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  alignItems: "center",
+  padding: 8,
+  borderRadius: 14,
+  border: "1px solid #e5e7eb",
+  background: "#f9fafb",
+};
+
+const domainGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+  gap: 12,
+  marginTop: 12,
+};
 
 const inputStyle = {
   width: "100%",
-  padding: "9px 12px",
-  border: "1px solid var(--admin-border)",
-  borderRadius: 8,
+  padding: "10px 14px",
+  border: "1px solid #e5e7eb",
+  borderRadius: 12,
   boxSizing: "border-box",
   fontSize: 14,
-  background: "var(--admin-bg)",
+  background: "#f9fafb",
   color: "var(--admin-text)",
-  transition: "border-color 0.15s, box-shadow 0.15s",
   outline: "none",
+  boxShadow: "inset 0 1px 2px rgba(15, 23, 42, 0.03)",
+};
+
+const textareaStyle = {
+  ...inputStyle,
+  minHeight: 88,
+  resize: "vertical",
+};
+
+const sectionCardStyle = {
+  padding: 18,
+  borderRadius: 16,
+  border: "1px solid #e5e7eb",
+  background: "#ffffff",
+  boxShadow: "0 6px 18px rgba(15, 23, 42, 0.03)",
+};
+
+const detailSplitLayoutStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+  gap: 12,
+  alignItems: "start",
+};
+
+const subSectionCardStyle = {
+  padding: 14,
+  borderRadius: 14,
+  border: "1px solid #e5e7eb",
+  background: "#f9fafb",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72)",
+};
+
+const typeChipButtonStyle = {
+  padding: "8px 12px",
+  borderRadius: 999,
+  border: "1px solid var(--admin-border)",
+  background: "var(--admin-bg)",
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: 700,
+  transition: "all 0.15s ease",
+};
+
+const sectionHintStyle = {
+  padding: "12px 14px",
+  borderRadius: 12,
+  border: "1px solid #e5e7eb",
+  background: "#f8fafc",
+  fontSize: 12,
+  lineHeight: 1.6,
+  color: "var(--admin-text-muted)",
+};
+
+const domainCardStyle = {
+  padding: 12,
+  borderRadius: 12,
+  border: "1px solid #e5e7eb",
+  background: "#ffffff",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.65)",
+};
+
+const domainBadgeStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minWidth: 38,
+  height: 38,
+  padding: "0 8px",
+  borderRadius: 10,
+  border: "1px solid transparent",
+  fontWeight: 800,
+  fontSize: 11,
+  letterSpacing: "0.04em",
+};
+
+const rubricButtonRowStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: 8,
+  marginTop: 12,
+};
+
+const rubricButtonStyle = {
+  padding: "8px 10px",
+  borderRadius: 999,
+  border: "1px solid var(--admin-border)",
+  background: "var(--admin-bg)",
+  cursor: "pointer",
+  fontWeight: 700,
+  fontSize: 12,
+  textAlign: "center",
+};
+
+const inlineNoteStyle = {
+  marginTop: 10,
+  fontSize: 12,
+  lineHeight: 1.6,
+  color: "var(--admin-text-muted)",
+};
+
+const inlineHelperStyle = {
+  marginTop: 12,
+  fontSize: 12,
+  lineHeight: 1.6,
+  color: "var(--admin-text-muted)",
+};
+
+const subSectionEyebrowStyle = {
+  fontSize: 11,
+  fontWeight: 800,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  color: "var(--admin-text-muted)",
+};
+
+const assessmentToggleButtonStyle = {
+  width: "100%",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  padding: 0,
+  background: "transparent",
+  border: "none",
+  cursor: "pointer",
+  textAlign: "left",
+};
+
+const sectionSummaryStyle = {
+  marginTop: 4,
+  fontSize: 12,
+  lineHeight: 1.5,
+  color: "var(--admin-text-muted)",
+};
+
+const assessmentToggleTextStyle = {
+  fontSize: 12,
+  fontWeight: 700,
+  color: "#334155",
+  padding: "6px 10px",
+  borderRadius: 999,
+  border: "1px solid #e5e7eb",
+  background: "#f8fafc",
+};
+
+const assessmentPanelBodyStyle = {
+  display: "grid",
+  gap: 12,
+  marginTop: 12,
+};
+
+const assessmentQuickGradeCardStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 12,
+  alignItems: "end",
+  padding: 14,
+  borderRadius: 12,
+  border: "1px solid #dbeafe",
+  background: "linear-gradient(180deg, #f8fbff 0%, #fdfefe 100%)",
+};
+
+const assessmentQuickGradeTextStyle = {
+  marginTop: 4,
+  fontSize: 12,
+  lineHeight: 1.6,
+  color: "var(--admin-text-muted)",
+};
+
+const assessmentSummaryCardStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  flexWrap: "wrap",
+  padding: "12px 14px",
+  borderRadius: 10,
+  border: "1px solid #dbeafe",
+  background: "#f8fbff",
+};
+
+const clearDomainsButtonStyle = {
+  padding: 0,
+  border: "none",
+  background: "transparent",
+  color: "#1d4ed8",
+  cursor: "pointer",
+  fontWeight: 700,
+  fontSize: 12,
+};
+
+const chipStyle = {
+  fontSize: 12,
+  fontWeight: 700,
+  padding: "4px 10px",
+  borderRadius: 999,
+  background: "#f3f4f6",
+  color: "var(--admin-text-muted)",
+};
+
+const countChipStyle = {
+  fontSize: 11,
+  fontWeight: 700,
+  background: "#f3f4f6",
+  color: "var(--admin-text-muted)",
+  padding: "2px 8px",
+  borderRadius: 999,
+};
+
+const badgeStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "4px 10px",
+  borderRadius: 999,
+  fontSize: 12,
+  fontWeight: 700,
+};
+
+const backdatedChipStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "2px 8px",
+  borderRadius: 999,
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#b45309",
+  background: "#fef3c7",
 };
 
 const tableStyle = {
   width: "100%",
   borderCollapse: "collapse",
+};
+
+const tableShellStyle = {
+  border: "1px solid #e5e7eb",
+  borderRadius: 16,
+  overflow: "hidden",
+  background: "var(--admin-bg)",
+  boxShadow: "0 10px 24px rgba(15, 23, 42, 0.03)",
 };
 
 const thStyle = {
@@ -711,31 +2230,37 @@ const thStyle = {
 const tdStyle = {
   padding: "12px 14px",
   borderBottom: "1px solid var(--admin-border-light, var(--admin-border))",
-  verticalAlign: "middle",
+  verticalAlign: "top",
+};
+
+const rowStyle = {
+  transition: "background 0.15s",
+  background: "var(--admin-bg)",
 };
 
 const primaryButton = {
   padding: "9px 18px",
-  background: "#6366f1",
+  background: "linear-gradient(135deg, #2563eb, #3b82f6)",
   color: "white",
   border: "none",
-  borderRadius: 8,
+  borderRadius: 12,
   cursor: "pointer",
   fontWeight: 700,
   fontSize: 14,
   whiteSpace: "nowrap",
-  transition: "background 0.15s, opacity 0.15s",
+  boxShadow: "0 10px 18px rgba(37, 99, 235, 0.16)",
 };
 
 const secondaryButton = {
   padding: "9px 14px",
-  background: "var(--admin-bg)",
+  background: "#fcfdff",
   color: "var(--admin-text)",
-  border: "1px solid var(--admin-border)",
-  borderRadius: 8,
+  border: "1px solid #e5e7eb",
+  borderRadius: 12,
   cursor: "pointer",
   fontWeight: 700,
   fontSize: 13,
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72)",
 };
 
 const smallActionButton = {
@@ -745,9 +2270,43 @@ const smallActionButton = {
 };
 
 const deleteIconButton = {
-  width: 32, height: 32, borderRadius: 8,
-  display: "inline-flex", alignItems: "center", justifyContent: "center",
-  background: "transparent", border: "none",
-  color: "var(--admin-text-muted)", cursor: "pointer",
-  transition: "all 0.15s",
+  ...smallActionButton,
+  color: "#b91c1c",
+  borderColor: "#fecaca",
+  background: "#fff1f2",
+};
+
+const mediaGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+  gap: 10,
+  marginTop: 12,
+};
+
+const mediaCardStyle = {
+  overflow: "hidden",
+  borderRadius: 12,
+  border: "1px solid var(--admin-border)",
+  background: "var(--admin-bg)",
+  boxShadow: "0 8px 18px rgba(15, 23, 42, 0.04)",
+};
+
+const mediaImageStyle = {
+  display: "block",
+  width: "100%",
+  height: 110,
+  objectFit: "cover",
+  background: "var(--admin-bg-secondary)",
+};
+
+const mediaRemoveButtonStyle = {
+  width: "100%",
+  padding: "8px 10px",
+  border: "none",
+  borderTop: "1px solid var(--admin-border)",
+  background: "var(--admin-bg)",
+  color: "var(--admin-text)",
+  cursor: "pointer",
+  fontWeight: 700,
+  fontSize: 12,
 };

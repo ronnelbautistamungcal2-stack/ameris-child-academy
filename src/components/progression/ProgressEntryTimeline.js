@@ -134,6 +134,12 @@ export default function ProgressEntryTimeline({ progressId, entries: propEntries
               <p className="mt-1.5 text-sm text-gray-700">{entry.notes}</p>
             )}
 
+            {entry?.details?.nextGoal ? (
+              <div className="mt-2 rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                <span className="font-semibold">Next goal:</span> {entry.details.nextGoal}
+              </div>
+            ) : null}
+
             {entry.media?.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-2">
                 {entry.media.map((url, i) =>

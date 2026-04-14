@@ -541,6 +541,11 @@ function ProgressHistory({ progressId }) {
                 <span className="text-xs text-gray-600 dark:text-gray-400">{entry.notes}</span>
               )}
             </div>
+            {entry?.details?.nextGoal ? (
+              <div className="mt-2 rounded-lg border border-violet-100 bg-violet-50 px-2.5 py-2 text-[11px] text-violet-800 dark:border-violet-900/40 dark:bg-violet-900/20 dark:text-violet-200">
+                <span className="font-semibold">Next goal:</span> {entry.details.nextGoal}
+              </div>
+            ) : null}
             {entry.media?.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {entry.media.map((url, i) => (

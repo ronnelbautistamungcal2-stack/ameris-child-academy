@@ -1,7 +1,7 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import ActiveGoalsPanel from "@/components/progression/ActiveGoalsPanel";
 import { useProgressUpdates } from "@/hooks/useSocket";
-import { AGE_GROUPS, ageGroupKeyFromBirthDate } from "@/lib/ageUtils";
+import { AGE_GROUPS, ageGroupKeyFromBirthDate, mapAgeRangeToGroup } from "@/lib/ageUtils";
 import { apiJson } from "@/lib/api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -34,6 +34,28 @@ function byString(a, b) {
   return String(a || "").localeCompare(String(b || ""));
 }
 
+function getLessonAgeGroups(lesson) {
+  const set = new Set();
+  const categoryAge = mapAgeRangeToGroup(lesson?.category?.ageRange);
+  if (categoryAge) set.add(categoryAge);
+  for (const goal of Array.isArray(lesson?.goals) ? lesson.goals : []) {
+    const pc = goal?.passingCriteria && typeof goal.passingCriteria === "object" ? goal.passingCriteria : {};
+    const ageKey = mapAgeRangeToGroup(pc.age || pc.childAge || pc.ageRange);
+    if (ageKey) set.add(ageKey);
+  }
+  return [...set];
+}
+
+function getNextGoalSuggestion(lesson, progress, recommended) {
+  const goals = Array.isArray(lesson?.goals) ? lesson.goals : [];
+  const nextIndex = Number(progress?.goalIndex || 0) + 1;
+  const nextGoal = goals.find((g) => Number(g.goalIndex || 0) === nextIndex);
+  if (nextGoal?.title) return nextGoal.title;
+  if (recommended?.[0]?.title) return recommended[0].title;
+  const firstGoal = goals[0];
+  return firstGoal?.title || lesson?.title || "";
+}
+
 function formatDate(value) {
   if (!value) return "\u2014";
   const d = new Date(value);
@@ -59,6 +81,7 @@ export default function AdminProgress() {
 
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
+  const [lessonAgeGroup, setLessonAgeGroup] = useState("");
   const [stage, setStage] = useState("all");
   const [ageGroup, setAgeGroup] = useState("");
   const [visibleCount, setVisibleCount] = useState(100);
@@ -97,6 +120,7 @@ export default function AdminProgress() {
         setProgressRows([]);
         setQuery("");
         setCategory("");
+        setLessonAgeGroup("");
         setStage("all");
         setAgeGroup("");
         setVisibleCount(100);
@@ -187,6 +211,19 @@ export default function AdminProgress() {
     return children.find((ch) => ch.id === childId) || null;
   }, [children, childId]);
 
+  useEffect(() => {
+    if (!selectedChild) return;
+    setLessonAgeGroup(ageGroupKeyFromBirthDate(selectedChild.birthDate));
+  }, [selectedChild?.id, selectedChild?.birthDate]);
+
+  const lessonAgeOptions = useMemo(() => {
+    const set = new Set();
+    for (const lesson of lessons) {
+      for (const key of getLessonAgeGroups(lesson)) set.add(key);
+    }
+    return AGE_GROUPS.filter((g) => set.has(g.key));
+  }, [lessons]);
+
   const remediationMap = useMemo(() => {
     const map = new Map();
     for (const lesson of lessons) {
@@ -227,7 +264,7 @@ export default function AdminProgress() {
   const lessonRows = useMemo(() => {
     const rows = lessons.map((l) => {
       const pr = currentProgressByLessonId.get(l.id) || null;
-      const draft = drafts[l.id] || { status: "IN_PROGRESS", notes: "" };
+      const draft = drafts[l.id] || { status: "IN_PROGRESS", notes: "", nextGoal: "" };
       const recommended = remediationMap.get(l.id) || [];
       return { lesson: l, progress: pr, draft, recommended };
     });
@@ -246,6 +283,10 @@ export default function AdminProgress() {
       if (stage === "completed" && !flags?.hasCompleted) return false;
       if (stage === "failed" && !flags?.hasFailed) return false;
       if (category && (lesson?.category?.name || "") !== category) return false;
+      if (lessonAgeGroup) {
+        const lessonGroups = getLessonAgeGroups(lesson);
+        if (!lessonGroups.includes(lessonAgeGroup)) return false;
+      }
       if (!q) return true;
       const haystack = [lesson?.title, lesson?.description, lesson?.category?.name]
         .filter(Boolean)
@@ -253,7 +294,7 @@ export default function AdminProgress() {
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [lessons, currentProgressByLessonId, drafts, remediationMap, lessonStatusFlags, query, category, stage]);
+  }, [lessons, currentProgressByLessonId, drafts, remediationMap, lessonStatusFlags, query, category, lessonAgeGroup, stage]);
 
   const categories = useMemo(() => {
     const set = new Set();
@@ -273,7 +314,7 @@ export default function AdminProgress() {
       setError("Select a child first.");
       return;
     }
-    const draft = drafts[lessonId] || { status: "IN_PROGRESS", notes: "" };
+    const draft = drafts[lessonId] || { status: "IN_PROGRESS", notes: "", nextGoal: "" };
     setSavingLessonId(lessonId);
     setError("");
 
@@ -287,11 +328,15 @@ export default function AdminProgress() {
       }
       await apiJson(`/api/v1/progress/${encodeURIComponent(progress.id)}/entries`, {
         method: "POST",
-        body: JSON.stringify({ status: draft.status, notes: draft.notes || null }),
+        body: JSON.stringify({
+          status: draft.status,
+          notes: draft.notes || null,
+          details: draft.nextGoal ? { nextGoal: draft.nextGoal } : null,
+        }),
       });
       const refreshed = await apiJson(`/api/v1/progress?childId=${encodeURIComponent(childId)}`);
       setProgressRows(Array.isArray(refreshed) ? refreshed : []);
-      setDraft(lessonId, { notes: "" });
+      setDraft(lessonId, { notes: "", nextGoal: "" });
     } catch (e) {
       setError(e.message || "Failed to record progress");
     } finally {
@@ -543,6 +588,9 @@ export default function AdminProgress() {
             setQuery={setQuery}
             category={category}
             setCategory={setCategory}
+            lessonAgeGroup={lessonAgeGroup}
+            setLessonAgeGroup={setLessonAgeGroup}
+            lessonAgeOptions={lessonAgeOptions}
             categories={categories}
             lessons={lessons}
             drafts={drafts}
@@ -558,7 +606,26 @@ export default function AdminProgress() {
 
 /* ── Lesson Table View ─────────────────────────────── */
 
-function LessonTableView({ stage, loading, lessonRows, visibleCount, setVisibleCount, query, setQuery, category, setCategory, categories, lessons, drafts, setDraft, savingLessonId, recordEntry }) {
+function LessonTableView({
+  stage,
+  loading,
+  lessonRows,
+  visibleCount,
+  setVisibleCount,
+  query,
+  setQuery,
+  category,
+  setCategory,
+  lessonAgeGroup,
+  setLessonAgeGroup,
+  lessonAgeOptions,
+  categories,
+  lessons,
+  drafts,
+  setDraft,
+  savingLessonId,
+  recordEntry,
+}) {
   const stageLabel = stage === "all" ? "All Lessons" : stage === "completed" ? "Completed Goals" : "Failed Goals";
   const stageColor = stage === "completed" ? "emerald" : stage === "failed" ? "red" : "violet";
 
@@ -597,9 +664,9 @@ function LessonTableView({ stage, loading, lessonRows, visibleCount, setVisibleC
           />
         ) : (
           <div className="space-y-4">
-            {/* Search & Category filter */}
-            <div className="flex flex-col gap-3 md:flex-row">
-              <div className="relative flex-1">
+            {/* Search & lesson filters */}
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="relative">
                 <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
@@ -610,17 +677,28 @@ function LessonTableView({ stage, loading, lessonRows, visibleCount, setVisibleC
                   onChange={(e) => { setQuery(e.target.value); setVisibleCount(100); }}
                 />
               </div>
-              <div className="relative md:w-56">
-                <select
-                  className="w-full appearance-none rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 pr-10 text-sm transition focus:border-violet-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-100"
-                  value={category}
-                  onChange={(e) => { setCategory(e.target.value); setVisibleCount(100); }}
-                >
-                  <option value="">All categories</option>
-                  {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <svg className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-              </div>
+              <FilterSelect
+                label="Category"
+                value={category}
+                onChange={(v) => { setCategory(v); setVisibleCount(100); }}
+                disabled={false}
+                placeholder="All categories"
+                icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h8m-8 6h16" /></svg>}
+              >
+                {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+              </FilterSelect>
+              <FilterSelect
+                label="Lesson Age Group"
+                value={lessonAgeGroup}
+                onChange={(v) => { setLessonAgeGroup(v); setVisibleCount(100); }}
+                disabled={false}
+                placeholder="All ages"
+                icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+              >
+                {(lessonAgeOptions.length ? lessonAgeOptions : AGE_GROUPS).map((g) => (
+                  <option key={g.key} value={g.key}>{g.label}</option>
+                ))}
+              </FilterSelect>
             </div>
 
             <div className="flex items-center justify-between text-xs text-gray-500">
@@ -716,7 +794,7 @@ function LessonTableView({ stage, loading, lessonRows, visibleCount, setVisibleC
                       </div>
 
                       {/* Record Entry */}
-                      <div className="flex shrink-0 flex-col gap-2 lg:w-64">
+                      <div className="flex shrink-0 flex-col gap-2 lg:w-72">
                         <div className="relative">
                           <select
                             className="w-full appearance-none rounded-xl border border-gray-200 bg-gray-50/50 px-3 py-2 pr-8 text-sm transition focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
@@ -728,6 +806,22 @@ function LessonTableView({ stage, loading, lessonRows, visibleCount, setVisibleC
                           </select>
                           <svg className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                         </div>
+                        <input
+                          className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-3 py-2 text-sm transition focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                          placeholder="Type next goal..."
+                          value={draft.nextGoal || ""}
+                          onChange={(e) => setDraft(lesson.id, { nextGoal: e.target.value })}
+                          disabled={savingLessonId === lesson.id}
+                        />
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700 transition hover:bg-violet-100 disabled:opacity-60"
+                          onClick={() => setDraft(lesson.id, { nextGoal: getNextGoalSuggestion(lesson, progress, recommended) })}
+                          disabled={savingLessonId === lesson.id}
+                        >
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                          Use next step
+                        </button>
                         <input
                           className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-3 py-2 text-sm transition focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
                           placeholder="Notes (optional)..."

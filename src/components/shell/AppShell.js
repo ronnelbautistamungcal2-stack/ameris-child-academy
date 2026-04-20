@@ -16,6 +16,8 @@ export default function AppShell({
   navItems,
   children,
   right,
+  shellMaxWidthClassName = "max-w-[1500px]",
+  contentMaxWidthClassName = "max-w-6xl",
   backHref = "/dashboard",
   backLabel = "Back",
   showBack,
@@ -190,7 +192,7 @@ export default function AppShell({
       <a href={`#${mainContentId}`} className="skip-link">
         Skip to main content
       </a>
-      <div className="mx-auto flex min-h-screen max-w-[1500px]">
+      <div className={["mx-auto flex min-h-screen w-full", shellMaxWidthClassName].join(" ")}>
         <div className="hidden md:block">{Sidebar}</div>
 
         {mobileOpen ? (
@@ -304,7 +306,7 @@ export default function AppShell({
           </header>
 
           <main id={mainContentId} className="px-4 py-6" tabIndex={-1}>
-            <div className="mx-auto w-full max-w-6xl">
+            <div className={["mx-auto w-full", contentMaxWidthClassName].join(" ")}>
               {right ? (
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_360px]">
                   <section className="min-w-0">{children}</section>

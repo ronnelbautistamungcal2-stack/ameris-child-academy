@@ -186,7 +186,11 @@ export default function TeacherDashboard() {
   const headerDate = useMemo(() => formatHeaderDate(new Date()), []);
 
   return (
-    <TeacherLayout title="Dashboard">
+    <TeacherLayout
+      title="Dashboard"
+      shellMaxWidthClassName="max-w-[1760px]"
+      contentMaxWidthClassName="max-w-[1400px]"
+    >
       <div className="space-y-5">
         <WorkspaceHero
           eyebrow="Teacher Dashboard"

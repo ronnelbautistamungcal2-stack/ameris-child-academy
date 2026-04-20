@@ -23,6 +23,12 @@ const STATUS_COLORS = {
   FAILED: "bg-red-100 text-red-800",
 };
 
+const STAGE_TONE_CLASSES = {
+  all: "bg-violet-100 text-violet-600",
+  completed: "bg-emerald-100 text-emerald-600",
+  failed: "bg-red-100 text-red-600",
+};
+
 const STAGE_FILTERS = [
   { value: "active", label: "Active Goals", icon: IconActive },
   { value: "all", label: "All Goals", icon: IconAll },
@@ -91,6 +97,39 @@ export default function AdminProgress() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  function resetLessonFilters() {
+    setQuery("");
+    setCategory("");
+    setLessonAgeGroup("");
+    setVisibleCount(100);
+  }
+
+  function handleCenterChange(nextCenterId) {
+    if (nextCenterId === centerId) return;
+    setCenterId(nextCenterId);
+    setClassId("");
+    setChildId("");
+    setProgressRows([]);
+    resetLessonFilters();
+  }
+
+  function handleClassChange(nextClassId) {
+    setClassId(nextClassId);
+    setChildId("");
+    resetLessonFilters();
+  }
+
+  function handleAgeGroupChange(nextAgeGroup) {
+    setAgeGroup(nextAgeGroup);
+    setChildId("");
+    resetLessonFilters();
+  }
+
+  function handleChildChange(nextChildId) {
+    setChildId(nextChildId);
+    resetLessonFilters();
+  }
 
   useEffect(() => {
     (async () => {
@@ -207,13 +246,23 @@ export default function AdminProgress() {
     }
   }, [classId, childId, filteredChildren]);
 
+  useEffect(() => {
+    if (!classId) return;
+    if (!classes.some((cls) => cls.id === classId)) {
+      setClassId("");
+    }
+  }, [classes, classId]);
+
   const selectedChild = useMemo(() => {
     return children.find((ch) => ch.id === childId) || null;
   }, [children, childId]);
 
   useEffect(() => {
-    if (!selectedChild) return;
-    setLessonAgeGroup(ageGroupKeyFromBirthDate(selectedChild.birthDate));
+    if (!selectedChild) {
+      setLessonAgeGroup("");
+      return;
+    }
+    setLessonAgeGroup(ageGroupKeyFromBirthDate(selectedChild.birthDate) || "");
   }, [selectedChild?.id, selectedChild?.birthDate]);
 
   const lessonAgeOptions = useMemo(() => {
@@ -499,25 +548,25 @@ export default function AdminProgress() {
 
             {/* Filters */}
             <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-5">
-              <FilterSelect label="Center" value={centerId} onChange={setCenterId} disabled={loading} placeholder="Select a center..." icon={
+              <FilterSelect label="Center" value={centerId} onChange={handleCenterChange} disabled={loading} placeholder="Select a center..." icon={
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
               }>
                 {centers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </FilterSelect>
 
-              <FilterSelect label="Class / Group" value={classId} onChange={setClassId} disabled={!centerId || loading} placeholder="All classes" icon={
+              <FilterSelect label="Class / Group" value={classId} onChange={handleClassChange} disabled={!centerId || loading} placeholder="All classes" icon={
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
               }>
                 {classes.map((cls) => <option key={cls.id} value={cls.id}>{cls.name}</option>)}
               </FilterSelect>
 
-              <FilterSelect label="Age Group" value={ageGroup} onChange={(v) => { setAgeGroup(v); setChildId(""); }} disabled={!centerId || loading} placeholder="All ages" icon={
+              <FilterSelect label="Age Group" value={ageGroup} onChange={handleAgeGroupChange} disabled={!centerId || loading} placeholder="All ages" icon={
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               }>
                 {AGE_GROUPS.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
               </FilterSelect>
 
-              <FilterSelect label="Child" value={childId} onChange={setChildId} disabled={!centerId || loading} placeholder={centerId && !childId ? "Overview (all)" : "Select child..."} icon={
+              <FilterSelect label="Child" value={childId} onChange={handleChildChange} disabled={!centerId || loading} placeholder={centerId && !childId ? "Overview (all)" : "Select child..."} icon={
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
               }>
                 {childOptions.map((ch) => <option key={ch.id} value={ch.id}>{ch.firstName} {ch.lastName || ""}</option>)}
@@ -627,13 +676,13 @@ function LessonTableView({
   recordEntry,
 }) {
   const stageLabel = stage === "all" ? "All Lessons" : stage === "completed" ? "Completed Goals" : "Failed Goals";
-  const stageColor = stage === "completed" ? "emerald" : stage === "failed" ? "red" : "violet";
+  const stageToneClass = STAGE_TONE_CLASSES[stage] || STAGE_TONE_CLASSES.all;
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
       <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
         <h3 className="flex items-center gap-2 text-sm font-extrabold text-gray-900">
-          <span className={`flex h-6 w-6 items-center justify-center rounded-lg bg-${stageColor}-100 text-${stageColor}-600`}>
+          <span className={`flex h-6 w-6 items-center justify-center rounded-lg ${stageToneClass}`}>
             {stage === "completed" ? (
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
             ) : stage === "failed" ? (

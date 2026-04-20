@@ -177,6 +177,8 @@ export default function Dashboard() {
       userLabel={session?.user?.email}
       userImageUrl={session?.user?.pictureUrl}
       navItems={nav}
+      shellMaxWidthClassName="max-w-[1760px]"
+      contentMaxWidthClassName="max-w-[1400px]"
       showBack={false}
     >
       {role === "PARENT" ? (
@@ -730,11 +732,11 @@ function formatDashboardTimestamp(value) {
 
 function DashboardIcon({ tone = "sky", children, className = "" }) {
   const tones = {
-    sky: "bg-sky-100 text-sky-700",
-    emerald: "bg-emerald-100 text-emerald-700",
-    amber: "bg-amber-100 text-amber-700",
-    rose: "bg-rose-100 text-rose-700",
-    gray: "bg-gray-100 text-gray-600",
+    sky: "bg-sky-100 text-sky-700 dark:bg-sky-950/70 dark:text-sky-300",
+    emerald: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300",
+    amber: "bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300",
+    rose: "bg-rose-100 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300",
+    gray: "bg-gray-100 text-gray-600 dark:bg-slate-900/90 dark:text-slate-300",
   };
 
   return (
@@ -761,23 +763,23 @@ function ParentDashboardPanel({
   const accents = {
     sky: {
       line: "from-sky-500 via-cyan-500 to-blue-500",
-      pill: "border-sky-200 bg-sky-50 text-sky-700",
-      bloom: "bg-sky-100/80",
+      pill: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-950/50 dark:text-sky-300",
+      bloom: "bg-sky-100/80 dark:bg-sky-500/10",
     },
     emerald: {
       line: "from-emerald-500 via-teal-500 to-cyan-500",
-      pill: "border-emerald-200 bg-emerald-50 text-emerald-700",
-      bloom: "bg-emerald-100/80",
+      pill: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-950/45 dark:text-emerald-300",
+      bloom: "bg-emerald-100/80 dark:bg-emerald-500/10",
     },
     amber: {
       line: "from-amber-500 via-orange-500 to-rose-500",
-      pill: "border-amber-200 bg-amber-50 text-amber-700",
-      bloom: "bg-amber-100/80",
+      pill: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-950/45 dark:text-amber-300",
+      bloom: "bg-amber-100/80 dark:bg-amber-500/10",
     },
     rose: {
       line: "from-rose-500 via-pink-500 to-orange-500",
-      pill: "border-rose-200 bg-rose-50 text-rose-700",
-      bloom: "bg-rose-100/80",
+      pill: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-950/45 dark:text-rose-300",
+      bloom: "bg-rose-100/80 dark:bg-rose-500/10",
     },
   };
   const accentClasses = accents[accent] || accents.sky;
@@ -785,7 +787,7 @@ function ParentDashboardPanel({
   return (
     <section
       className={[
-        "relative overflow-hidden rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm",
+        "relative overflow-hidden rounded-[24px] border border-gray-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-slate-950/75 dark:shadow-[0_22px_60px_-42px_rgba(2,6,23,0.95)]",
         className,
       ].join(" ")}
     >
@@ -797,7 +799,7 @@ function ParentDashboardPanel({
       />
       <div
         className={[
-          "pointer-events-none absolute right-0 top-0 h-24 w-24 rounded-full blur-3xl",
+          "pointer-events-none absolute right-0 top-0 h-20 w-20 rounded-full blur-3xl",
           accentClasses.bloom,
         ].join(" ")}
       />
@@ -807,22 +809,22 @@ function ParentDashboardPanel({
             {eyebrow ? (
               <div
                 className={[
-                  "inline-flex rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.18em]",
+                  "inline-flex rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em]",
                   accentClasses.pill,
                 ].join(" ")}
               >
                 {eyebrow}
               </div>
             ) : null}
-            <h3 className="mt-3 text-lg font-black tracking-tight text-gray-900">
+            <h3 className="mt-2.5 text-base font-black tracking-tight text-gray-900 dark:text-slate-100">
               {title}
             </h3>
             {description ? (
-              <p className="mt-1 text-sm leading-6 text-gray-600">{description}</p>
+              <p className="mt-1 text-[13px] leading-5 text-gray-600 dark:text-slate-400">{description}</p>
             ) : null}
           </div>
         </div>
-        <div className="mt-4">{children}</div>
+        <div className="mt-3">{children}</div>
       </div>
     </section>
   );
@@ -830,19 +832,135 @@ function ParentDashboardPanel({
 
 function ParentMiniStat({ label, value, tone = "sky" }) {
   const tones = {
-    sky: "border-sky-200 bg-sky-50 text-sky-900",
-    emerald: "border-emerald-200 bg-emerald-50 text-emerald-900",
-    amber: "border-amber-200 bg-amber-50 text-amber-900",
-    rose: "border-rose-200 bg-rose-50 text-rose-900",
-    gray: "border-gray-200 bg-gray-50 text-gray-900",
+    sky: "border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-500/25 dark:bg-sky-950/35 dark:text-sky-100",
+    emerald: "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/25 dark:bg-emerald-950/35 dark:text-emerald-100",
+    amber: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/25 dark:bg-amber-950/35 dark:text-amber-100",
+    rose: "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-500/25 dark:bg-rose-950/35 dark:text-rose-100",
+    gray: "border-gray-200 bg-gray-50 text-gray-900 dark:border-white/10 dark:bg-slate-900/85 dark:text-slate-100",
   };
 
   return (
     <div className={["rounded-2xl border p-3", tones[tone] || tones.sky].join(" ")}>
-      <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-gray-500">
+      <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-400">
         {label}
       </div>
       <div className="mt-2 text-xl font-black tracking-tight">{value}</div>
+    </div>
+  );
+}
+
+function ParentHeroStat({ label, value, detail, tone = "sky" }) {
+  const tones = {
+    sky: "border-sky-200 bg-sky-50/90 text-sky-900 dark:border-sky-500/25 dark:bg-sky-950/30 dark:text-sky-100",
+    emerald: "border-emerald-200 bg-emerald-50/90 text-emerald-900 dark:border-emerald-500/25 dark:bg-emerald-950/30 dark:text-emerald-100",
+    amber: "border-amber-200 bg-amber-50/90 text-amber-900 dark:border-amber-500/25 dark:bg-amber-950/30 dark:text-amber-100",
+    rose: "border-rose-200 bg-rose-50/90 text-rose-900 dark:border-rose-500/25 dark:bg-rose-950/30 dark:text-rose-100",
+    gray: "border-gray-200 bg-gray-50/95 text-gray-900 dark:border-white/10 dark:bg-slate-900/85 dark:text-slate-100",
+  };
+
+  return (
+    <div className={["rounded-[20px] border p-3", tones[tone] || tones.sky].join(" ")}>
+      <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-400">
+        {label}
+      </div>
+      <div className="mt-2 text-base font-black tracking-tight">{value}</div>
+      <div className="mt-1 text-xs leading-5 text-gray-600 dark:text-slate-400">{detail}</div>
+    </div>
+  );
+}
+
+function ParentHeroSnapshot({
+  selectedChild,
+  selectedChildProgress,
+  visibleChildrenCount,
+  urgentReminderCount,
+  nextReminder,
+  subscriptionSummary,
+}) {
+  const selectedChildAge = formatAge(selectedChild?.birthDate);
+  const selectedChildName = selectedChild
+    ? `${selectedChild.firstName}${selectedChild.lastName ? ` ${selectedChild.lastName}` : ""}`
+    : "";
+  const focusValue = selectedChild?.firstName || `${visibleChildrenCount || 0} linked`;
+  const focusDetail = selectedChild
+    ? [
+        selectedChildAge ? `Age ${selectedChildAge}` : null,
+        selectedChildProgress?.overall != null
+          ? `${selectedChildProgress.overall}% progress`
+          : "Progress syncing",
+      ]
+        .filter(Boolean)
+        .join(" - ")
+    : visibleChildrenCount
+      ? "Profiles linked to this family account."
+      : "Profiles will appear here after linking.";
+  const formsValue = urgentReminderCount ? `${urgentReminderCount} due` : "Up to date";
+  const formsDetail = nextReminder
+    ? `${nextReminder.title} - ${nextReminder.statusLabel}`
+    : "No renewals are currently blocking you.";
+  const billingValue = subscriptionSummary?.active
+    ? "Active"
+    : subscriptionSummary
+      ? "Review"
+      : "Pending";
+  const billingDetail = subscriptionSummary?.centerName
+    ? `${subscriptionSummary.centerName} - ${subscriptionSummary.tier}`
+    : "Billing snapshot will appear here once available.";
+
+  return (
+    <div className="w-full rounded-[24px] border border-amber-200/80 bg-white/90 p-3.5 shadow-[0_18px_45px_-30px_rgba(217,119,6,0.4)] backdrop-blur dark:border-amber-500/25 dark:bg-slate-950/80 dark:shadow-[0_28px_70px_-48px_rgba(2,6,23,0.95)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-amber-700 dark:border-amber-500/30 dark:bg-amber-950/45 dark:text-amber-300">
+            Family spotlight
+          </div>
+          <div className="mt-2.5 text-base font-black tracking-tight text-gray-900 dark:text-slate-100">
+            {selectedChildName || "Everything in one place"}
+          </div>
+          <div className="mt-1 text-[13px] leading-5 text-gray-600 dark:text-slate-400">
+            {selectedChildName
+              ? `Keep ${selectedChild.firstName}'s updates, renewals, and support links close at hand.`
+              : "Use this card to jump from daily updates into forms, billing, and messages."}
+          </div>
+        </div>
+        <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-sky-700 dark:border-sky-500/30 dark:bg-sky-950/45 dark:text-sky-300">
+          {selectedChildProgress?.overall != null
+            ? `${selectedChildProgress.overall}% progress`
+            : urgentReminderCount
+              ? `${urgentReminderCount} form${urgentReminderCount === 1 ? "" : "s"} due`
+              : "Ready"}
+        </span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <ParentHeroStat
+          label="Focus"
+          value={focusValue}
+          detail={focusDetail}
+          tone="sky"
+        />
+        <ParentHeroStat
+          label="Forms"
+          value={formsValue}
+          detail={formsDetail}
+          tone={urgentReminderCount ? "amber" : "emerald"}
+        />
+        <ParentHeroStat
+          label="Billing"
+          value={billingValue}
+          detail={billingDetail}
+          tone={subscriptionSummary?.active ? "emerald" : subscriptionSummary ? "amber" : "gray"}
+        />
+      </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <ParentButton href="/parent/messages" variant="secondary" className="w-full px-3 py-2 text-xs">
+          Messages
+        </ParentButton>
+        <ParentButton href="/parent/forms" className="w-full px-3 py-2 text-xs">
+          Open forms
+        </ParentButton>
+      </div>
     </div>
   );
 }
@@ -859,28 +977,28 @@ function ParentDashboardActionCard({
 }) {
   const tones = {
     sky: {
-      card: "border-sky-100 bg-white hover:border-sky-200 hover:bg-sky-50/70",
-      icon: "bg-sky-100 text-sky-700",
-      meta: "border-sky-200 bg-sky-50 text-sky-700",
-      glow: "bg-sky-100/70",
+      card: "border-sky-100 bg-white hover:border-sky-200 hover:bg-sky-50/70 dark:border-sky-500/15 dark:bg-slate-950/80 dark:hover:border-sky-500/30 dark:hover:bg-sky-950/25",
+      icon: "bg-sky-100 text-sky-700 dark:bg-sky-950/70 dark:text-sky-300",
+      meta: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-950/45 dark:text-sky-300",
+      glow: "bg-sky-100/70 dark:bg-sky-500/10",
     },
     emerald: {
-      card: "border-emerald-100 bg-white hover:border-emerald-200 hover:bg-emerald-50/70",
-      icon: "bg-emerald-100 text-emerald-700",
-      meta: "border-emerald-200 bg-emerald-50 text-emerald-700",
-      glow: "bg-emerald-100/70",
+      card: "border-emerald-100 bg-white hover:border-emerald-200 hover:bg-emerald-50/70 dark:border-emerald-500/15 dark:bg-slate-950/80 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-950/25",
+      icon: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300",
+      meta: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-950/45 dark:text-emerald-300",
+      glow: "bg-emerald-100/70 dark:bg-emerald-500/10",
     },
     amber: {
-      card: "border-amber-100 bg-white hover:border-amber-200 hover:bg-amber-50/70",
-      icon: "bg-amber-100 text-amber-700",
-      meta: "border-amber-200 bg-amber-50 text-amber-700",
-      glow: "bg-amber-100/70",
+      card: "border-amber-100 bg-white hover:border-amber-200 hover:bg-amber-50/70 dark:border-amber-500/15 dark:bg-slate-950/80 dark:hover:border-amber-500/30 dark:hover:bg-amber-950/25",
+      icon: "bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300",
+      meta: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-950/45 dark:text-amber-300",
+      glow: "bg-amber-100/70 dark:bg-amber-500/10",
     },
     rose: {
-      card: "border-rose-100 bg-white hover:border-rose-200 hover:bg-rose-50/70",
-      icon: "bg-rose-100 text-rose-700",
-      meta: "border-rose-200 bg-rose-50 text-rose-700",
-      glow: "bg-rose-100/70",
+      card: "border-rose-100 bg-white hover:border-rose-200 hover:bg-rose-50/70 dark:border-rose-500/15 dark:bg-slate-950/80 dark:hover:border-rose-500/30 dark:hover:bg-rose-950/25",
+      icon: "bg-rose-100 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300",
+      meta: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-950/45 dark:text-rose-300",
+      glow: "bg-rose-100/70 dark:bg-rose-500/10",
     },
   };
   const toneClasses = tones[tone] || tones.sky;
@@ -889,26 +1007,26 @@ function ParentDashboardActionCard({
     <Link
       href={href}
       className={[
-        "group relative overflow-hidden rounded-[26px] border p-4 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg sm:p-5",
+        "group relative overflow-hidden rounded-[22px] border p-3 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-3.5",
         toneClasses.card,
         className,
       ].join(" ")}
     >
       <div
         className={[
-          "pointer-events-none absolute right-0 top-0 h-20 w-20 rounded-full blur-3xl",
+          "pointer-events-none absolute right-0 top-0 h-16 w-16 rounded-full blur-3xl",
           toneClasses.glow,
         ].join(" ")}
       />
       <div className="relative flex h-full flex-col">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
-            <DashboardIcon tone={tone} className={toneClasses.icon}>
+            <DashboardIcon tone={tone} className={[toneClasses.icon, "h-10 w-10 rounded-xl"].join(" ")}>
               {icon}
             </DashboardIcon>
             <div
               className={[
-                "inline-flex rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.18em]",
+                "inline-flex rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em]",
                 toneClasses.meta,
               ].join(" ")}
             >
@@ -916,7 +1034,7 @@ function ParentDashboardActionCard({
             </div>
           </div>
           <svg
-            className="h-5 w-5 shrink-0 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-gray-500"
+            className="h-5 w-5 shrink-0 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-gray-500 dark:text-slate-600 dark:group-hover:text-slate-300"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -925,21 +1043,21 @@ function ParentDashboardActionCard({
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
           </svg>
         </div>
-        <div className="mt-5">
-          <div className="text-xl font-black leading-tight tracking-tight text-gray-900">
+        <div className="mt-3.5">
+          <div className="text-base font-black leading-tight tracking-tight text-gray-900 dark:text-slate-100">
             {title}
           </div>
-          <p className="mt-2 max-w-[34ch] text-sm leading-6 text-gray-600">
+          <p className="mt-1.5 max-w-[30ch] text-[13px] leading-5 text-gray-600 dark:text-slate-400">
             {description}
           </p>
         </div>
-        <div className="mt-5 flex items-center justify-between gap-3 border-t border-gray-100 pt-4">
-          <span className="text-sm font-semibold text-gray-600">
+        <div className="mt-3.5 flex items-center justify-between gap-2 border-t border-gray-100 pt-3 dark:border-white/10">
+          <span className="text-xs font-semibold text-gray-600 dark:text-slate-400">
             {meta}
           </span>
-          <span className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-sm font-extrabold text-gray-900 shadow-sm">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-extrabold text-gray-900 shadow-sm dark:border-white/10 dark:bg-slate-900/90 dark:text-slate-100 dark:shadow-none">
             Open
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
           </span>
@@ -960,25 +1078,25 @@ function ParentChildCard({ child, index, gwa }) {
         : "sky";
   const tones = {
     sky: {
-      card: "border-sky-100 bg-white hover:border-sky-200 hover:bg-sky-50/70",
-      icon: "bg-sky-100 text-sky-700",
-      pill: "border-sky-200 bg-sky-50 text-sky-700",
+      card: "border-sky-100 bg-white hover:border-sky-200 hover:bg-sky-50/70 dark:border-sky-500/15 dark:bg-slate-950/80 dark:hover:border-sky-500/30 dark:hover:bg-sky-950/25",
+      icon: "bg-sky-100 text-sky-700 dark:bg-sky-950/70 dark:text-sky-300",
+      pill: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-950/45 dark:text-sky-300",
       progress: "from-sky-500 to-cyan-500",
-      glow: "bg-sky-100/80",
+      glow: "bg-sky-100/80 dark:bg-sky-500/10",
     },
     emerald: {
-      card: "border-emerald-100 bg-white hover:border-emerald-200 hover:bg-emerald-50/70",
-      icon: "bg-emerald-100 text-emerald-700",
-      pill: "border-emerald-200 bg-emerald-50 text-emerald-700",
+      card: "border-emerald-100 bg-white hover:border-emerald-200 hover:bg-emerald-50/70 dark:border-emerald-500/15 dark:bg-slate-950/80 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-950/25",
+      icon: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300",
+      pill: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-950/45 dark:text-emerald-300",
       progress: "from-emerald-500 to-teal-500",
-      glow: "bg-emerald-100/80",
+      glow: "bg-emerald-100/80 dark:bg-emerald-500/10",
     },
     amber: {
-      card: "border-amber-100 bg-white hover:border-amber-200 hover:bg-amber-50/70",
-      icon: "bg-amber-100 text-amber-700",
-      pill: "border-amber-200 bg-amber-50 text-amber-700",
+      card: "border-amber-100 bg-white hover:border-amber-200 hover:bg-amber-50/70 dark:border-amber-500/15 dark:bg-slate-950/80 dark:hover:border-amber-500/30 dark:hover:bg-amber-950/25",
+      icon: "bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300",
+      pill: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-950/45 dark:text-amber-300",
       progress: "from-amber-500 to-orange-500",
-      glow: "bg-amber-100/80",
+      glow: "bg-amber-100/80 dark:bg-amber-500/10",
     },
   };
   const toneClasses = tones[tone] || tones.sky;
@@ -988,68 +1106,68 @@ function ParentChildCard({ child, index, gwa }) {
     <Link
       href={`/parent/children?childId=${encodeURIComponent(child.id)}`}
       className={[
-        "group relative overflow-hidden rounded-[28px] border p-5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg",
+        "group relative overflow-hidden rounded-[24px] border p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
         toneClasses.card,
       ].join(" ")}
     >
       <div
         className={[
-          "pointer-events-none absolute right-0 top-0 h-24 w-24 rounded-full blur-3xl",
+          "pointer-events-none absolute right-0 top-0 h-20 w-20 rounded-full blur-3xl",
           toneClasses.glow,
         ].join(" ")}
       />
       <div className="relative">
         <div className="flex items-start justify-between gap-3">
-          <DashboardIcon tone={tone} className={toneClasses.icon}>
+          <DashboardIcon tone={tone} className={[toneClasses.icon, "h-10 w-10 rounded-xl"].join(" ")}>
             <span className="text-sm font-black">{initials(child.firstName, child.lastName)}</span>
           </DashboardIcon>
           <span
             className={[
-              "rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.18em]",
+              "rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em]",
               progression
                 ? toneClasses.pill
-                : "border-gray-200 bg-gray-50 text-gray-600",
+                : "border-gray-200 bg-gray-50 text-gray-600 dark:border-white/10 dark:bg-slate-900/90 dark:text-slate-300",
             ].join(" ")}
           >
             {progression?.label || "Profile"}
           </span>
         </div>
 
-        <div className="mt-5">
-          <div className="text-lg font-black tracking-tight text-gray-900">
+        <div className="mt-3.5">
+          <div className="text-base font-black tracking-tight text-gray-900 dark:text-slate-100">
             {child.firstName} {child.lastName || ""}
           </div>
-          <div className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+          <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-400">
             Child {index + 1}
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap gap-1.5">
           {ageLabel ? (
-            <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-700">
+            <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-semibold text-gray-700 dark:border-white/10 dark:bg-slate-900/90 dark:text-slate-300">
               Age {ageLabel}
             </span>
           ) : null}
-          <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-700">
+          <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-semibold text-gray-700 dark:border-white/10 dark:bg-slate-900/90 dark:text-slate-300">
             {child.classRoomId ? "Classroom assigned" : "Classroom pending"}
           </span>
         </div>
 
         {gwa ? (
-          <div className="mt-5 rounded-[22px] border border-gray-200 bg-white/90 p-4">
+          <div className="mt-3.5 rounded-[18px] border border-gray-200 bg-white/90 p-3 dark:border-white/10 dark:bg-slate-950/80">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-gray-500">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-400">
                   Overall progress
                 </div>
-                <div className="mt-2 text-2xl font-black tracking-tight text-gray-900">
+                <div className="mt-1.5 text-xl font-black tracking-tight text-gray-900 dark:text-slate-100">
                   {gwa.overall}%
                 </div>
               </div>
-              <div className="text-right text-xs text-gray-500">
+              <div className="text-right text-[11px] text-gray-500 dark:text-slate-400">
                 {gwa.progressStats?.total ? (
                   <>
-                    <div className="font-semibold text-gray-900">
+                    <div className="font-semibold text-gray-900 dark:text-slate-100">
                       {gwa.progressStats.completed}/{gwa.progressStats.total}
                     </div>
                     <div>steps complete</div>
@@ -1059,7 +1177,7 @@ function ParentChildCard({ child, index, gwa }) {
                 )}
               </div>
             </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-100">
+            <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800">
               <div
                 className={[
                   "h-full rounded-full bg-gradient-to-r",
@@ -1070,14 +1188,14 @@ function ParentChildCard({ child, index, gwa }) {
             </div>
           </div>
         ) : (
-          <div className="mt-5 rounded-[22px] border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
+          <div className="mt-3.5 rounded-[18px] border border-dashed border-gray-300 bg-gray-50 p-3 text-[13px] leading-5 text-gray-600 dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-400">
             Progress data is still syncing for this child.
           </div>
         )}
 
-        <div className="mt-5 inline-flex items-center gap-2 text-sm font-extrabold text-gray-900 transition group-hover:translate-x-0.5">
+        <div className="mt-3.5 inline-flex items-center gap-1.5 text-[13px] font-extrabold text-gray-900 transition group-hover:translate-x-0.5 dark:text-slate-100">
           Open full profile
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
           </svg>
         </div>
@@ -1171,76 +1289,91 @@ function ParentDashboard({
   const childrenWithProgress = visibleChildren.filter((child) => childGWAs[child.id]).length;
   const urgentReminderCount = reminders.filter((item) => item.tone !== "emerald").length;
   const billingTone = subscriptionSummary?.active ? "emerald" : subscriptionSummary ? "amber" : "rose";
+  const selectedChildProgress = selectedChild ? childGWAs[selectedChild.id] : null;
+  const nextReminder = reminders[0] || null;
 
   return (
-    <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.45fr)_360px]">
+    <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
       <section className="min-w-0 space-y-5">
-        <ParentPageHeader
-          eyebrow="Family overview"
-          title={`Welcome back, ${name}`}
-          description="Check your children, renew forms before they become urgent, and move directly into messages, billing, and progress updates from one dashboard."
-          accent="amber"
-          layout="split"
-          stats={[
-            {
-              label: "Children",
-              value: visibleChildren.length,
-              hint: "Linked to this account",
-              tone: "sky",
-              icon: (
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
-                </svg>
-              ),
-            },
-            {
-              label: "Recent updates",
-              value: recentActivities.length,
-              hint: selectedChild ? `Latest feed from ${selectedChild.firstName}` : "Recent visible updates",
-              tone: recentActivities.length ? "amber" : "gray",
-              icon: (
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022 23.848 23.848 0 005.454 1.31m5.715 0a24.255 24.255 0 01-5.715 0m5.715 0a3 3 0 11-5.715 0" />
-                </svg>
-              ),
-            },
-            {
-              label: "Renewals",
-              value: urgentReminderCount ? urgentReminderCount : "Clear",
-              hint: urgentReminderCount ? "Forms needing attention" : "No urgent renewals",
-              tone: urgentReminderCount ? "amber" : "emerald",
-              icon: (
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0119 9.414V19a2 2 0 01-2 2z" />
-                </svg>
-              ),
-            },
-            {
-              label: "Billing",
-              value: subscriptionSummary?.active ? "Active" : "Review",
-              hint: subscriptionSummary?.centerName || "Center plan",
-              tone: subscriptionSummary?.active ? "emerald" : "amber",
-              icon: (
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M3 10.5h18A1.5 1.5 0 0122.5 12v6A1.5 1.5 0 0121 19.5H3A1.5 1.5 0 011.5 18v-6A1.5 1.5 0 013 10.5z" />
-                </svg>
-              ),
-            },
-          ]}
-          actions={
-            <>
-              <ParentButton href="/parent/messages" variant="secondary">Messages</ParentButton>
-              <ParentButton href="/parent/forms">Open forms</ParentButton>
-            </>
-          }
-        />
+        <div className="grid grid-cols-1 items-start gap-5 2xl:grid-cols-[minmax(0,1fr)_320px]">
+          <ParentPageHeader
+            eyebrow="Family overview"
+            title={`Welcome back, ${name}`}
+            description="See updates, forms, billing, and progress from one parent dashboard."
+            accent="amber"
+            layout="default"
+            stats={[
+              {
+                label: "Children",
+                value: visibleChildren.length,
+                hint: "Linked profiles",
+                tone: "sky",
+                icon: (
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                  </svg>
+                ),
+              },
+              {
+                label: "Recent updates",
+                value: recentActivities.length,
+                hint: selectedChild ? `${selectedChild.firstName} feed` : "Latest updates",
+                tone: recentActivities.length ? "amber" : "gray",
+                icon: (
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022 23.848 23.848 0 005.454 1.31m5.715 0a24.255 24.255 0 01-5.715 0m5.715 0a3 3 0 11-5.715 0" />
+                  </svg>
+                ),
+              },
+              {
+                label: "Renewals",
+                value: urgentReminderCount ? urgentReminderCount : "Clear",
+                hint: urgentReminderCount ? "Need review" : "Nothing due",
+                tone: urgentReminderCount ? "amber" : "emerald",
+                icon: (
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0119 9.414V19a2 2 0 01-2 2z" />
+                  </svg>
+                ),
+              },
+              {
+                label: "Billing",
+                value: subscriptionSummary?.active ? "Active" : "Review",
+                hint: subscriptionSummary?.centerName || "Center account",
+                tone: subscriptionSummary?.active ? "emerald" : "amber",
+                icon: (
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M3 10.5h18A1.5 1.5 0 0122.5 12v6A1.5 1.5 0 0121 19.5H3A1.5 1.5 0 011.5 18v-6A1.5 1.5 0 013 10.5z" />
+                  </svg>
+                ),
+              },
+            ]}
+            actions={
+              <>
+                <ParentButton href="/parent/messages" variant="secondary" className="px-3 py-2 text-xs">Messages</ParentButton>
+                <ParentButton href="/parent/forms" className="px-3 py-2 text-xs">Open forms</ParentButton>
+              </>
+            }
+          />
+
+          <ParentHeroSnapshot
+            selectedChild={selectedChild}
+            selectedChildProgress={selectedChildProgress}
+            visibleChildrenCount={visibleChildren.length}
+            urgentReminderCount={urgentReminderCount}
+            nextReminder={nextReminder}
+            subscriptionSummary={subscriptionSummary}
+          />
+        </div>
 
         <ParentSection
           title="Jump back in"
-          description="Each card takes you straight to a common parent task without making you hunt through the portal."
-          className="overflow-hidden border-sky-100 bg-gradient-to-br from-sky-50 via-white to-amber-50/70 shadow-[0_22px_70px_-52px_rgba(14,116,144,0.55)]"
+          description="Direct links to the parent tasks you use most."
+          className="overflow-hidden border-sky-100 bg-gradient-to-br from-sky-50 via-white to-amber-50/70 p-4 shadow-[0_22px_70px_-52px_rgba(14,116,144,0.55)] dark:border-sky-500/20 dark:from-slate-950 dark:via-slate-900 dark:to-sky-950/35"
+          headerClassName="pb-3"
+          bodyClassName="pt-3"
         >
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-4">
             <ParentDashboardActionCard
               href="/parent/messages"
               eyebrow="Communication"
@@ -1303,11 +1436,13 @@ function ParentDashboard({
         <ParentSection
           title="Children at a glance"
           description="Each profile card gives you a fast read on progress, age, and what to open next."
-          action={<ParentButton href="/parent/children" variant="soft">View all children</ParentButton>}
-          className="overflow-hidden border-amber-100 bg-gradient-to-br from-white via-white to-amber-50/70 shadow-[0_24px_70px_-52px_rgba(217,119,6,0.45)]"
+          action={<ParentButton href="/parent/children" variant="soft" className="px-3 py-2 text-xs">View all children</ParentButton>}
+          className="overflow-hidden border-amber-100 bg-gradient-to-br from-white via-white to-amber-50/70 p-4 shadow-[0_24px_70px_-52px_rgba(217,119,6,0.45)] dark:border-amber-500/20 dark:from-slate-950 dark:via-slate-900 dark:to-amber-950/30"
+          headerClassName="pb-3"
+          bodyClassName="pt-3"
         >
           {error ? (
-            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-500/30 dark:bg-red-950/25 dark:text-red-200">
               {error}
             </div>
           ) : null}
@@ -1315,11 +1450,11 @@ function ParentDashboard({
           {loading ? (
             <div className="mt-4"><Skeleton count={4} /></div>
           ) : visibleChildren.length === 0 ? (
-            <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+            <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600 dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-400">
               No children found for this account.
             </div>
           ) : (
-            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
               {visibleChildren.map((ch, index) => (
                 <ParentChildCard
                   key={ch.id}
@@ -1333,195 +1468,159 @@ function ParentDashboard({
         </ParentSection>
       </section>
 
-      <aside className="space-y-4">
-        <ParentDashboardPanel
-          eyebrow="Family pulse"
-          title="Today at a glance"
-          description="A quick snapshot of what is ready, what is urgent, and where to look next."
-          accent="sky"
-        >
-          <div className="grid grid-cols-2 gap-3">
-            <ParentMiniStat
-              label="Profiles ready"
-              value={`${childrenWithProgress}/${visibleChildren.length || 0}`}
-              tone="sky"
-            />
-            <ParentMiniStat
-              label="Forms due"
-              value={urgentReminderCount}
-              tone={urgentReminderCount ? "amber" : "emerald"}
-            />
-            <ParentMiniStat
-              label="Recent alerts"
-              value={recentActivities.length}
-              tone={recentActivities.length ? "sky" : "gray"}
-            />
-            <ParentMiniStat
-              label="Billing"
-              value={subscriptionSummary?.active ? "Good" : "Check"}
-              tone={subscriptionSummary?.active ? "emerald" : "amber"}
-            />
-          </div>
-
-          {selectedChild ? (
-            <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
-              Latest updates are currently loaded for <span className="font-extrabold">{selectedChild.firstName}</span>.
+      <aside className="space-y-3">
+          <ParentDashboardPanel
+            eyebrow="Alerts"
+            title="Recent updates"
+            description="Short updates you can scan quickly."
+            accent="amber"
+          >
+            <div className="space-y-2.5">
+              {recentActivities.length ? (
+                recentActivities.map((activity) => (
+                  <div
+                    key={activity.id}
+                    className="rounded-[18px] border border-gray-200 bg-gradient-to-r from-white to-sky-50/70 p-3 dark:border-white/10 dark:from-slate-950 dark:to-sky-950/25"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-extrabold text-gray-900 dark:text-slate-100">
+                          {activity.type}
+                        </div>
+                        <div className="mt-1 line-clamp-2 text-[13px] leading-5 text-gray-600 dark:text-slate-400">
+                          {activity.notes || "No extra details were added to this update."}
+                        </div>
+                      </div>
+                      <span
+                        className={[
+                          "rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em]",
+                          activity.isBackdated
+                            ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-950/45 dark:text-amber-300"
+                            : "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-950/45 dark:text-sky-300",
+                        ].join(" ")}
+                      >
+                        {activity.isBackdated ? "Backdated" : "Update"}
+                      </span>
+                    </div>
+                    <div className="mt-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500 dark:text-slate-500">
+                      {formatDashboardTimestamp(activity.createdAt)}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-[18px] border border-dashed border-gray-300 bg-gray-50 p-3 text-[13px] leading-5 text-gray-600 dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-400">
+                  No new alerts right now.
+                </div>
+              )}
             </div>
-          ) : null}
-        </ParentDashboardPanel>
 
-        <ParentDashboardPanel
-          eyebrow="Alerts"
-          title="Recent updates"
-          description="Short, readable updates so you can scan what changed before opening the full conversation."
-          accent="amber"
-        >
-          <div className="space-y-3">
-            {recentActivities.length ? (
-              recentActivities.map((activity) => (
+            <ParentButton href="/parent/messages" variant="secondary" className="mt-3 w-full px-3 py-2 text-xs">
+              Open messages
+            </ParentButton>
+          </ParentDashboardPanel>
+
+          <ParentDashboardPanel
+            eyebrow="Forms"
+            title="Renewal reminders"
+            description="Paperwork that still needs attention."
+            accent={urgentReminderCount ? "amber" : "emerald"}
+          >
+            <div className="space-y-2.5">
+              {reminders.map((item) => (
                 <div
-                  key={activity.id}
-                  className="rounded-[22px] border border-gray-200 bg-gradient-to-r from-white to-sky-50/70 p-4"
+                  key={item.id}
+                  className={[
+                    "rounded-[18px] border p-3",
+                    item.tone === "emerald"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-950/30 dark:text-emerald-100"
+                      : item.tone === "rose"
+                        ? "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-500/30 dark:bg-rose-950/30 dark:text-rose-100"
+                        : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100",
+                  ].join(" ")}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-extrabold text-gray-900">
-                        {activity.type}
+                    <div>
+                      <div className="text-[13px] font-extrabold">{item.title}</div>
+                      <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] opacity-80">
+                        {item.detail}
                       </div>
-                      <div className="mt-1 line-clamp-2 text-sm leading-6 text-gray-600">
-                        {activity.notes || "No extra details were added to this update."}
+                    </div>
+                    <span className="rounded-full bg-white/70 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] dark:bg-slate-950/70 dark:text-slate-100">
+                      {item.statusLabel}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <ParentButton href="/parent/forms" variant="secondary" className="mt-3 w-full px-3 py-2 text-xs">
+              Review forms
+            </ParentButton>
+          </ParentDashboardPanel>
+
+          <ParentDashboardPanel
+            eyebrow="Billing"
+            title="Billing snapshot"
+            description="Plan status and support in one place."
+            accent={billingTone}
+          >
+            {subscriptionSummary ? (
+              <>
+                <div className="rounded-[18px] border border-gray-200 bg-gray-50 p-3 dark:border-white/10 dark:bg-slate-950/75">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[13px] font-extrabold text-gray-900 dark:text-slate-100">
+                        {subscriptionSummary.centerName}
+                      </div>
+                      <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500 dark:text-slate-400">
+                        {subscriptionSummary.tier}
                       </div>
                     </div>
                     <span
                       className={[
-                        "rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em]",
-                        activity.isBackdated
-                          ? "border-amber-200 bg-amber-50 text-amber-700"
-                          : "border-sky-200 bg-sky-50 text-sky-700",
+                        "rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em]",
+                        subscriptionSummary.active
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-950/45 dark:text-emerald-300"
+                          : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-950/45 dark:text-amber-300",
                       ].join(" ")}
                     >
-                      {activity.isBackdated ? "Backdated" : "Update"}
+                      {subscriptionSummary.active ? "Active" : "Needs review"}
                     </span>
                   </div>
-                  <div className="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                    {formatDashboardTimestamp(activity.createdAt)}
+
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <ParentMiniStat
+                      label="Status"
+                      value={subscriptionSummary.active ? "Active" : "Inactive"}
+                      tone={subscriptionSummary.active ? "emerald" : "amber"}
+                    />
+                    <ParentMiniStat
+                      label="Expires"
+                      value={
+                        subscriptionSummary.expiresAt
+                          ? subscriptionSummary.expiresAt.toLocaleDateString()
+                          : "-"
+                      }
+                      tone="gray"
+                    />
                   </div>
                 </div>
-              ))
+
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <ParentButton href="/parent/billing" variant="secondary" className="w-full px-3 py-2 text-xs">
+                    Open billing
+                  </ParentButton>
+                  <ParentButton href={billingHref} className="w-full px-3 py-2 text-xs">
+                    Request support
+                  </ParentButton>
+                </div>
+              </>
             ) : (
-              <div className="rounded-[22px] border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
-                No new alerts right now.
+              <div className="rounded-[18px] border border-dashed border-gray-300 bg-gray-50 p-3 text-[13px] leading-5 text-gray-600 dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-400">
+                Billing details are not available yet.
               </div>
             )}
-          </div>
-
-          <ParentButton href="/parent/messages" variant="secondary" className="mt-4 w-full">
-            Open messages
-          </ParentButton>
-        </ParentDashboardPanel>
-
-        <ParentDashboardPanel
-          eyebrow="Forms"
-          title="Renewal reminders"
-          description="These items are pulled forward so paperwork does not get buried behind other dashboard content."
-          accent={urgentReminderCount ? "amber" : "emerald"}
-        >
-          <div className="space-y-3">
-            {reminders.map((item) => (
-              <div
-                key={item.id}
-                className={[
-                  "rounded-[22px] border p-4",
-                  item.tone === "emerald"
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                    : item.tone === "rose"
-                      ? "border-rose-200 bg-rose-50 text-rose-900"
-                      : "border-amber-200 bg-amber-50 text-amber-900",
-                ].join(" ")}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-extrabold">{item.title}</div>
-                    <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] opacity-80">
-                      {item.detail}
-                    </div>
-                  </div>
-                  <span className="rounded-full bg-white/70 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em]">
-                    {item.statusLabel}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <ParentButton href="/parent/forms" variant="secondary" className="mt-4 w-full">
-            Review forms
-          </ParentButton>
-        </ParentDashboardPanel>
-
-        <ParentDashboardPanel
-          eyebrow="Billing"
-          title="Billing snapshot"
-          description="One place to confirm plan status and request support without leaving the dashboard."
-          accent={billingTone}
-        >
-          {subscriptionSummary ? (
-            <>
-              <div className="rounded-[22px] border border-gray-200 bg-gray-50 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-extrabold text-gray-900">
-                      {subscriptionSummary.centerName}
-                    </div>
-                    <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                      {subscriptionSummary.tier}
-                    </div>
-                  </div>
-                  <span
-                    className={[
-                      "rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em]",
-                      subscriptionSummary.active
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                        : "border-amber-200 bg-amber-50 text-amber-700",
-                    ].join(" ")}
-                  >
-                    {subscriptionSummary.active ? "Active" : "Needs review"}
-                  </span>
-                </div>
-
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  <ParentMiniStat
-                    label="Status"
-                    value={subscriptionSummary.active ? "Active" : "Inactive"}
-                    tone={subscriptionSummary.active ? "emerald" : "amber"}
-                  />
-                  <ParentMiniStat
-                    label="Expires"
-                    value={
-                      subscriptionSummary.expiresAt
-                        ? subscriptionSummary.expiresAt.toLocaleDateString()
-                        : "-"
-                    }
-                    tone="gray"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <ParentButton href="/parent/billing" variant="secondary" className="w-full">
-                  Open billing
-                </ParentButton>
-                <ParentButton href={billingHref} className="w-full">
-                  Request support
-                </ParentButton>
-              </div>
-            </>
-          ) : (
-            <div className="rounded-[22px] border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
-              Billing details are not available yet.
-            </div>
-          )}
-        </ParentDashboardPanel>
+          </ParentDashboardPanel>
       </aside>
     </div>
   );

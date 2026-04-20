@@ -109,7 +109,11 @@ export default function AdminDashboard() {
   const headerDate = useMemo(() => formatHeaderDate(new Date()), []);
 
   return (
-    <AdminLayout title="Dashboard">
+    <AdminLayout
+      title="Dashboard"
+      shellMaxWidthClassName="max-w-[1760px]"
+      contentMaxWidthClassName="max-w-[1400px]"
+    >
       <div className="space-y-5">
         <WorkspaceHero
           eyebrow="Admin Dashboard"

@@ -350,6 +350,30 @@ function parseExtraDetails(extraDetailsText) {
   return parsed;
 }
 
+function getFormValidationMessage(form) {
+  const baseDate = form?.createdAt ? new Date(form.createdAt) : new Date();
+  if (Number.isNaN(baseDate.getTime())) {
+    return "Select a valid date and time.";
+  }
+
+  try {
+    parseExtraDetails(form?.extraDetailsText);
+  } catch (error) {
+    return error?.message || "Extra details must be valid JSON.";
+  }
+
+  const fields = asObject(form?.fields);
+  if (form?.type === "NAP" && fields.napStartTime && fields.napEndTime) {
+    const start = combineDateAndTime(baseDate, fields.napStartTime);
+    const end = combineDateAndTime(baseDate, fields.napEndTime);
+    if (!start || !end || end.getTime() < start.getTime()) {
+      return "Nap end time must be after the start time.";
+    }
+  }
+
+  return "";
+}
+
 function buildPayloadFromForm(form) {
   const baseDate = form?.createdAt ? new Date(form.createdAt) : new Date();
   if (Number.isNaN(baseDate.getTime())) {
@@ -659,6 +683,7 @@ export default function AdminActivityOverrides() {
     if (!id) {
       setChildren([]);
       setChildId("");
+      setActivities([]);
       return;
     }
     setLoading(true);
@@ -762,6 +787,28 @@ export default function AdminActivityOverrides() {
   const dismissError = useCallback(() => setError(""), []);
   const dismissSuccess = useCallback(() => setSuccess(""), []);
 
+  function handleCenterChange(nextCenterId) {
+    if (nextCenterId === centerId) return;
+    setCenterId(nextCenterId);
+    setChildId("");
+    setActivities([]);
+    setSearch("");
+    setFilterType("");
+    setError("");
+    setSuccess("");
+    cancelEditActivity();
+  }
+
+  function handleChildChange(nextChildId) {
+    if (nextChildId === childId) return;
+    setChildId(nextChildId);
+    setSearch("");
+    setFilterType("");
+    setError("");
+    setSuccess("");
+    cancelEditActivity();
+  }
+
   function setFormField(setter, key, value) {
     setter((current) => ({ ...current, [key]: value }));
   }
@@ -828,8 +875,19 @@ export default function AdminActivityOverrides() {
 
   async function createActivity(event) {
     event.preventDefault();
+    setSuccess("");
     if (!childId) {
       setError("Select a child before creating a log.");
+      return;
+    }
+    if (uploadingCreatePhotos) {
+      setError("Wait for photos to finish uploading before saving.");
+      return;
+    }
+
+    const validationMessage = getFormValidationMessage(createForm);
+    if (validationMessage) {
+      setError(validationMessage);
       return;
     }
 
@@ -874,6 +932,18 @@ export default function AdminActivityOverrides() {
 
   async function saveActivity(activityId) {
     if (!activityId) return;
+    setSuccess("");
+    if (uploadingEditPhotos) {
+      setError("Wait for photos to finish uploading before saving.");
+      return;
+    }
+
+    const validationMessage = getFormValidationMessage(editForm);
+    if (validationMessage) {
+      setError(validationMessage);
+      return;
+    }
+
     setSavingActivityId(activityId);
     setError("");
     setSuccess("");
@@ -975,7 +1045,7 @@ export default function AdminActivityOverrides() {
             </div>
             <div style={{ ...responsiveTwoColStyle, marginTop: 14 }}>
               <Field label="Center" style={{ minWidth: 0 }}>
-                <select value={centerId} onChange={(event) => setCenterId(event.target.value)} style={inputStyle}>
+                <select value={centerId} onChange={(event) => handleCenterChange(event.target.value)} style={inputStyle}>
                   <option value="">Select a center...</option>
                   {centers.map((center) => (
                     <option key={center.id} value={center.id}>
@@ -987,7 +1057,7 @@ export default function AdminActivityOverrides() {
               <Field label="Child" style={{ minWidth: 0 }}>
                 <select
                   value={childId}
-                  onChange={(event) => setChildId(event.target.value)}
+                  onChange={(event) => handleChildChange(event.target.value)}
                   style={{ ...inputStyle, opacity: centerId ? 1 : 0.55 }}
                   disabled={!centerId}
                 >
@@ -1257,6 +1327,8 @@ function ActivityComposer({
   );
   const overallAssessment = useMemo(() => getAssessmentOverall(domainScores), [domainScores]);
   const hasAssessmentValue = domainScoreCount > 0 || form.dailyGrade !== "";
+  const validationMessage = useMemo(() => getFormValidationMessage(form), [form]);
+  const interactionDisabled = busy || uploadingPhotos;
   const [assessmentOpen, setAssessmentOpen] = useState(hasAssessmentValue);
 
   useEffect(() => {
@@ -1275,6 +1347,17 @@ function ActivityComposer({
         {childLabel ? <Chip>{childLabel}</Chip> : null}
       </div>
 
+      {uploadingPhotos ? (
+        <div role="status" style={formNoticeStyle}>
+          Photos are still uploading. Save will unlock when the upload finishes.
+        </div>
+      ) : null}
+      {validationMessage ? (
+        <div role="alert" style={formErrorStyle}>
+          {validationMessage}
+        </div>
+      ) : null}
+
       <div style={composerGridStyle}>
         <div style={{ ...sectionCardStyle, gridColumn: "1 / -1" }}>
           <SectionHeading
@@ -1288,7 +1371,7 @@ function ActivityComposer({
                 value={form.createdAt}
                 onChange={(event) => onFormFieldChange("createdAt", event.target.value)}
                 style={inputStyle}
-                disabled={busy}
+                disabled={interactionDisabled}
               />
             </Field>
             <div style={sectionHintStyle}>
@@ -1309,7 +1392,7 @@ function ActivityComposer({
                   value={form.type}
                   onChange={(event) => onTypeChange(event.target.value)}
                   style={inputStyle}
-                  disabled={busy}
+                  disabled={interactionDisabled}
                 >
                   {TYPES.map((type) => (
                     <option key={type} value={type}>
@@ -1334,7 +1417,7 @@ function ActivityComposer({
                         color: active ? meta.color : "var(--admin-text-muted)",
                         boxShadow: active ? "inset 0 0 0 1px rgba(255,255,255,0.45)" : "none",
                       }}
-                      disabled={busy}
+                      disabled={interactionDisabled}
                     >
                       {TYPE_META[type]?.label || type}
                     </button>
@@ -1357,7 +1440,7 @@ function ActivityComposer({
                         value={form.fields.napStartTime}
                         onChange={(event) => onNestedFieldChange("napStartTime", event.target.value)}
                         style={inputStyle}
-                        disabled={busy}
+                        disabled={interactionDisabled}
                       />
                     </Field>
                     <Field label="End time" style={{ minWidth: 0 }}>
@@ -1366,7 +1449,7 @@ function ActivityComposer({
                         value={form.fields.napEndTime}
                         onChange={(event) => onNestedFieldChange("napEndTime", event.target.value)}
                         style={inputStyle}
-                        disabled={busy}
+                        disabled={interactionDisabled}
                       />
                     </Field>
                   </>
@@ -1379,7 +1462,7 @@ function ActivityComposer({
                         value={form.fields.mealType}
                         onChange={(event) => onNestedFieldChange("mealType", event.target.value)}
                         style={inputStyle}
-                        disabled={busy}
+                        disabled={interactionDisabled}
                       >
                         {selectedMealOptions.map((option) => (
                           <option key={option.value} value={option.value}>
@@ -1393,7 +1476,7 @@ function ActivityComposer({
                         value={form.fields.quantity}
                         onChange={(event) => onNestedFieldChange("quantity", event.target.value)}
                         style={inputStyle}
-                        disabled={busy}
+                        disabled={interactionDisabled}
                       >
                         {PORTION_OPTIONS.map((option) => (
                           <option key={option.value} value={option.value}>
@@ -1411,7 +1494,7 @@ function ActivityComposer({
                       value={form.fields.bottleQuantity}
                       onChange={(event) => onNestedFieldChange("bottleQuantity", event.target.value)}
                       style={inputStyle}
-                      disabled={busy}
+                      disabled={interactionDisabled}
                     >
                       {BOTTLE_PORTION_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -1428,7 +1511,7 @@ function ActivityComposer({
                       value={form.fields.diaperType}
                       onChange={(event) => onNestedFieldChange("diaperType", event.target.value)}
                       style={inputStyle}
-                      disabled={busy}
+                      disabled={interactionDisabled}
                     >
                       {DIAPER_TYPE_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -1446,7 +1529,7 @@ function ActivityComposer({
                         value={form.fields.behaviorType}
                         onChange={(event) => onNestedFieldChange("behaviorType", event.target.value)}
                         style={inputStyle}
-                        disabled={busy}
+                        disabled={interactionDisabled}
                       >
                         {BEHAVIOR_TYPE_OPTIONS.map((option) => (
                           <option key={option.value} value={option.value}>
@@ -1460,7 +1543,7 @@ function ActivityComposer({
                         value={form.fields.behaviorLevel}
                         onChange={(event) => onNestedFieldChange("behaviorLevel", event.target.value)}
                         style={inputStyle}
-                        disabled={busy}
+                        disabled={interactionDisabled}
                       >
                         {BEHAVIOR_LEVEL_OPTIONS.map((level) => (
                           <option key={level} value={level}>
@@ -1485,7 +1568,7 @@ function ActivityComposer({
               value={form.notes}
               onChange={(event) => onFormFieldChange("notes", event.target.value)}
               style={textareaStyle}
-              disabled={busy}
+              disabled={interactionDisabled}
               placeholder={descriptionPlaceholder}
             />
           </Field>
@@ -1496,7 +1579,7 @@ function ActivityComposer({
             type="button"
             onClick={() => setAssessmentOpen((current) => !current)}
             style={assessmentToggleButtonStyle}
-            disabled={busy}
+            disabled={interactionDisabled}
           >
             <div>
               <div style={{ fontSize: 13, fontWeight: 800, color: "var(--admin-text)" }}>
@@ -1524,10 +1607,11 @@ function ActivityComposer({
                 </div>
                 <div style={{ minWidth: 160 }}>
                   <select
+                    aria-label="Quick daily grade"
                     value={form.dailyGrade}
                     onChange={(event) => onFormFieldChange("dailyGrade", event.target.value)}
                     style={inputStyle}
-                    disabled={busy || domainScoreCount > 0}
+                    disabled={interactionDisabled || domainScoreCount > 0}
                   >
                     <option value="">None</option>
                     {[1, 2, 3, 4, 5].map((grade) => (
@@ -1576,7 +1660,7 @@ function ActivityComposer({
                                 borderColor: active ? level.borderColor : "var(--admin-border)",
                                 color: active ? level.color : "var(--admin-text-muted)",
                               }}
-                              disabled={busy}
+                              disabled={interactionDisabled}
                             >
                               {level.value} {level.label}
                             </button>
@@ -1600,7 +1684,7 @@ function ActivityComposer({
                     type="button"
                     onClick={onClearDomains}
                     style={clearDomainsButtonStyle}
-                    disabled={busy}
+                    disabled={interactionDisabled}
                   >
                     Clear all
                   </button>
@@ -1619,16 +1703,18 @@ function ActivityComposer({
             <input
               ref={photoInputRef}
               type="file"
+              aria-label="Activity photos"
               accept="image/*"
               multiple
               className="hidden"
+              disabled={interactionDisabled}
               onChange={(event) => onUploadPhotos(event.target.files)}
             />
             <button
               type="button"
               onClick={() => photoInputRef.current?.click()}
               style={secondaryButton}
-              disabled={busy || uploadingPhotos}
+              disabled={interactionDisabled}
             >
               {uploadingPhotos ? "Uploading..." : "Add Photos"}
             </button>
@@ -1642,7 +1728,7 @@ function ActivityComposer({
                     type="button"
                     onClick={() => onRemoveMedia(index)}
                     style={mediaRemoveButtonStyle}
-                    disabled={busy}
+                    disabled={interactionDisabled}
                   >
                     Remove
                   </button>
@@ -1666,7 +1752,7 @@ function ActivityComposer({
               value={form.extraDetailsText}
               onChange={(event) => onFormFieldChange("extraDetailsText", event.target.value)}
               style={textareaStyle}
-              disabled={busy}
+              disabled={interactionDisabled}
               placeholder='{"customField":"value"}'
             />
           </Field>
@@ -1675,11 +1761,11 @@ function ActivityComposer({
 
       <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
         {onCancel ? (
-          <button type="button" onClick={onCancel} style={secondaryButton} disabled={busy}>
+          <button type="button" onClick={onCancel} style={secondaryButton} disabled={interactionDisabled}>
             Cancel
           </button>
         ) : null}
-        <button type="submit" style={primaryButton} disabled={busy}>
+        <button type="submit" style={primaryButton} disabled={interactionDisabled || !!validationMessage}>
           {busy ? "Saving..." : submitLabel}
         </button>
       </div>
@@ -2024,6 +2110,28 @@ const sectionHintStyle = {
   fontSize: 12,
   lineHeight: 1.6,
   color: "var(--admin-text-muted)",
+};
+
+const formNoticeStyle = {
+  marginBottom: 14,
+  padding: "12px 14px",
+  borderRadius: 12,
+  border: "1px solid #bfdbfe",
+  background: "#eff6ff",
+  fontSize: 12,
+  lineHeight: 1.6,
+  color: "#1d4ed8",
+};
+
+const formErrorStyle = {
+  marginBottom: 14,
+  padding: "12px 14px",
+  borderRadius: 12,
+  border: "1px solid #fecaca",
+  background: "#fff1f2",
+  fontSize: 12,
+  lineHeight: 1.6,
+  color: "#b91c1c",
 };
 
 const domainCardStyle = {

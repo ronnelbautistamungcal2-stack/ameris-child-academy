@@ -2,7 +2,12 @@ import AppShell from "@/components/shell/AppShell";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import { TEACHER_NAV_ITEMS } from "@/components/teacher/teacherNav";
 
-export default function TeacherLayout({ title, children }) {
+export default function TeacherLayout({
+  title,
+  children,
+  shellMaxWidthClassName,
+  contentMaxWidthClassName,
+}) {
   const { session, status, allowed } = useRequireRole(
     ["TEACHER"],
     "/dashboard",
@@ -20,6 +25,8 @@ export default function TeacherLayout({ title, children }) {
       userImageUrl={session?.user?.pictureUrl}
       userId={session?.user?.id}
       navItems={TEACHER_NAV_ITEMS}
+      shellMaxWidthClassName={shellMaxWidthClassName}
+      contentMaxWidthClassName={contentMaxWidthClassName}
       showBack={false}
     >
       {children}

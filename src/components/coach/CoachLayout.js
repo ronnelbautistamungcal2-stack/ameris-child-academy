@@ -2,7 +2,12 @@ import AppShell from "@/components/shell/AppShell";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import { COACH_NAV_ITEMS } from "@/components/coach/coachNav";
 
-export default function CoachLayout({ title, children }) {
+export default function CoachLayout({
+  title,
+  children,
+  shellMaxWidthClassName,
+  contentMaxWidthClassName,
+}) {
   const { session, status, allowed } = useRequireRole(
     ["COACH", "ADMIN"],
     "/dashboard",
@@ -20,6 +25,8 @@ export default function CoachLayout({ title, children }) {
       userImageUrl={session?.user?.pictureUrl}
       userId={session?.user?.id}
       navItems={COACH_NAV_ITEMS}
+      shellMaxWidthClassName={shellMaxWidthClassName}
+      contentMaxWidthClassName={contentMaxWidthClassName}
       backHref="/dashboard"
     >
       {children}

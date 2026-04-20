@@ -7,6 +7,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 const STATUSES = ["NOT_STARTED", "IN_PROGRESS", "PASSED", "FAILED", "COMPLETED"];
 
+const STATUS_LABEL = {
+  NOT_STARTED: "Not Started",
+  IN_PROGRESS: "In Progress",
+  COMPLETED: "Completed",
+  PASSED: "Passed",
+  FAILED: "Failed",
+};
+
 const STAGE_FILTERS = [
   { value: "active", label: "Active Goals", icon: IconActive },
   { value: "all", label: "All Goals", icon: IconAll },
@@ -75,6 +83,39 @@ export default function TeacherProgress() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  function resetLessonFilters() {
+    setQuery("");
+    setCategory("");
+    setLessonAgeGroup("");
+    setVisibleCount(100);
+  }
+
+  function handleCenterChange(nextCenterId) {
+    if (nextCenterId === centerId) return;
+    setCenterId(nextCenterId);
+    setClassId("");
+    setChildId("");
+    setProgressRows([]);
+    resetLessonFilters();
+  }
+
+  function handleClassChange(nextClassId) {
+    setClassId(nextClassId);
+    setChildId("");
+    resetLessonFilters();
+  }
+
+  function handleAgeGroupChange(nextAgeGroup) {
+    setAgeGroup(nextAgeGroup);
+    setChildId("");
+    resetLessonFilters();
+  }
+
+  function handleChildChange(nextChildId) {
+    setChildId(nextChildId);
+    resetLessonFilters();
+  }
 
   useEffect(() => {
     (async () => {
@@ -193,13 +234,23 @@ export default function TeacherProgress() {
     }
   }, [classId, childId, filteredChildren]);
 
+  useEffect(() => {
+    if (!classId) return;
+    if (!classes.some((cls) => cls.id === classId)) {
+      setClassId("");
+    }
+  }, [classes, classId]);
+
   const selectedChild = useMemo(() => {
     return children.find((ch) => ch.id === childId) || null;
   }, [children, childId]);
 
   useEffect(() => {
-    if (!selectedChild) return;
-    setLessonAgeGroup(ageGroupKeyFromBirthDate(selectedChild.birthDate));
+    if (!selectedChild) {
+      setLessonAgeGroup("");
+      return;
+    }
+    setLessonAgeGroup(ageGroupKeyFromBirthDate(selectedChild.birthDate) || "");
   }, [selectedChild?.id, selectedChild?.birthDate]);
 
   const lessonAgeOptions = useMemo(() => {
@@ -515,7 +566,7 @@ export default function TeacherProgress() {
               <FilterSelect
                 label="Center"
                 value={centerId}
-                onChange={setCenterId}
+                onChange={handleCenterChange}
                 disabled={loading}
                 placeholder="Select a center..."
                 icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>}
@@ -526,7 +577,7 @@ export default function TeacherProgress() {
               <FilterSelect
                 label="Class / Group"
                 value={classId}
-                onChange={setClassId}
+                onChange={handleClassChange}
                 disabled={!centerId || loading}
                 placeholder="All classes"
                 icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
@@ -537,7 +588,7 @@ export default function TeacherProgress() {
               <FilterSelect
                 label="Age Group"
                 value={ageGroup}
-                onChange={(v) => { setAgeGroup(v); setChildId(""); }}
+                onChange={handleAgeGroupChange}
                 disabled={!centerId || loading}
                 placeholder="All ages"
                 icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
@@ -548,7 +599,7 @@ export default function TeacherProgress() {
               <FilterSelect
                 label="Child"
                 value={childId}
-                onChange={setChildId}
+                onChange={handleChildChange}
                 disabled={!centerId || loading}
                 placeholder={centerId && !childId ? "Overview (all)" : "Select child..."}
                 icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
@@ -596,6 +647,14 @@ export default function TeacherProgress() {
             icon={<svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h8m-8 4h8m-8 4h6M5 5a2 2 0 012-2h10a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5z" /></svg>}
             title="Select a child"
             description="Choose a child to view active goals and record progress updates."
+          />
+        )}
+
+        {!centerId && !loading && (
+          <EmptyState
+            icon={<svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>}
+            title="Select a center to get started"
+            description="Choose a center from the filter above to view progression data."
           />
         )}
 
@@ -736,7 +795,9 @@ export default function TeacherProgress() {
                           </td>
 
                           <td className="px-4 py-3 align-top">
-                            <div className="text-xs text-gray-500">Current: {progress?.status || "—"}</div>
+                            <div className="text-xs text-gray-500">
+                              Current: {STATUS_LABEL[progress?.status] || progress?.status || "—"}
+                            </div>
                             <select
                               className="mt-1 w-full rounded-xl border border-gray-200 px-2 py-2 text-sm shadow-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"
                               value={draft.status || "IN_PROGRESS"}
@@ -745,7 +806,7 @@ export default function TeacherProgress() {
                             >
                               {STATUSES.map((s) => (
                                 <option key={s} value={s}>
-                                  {s}
+                                  {STATUS_LABEL[s] || s}
                                 </option>
                               ))}
                             </select>

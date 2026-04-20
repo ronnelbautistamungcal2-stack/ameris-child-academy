@@ -125,6 +125,8 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
   const router = useRouter();
   const toast = useToast();
   const userId = session?.user?.id;
+  const viewerRole = String(session?.user?.role || "").toUpperCase();
+  const isParentView = viewerRole === "PARENT";
   const queryThreadId =
     typeof router.query.threadId === "string" ? router.query.threadId : "";
 
@@ -657,6 +659,27 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
       : centerId
         ? "No conversations in this center yet."
         : "No conversations found yet.";
+  const inboxBadgeLabel = isParentView ? "Family inbox" : "Inbox";
+  const inboxTitle = isParentView
+    ? "Stay close to the classroom conversation."
+    : "Keep the classroom conversation moving.";
+  const inboxDescription = isParentView
+    ? "Teacher updates, family questions, and billing follow-through stay in one thread-aware workspace so you can reply without losing context."
+    : "Parent updates, teacher follow-through, and quick staff replies stay in one thread-aware workspace so you can respond without losing context.";
+  const workflowLabel = isParentView ? "Parent workflow" : "Teacher workflow";
+  const workflowDescription = isParentView
+    ? "Start a new question, billing request, or child update follow-up without leaving the parent portal."
+    : "Start a new thread or jump straight into the current conversation.";
+  const composeHelperText = isAdmin
+    ? "Start a new thread with parents or staff without leaving the admin inbox."
+    : isParentView
+      ? "Start a new message to the center or follow up on a family question."
+      : "Start a new message thread.";
+  const tipCopy = activeMeta
+    ? `Reply inside this ${threadTypeLabel(activeMeta.isGroup).toLowerCase()} so earlier context stays attached for everyone involved.`
+    : isParentView
+      ? "Use a short subject like billing, pickup, schedule change, or progress question so staff can triage your message quickly."
+      : "Use direct threads for family-specific updates and keep subjects short so parents can scan them quickly.";
 
   return (
     <div
@@ -726,14 +749,13 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.02fr)_minmax(360px,0.98fr)] xl:items-start">
             <div className="min-w-0">
               <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-sky-700 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
-                Inbox
+                {inboxBadgeLabel}
               </div>
               <h2 className="mt-3 text-3xl font-black tracking-tight text-gray-900 dark:text-gray-100">
-                Keep the classroom conversation moving.
+                {inboxTitle}
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600 dark:text-gray-400">
-                Parent updates, teacher follow-through, and quick staff replies stay in one
-                thread-aware workspace so you can respond without losing context.
+                {inboxDescription}
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
@@ -755,10 +777,10 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="text-[11px] font-black uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">
-                      Teacher workflow
+                      {workflowLabel}
                     </div>
                     <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                      Start a new thread or jump straight into the current conversation.
+                      {workflowDescription}
                     </p>
                   </div>
                   <button
@@ -829,9 +851,7 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
                   New Conversation
                 </h3>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {isAdmin
-                    ? "Start a new thread with parents or staff without leaving the admin inbox."
-                    : "Start a new message thread."}
+                  {composeHelperText}
                 </p>
               </div>
               <button
@@ -1218,9 +1238,7 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
                 {activeMeta ? "Current focus" : "Teacher messaging tip"}
               </div>
               <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-400">
-                {activeMeta
-                  ? `Reply inside this ${threadTypeLabel(activeMeta.isGroup).toLowerCase()} so earlier context stays attached for everyone involved.`
-                  : "Use direct threads for family-specific updates and keep subjects short so parents can scan them quickly."}
+                {tipCopy}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-200">

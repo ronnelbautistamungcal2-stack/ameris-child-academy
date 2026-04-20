@@ -87,7 +87,11 @@ export default function CoachDashboard() {
     : "-";
 
   return (
-    <CoachLayout title="Coach Dashboard">
+    <CoachLayout
+      title="Coach Dashboard"
+      shellMaxWidthClassName="max-w-[1760px]"
+      contentMaxWidthClassName="max-w-[1400px]"
+    >
       <div className="space-y-5">
         <CoachPageHero
           eyebrow="Coach Command"

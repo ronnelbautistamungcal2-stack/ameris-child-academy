@@ -1295,7 +1295,7 @@ function ParentDashboard({
   return (
     <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
       <section className="min-w-0 space-y-5">
-        <div className="grid grid-cols-1 items-start gap-5 2xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid grid-cols-1 items-start gap-5">
           <ParentPageHeader
             eyebrow="Family overview"
             title={`Welcome back, ${name}`}

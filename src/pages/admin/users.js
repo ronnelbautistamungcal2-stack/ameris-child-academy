@@ -366,7 +366,8 @@ export default function AdminUsers() {
                       style={inputStyle}
                       type="password"
                       required={!editing}
-                      placeholder={editing ? "••••••••" : "Min 6 characters"}
+                      minLength={editing ? undefined : 8}
+                      placeholder={editing ? "••••••••" : "Min 8 characters"}
                     />
                   </Field>
                 </div>

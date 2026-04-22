@@ -12,6 +12,10 @@ function parseOptionalDate(value) {
   return d;
 }
 
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
 function sanitizeUser(user) {
   if (!user) return user;
   const { password, ...safeUser } = user;
@@ -63,8 +67,14 @@ export default async function handler(req, res) {
   if (req.method === "POST") {
     // Create new user
     const { email, name, password, role, roles, centerId, dob, hireDate, aboutMe, pictureUrl } = req.body;
-    if (!email || !password) {
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedCenterId = centerId ? String(centerId).trim() : "";
+
+    if (!normalizedEmail || !password) {
       return res.status(400).json({ error: "Email and password required" });
+    }
+    if (String(password).length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
     const assignedRoles = normalizeRoles(roles || role, role || "PARENT");
     const primaryRole = primaryRoleFromRoles(assignedRoles, "PARENT");
@@ -75,35 +85,56 @@ export default async function handler(req, res) {
         : primaryRole;
     const isEmployee = hasEmployeeRole(assignedRoles);
 
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (existing)
       return res.status(409).json({ error: "Email already exists" });
 
-    const passwordHash = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
-      data: {
-        email,
-        name,
-        password: passwordHash,
-        dob: isEmployee ? parseOptionalDate(dob) : null,
-        hireDate: isEmployee ? parseOptionalDate(hireDate) : null,
-        aboutMe: isEmployee && aboutMe ? String(aboutMe).slice(0, 5000) : null,
-        pictureUrl: isEmployee && pictureUrl ? String(pictureUrl).slice(0, 2000) : null,
-        role: primaryRole,
-        roles: assignedRoles,
-        centers: centerId
-          ? {
-              create: {
-                center: { connect: { id: centerId } },
-                role: centerRole,
-              },
-            }
-          : undefined,
-      },
-      include: { centers: true },
-    });
+    if (normalizedCenterId) {
+      const center = await prisma.center.findUnique({
+        where: { id: normalizedCenterId },
+        select: { id: true },
+      });
+      if (!center) {
+        return res.status(400).json({ error: "Invalid centerId" });
+      }
+    }
 
-    return res.status(201).json(sanitizeUser(user));
+    const passwordHash = await bcrypt.hash(password, 10);
+    try {
+      const user = await prisma.user.create({
+        data: {
+          email: normalizedEmail,
+          name: name ? String(name) : null,
+          password: passwordHash,
+          dob: isEmployee ? parseOptionalDate(dob) : null,
+          hireDate: isEmployee ? parseOptionalDate(hireDate) : null,
+          aboutMe: isEmployee && aboutMe ? String(aboutMe).slice(0, 5000) : null,
+          pictureUrl: isEmployee && pictureUrl ? String(pictureUrl).slice(0, 2000) : null,
+          role: primaryRole,
+          roles: assignedRoles,
+          centers: normalizedCenterId
+            ? {
+                create: {
+                  center: { connect: { id: normalizedCenterId } },
+                  role: centerRole,
+                },
+              }
+            : undefined,
+        },
+        include: { centers: true },
+      });
+
+      return res.status(201).json(sanitizeUser(user));
+    } catch (e) {
+      if (e?.code === "P2002") {
+        return res.status(409).json({ error: "Email already exists" });
+      }
+      if (e?.code === "P2003" || e?.code === "P2025") {
+        return res.status(400).json({ error: "Invalid centerId" });
+      }
+      console.error("Failed to create user", e);
+      return res.status(500).json({ error: "Failed to create user" });
+    }
   }
 
   res.setHeader("Allow", ["GET", "POST"]);

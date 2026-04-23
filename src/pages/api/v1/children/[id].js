@@ -1,10 +1,20 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import {
+  decorateChildWithTodayAttendance,
+  startOfDay,
+} from "@/lib/attendance-classroom";
+import {
   buildLegacyEmergencyContact,
   normalizeEmergencyContacts,
   normalizeParentContacts,
 } from "@/lib/child-contacts";
+import {
+  applyLinkedParentAccountIds,
+  isChildLinkedToParent,
+  linkedParentAccountsInclude,
+  resolveLinkedParentAccountIds,
+} from "@/lib/child-parent-links";
 
 function normalizeDocs(value) {
   const arr = Array.isArray(value) ? value : [];
@@ -44,6 +54,31 @@ function normalizeFeedingPlan(value) {
   };
 }
 
+async function attachTodayClassroom(child, role) {
+  if (!child) return null;
+  const todayAttendance = await prisma.attendance.findUnique({
+    where: {
+      childId_day: {
+        childId: child.id,
+        day: startOfDay(),
+      },
+    },
+    select: {
+      id: true,
+      childId: true,
+      classRoomId: true,
+      checkedInAt: true,
+      checkedOutAt: true,
+      notes: true,
+      day: true,
+    },
+  });
+
+  return decorateChildWithTodayAttendance(child, todayAttendance, {
+    replaceClassRoomId: role === "TEACHER",
+  });
+}
+
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
@@ -56,17 +91,20 @@ export default async function handler(req, res) {
       include: {
         progress: { include: { lesson: true } },
         activities: true,
-        parent: true,
+        ...linkedParentAccountsInclude,
       },
     });
     if (!child) return res.status(404).json({ error: "Child not found" });
 
     // Parent can only see their own child
-    if (session.user.role === "PARENT" && child.parentId !== session.user.id) {
+    if (
+      session.user.role === "PARENT" &&
+      !isChildLinkedToParent(child, session.user.id)
+    ) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    return res.status(200).json(child);
+    return res.status(200).json(await attachTodayClassroom(child, session.user.role));
   }
 
   if (req.method === "PUT") {
@@ -80,6 +118,7 @@ export default async function handler(req, res) {
       birthDate,
       classRoomId,
       parentId,
+      parentAccountIds,
       parentContacts,
       emergencyContacts,
       emergencyContact,
@@ -103,72 +142,132 @@ export default async function handler(req, res) {
         ? emergencyContact.trim()
         : null);
 
-    const child = await prisma.child.update({
-      where: { id },
-      data: {
-        firstName,
-        lastName,
-        birthDate: birthDate ? new Date(birthDate) : undefined,
-        classRoomId,
-        parentId: Object.prototype.hasOwnProperty.call(req.body, "parentId")
-          ? parentId || null
-          : undefined,
-        parentContacts: Object.prototype.hasOwnProperty.call(req.body, "parentContacts")
-          ? normalizedParentContacts
-          : undefined,
-        emergencyContacts: Object.prototype.hasOwnProperty.call(req.body, "emergencyContacts")
-          ? normalizedEmergencyContacts
-          : undefined,
-        emergencyContact: Object.prototype.hasOwnProperty.call(req.body, "emergencyContact")
-          ? typeof emergencyContact === "string" && emergencyContact.trim()
-            ? emergencyContact.trim()
-            : null
-          : Object.prototype.hasOwnProperty.call(req.body, "emergencyContacts")
-            ? legacyEmergencyContact
+    const requestedParentAccountIds = Object.prototype.hasOwnProperty.call(
+      req.body,
+      "parentAccountIds",
+    )
+      ? parentAccountIds
+      : Object.prototype.hasOwnProperty.call(req.body, "parentId")
+        ? [parentId]
+        : undefined;
+
+    let resolvedParentAccountIds;
+    if (requestedParentAccountIds !== undefined) {
+      try {
+        resolvedParentAccountIds = await resolveLinkedParentAccountIds(
+          prisma,
+          requestedParentAccountIds,
+        );
+      } catch (error) {
+        return res.status(400).json({
+          error: error?.message || "Invalid linked parent accounts",
+        });
+      }
+    }
+
+    const child = await prisma.$transaction(async (tx) => {
+      await tx.child.update({
+        where: { id },
+        data: {
+          firstName,
+          lastName,
+          birthDate: birthDate ? new Date(birthDate) : undefined,
+          classRoomId,
+          parentId:
+            resolvedParentAccountIds !== undefined
+              ? resolvedParentAccountIds[0] || null
+              : undefined,
+          parentContacts: Object.prototype.hasOwnProperty.call(
+            req.body,
+            "parentContacts",
+          )
+            ? normalizedParentContacts
             : undefined,
-        allergies: Object.prototype.hasOwnProperty.call(req.body, "allergies")
-          ? typeof allergies === "string" && allergies.trim()
-            ? allergies.trim()
-            : null
-          : undefined,
-        healthAssessmentDocuments: Object.prototype.hasOwnProperty.call(
-          req.body,
-          "healthAssessmentDocuments",
-        )
-          ? normalizeDocs(healthAssessmentDocuments)
-          : undefined,
-        enrollmentDocuments: Object.prototype.hasOwnProperty.call(
-          req.body,
-          "enrollmentDocuments",
-        )
-          ? normalizeDocs(enrollmentDocuments)
-          : undefined,
-        iefDocuments: Object.prototype.hasOwnProperty.call(req.body, "iefDocuments")
-          ? normalizeDocs(iefDocuments)
-          : undefined,
-        immunizationDocuments: Object.prototype.hasOwnProperty.call(req.body, "immunizationDocuments")
-          ? normalizeDocs(immunizationDocuments)
-          : undefined,
-        infantDocuments: Object.prototype.hasOwnProperty.call(req.body, "infantDocuments")
-          ? normalizeDocs(infantDocuments)
-          : undefined,
-        otherDocuments: Object.prototype.hasOwnProperty.call(req.body, "otherDocuments")
-          ? normalizeDocs(otherDocuments)
-          : undefined,
-        feedingPlan: Object.prototype.hasOwnProperty.call(req.body, "feedingPlan")
-          ? normalizeFeedingPlan(feedingPlan)
-          : undefined,
-        enrollmentStartDate: Object.prototype.hasOwnProperty.call(req.body, "enrollmentStartDate")
-          ? enrollmentStartDate ? new Date(enrollmentStartDate) : null
-          : undefined,
-        enrollmentEndDate: Object.prototype.hasOwnProperty.call(req.body, "enrollmentEndDate")
-          ? enrollmentEndDate ? new Date(enrollmentEndDate) : null
-          : undefined,
-      },
-      include: { progress: true, activities: true },
+          emergencyContacts: Object.prototype.hasOwnProperty.call(
+            req.body,
+            "emergencyContacts",
+          )
+            ? normalizedEmergencyContacts
+            : undefined,
+          emergencyContact: Object.prototype.hasOwnProperty.call(
+            req.body,
+            "emergencyContact",
+          )
+            ? typeof emergencyContact === "string" && emergencyContact.trim()
+              ? emergencyContact.trim()
+              : null
+            : Object.prototype.hasOwnProperty.call(req.body, "emergencyContacts")
+              ? legacyEmergencyContact
+              : undefined,
+          allergies: Object.prototype.hasOwnProperty.call(req.body, "allergies")
+            ? typeof allergies === "string" && allergies.trim()
+              ? allergies.trim()
+              : null
+            : undefined,
+          healthAssessmentDocuments: Object.prototype.hasOwnProperty.call(
+            req.body,
+            "healthAssessmentDocuments",
+          )
+            ? normalizeDocs(healthAssessmentDocuments)
+            : undefined,
+          enrollmentDocuments: Object.prototype.hasOwnProperty.call(
+            req.body,
+            "enrollmentDocuments",
+          )
+            ? normalizeDocs(enrollmentDocuments)
+            : undefined,
+          iefDocuments: Object.prototype.hasOwnProperty.call(req.body, "iefDocuments")
+            ? normalizeDocs(iefDocuments)
+            : undefined,
+          immunizationDocuments: Object.prototype.hasOwnProperty.call(
+            req.body,
+            "immunizationDocuments",
+          )
+            ? normalizeDocs(immunizationDocuments)
+            : undefined,
+          infantDocuments: Object.prototype.hasOwnProperty.call(req.body, "infantDocuments")
+            ? normalizeDocs(infantDocuments)
+            : undefined,
+          otherDocuments: Object.prototype.hasOwnProperty.call(req.body, "otherDocuments")
+            ? normalizeDocs(otherDocuments)
+            : undefined,
+          feedingPlan: Object.prototype.hasOwnProperty.call(req.body, "feedingPlan")
+            ? normalizeFeedingPlan(feedingPlan)
+            : undefined,
+          enrollmentStartDate: Object.prototype.hasOwnProperty.call(
+            req.body,
+            "enrollmentStartDate",
+          )
+            ? enrollmentStartDate
+              ? new Date(enrollmentStartDate)
+              : null
+            : undefined,
+          enrollmentEndDate: Object.prototype.hasOwnProperty.call(
+            req.body,
+            "enrollmentEndDate",
+          )
+            ? enrollmentEndDate
+              ? new Date(enrollmentEndDate)
+              : null
+            : undefined,
+        },
+      });
+
+      if (resolvedParentAccountIds !== undefined) {
+        await applyLinkedParentAccountIds(tx, id, resolvedParentAccountIds);
+      }
+
+      return tx.child.findUnique({
+        where: { id },
+        include: {
+          progress: true,
+          activities: true,
+          ...linkedParentAccountsInclude,
+        },
+      });
     });
 
-    return res.status(200).json(child);
+    return res.status(200).json(await attachTodayClassroom(child, session.user.role));
   }
 
   if (req.method === "DELETE") {

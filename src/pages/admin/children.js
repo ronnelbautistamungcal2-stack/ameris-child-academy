@@ -6,6 +6,11 @@ import { childAgeGroup, ageInMonths } from "@/lib/ageUtils";
 import { apiJson } from "@/lib/api";
 import { userRoles } from "@/lib/roles";
 import {
+  getLinkedParentIds,
+  getLinkedParentUsers,
+  MAX_LINKED_PARENT_ACCOUNTS,
+} from "@/lib/child-parent-links";
+import {
   MAX_EMERGENCY_CONTACTS,
   MAX_PARENT_CONTACTS,
   formatContactLine,
@@ -28,6 +33,14 @@ function createParentContacts(value = []) {
   });
 }
 
+function createParentAccountIds(value = []) {
+  const source = Array.isArray(value) ? value : [];
+  return Array.from(
+    { length: MAX_LINKED_PARENT_ACCOUNTS },
+    (_, index) => source[index] || "",
+  );
+}
+
 function createEmergencyContacts(value = []) {
   const source = Array.isArray(value) ? value : [];
   return Array.from({ length: MAX_EMERGENCY_CONTACTS }, (_, index) => {
@@ -42,6 +55,22 @@ function createEmergencyContacts(value = []) {
 
 function childFullName(child) {
   return `${child?.firstName || ""} ${child?.lastName || ""}`.trim() || "Unnamed child";
+}
+
+function formatLinkedParentAccount(parent) {
+  return parent?.email || parent?.name || parent?.id || "";
+}
+
+function getDefaultClassRoomId(child) {
+  return child?.defaultClassRoomId ?? child?.classRoomId ?? "";
+}
+
+function getEffectiveClassRoomId(child) {
+  return child?.effectiveClassRoomId ?? getDefaultClassRoomId(child);
+}
+
+function isChildCheckedInToday(child) {
+  return !!child?.todayAttendance?.checkedInAt && !child?.todayAttendance?.checkedOutAt;
 }
 
 function escapeHtml(value) {
@@ -98,7 +127,7 @@ export default function AdminChildren() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [q, setQ] = useState("");
-  const [ageFilter, setAgeFilter] = useState("");
+  const [classroomFilter, setClassroomFilter] = useState("");
 
   const [editing, setEditing] = useState(null);
   const [firstName, setFirstName] = useState("");
@@ -106,7 +135,7 @@ export default function AdminChildren() {
   const [birthDate, setBirthDate] = useState("");
   const [centerId, setCenterId] = useState("");
   const [classRoomId, setClassRoomId] = useState("");
-  const [parentId, setParentId] = useState("");
+  const [parentAccountIds, setParentAccountIds] = useState(createParentAccountIds());
   const [parentContacts, setParentContacts] = useState(createParentContacts());
 
   const [emergencyContacts, setEmergencyContacts] = useState(createEmergencyContacts());
@@ -155,6 +184,8 @@ export default function AdminChildren() {
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [profileChild, setProfileChild] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [profileTransferClassRoomId, setProfileTransferClassRoomId] = useState("");
+  const [transferSaving, setTransferSaving] = useState(false);
 
   async function refresh() {
     setError("");
@@ -185,12 +216,17 @@ export default function AdminChildren() {
     return users.filter((u) => userRoles(u).includes("PARENT")).sort((a, b) => (a.email || "").localeCompare(b.email || ""));
   }, [users]);
 
-  const userById = useMemo(() => {
-    return Object.fromEntries(users.map((u) => [u.id, u]));
-  }, [users]);
-
   const centerById = useMemo(() => Object.fromEntries(centers.map((c) => [c.id, c])), [centers]);
   const classById = useMemo(() => Object.fromEntries(classes.map((c) => [c.id, c])), [classes]);
+  const classroomOptions = useMemo(() => {
+    return [...classes].sort((left, right) => {
+      const leftCenter = centerById[left.centerId]?.name || "";
+      const rightCenter = centerById[right.centerId]?.name || "";
+      const centerCompare = leftCenter.localeCompare(rightCenter);
+      if (centerCompare !== 0) return centerCompare;
+      return (left.name || "").localeCompare(right.name || "");
+    });
+  }, [classes, centerById]);
 
   const filteredSorted = useMemo(() => {
     const query = (q || "").trim().toLowerCase();
@@ -200,14 +236,20 @@ export default function AdminChildren() {
         const name = `${ch.firstName || ""} ${ch.lastName || ""}`.trim().toLowerCase();
         return name.includes(query) || String(ch.id || "").toLowerCase().includes(query);
       })
-      .filter((ch) => (ageFilter ? childAgeGroup(ch) === ageFilter : true))
+      .filter((ch) => {
+        if (!classroomFilter) return true;
+        const currentClassRoomId = getEffectiveClassRoomId(ch);
+        if (classroomFilter === "__unassigned__") return !currentClassRoomId;
+        return currentClassRoomId === classroomFilter;
+      })
       .sort((a, b) => (a.firstName || "").localeCompare(b.firstName || ""));
-  }, [children, q, ageFilter]);
+  }, [children, classroomFilter, q]);
 
   const documentReportRows = useMemo(() => {
     const rows = [];
     for (const child of children) {
-      const family = child.parent?.name || child.parent?.email || "";
+      const linkedParent = getLinkedParentUsers(child)[0];
+      const family = linkedParent?.name || linkedParent?.email || "";
       for (const type of CHILD_DOCUMENT_TYPES) {
         const docs = Array.isArray(child[type.field]) ? child[type.field] : [];
         for (const doc of docs) {
@@ -318,7 +360,7 @@ export default function AdminChildren() {
     setBirthDate("");
     setCenterId("");
     setClassRoomId("");
-    setParentId("");
+    setParentAccountIds(createParentAccountIds());
     setParentContacts(createParentContacts());
     setEmergencyContacts(createEmergencyContacts());
     setAllergies("");
@@ -359,7 +401,7 @@ export default function AdminChildren() {
     setBirthDate(child.birthDate ? child.birthDate.slice(0, 10) : "");
     setCenterId(child.centerId || "");
     setClassRoomId(child.classRoomId || "");
-    setParentId(child.parentId || "");
+    setParentAccountIds(createParentAccountIds(getLinkedParentIds(child)));
     setParentContacts(createParentContacts(getParentContacts(child)));
     setEmergencyContacts(createEmergencyContacts(getEmergencyContacts(child)));
     setAllergies(child.allergies || "");
@@ -463,6 +505,16 @@ export default function AdminChildren() {
       current.map((item, itemIndex) =>
         itemIndex === index ? { ...item, [field]: value } : item,
       ),
+    );
+  }
+
+  function updateParentAccount(index, value) {
+    setParentAccountIds((current) =>
+      current.map((item, itemIndex) => {
+        if (itemIndex === index) return value;
+        if (value && item === value) return "";
+        return item;
+      }),
     );
   }
 
@@ -614,7 +666,7 @@ export default function AdminChildren() {
           birthDate: birthDate || null,
           centerId,
           classRoomId: classRoomId || null,
-          parentId: parentId || null,
+          parentAccountIds: parentAccountIds.filter(Boolean),
           parentContacts,
           emergencyContacts,
           allergies: allergies || null,
@@ -672,6 +724,7 @@ export default function AdminChildren() {
           lastName: lastName || null,
           birthDate: birthDate || null,
           classRoomId: classRoomId || null,
+          parentAccountIds: parentAccountIds.filter(Boolean),
           parentContacts,
           emergencyContacts,
           allergies: allergies || null,
@@ -725,9 +778,11 @@ export default function AdminChildren() {
   async function openProfile(childId) {
     setProfileLoading(true);
     setProfileChild(null);
+    setProfileTransferClassRoomId("");
     try {
       const data = await apiJson(`/api/v1/children/${childId}`);
       setProfileChild(data || null);
+      setProfileTransferClassRoomId(getEffectiveClassRoomId(data || null));
     } catch (e) {
       setError(e.message || "Failed to load child profile");
     } finally {
@@ -738,6 +793,32 @@ export default function AdminChildren() {
   function closeProfile() {
     setProfileChild(null);
     setProfileLoading(false);
+    setProfileTransferClassRoomId("");
+    setTransferSaving(false);
+  }
+
+  async function saveProfileTransfer(targetClassRoomId = profileTransferClassRoomId) {
+    if (!profileChild) return;
+    setTransferSaving(true);
+    setError("");
+    try {
+      await apiJson("/api/v1/attendance/transfer-classroom", {
+        method: "POST",
+        body: JSON.stringify({
+          childId: profileChild.id,
+          targetClassRoomId: targetClassRoomId || null,
+        }),
+      });
+      await refresh();
+      const updated = await apiJson(`/api/v1/children/${profileChild.id}`);
+      setProfileChild(updated || null);
+      setProfileTransferClassRoomId(getEffectiveClassRoomId(updated || null));
+      toast.success("Temporary classroom updated for today.");
+    } catch (e) {
+      setError(e.message || "Failed to update today's classroom");
+    } finally {
+      setTransferSaving(false);
+    }
   }
 
   async function setChecklistItemCompleted(itemId, completed) {
@@ -832,27 +913,33 @@ export default function AdminChildren() {
             </div>
           </div>
           <div style={{ flex: "0 0 200px" }}>
-            <div style={filterLabelStyle}>Age Group</div>
+            <div style={filterLabelStyle}>Classroom</div>
             <select
-              value={ageFilter}
-              onChange={(e) => setAgeFilter(e.target.value)}
+              value={classroomFilter}
+              onChange={(e) => setClassroomFilter(e.target.value)}
               style={inputStyle}
             >
-              <option value="">All ages</option>
-              <option value="0-1">0-1 year</option>
-              <option value="2">2 years</option>
-              <option value="3">3 years</option>
-              <option value="4-5">4-5 years</option>
-              <option value="6-7">6-7 years</option>
-              <option value="8-12">8-12 years</option>
-              <option value="12+">12+ years</option>
-              <option value="Unknown">Unknown</option>
+              <option value="">All classrooms</option>
+              {classroomOptions.map((classroom) => {
+                const centerName = centerById[classroom.centerId]?.name || "";
+                return (
+                  <option key={classroom.id} value={classroom.id}>
+                    {centerName ? `${classroom.name} - ${centerName}` : classroom.name}
+                  </option>
+                );
+              })}
+              <option value="__unassigned__">
+                Unassigned
+              </option>
             </select>
           </div>
-          {(q || ageFilter) && (
+          {(q || classroomFilter) && (
             <button
               type="button"
-              onClick={() => { setQ(""); setAgeFilter(""); }}
+              onClick={() => {
+                setQ("");
+                setClassroomFilter("");
+              }}
               style={{ ...secondaryButtonStyle, alignSelf: "flex-end", fontSize: 12, padding: "10px 14px" }}
             >
               Clear Filters
@@ -948,9 +1035,9 @@ export default function AdminChildren() {
           ) : filteredSorted.length === 0 ? (
             <EmptyState
               title="No children found"
-              description={q || ageFilter ? "Try adjusting your search or filters." : "Get started by adding your first child record."}
-              actionLabel={!q && !ageFilter ? "+ Add Child" : undefined}
-              onAction={!q && !ageFilter ? openCreate : undefined}
+              description={q || classroomFilter ? "Try adjusting your search or filters." : "Get started by adding your first child record."}
+              actionLabel={!q && !classroomFilter ? "+ Add Child" : undefined}
+              onAction={!q && !classroomFilter ? openCreate : undefined}
               className="py-8"
             />
           ) : (
@@ -960,8 +1047,12 @@ export default function AdminChildren() {
                 const age = childAgeGroup(ch);
                 const ageColor = AGE_COLORS[age] || AGE_COLORS["Unknown"];
                 const centerName = centerById[ch.centerId]?.name || "—";
-                const className = ch.classRoomId ? (classById[ch.classRoomId]?.name || ch.classRoomId) : null;
-                const parentEmail = ch.parentId ? (userById[ch.parentId]?.email || ch.parentId) : null;
+                const defaultClassRoomId = getDefaultClassRoomId(ch);
+                const effectiveClassRoomId = getEffectiveClassRoomId(ch);
+                const className = effectiveClassRoomId ? (classById[effectiveClassRoomId]?.name || effectiveClassRoomId) : null;
+                const defaultClassName = defaultClassRoomId ? (classById[defaultClassRoomId]?.name || defaultClassRoomId) : null;
+                const movedToday = !!ch.hasTemporaryClassRoomToday;
+                const linkedParents = getLinkedParentUsers(ch).map(formatLinkedParentAccount).filter(Boolean);
                 const parentSummaries = getParentContacts(ch)
                   .map((contact) => formatContactLine(contact))
                   .filter(Boolean);
@@ -995,7 +1086,12 @@ export default function AdminChildren() {
                             ⚠ Allergies
                           </span>
                         )}
-                        {!ch.classRoomId && (
+                        {movedToday && (
+                          <span style={{ ...tagStyle, background: "#E0F2FE", color: "#075985", borderColor: "#BAE6FD" }}>
+                            Moved Today
+                          </span>
+                        )}
+                        {!effectiveClassRoomId && (
                           <span style={{ ...tagStyle, background: "#FEF3C7", color: "#92400E", borderColor: "#FDE68A" }}>
                             No class
                           </span>
@@ -1013,20 +1109,22 @@ export default function AdminChildren() {
                         {className && (
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                             <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", display: "inline-block" }} />
-                            {className}
+                            {movedToday ? `Today: ${className}` : className}
                           </span>
                         )}
-                        {(parentSummaries[0] || parentEmail) && (
+                        {linkedParents[0] && (
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                            👤 {parentSummaries[0] || parentEmail}
+                            Linked: {linkedParents[0]}
                           </span>
                         )}
                       </div>
 
-                      {parentSummaries.length > 1 || emergencySummary.length > 0 ? (
+                      {linkedParents.length > 1 || parentSummaries.length > 0 || emergencySummary.length > 0 ? (
                         <div style={{ marginTop: 4, fontSize: 11, color: "var(--admin-text-muted)" }}>
-                          {parentSummaries.length > 1 ? `Parent 2: ${parentSummaries[1]}` : null}
-                          {parentSummaries.length > 1 && emergencySummary.length > 0 ? " • " : null}
+                          {linkedParents.length > 1 ? `Linked 2: ${linkedParents[1]}` : null}
+                          {linkedParents.length > 1 && parentSummaries.length > 0 ? " • " : null}
+                          {parentSummaries.length > 0 ? `Contacts: ${parentSummaries.join(" • ")}` : null}
+                          {((linkedParents.length > 1) || parentSummaries.length > 0) && emergencySummary.length > 0 ? " • " : null}
                           {emergencySummary.length > 0 ? `Emergency: ${emergencySummary.join(" • ")}` : null}
                         </div>
                       ) : null}
@@ -1036,6 +1134,11 @@ export default function AdminChildren() {
                           Enrolled: {ch.enrollmentStartDate ? new Date(ch.enrollmentStartDate).toLocaleDateString() : "—"} — {ch.enrollmentEndDate ? new Date(ch.enrollmentEndDate).toLocaleDateString() : "Present"}
                         </div>
                       )}
+                      {movedToday && defaultClassName ? (
+                        <div style={{ marginTop: 4, fontSize: 11, color: "var(--admin-text-muted)" }}>
+                          Default classroom: {defaultClassName}
+                        </div>
+                      ) : null}
                     </div>
 
                     {/* Actions */}
@@ -1097,9 +1200,9 @@ export default function AdminChildren() {
                   </div>
                 </div>
                 <div style={infoBoxStyle}>
-                  <div style={fieldLabelStyle}>Classroom</div>
+                  <div style={fieldLabelStyle}>Today's Classroom</div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>
-                    {profileChild.classRoomId ? (classById[profileChild.classRoomId]?.name || profileChild.classRoomId) : "Unassigned"}
+                    {getEffectiveClassRoomId(profileChild) ? (classById[getEffectiveClassRoomId(profileChild)]?.name || getEffectiveClassRoomId(profileChild)) : "Unassigned"}
                   </div>
                 </div>
                 <div style={infoBoxStyle}>
@@ -1109,10 +1212,70 @@ export default function AdminChildren() {
                   </div>
                 </div>
                 <div style={infoBoxStyle}>
-                  <div style={fieldLabelStyle}>Parent</div>
+                  <div style={fieldLabelStyle}>Linked Parents</div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>
-                    {profileChild.parent?.name || profileChild.parent?.email || "—"}
+                    {(() => {
+                      const linkedParents = getLinkedParentUsers(profileChild)
+                        .map(formatLinkedParentAccount)
+                        .filter(Boolean);
+                      return linkedParents.length ? linkedParents.join(" • ") : "—";
+                    })()}
                   </div>
+                </div>
+              </div>
+
+              <div style={infoBoxStyle}>
+                <SectionHeader icon="🏫" title="Temporary Classroom Transfer" />
+                <div style={{ display: "grid", gap: 10 }}>
+                  <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>
+                    Default classroom: {getDefaultClassRoomId(profileChild) ? (classById[getDefaultClassRoomId(profileChild)]?.name || getDefaultClassRoomId(profileChild)) : "Unassigned"}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>
+                    Status today: {isChildCheckedInToday(profileChild) ? "Checked in and eligible for classroom transfer" : "Not currently checked in"}
+                  </div>
+                  <select
+                    value={profileTransferClassRoomId}
+                    onChange={(e) => setProfileTransferClassRoomId(e.target.value)}
+                    style={inputStyle}
+                    disabled={!isChildCheckedInToday(profileChild) || transferSaving}
+                  >
+                    <option value="">Return to default classroom</option>
+                    {classes
+                      .filter((cl) => cl.centerId === profileChild.centerId)
+                      .map((cl) => (
+                        <option key={cl.id} value={cl.id}>
+                          {cl.name}
+                        </option>
+                      ))}
+                  </select>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      style={secondaryButtonStyle}
+                      onClick={saveProfileTransfer}
+                      disabled={!isChildCheckedInToday(profileChild) || transferSaving}
+                    >
+                      {transferSaving ? "Saving..." : "Save for Today"}
+                    </button>
+                    {profileChild.hasTemporaryClassRoomToday ? (
+                      <button
+                        type="button"
+                        style={secondaryButtonStyle}
+                        onClick={() => {
+                          setProfileTransferClassRoomId("");
+                          saveProfileTransfer("");
+                        }}
+                        disabled={!isChildCheckedInToday(profileChild) || transferSaving}
+                      >
+                        Return to Default
+                      </button>
+                    ) : null}
+                  </div>
+                  {!isChildCheckedInToday(profileChild) ? (
+                    <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>
+                      Transfer is available only while the child is checked in. The default classroom stays unchanged and resumes tomorrow.
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
@@ -1288,23 +1451,28 @@ export default function AdminChildren() {
                     ))}
                 </select>
               </Field>
-              <Field label={editing ? "Linked parent account (set at creation)" : "Linked parent account"}>
-                <select
-                  value={parentId}
-                  onChange={(e) => setParentId(e.target.value)}
-                  style={inputStyle}
-                  disabled={!!editing}
-                >
-                  <option value="">
-                    {editing ? "(unchanged)" : "(none)"}
-                  </option>
-                  {parents.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.email}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+              {parentAccountIds.map((parentAccountId, index) => (
+                <Field key={`linked-parent-${index + 1}`} label={`Linked Parent Account ${index + 1}`}>
+                  <select
+                    value={parentAccountId}
+                    onChange={(e) => updateParentAccount(index, e.target.value)}
+                    style={inputStyle}
+                  >
+                    <option value="">(optional)</option>
+                    {parents.map((p) => {
+                      const alreadySelected = parentAccountIds.some(
+                        (selectedId, selectedIndex) =>
+                          selectedIndex !== index && selectedId === p.id,
+                      );
+                      return (
+                        <option key={p.id} value={p.id} disabled={alreadySelected}>
+                          {p.email || p.name || p.id}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </Field>
+              ))}
             </div>
 
             <SectionHeader icon="👪" title="Parent Contacts" style={{ marginTop: 20 }} />

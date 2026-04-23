@@ -1,7 +1,8 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { emitProgressUpdate } from "@/lib/socket";
-import { teacherCanAccessClass } from "@/lib/teacherScope";
+import { teacherCanAccessChild } from "@/lib/teacherScope";
+import { isChildLinkedToParent } from "@/lib/child-parent-links";
 
 const ALLOWED_STATUSES = [
   "NOT_STARTED",
@@ -30,22 +31,22 @@ export default async function handler(req, res) {
 
   const progress = await prisma.progress.findUnique({
     where: { id },
-    include: { child: true, lesson: true },
+    include: {
+      child: { include: { guardians: { select: { guardianId: true } } } },
+      lesson: true,
+    },
   });
   if (!progress) return res.status(404).json({ error: "Progress not found" });
 
   if (session.user.role === "PARENT") {
-    if (progress.child.parentId !== session.user.id) {
+    if (!isChildLinkedToParent(progress.child, session.user.id)) {
       return res.status(403).json({ error: "Forbidden" });
     }
   } else if (session.user.role !== "ADMIN") {
     const hasAccess = await hasAccessToCenter(session.user.id, progress.child.centerId);
     if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
     if (session.user.role === "TEACHER") {
-      const hasClassAccess = await teacherCanAccessClass(
-        session.user.id,
-        progress.child.classRoomId,
-      );
+      const hasClassAccess = await teacherCanAccessChild(session.user.id, progress.child);
       if (!hasClassAccess) return res.status(403).json({ error: "Forbidden" });
     }
   }

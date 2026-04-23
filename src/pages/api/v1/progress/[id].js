@@ -1,19 +1,21 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { decorateChildWithTodayAttendance, startOfDay } from "@/lib/attendance-classroom";
 import { emitProgressUpdate } from "@/lib/socket";
 import { hasAccessToCenter } from "@/lib/auth";
-import { teacherCanAccessClass } from "@/lib/teacherScope";
+import { teacherCanAccessChild } from "@/lib/teacherScope";
+import { isChildLinkedToParent } from "@/lib/child-parent-links";
 
 async function canAccessProgress(user, progress) {
   if (!user || !progress?.child) return false;
   if (user.role === "ADMIN") return true;
-  if (user.role === "PARENT") return progress.child.parentId === user.id;
+  if (user.role === "PARENT") return isChildLinkedToParent(progress.child, user.id);
 
   const hasCenterAccess = await hasAccessToCenter(user.id, progress.child.centerId);
   if (!hasCenterAccess) return false;
 
   if (user.role === "TEACHER") {
-    return teacherCanAccessClass(user.id, progress.child.classRoomId);
+    return teacherCanAccessChild(user.id, progress.child);
   }
 
   return user.role === "COACH";
@@ -29,7 +31,11 @@ export default async function handler(req, res) {
     const progress = await prisma.progress.findUnique({
       where: { id },
       include: {
-        child: true,
+        child: {
+          include: {
+            guardians: { select: { guardianId: true } },
+          },
+        },
         lesson: true,
         lessonGoal: true,
         nextGoals: true,
@@ -44,7 +50,31 @@ export default async function handler(req, res) {
     if (!(await canAccessProgress(session.user, progress))) {
       return res.status(403).json({ error: "Forbidden" });
     }
-    return res.status(200).json(progress);
+    const todayAttendance = progress.child?.id
+      ? await prisma.attendance.findUnique({
+          where: {
+            childId_day: {
+              childId: progress.child.id,
+              day: startOfDay(),
+            },
+          },
+          select: {
+            id: true,
+            childId: true,
+            classRoomId: true,
+            checkedInAt: true,
+            checkedOutAt: true,
+            notes: true,
+            day: true,
+          },
+        })
+      : null;
+    return res.status(200).json({
+      ...progress,
+      child: decorateChildWithTodayAttendance(progress.child, todayAttendance, {
+        replaceClassRoomId: session.user.role === "TEACHER",
+      }),
+    });
   }
 
   if (req.method === "PUT") {
@@ -57,7 +87,11 @@ export default async function handler(req, res) {
     const existing = await prisma.progress.findUnique({
       where: { id },
       include: {
-        child: true,
+        child: {
+          include: {
+            guardians: { select: { guardianId: true } },
+          },
+        },
         lesson: true,
       },
     });
@@ -72,7 +106,10 @@ export default async function handler(req, res) {
         status,
         achievedAt: achievedAt ? new Date(achievedAt) : undefined,
       },
-      include: { child: true, lesson: true },
+      include: {
+        child: { include: { guardians: { select: { guardianId: true } } } },
+        lesson: true,
+      },
     });
 
     // Emit socket event
@@ -110,7 +147,31 @@ export default async function handler(req, res) {
       }
     }
 
-    return res.status(200).json(progress);
+    const todayAttendance = progress.child?.id
+      ? await prisma.attendance.findUnique({
+          where: {
+            childId_day: {
+              childId: progress.child.id,
+              day: startOfDay(),
+            },
+          },
+          select: {
+            id: true,
+            childId: true,
+            classRoomId: true,
+            checkedInAt: true,
+            checkedOutAt: true,
+            notes: true,
+            day: true,
+          },
+        })
+      : null;
+    return res.status(200).json({
+      ...progress,
+      child: decorateChildWithTodayAttendance(progress.child, todayAttendance, {
+        replaceClassRoomId: session.user.role === "TEACHER",
+      }),
+    });
   }
 
   if (req.method === "DELETE") {

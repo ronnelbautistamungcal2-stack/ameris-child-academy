@@ -1,12 +1,7 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { teacherCanAccessClass } from "@/lib/teacherScope";
-
-function startOfDay(d = new Date()) {
-  const out = new Date(d);
-  out.setHours(0, 0, 0, 0);
-  return out;
-}
+import { startOfDay } from "@/lib/attendance-classroom";
+import { teacherCanAccessChild } from "@/lib/teacherScope";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -35,7 +30,7 @@ export default async function handler(req, res) {
     const ok = await hasAccessToCenter(session.user.id, child.centerId);
     if (!ok) return res.status(403).json({ error: "Forbidden" });
     if (role === "TEACHER") {
-      const hasClassAccess = await teacherCanAccessClass(session.user.id, child.classRoomId);
+      const hasClassAccess = await teacherCanAccessChild(session.user.id, child);
       if (!hasClassAccess) return res.status(403).json({ error: "Forbidden" });
     }
   }
@@ -43,16 +38,31 @@ export default async function handler(req, res) {
   const day = startOfDay();
   const now = new Date();
 
-  const record = await prisma.attendance.upsert({
+  const existing = await prisma.attendance.findUnique({
     where: { childId_day: { childId: child.id, day } },
-    update: { checkedInAt: now, checkedOutAt: null },
-    create: {
-      childId: child.id,
-      centerId: child.centerId,
-      day,
-      checkedInAt: now,
-    },
   });
+
+  const record = existing
+    ? await prisma.attendance.update({
+        where: { id: existing.id },
+        data: {
+          checkedInAt: now,
+          checkedOutAt: null,
+          classRoomId:
+            existing.classRoomId !== undefined && existing.classRoomId !== null
+              ? existing.classRoomId
+              : child.classRoomId || null,
+        },
+      })
+    : await prisma.attendance.create({
+        data: {
+          childId: child.id,
+          centerId: child.centerId,
+          day,
+          classRoomId: child.classRoomId || null,
+          checkedInAt: now,
+        },
+      });
 
   return res.status(200).json(record);
 }

@@ -126,6 +126,17 @@ function IconChevronRight({ className }) {
   );
 }
 
+function IconSwap({ className }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" className={className} aria-hidden="true">
+      <path d="M4 6h10" strokeLinecap="round" />
+      <path d="m11 3 3 3-3 3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M16 14H6" strokeLinecap="round" />
+      <path d="m9 11-3 3 3 3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 
 function flagsForChild(ch) {
   const flags = [];
@@ -140,6 +151,7 @@ export default function TeacherClassroom() {
   const [centerId, setCenterId] = useState("");
 
   const [classes, setClasses] = useState([]);
+  const [transferClasses, setTransferClasses] = useState([]);
   const [classId, setClassId] = useState("");
   const [search, setSearch] = useState("");
 
@@ -154,6 +166,9 @@ export default function TeacherClassroom() {
 
   const [busyChildId, setBusyChildId] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [transferChild, setTransferChild] = useState(null);
+  const [transferClassRoomId, setTransferClassRoomId] = useState("");
+  const [transferBusy, setTransferBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -191,14 +206,32 @@ export default function TeacherClassroom() {
     }
   }
 
+  async function loadCenterData(id) {
+    if (!id) return;
+    const [cls, kids, allClasses, att] = await Promise.all([
+      apiJson(`/api/v1/classes?centerId=${encodeURIComponent(id)}`),
+      apiJson(`/api/v1/children?centerId=${encodeURIComponent(id)}`),
+      apiJson(`/api/v1/classes?centerId=${encodeURIComponent(id)}&mode=transfer`),
+      apiJson(`/api/v1/attendance/today?centerId=${encodeURIComponent(id)}`),
+    ]);
+    setClasses(Array.isArray(cls) ? cls : []);
+    setChildren(Array.isArray(kids) ? kids : []);
+    setTransferClasses(Array.isArray(allClasses) ? allClasses : []);
+    setAttendance(att || null);
+    setLastRefreshAt(new Date());
+  }
+
   useEffect(() => {
     if (!centerId) {
       setClasses([]);
+      setTransferClasses([]);
       setChildren([]);
       setClassId("");
       setAttendance(null);
       setSelectedAttendanceChildIds([]);
       setLastRefreshAt(null);
+      setTransferChild(null);
+      setTransferClassRoomId("");
       return;
     }
 
@@ -206,13 +239,7 @@ export default function TeacherClassroom() {
       setLoading(true);
       setError("");
       try {
-        const [cls, kids] = await Promise.all([
-          apiJson(`/api/v1/classes?centerId=${encodeURIComponent(centerId)}`),
-          apiJson(`/api/v1/children?centerId=${encodeURIComponent(centerId)}`),
-        ]);
-        setClasses(Array.isArray(cls) ? cls : []);
-        setChildren(Array.isArray(kids) ? kids : []);
-        await refreshAttendance(centerId);
+        await loadCenterData(centerId);
       } catch (e) {
         setError(e.message || "Failed to load classroom data");
       } finally {
@@ -244,6 +271,9 @@ export default function TeacherClassroom() {
   const classNameById = useMemo(() => {
     return Object.fromEntries((classes || []).map((c) => [c.id, c.name]));
   }, [classes]);
+  const transferClassNameById = useMemo(() => {
+    return Object.fromEntries((transferClasses || []).map((c) => [c.id, c.name]));
+  }, [transferClasses]);
   const centerNameById = useMemo(() => {
     return Object.fromEntries((centers || []).map((c) => [c.id, c.name]));
   }, [centers]);
@@ -413,6 +443,38 @@ export default function TeacherClassroom() {
     }
   }
 
+  function openTransfer(child) {
+    setTransferChild(child);
+    setTransferClassRoomId(child?.classRoomId || "");
+    setError("");
+  }
+
+  function closeTransfer() {
+    setTransferChild(null);
+    setTransferClassRoomId("");
+    setTransferBusy(false);
+  }
+
+  async function saveTransfer() {
+    if (!transferChild) return;
+    setTransferBusy(true);
+    setError("");
+    try {
+      await apiJson("/api/v1/attendance/transfer-classroom", {
+        method: "POST",
+        body: JSON.stringify({
+          childId: transferChild.id,
+          targetClassRoomId: transferClassRoomId || null,
+        }),
+      });
+      await loadCenterData(centerId);
+      closeTransfer();
+    } catch (e) {
+      setError(e.message || "Failed to move child");
+      setTransferBusy(false);
+    }
+  }
+
   return (
     <TeacherLayout title="My Classroom">
       <div className="space-y-5">
@@ -446,7 +508,14 @@ export default function TeacherClassroom() {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => refreshAttendance()}
+                onClick={async () => {
+                  setError("");
+                  try {
+                    await loadCenterData(centerId);
+                  } catch (e) {
+                    setError(e.message || "Failed to refresh classroom data");
+                  }
+                }}
                 className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
               >
                 <IconRefresh className="h-4 w-4 text-gray-500" />
@@ -654,6 +723,7 @@ export default function TeacherClassroom() {
                         onToggleSelect={toggleAttendanceSelected}
                         onCheckIn={checkIn}
                         onCheckOut={checkOut}
+                        onOpenTransfer={openTransfer}
                       />
                     )}
                   </div>
@@ -820,6 +890,88 @@ export default function TeacherClassroom() {
             </div>
           </>
         )}
+
+        {transferChild ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+                      <IconSwap className="h-4 w-4" />
+                    </span>
+                    <h3 className="text-base font-extrabold text-slate-900">Move Child for Today</h3>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-600">
+                    {fullName(transferChild)} stays checked into the center. Their default classroom remains{" "}
+                    <span className="font-semibold text-slate-800">
+                      {transferClassNameById[transferChild.defaultClassRoomId] || classNameById[transferChild.defaultClassRoomId] || "Unassigned"}
+                    </span>{" "}
+                    and will resume tomorrow.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeTransfer}
+                  className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50"
+                >
+                  <IconX className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  Current classroom today:{" "}
+                  <span className="font-semibold text-slate-900">
+                    {transferClassNameById[transferChild.classRoomId] || classNameById[transferChild.classRoomId] || "Unassigned"}
+                  </span>
+                </div>
+
+                <label className="block">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    New classroom for today
+                  </div>
+                  <select
+                    value={transferClassRoomId}
+                    onChange={(e) => setTransferClassRoomId(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                    disabled={transferBusy}
+                  >
+                    <option value="">Return to default classroom</option>
+                    {transferClasses
+                      .slice()
+                      .sort((a, b) => byString(a.name, b.name))
+                      .map((classroom) => (
+                        <option key={classroom.id} value={classroom.id}>
+                          {classroom.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeTransfer}
+                  disabled={transferBusy}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={saveTransfer}
+                  disabled={transferBusy}
+                  className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-sky-700 disabled:opacity-60"
+                >
+                  <IconSwap className="h-4 w-4 text-white/90" />
+                  {transferBusy ? "Saving..." : "Save for Today"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </TeacherLayout>
   );
@@ -989,6 +1141,7 @@ function RosterGroups({
   onToggleSelect,
   onCheckIn,
   onCheckOut,
+  onOpenTransfer,
 }) {
   if (!items?.length) {
     return (
@@ -1013,6 +1166,7 @@ function RosterGroups({
           onToggleSelect={onToggleSelect}
           onCheckIn={onCheckIn}
           onCheckOut={onCheckOut}
+          onOpenTransfer={onOpenTransfer}
         />
       ))}
     </div>
@@ -1030,6 +1184,7 @@ function RosterRow({
   onToggleSelect,
   onCheckIn,
   onCheckOut,
+  onOpenTransfer,
 }) {
   const att = attendanceByChildId.get(child.id) || null;
   const checkedIn = !!att?.checkedIn;
@@ -1088,13 +1243,18 @@ function RosterRow({
             Checked in at {checkedInAt}
           </div>
         ) : null}
-        {flags.length > 0 && (
+        {(flags.length > 0 || child.hasTemporaryClassRoomToday) && (
           <div className="mt-1 flex flex-wrap gap-1">
             {flags.map((f) => (
               <span key={f.label} className={["rounded-md border px-1.5 py-0.5 text-[10px] font-semibold", f.color].join(" ")}>
                 {f.label}
               </span>
             ))}
+            {child.hasTemporaryClassRoomToday ? (
+              <span className="rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">
+                Moved today
+              </span>
+            ) : null}
           </div>
         )}
       </div>
@@ -1105,13 +1265,13 @@ function RosterRow({
       </div>
 
       {/* Attendance */}
-      <div className="w-28 shrink-0 text-right">
+      <div className="w-36 shrink-0 space-y-2 text-right">
         <button
           type="button"
           onClick={() => (checkedIn ? onCheckOut(child.id) : onCheckIn(child.id))}
           disabled={!hasAttendance || busy}
           className={[
-            "inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-xs font-extrabold text-white shadow-sm disabled:opacity-60",
+            "inline-flex w-full items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-xs font-extrabold text-white shadow-sm disabled:opacity-60",
             checkedIn ? "bg-gray-700 hover:bg-gray-800" : "bg-emerald-600 hover:bg-emerald-700",
           ].join(" ")}
         >
@@ -1132,6 +1292,17 @@ function RosterRow({
             </>
           )}
         </button>
+        {checkedIn ? (
+          <button
+            type="button"
+            onClick={() => onOpenTransfer(child)}
+            disabled={busy || bulkBusy}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-700 hover:bg-sky-100 disabled:opacity-60"
+          >
+            <IconSwap className="h-3.5 w-3.5" />
+            Move Today
+          </button>
+        ) : null}
       </div>
     </div>
   );

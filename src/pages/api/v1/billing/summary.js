@@ -2,6 +2,7 @@ import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { createApiHandler, forbidden, unauthorized } from "@/lib/api-error";
 import { getBillingSummaryForCenter } from "@/lib/billing";
+import { buildParentLinkedChildWhere } from "@/lib/child-parent-links";
 
 async function getAccessibleCenters(session) {
   if (session.user.role === "ADMIN") {
@@ -14,7 +15,7 @@ async function getAccessibleCenters(session) {
   if (session.user.role === "PARENT") {
     const [children, memberships] = await Promise.all([
       prisma.child.findMany({
-        where: { parentId: session.user.id },
+        where: buildParentLinkedChildWhere(session.user.id),
         select: { centerId: true },
       }),
       prisma.centerUser.findMany({

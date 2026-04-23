@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { normalizeSubscription } from "@/lib/subscriptions";
+import { buildParentLinkedChildWhere } from "@/lib/child-parent-links";
 
 function withResolvedSubscription(center) {
   return {
@@ -22,7 +23,7 @@ export default async function handler(req, res) {
       });
     } else if (session.user.role === "PARENT") {
       const children = await prisma.child.findMany({
-        where: { parentId: session.user.id },
+        where: buildParentLinkedChildWhere(session.user.id),
         select: { centerId: true },
       });
       const memberships = await prisma.centerUser.findMany({

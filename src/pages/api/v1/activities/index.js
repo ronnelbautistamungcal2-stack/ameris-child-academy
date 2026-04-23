@@ -1,7 +1,11 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { emitActivityLog } from "@/lib/socket";
-import { getTeacherClassIds, teacherChildFilter } from "@/lib/teacherScope";
+import {
+  buildTeacherChildWhere,
+  teacherCanAccessChild,
+} from "@/lib/teacherScope";
+import { isChildLinkedToParent } from "@/lib/child-parent-links";
 
 function sameCalendarDay(left, right) {
   return (
@@ -26,8 +30,9 @@ export default async function handler(req, res) {
         }
         const child = await prisma.child.findUnique({
           where: { id: childId },
+          include: { guardians: { select: { guardianId: true } } },
         });
-        if (!child || child.parentId !== session.user.id) {
+        if (!child || !isChildLinkedToParent(child, session.user.id)) {
           return res.status(403).json({ error: "Forbidden" });
         }
       } else {
@@ -60,10 +65,10 @@ export default async function handler(req, res) {
         createdAt: Object.keys(createdAt).length ? createdAt : undefined,
         child:
           session.user.role === "TEACHER"
-            ? teacherChildFilter(session.user.id)
+            ? await buildTeacherChildWhere(session.user.id, centerId)
             : centerId
               ? { centerId }
-            : undefined,
+              : undefined,
       },
       include: { child: true, recordedBy: true },
       orderBy: { createdAt: "desc" },
@@ -95,15 +100,8 @@ export default async function handler(req, res) {
       const hasCenterAccess = await hasAccessToCenter(session.user.id, childRecord.centerId);
       if (!hasCenterAccess) return res.status(403).json({ error: "Forbidden" });
 
-      // Fallback behavior:
-      // If class assignments exist, enforce class-level access.
-      // If no class assignments are configured yet, allow center-level access.
-      const classIds = await getTeacherClassIds(session.user.id, childRecord.centerId);
-      if (
-        classIds.length > 0 &&
-        childRecord.classRoomId &&
-        !classIds.includes(childRecord.classRoomId)
-      ) {
+      const hasChildAccess = await teacherCanAccessChild(session.user.id, childRecord);
+      if (!hasChildAccess) {
         return res.status(403).json({ error: "Forbidden" });
       }
     }

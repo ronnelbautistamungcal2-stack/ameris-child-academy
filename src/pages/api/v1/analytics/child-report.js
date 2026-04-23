@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { teacherChildFilter } from "@/lib/teacherScope";
+import { isChildLinkedToParent } from "@/lib/child-parent-links";
 
 export default async function handler(req, res) {
   try {
@@ -17,11 +18,17 @@ export default async function handler(req, res) {
     // Access check
     const child = await prisma.child.findUnique({
       where: { id: childId },
-      include: { classRoom: true },
+      include: {
+        classRoom: true,
+        guardians: { select: { guardianId: true } },
+      },
     });
     if (!child) return res.status(404).json({ error: "Child not found" });
 
-    if (session.user.role === "PARENT" && child.parentId !== session.user.id) {
+    if (
+      session.user.role === "PARENT" &&
+      !isChildLinkedToParent(child, session.user.id)
+    ) {
       return res.status(403).json({ error: "Forbidden" });
     }
     if (session.user.role === "TEACHER") {

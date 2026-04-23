@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { teacherCanAccessClass } from "@/lib/teacherScope";
+import { teacherCanAccessChild } from "@/lib/teacherScope";
+import { isChildLinkedToParent } from "@/lib/child-parent-links";
 
 const VALID_TYPES = [
   "PHOTO_RELEASE",
@@ -23,20 +24,24 @@ export default async function handler(req, res) {
 
   const child = await prisma.child.findUnique({
     where: { id },
-    select: { id: true, parentId: true, classRoomId: true, centerId: true },
+    select: {
+      id: true,
+      parentId: true,
+      classRoomId: true,
+      centerId: true,
+      guardians: { select: { guardianId: true } },
+    },
   });
   if (!child) return res.status(404).json({ error: "Child not found" });
 
   // Authorization
   if (session.user.role === "PARENT") {
-    if (child.parentId !== session.user.id) {
+    if (!isChildLinkedToParent(child, session.user.id)) {
       return res.status(403).json({ error: "Forbidden" });
     }
   } else if (session.user.role === "TEACHER") {
-    if (child.classRoomId) {
-      const hasAccess = await teacherCanAccessClass(session.user.id, child.classRoomId);
-      if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
-    }
+    const hasAccess = await teacherCanAccessChild(session.user.id, child);
+    if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
   } else if (session.user.role !== "ADMIN") {
     return res.status(403).json({ error: "Forbidden" });
   }

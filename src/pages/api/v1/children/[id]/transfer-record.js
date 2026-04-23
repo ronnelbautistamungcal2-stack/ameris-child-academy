@@ -1,6 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { teacherCanAccessClass } from "@/lib/teacherScope";
+import { teacherCanAccessChild } from "@/lib/teacherScope";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -58,7 +58,7 @@ export default async function handler(req, res) {
   if (!child) return res.status(404).json({ error: "Child not found" });
 
   if (session.user.role === "TEACHER") {
-    const hasAccess = await teacherCanAccessClass(session.user.id, child.classRoomId);
+    const hasAccess = await teacherCanAccessChild(session.user.id, child);
     if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
   }
 

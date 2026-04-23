@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
 
-  const { centerId } = req.query;
+  const { centerId, mode } = req.query;
 
   // Check center access
   if (centerId && session.user.role !== "ADMIN") {
@@ -26,13 +26,14 @@ export default async function handler(req, res) {
 
   if (req.method === "GET") {
     let teacherClassIds = null;
-    if (session.user.role === "TEACHER") {
+    const transferMode = mode === "transfer";
+    if (session.user.role === "TEACHER" && !transferMode) {
       teacherClassIds = await getTeacherClassIds(session.user.id, centerId);
       if (!teacherClassIds.length) return res.status(200).json([]);
     }
 
     const where = centerId ? { centerId } : {};
-    if (session.user.role === "TEACHER") {
+    if (session.user.role === "TEACHER" && !transferMode) {
       where.id = { in: teacherClassIds };
     }
 

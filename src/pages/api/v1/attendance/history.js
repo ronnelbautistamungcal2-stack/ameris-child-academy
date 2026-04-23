@@ -1,6 +1,10 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { getTeacherClassIds } from "@/lib/teacherScope";
+import {
+  buildTeacherChildWhere,
+  teacherCanAccessChild,
+} from "@/lib/teacherScope";
+import { isChildLinkedToParent } from "@/lib/child-parent-links";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -28,16 +32,22 @@ export default async function handler(req, res) {
     if (childId) {
       const child = await prisma.child.findUnique({
         where: { id: childId },
-        select: { id: true, centerId: true, parentId: true, classRoomId: true },
+        select: {
+          id: true,
+          centerId: true,
+          parentId: true,
+          classRoomId: true,
+          guardians: { select: { guardianId: true } },
+        },
       });
       if (!child) return res.status(404).json({ error: "Child not found" });
 
       if (role === "PARENT") {
-        if (child.parentId !== session.user.id) {
+        if (!isChildLinkedToParent(child, session.user.id)) {
           return res.status(403).json({ error: "Forbidden" });
         }
       } else if (role === "TEACHER") {
-        const ok = await hasAccessToCenter(session.user.id, child.centerId);
+        const ok = await teacherCanAccessChild(session.user.id, child);
         if (!ok) return res.status(403).json({ error: "Forbidden" });
       }
 
@@ -54,12 +64,11 @@ export default async function handler(req, res) {
       where.centerId = centerId;
 
       if (role === "TEACHER") {
-        const classIds = await getTeacherClassIds(session.user.id, centerId);
-        if (classIds.length) {
-          where.child = { classRoomId: { in: classIds } };
-        } else {
+        const teacherWhere = await buildTeacherChildWhere(session.user.id, centerId);
+        if (teacherWhere.id?.in && !teacherWhere.id.in.length) {
           return res.status(200).json([]);
         }
+        where.child = teacherWhere;
       }
     }
 
@@ -86,6 +95,12 @@ export default async function handler(req, res) {
             firstName: true,
             lastName: true,
             classRoomId: true,
+          },
+        },
+        classRoom: {
+          select: {
+            id: true,
+            name: true,
           },
         },
       },

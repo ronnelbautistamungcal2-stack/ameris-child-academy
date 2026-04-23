@@ -1,11 +1,22 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { getTeacherClassIds } from "@/lib/teacherScope";
+import {
+  attendanceByChildId,
+  decorateChildWithTodayAttendance,
+  startOfDay,
+} from "@/lib/attendance-classroom";
+import { buildTeacherChildWhere } from "@/lib/teacherScope";
 import {
   buildLegacyEmergencyContact,
   normalizeEmergencyContacts,
   normalizeParentContacts,
 } from "@/lib/child-contacts";
+import {
+  applyLinkedParentAccountIds,
+  buildParentLinkedChildWhere,
+  linkedParentAccountsInclude,
+  resolveLinkedParentAccountIds,
+} from "@/lib/child-parent-links";
 
 function normalizeDocs(value) {
   const arr = Array.isArray(value) ? value : [];
@@ -40,6 +51,35 @@ function normalizeFeedingPlan(value) {
   };
 }
 
+async function attachTodayClassroom(children, role, centerId) {
+  const list = Array.isArray(children) ? children : [];
+  if (!list.length) return [];
+
+  const todayAttendance = await prisma.attendance.findMany({
+    where: {
+      childId: { in: list.map((child) => child.id) },
+      day: startOfDay(),
+      ...(centerId ? { centerId } : {}),
+    },
+    select: {
+      id: true,
+      childId: true,
+      classRoomId: true,
+      checkedInAt: true,
+      checkedOutAt: true,
+      notes: true,
+      day: true,
+    },
+  });
+
+  const byChildId = attendanceByChildId(todayAttendance);
+  return list.map((child) =>
+    decorateChildWithTodayAttendance(child, byChildId.get(child.id) || null, {
+      replaceClassRoomId: role === "TEACHER",
+    }),
+  );
+}
+
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
@@ -53,9 +93,12 @@ export default async function handler(req, res) {
       // Parents can only see their own children
       if (session.user.role === "PARENT") {
         const children = await prisma.child.findMany({
-          where: { parentId: session.user.id },
+          where: buildParentLinkedChildWhere(session.user.id),
+          include: linkedParentAccountsInclude,
         });
-        return res.status(200).json(children);
+        return res
+          .status(200)
+          .json(await attachTodayClassroom(children, session.user.role, centerId));
       }
       // Subscribers: only if active subscription + membership
       if (session.user.role === "SUBSCRIBER") {
@@ -76,7 +119,9 @@ export default async function handler(req, res) {
           where: { centerId: centerId ? centerId : { in: centerIds } },
           include: { progress: true, activities: true },
         });
-        return res.status(200).json(children);
+        return res
+          .status(200)
+          .json(await attachTodayClassroom(children, session.user.role, centerId));
       }
       return res.status(403).json({ error: "Forbidden" });
     }
@@ -87,15 +132,17 @@ export default async function handler(req, res) {
       if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
     }
 
-    let teacherClassIds = null;
+    let teacherWhere = {};
     if (session.user.role === "TEACHER") {
-      teacherClassIds = await getTeacherClassIds(session.user.id, centerId);
-      if (!teacherClassIds.length) return res.status(200).json([]);
+      teacherWhere = await buildTeacherChildWhere(session.user.id, centerId);
+      if (teacherWhere.id?.in && !teacherWhere.id.in.length) {
+        return res.status(200).json([]);
+      }
     }
 
     const where = centerId ? { centerId } : {};
     if (session.user.role === "TEACHER") {
-      where.classRoomId = { in: teacherClassIds };
+      Object.assign(where, teacherWhere);
     }
 
     const children = await prisma.child.findMany({
@@ -103,10 +150,12 @@ export default async function handler(req, res) {
       include: {
         progress: true,
         activities: true,
-        parent: { select: { id: true, name: true, email: true } },
+        ...linkedParentAccountsInclude,
       },
     });
-    return res.status(200).json(children);
+    return res
+      .status(200)
+      .json(await attachTodayClassroom(children, session.user.role, centerId));
   }
 
   if (req.method === "POST") {
@@ -123,6 +172,7 @@ export default async function handler(req, res) {
       centerId: cId,
       classRoomId,
       parentId,
+      parentAccountIds,
       parentContacts,
       emergencyContacts,
       emergencyContact,
@@ -145,6 +195,27 @@ export default async function handler(req, res) {
       if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
     }
 
+    const requestedParentAccountIds = Object.prototype.hasOwnProperty.call(
+      req.body,
+      "parentAccountIds",
+    )
+      ? parentAccountIds
+      : Object.prototype.hasOwnProperty.call(req.body, "parentId")
+        ? [parentId]
+        : [];
+
+    let resolvedParentAccountIds = [];
+    try {
+      resolvedParentAccountIds = await resolveLinkedParentAccountIds(
+        prisma,
+        requestedParentAccountIds,
+      );
+    } catch (error) {
+      return res.status(400).json({
+        error: error?.message || "Invalid linked parent accounts",
+      });
+    }
+
     const normalizedParentContacts = normalizeParentContacts(parentContacts);
     const normalizedEmergencyContacts = normalizeEmergencyContacts(emergencyContacts);
     const legacyEmergencyContact =
@@ -153,32 +224,52 @@ export default async function handler(req, res) {
         ? emergencyContact.trim()
         : null);
 
-    const child = await prisma.child.create({
-      data: {
-        firstName,
-        lastName,
-        birthDate: birthDate ? new Date(birthDate) : null,
-        centerId: cId,
-        classRoomId,
-        parentId,
-        parentContacts: normalizedParentContacts,
-        emergencyContacts: normalizedEmergencyContacts,
-        emergencyContact: legacyEmergencyContact,
-        allergies:
-          typeof allergies === "string" && allergies.trim()
-            ? allergies.trim()
+    const child = await prisma.$transaction(async (tx) => {
+      const created = await tx.child.create({
+        data: {
+          firstName,
+          lastName,
+          birthDate: birthDate ? new Date(birthDate) : null,
+          centerId: cId,
+          classRoomId,
+          parentId: resolvedParentAccountIds[0] || null,
+          parentContacts: normalizedParentContacts,
+          emergencyContacts: normalizedEmergencyContacts,
+          emergencyContact: legacyEmergencyContact,
+          allergies:
+            typeof allergies === "string" && allergies.trim()
+              ? allergies.trim()
+              : null,
+          healthAssessmentDocuments: normalizeDocs(healthAssessmentDocuments),
+          enrollmentDocuments: normalizeDocs(enrollmentDocuments),
+          iefDocuments: normalizeDocs(iefDocuments),
+          immunizationDocuments: normalizeDocs(immunizationDocuments),
+          infantDocuments: normalizeDocs(infantDocuments),
+          otherDocuments: normalizeDocs(otherDocuments),
+          feedingPlan: normalizeFeedingPlan(feedingPlan),
+          enrollmentStartDate: enrollmentStartDate
+            ? new Date(enrollmentStartDate)
             : null,
-        healthAssessmentDocuments: normalizeDocs(healthAssessmentDocuments),
-        enrollmentDocuments: normalizeDocs(enrollmentDocuments),
-        iefDocuments: normalizeDocs(iefDocuments),
-        immunizationDocuments: normalizeDocs(immunizationDocuments),
-        infantDocuments: normalizeDocs(infantDocuments),
-        otherDocuments: normalizeDocs(otherDocuments),
-        feedingPlan: normalizeFeedingPlan(feedingPlan),
-        enrollmentStartDate: enrollmentStartDate ? new Date(enrollmentStartDate) : null,
-        enrollmentEndDate: enrollmentEndDate ? new Date(enrollmentEndDate) : null,
-      },
-      include: { progress: true, activities: true },
+          enrollmentEndDate: enrollmentEndDate
+            ? new Date(enrollmentEndDate)
+            : null,
+        },
+      });
+
+      await applyLinkedParentAccountIds(
+        tx,
+        created.id,
+        resolvedParentAccountIds,
+      );
+
+      return tx.child.findUnique({
+        where: { id: created.id },
+        include: {
+          progress: true,
+          activities: true,
+          ...linkedParentAccountsInclude,
+        },
+      });
     });
 
     return res.status(201).json(child);

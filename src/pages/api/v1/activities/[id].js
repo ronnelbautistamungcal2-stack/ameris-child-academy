@@ -1,6 +1,7 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { teacherCanAccessClass } from "@/lib/teacherScope";
+import { teacherCanAccessChild } from "@/lib/teacherScope";
+import { isChildLinkedToParent } from "@/lib/child-parent-links";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -11,7 +12,10 @@ export default async function handler(req, res) {
   if (req.method === "GET") {
     const activity = await prisma.activityLog.findUnique({
       where: { id },
-      include: { child: true, recordedBy: true },
+      include: {
+        child: { include: { guardians: { select: { guardianId: true } } } },
+        recordedBy: true,
+      },
     });
 
     if (!activity) return res.status(404).json({ error: "Activity not found" });
@@ -19,17 +23,14 @@ export default async function handler(req, res) {
     // Parent can only see their own child's activities
     if (
       session.user.role === "PARENT" &&
-      activity.child.parentId !== session.user.id
+      !isChildLinkedToParent(activity.child, session.user.id)
     ) {
       return res.status(403).json({ error: "Forbidden" });
     }
     if (session.user.role === "TEACHER") {
       const ok = await hasAccessToCenter(session.user.id, activity.child.centerId);
       if (!ok) return res.status(403).json({ error: "Forbidden" });
-      const hasClassAccess = await teacherCanAccessClass(
-        session.user.id,
-        activity.child.classRoomId,
-      );
+      const hasClassAccess = await teacherCanAccessChild(session.user.id, activity.child);
       if (!hasClassAccess) return res.status(403).json({ error: "Forbidden" });
     }
 
@@ -52,10 +53,7 @@ export default async function handler(req, res) {
     if (session.user.role === "TEACHER") {
       const ok = await hasAccessToCenter(session.user.id, activity.child.centerId);
       if (!ok) return res.status(403).json({ error: "Forbidden" });
-      const hasClassAccess = await teacherCanAccessClass(
-        session.user.id,
-        activity.child.classRoomId,
-      );
+      const hasClassAccess = await teacherCanAccessChild(session.user.id, activity.child);
       if (!hasClassAccess) return res.status(403).json({ error: "Forbidden" });
     }
 
@@ -104,10 +102,7 @@ export default async function handler(req, res) {
     if (session.user.role === "TEACHER") {
       const ok = await hasAccessToCenter(session.user.id, activity.child.centerId);
       if (!ok) return res.status(403).json({ error: "Forbidden" });
-      const hasClassAccess = await teacherCanAccessClass(
-        session.user.id,
-        activity.child.classRoomId,
-      );
+      const hasClassAccess = await teacherCanAccessChild(session.user.id, activity.child);
       if (!hasClassAccess) return res.status(403).json({ error: "Forbidden" });
     }
 

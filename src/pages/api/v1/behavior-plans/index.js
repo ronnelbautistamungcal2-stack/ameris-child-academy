@@ -1,6 +1,9 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { teacherChildFilter } from "@/lib/teacherScope";
+import {
+  buildTeacherChildWhere,
+  teacherCanAccessChild,
+} from "@/lib/teacherScope";
 
 export default async function handler(req, res) {
   try {
@@ -29,7 +32,7 @@ async function handleGet(req, res, session) {
   if (status) where.status = status;
 
   if (session.user.role === "TEACHER") {
-    where.child = teacherChildFilter(session.user.id);
+    where.child = await buildTeacherChildWhere(session.user.id, centerId);
   }
 
   const plans = await prisma.behaviorPlan.findMany({
@@ -54,8 +57,7 @@ async function handlePost(req, res, session) {
 
   // Verify access to child
   if (session.user.role === "TEACHER") {
-    const tf = teacherChildFilter(session.user.id);
-    const count = await prisma.child.count({ where: { id: childId, ...tf } });
+    const count = await teacherCanAccessChild(session.user.id, childId);
     if (!count) return res.status(403).json({ error: "You don't have access to this child" });
   }
 

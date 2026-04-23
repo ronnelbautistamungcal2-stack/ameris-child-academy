@@ -1,6 +1,51 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { teacherCanAccessClass, teacherChildFilter } from "@/lib/teacherScope";
+import {
+  attendanceByChildId,
+  decorateChildWithTodayAttendance,
+  startOfDay,
+} from "@/lib/attendance-classroom";
+import {
+  buildTeacherChildWhere,
+  teacherCanAccessChild,
+} from "@/lib/teacherScope";
+import { isChildLinkedToParent } from "@/lib/child-parent-links";
+
+async function attachTodayClassroom(progressRows, role) {
+  const list = Array.isArray(progressRows) ? progressRows : [];
+  const childIds = [...new Set(list.map((row) => row?.child?.id).filter(Boolean))];
+  if (!childIds.length) return list;
+
+  const todayAttendance = await prisma.attendance.findMany({
+    where: {
+      childId: { in: childIds },
+      day: startOfDay(),
+    },
+    select: {
+      id: true,
+      childId: true,
+      classRoomId: true,
+      checkedInAt: true,
+      checkedOutAt: true,
+      notes: true,
+      day: true,
+    },
+  });
+  const byChildId = attendanceByChildId(todayAttendance);
+
+  return list.map((row) =>
+    row?.child
+      ? {
+          ...row,
+          child: decorateChildWithTodayAttendance(
+            row.child,
+            byChildId.get(row.child.id) || null,
+            { replaceClassRoomId: role === "TEACHER" },
+          ),
+        }
+      : row,
+  );
+}
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -25,9 +70,14 @@ export default async function handler(req, res) {
 
       const child = await prisma.child.findUnique({
         where: { id: childId },
-        select: { id: true, parentId: true, centerId: true },
+        select: {
+          id: true,
+          parentId: true,
+          centerId: true,
+          guardians: { select: { guardianId: true } },
+        },
       });
-      if (!child || child.parentId !== session.user.id) {
+      if (!child || !isChildLinkedToParent(child, session.user.id)) {
         return res.status(403).json({ error: "Forbidden" });
       }
       if (centerId && child.centerId !== centerId) {
@@ -42,10 +92,7 @@ export default async function handler(req, res) {
         });
         if (!child) return res.status(404).json({ error: "Child not found" });
 
-        const hasClassAccess = await teacherCanAccessClass(
-          session.user.id,
-          child.classRoomId,
-        );
+        const hasClassAccess = await teacherCanAccessChild(session.user.id, child);
         if (!hasClassAccess) return res.status(403).json({ error: "Forbidden" });
         if (centerId && child.centerId !== centerId) {
           return res.status(200).json([]);
@@ -54,7 +101,7 @@ export default async function handler(req, res) {
 
       where.child = {
         ...(centerId ? { centerId } : {}),
-        ...teacherChildFilter(session.user.id),
+        ...(await buildTeacherChildWhere(session.user.id, centerId)),
       };
     } else if (role === "COACH") {
       const memberships = await prisma.centerUser.findMany({
@@ -81,7 +128,7 @@ export default async function handler(req, res) {
       orderBy: { createdAt: "desc" },
     });
 
-    return res.status(200).json(progress);
+    return res.status(200).json(await attachTodayClassroom(progress, role));
   }
 
   if (req.method === "POST") {
@@ -106,7 +153,7 @@ export default async function handler(req, res) {
         select: { id: true, classRoomId: true },
       });
       if (!child) return res.status(404).json({ error: "Child not found" });
-      const hasClassAccess = await teacherCanAccessClass(session.user.id, child.classRoomId);
+      const hasClassAccess = await teacherCanAccessChild(session.user.id, child);
       if (!hasClassAccess) return res.status(403).json({ error: "Forbidden" });
     }
 
@@ -130,7 +177,9 @@ export default async function handler(req, res) {
       },
     });
 
-    return res.status(201).json(progress);
+    return res
+      .status(201)
+      .json((await attachTodayClassroom([progress], session.user.role))[0]);
   }
 
   res.setHeader("Allow", ["GET", "POST"]);

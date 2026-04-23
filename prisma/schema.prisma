@@ -271,6 +271,7 @@ model ClassRoom {
   center   Center         @relation(fields: [centerId], references: [id])
   centerId String
   children Child[]
+  attendances Attendance[]
   teachers TeacherClass[]
   budgets  ClassroomBudget[]
   coachObservations CoachObservation[]
@@ -474,6 +475,8 @@ model Attendance {
   centerId     String
   child        Child     @relation(fields: [childId], references: [id])
   childId      String
+  classRoom    ClassRoom? @relation(fields: [classRoomId], references: [id])
+  classRoomId  String?
   checkedInAt  DateTime?
   checkedOutAt DateTime?
   notes        String?
@@ -482,6 +485,7 @@ model Attendance {
 
   @@unique([childId, day])
   @@index([centerId, day])
+  @@index([centerId, day, classRoomId])
 }
 
 model TaskChecklist {

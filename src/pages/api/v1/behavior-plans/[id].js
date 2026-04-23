@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { isChildLinkedToParent } from "@/lib/child-parent-links";
 
 export default async function handler(req, res) {
   try {
@@ -31,7 +32,14 @@ async function handleGet(req, res, session, id) {
         orderBy: { sortOrder: "asc" },
         include: { lesson: { select: { title: true } } },
       },
-      child: { select: { firstName: true, lastName: true, parentId: true } },
+      child: {
+        select: {
+          firstName: true,
+          lastName: true,
+          parentId: true,
+          guardians: { select: { guardianId: true } },
+        },
+      },
       createdBy: { select: { name: true } },
     },
   });
@@ -39,7 +47,10 @@ async function handleGet(req, res, session, id) {
   if (!plan) return res.status(404).json({ error: "Plan not found" });
 
   // Parents can only see their children's plans
-  if (session.user.role === "PARENT" && plan.child?.parentId !== session.user.id) {
+  if (
+    session.user.role === "PARENT" &&
+    !isChildLinkedToParent(plan.child, session.user.id)
+  ) {
     return res.status(403).json({ error: "Forbidden" });
   }
 

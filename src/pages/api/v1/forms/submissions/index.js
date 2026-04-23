@@ -1,5 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { isChildLinkedToParent } from "@/lib/child-parent-links";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -46,9 +47,12 @@ export default async function handler(req, res) {
     }
 
     if (childId) {
-      const child = await prisma.child.findUnique({ where: { id: childId } });
+      const child = await prisma.child.findUnique({
+        where: { id: childId },
+        include: { guardians: { select: { guardianId: true } } },
+      });
       if (!child) return res.status(404).json({ error: "Child not found" });
-      if (user.role === "PARENT" && child.parentId !== user.id) {
+      if (user.role === "PARENT" && !isChildLinkedToParent(child, user.id)) {
         return res.status(403).json({ error: "Forbidden" });
       }
       if (user.role !== "ADMIN" && template.centerId && child.centerId !== template.centerId) {
@@ -78,4 +82,3 @@ export default async function handler(req, res) {
   res.setHeader("Allow", ["GET", "POST"]);
   res.status(405).end();
 }
-

@@ -6,6 +6,7 @@ import {
   notFound,
   unauthorized,
 } from "@/lib/api-error";
+import { buildParentLinkedChildWhere } from "@/lib/child-parent-links";
 import { ensureObject, requiredString } from "@/lib/validation";
 import { assertActiveSubscription, assertSubscriptionFeature, normalizeSubscription } from "@/lib/subscriptions";
 
@@ -13,7 +14,7 @@ async function userCanAccessCenter(session, centerId) {
   if (session.user.role === "ADMIN") return true;
   if (session.user.role === "PARENT") {
     const child = await prisma.child.findFirst({
-      where: { parentId: session.user.id, centerId },
+      where: buildParentLinkedChildWhere(session.user.id, { centerId }),
       select: { id: true },
     });
     if (child) return true;

@@ -1,12 +1,11 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getTeacherClassIds } from "@/lib/teacherScope";
-
-function startOfDay(d = new Date()) {
-  const out = new Date(d);
-  out.setHours(0, 0, 0, 0);
-  return out;
-}
+import {
+  attendanceByChildId,
+  decorateChildWithTodayAttendance,
+  startOfDay,
+} from "@/lib/attendance-classroom";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -51,10 +50,7 @@ export default async function handler(req, res) {
 
   const [children, records] = await Promise.all([
     prisma.child.findMany({
-      where:
-        role === "TEACHER"
-          ? { centerId, classRoomId: { in: teacherClassIds } }
-          : { centerId },
+      where: { centerId },
       select: { id: true, firstName: true, lastName: true, classRoomId: true },
       orderBy: { createdAt: "desc" },
       take: 500,
@@ -64,6 +60,7 @@ export default async function handler(req, res) {
       select: {
         id: true,
         childId: true,
+        classRoomId: true,
         checkedInAt: true,
         checkedOutAt: true,
         notes: true,
@@ -72,13 +69,24 @@ export default async function handler(req, res) {
     }),
   ]);
 
-  const byChildId = new Map(records.map((r) => [r.childId, r]));
+  const byChildId = attendanceByChildId(records);
+  const visibleChildren = (role === "TEACHER"
+    ? children
+        .map((child) =>
+          decorateChildWithTodayAttendance(child, byChildId.get(child.id) || null, {
+            replaceClassRoomId: true,
+          }),
+        )
+        .filter((child) => teacherClassIds.includes(child.effectiveClassRoomId))
+    : children.map((child) =>
+        decorateChildWithTodayAttendance(child, byChildId.get(child.id) || null),
+      ));
 
   let checkedInCount = 0;
   const checkedInChildren = [];
   const missingChildren = [];
 
-  for (const child of children) {
+  for (const child of visibleChildren) {
     const r = byChildId.get(child.id);
     const checkedIn = !!r?.checkedInAt && !r?.checkedOutAt;
     if (checkedIn) {
@@ -95,7 +103,7 @@ export default async function handler(req, res) {
   return res.status(200).json({
     centerId,
     day: day.toISOString(),
-    totalChildren: children.length,
+    totalChildren: visibleChildren.length,
     checkedInCount,
     checkedInChildren,
     missingChildren,

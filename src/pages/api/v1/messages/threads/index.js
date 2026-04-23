@@ -2,6 +2,7 @@ import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { emitNewMessage } from "@/lib/socket";
 import { notifyMessageRecipients } from "@/lib/messaging";
+import { buildParentLinkedChildWhere } from "@/lib/child-parent-links";
 
 async function getAllowedCenterIdsForUser(user) {
   if (user.role === "ADMIN") {
@@ -10,7 +11,7 @@ async function getAllowedCenterIdsForUser(user) {
   }
   if (user.role === "PARENT") {
     const children = await prisma.child.findMany({
-      where: { parentId: user.id },
+      where: buildParentLinkedChildWhere(user.id),
       select: { centerId: true },
     });
     return [...new Set(children.map((c) => c.centerId))];

@@ -9,6 +9,14 @@ function normalizeSpaces(value) {
     .replace(/\s+/g, " ");
 }
 
+function normalizeLessonTerm(value) {
+  const raw = normalizeSpaces(value);
+  if (!raw) return "";
+  const numeric = raw.match(/^(?:term\s*)?(\d+)$/i);
+  if (numeric) return `Term ${numeric[1]}`;
+  return raw;
+}
+
 async function getOrCreateCategory({ centerId, name, ageRange }) {
   const canonical = canonicalizeLessonCategoryName(name);
   if (!canonical) return null;
@@ -121,7 +129,7 @@ export default async function handler(req, res) {
       description: normalizeSpaces(testingQuestion) || null,
       passingCriteria: {
         reference: normalizeSpaces(reference),
-        term: normalizeSpaces(term),
+        term: normalizeLessonTerm(term),
         lesson: normalizeSpaces(lessonTitle),
         stepOfProgression: step,
         testingQuestion: normalizeSpaces(testingQuestion),

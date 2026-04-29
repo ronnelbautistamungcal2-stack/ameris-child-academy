@@ -8,6 +8,14 @@ function normalizeSpaces(value) {
     .replace(/\s+/g, " ");
 }
 
+function normalizeLessonTerm(value) {
+  const raw = normalizeSpaces(value);
+  if (!raw) return "";
+  const numeric = raw.match(/^(?:term\s*)?(\d+)$/i);
+  if (numeric) return `Term ${numeric[1]}`;
+  return raw;
+}
+
 function getPassingCriteriaObject(value) {
   if (!value) return {};
   if (typeof value === "object" && !Array.isArray(value)) return value;
@@ -68,7 +76,7 @@ export default async function handler(req, res) {
       passingCriteria: {
         ...previousPc,
         reference: normalizeSpaces(reference),
-        term: normalizeSpaces(term),
+        term: normalizeLessonTerm(term),
         lesson: normalizeSpaces(lessonTitle),
         stepOfProgression: step,
         testingQuestion: normalizeSpaces(testingQuestion),

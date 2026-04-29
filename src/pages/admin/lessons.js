@@ -1,5 +1,6 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import { apiJson } from "@/lib/api";
+import { AGE_GROUPS } from "@/lib/ageUtils";
 import { normalizeSubjectForRef } from "@/lib/subjectNormalization.mjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -22,8 +23,33 @@ function normalizeKey(value) {
   return normalizeSpaces(value).toLowerCase();
 }
 
+function normalizeLessonTerm(value) {
+  const raw = normalizeSpaces(value);
+  if (!raw) return "";
+  const numeric = raw.match(/^(?:term\s*)?(\d+)$/i);
+  if (numeric) return `Term ${numeric[1]}`;
+  return raw;
+}
+
 function byNaturalString(a, b) {
   return naturalCollator.compare(normalizeSpaces(a), normalizeSpaces(b));
+}
+
+function mergeSelectOptions(defaults, extras) {
+  const seen = new Set();
+  const out = [];
+
+  const add = (value) => {
+    const normalized = normalizeKey(value);
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    out.push(normalizeSpaces(value));
+  };
+
+  for (const value of defaults) add(value);
+  for (const value of [...extras].sort(byNaturalString)) add(value);
+
+  return out;
 }
 
 const REF_DOMAIN_ORDER = new Map([
@@ -32,6 +58,9 @@ const REF_DOMAIN_ORDER = new Map([
   ["A", 2], // Academics
   ["L", 3], // Life Skills
 ]);
+
+const DEFAULT_LESSON_AGE_OPTIONS = AGE_GROUPS.map((group) => group.label);
+const DEFAULT_LESSON_TERM_OPTIONS = ["Term 1", "Term 2", "Term 3", "Term 4", "Term 5"];
 
 function parseRefIdParts(value) {
   const raw = normalizeSpaces(value);
@@ -711,7 +740,7 @@ export default function AdminLessons() {
             refId: String(pc.reference ?? ""),
           }),
           childAge: String(pc.age ?? ""),
-          term: String(pc.term ?? ""),
+          term: normalizeLessonTerm(pc.term ?? ""),
           category: String(pc.category ?? lesson?.category?.name ?? ""),
           progressionStep: String(pc.stepOfProgression ?? goal?.title ?? ""),
           testingQuestion: String(
@@ -747,6 +776,14 @@ export default function AdminLessons() {
       subjects: [...subjects].sort((a, b) => byString(a, b)),
     };
   }, [records]);
+
+  const lessonAgeOptions = useMemo(() => {
+    return mergeSelectOptions(DEFAULT_LESSON_AGE_OPTIONS, options.ages);
+  }, [options.ages]);
+
+  const lessonTermOptions = useMemo(() => {
+    return mergeSelectOptions(DEFAULT_LESSON_TERM_OPTIONS, options.terms);
+  }, [options.terms]);
 
   const subjectOptions = useMemo(() => {
     const ageKey = normalizeSpaces(age);
@@ -885,7 +922,7 @@ export default function AdminLessons() {
     setEditRecord(rec || null);
     setEditLessonTitle(String(rec?.lessonTitle || ""));
     setEditChildAge(String(rec?.childAge || ""));
-    setEditTerm(String(rec?.term || ""));
+    setEditTerm(normalizeLessonTerm(rec?.term || ""));
     setEditCategory(String(rec?.category || ""));
     setEditSubject(String(rec?.subject || ""));
     setEditReference(String(rec?.refId || ""));
@@ -967,7 +1004,7 @@ export default function AdminLessons() {
             centerId: mainCenter.id,
             lessonTitle: normalizeSpaces(newLessonTitle),
             childAge: normalizeSpaces(newChildAge),
-            term: normalizeSpaces(newTerm),
+            term: normalizeLessonTerm(newTerm),
             category: normalizeSpaces(newCategory),
             subject: normalizeSubjectForRef({
               subject: normalizeSpaces(newSubject),
@@ -1028,7 +1065,7 @@ export default function AdminLessons() {
             body: JSON.stringify({
               lessonTitle: normalizeSpaces(editLessonTitle),
               childAge: normalizeSpaces(editChildAge),
-              term: normalizeSpaces(editTerm),
+              term: normalizeLessonTerm(editTerm),
               category: normalizeSpaces(editCategory),
               subject: normalizeSubjectForRef({
                 subject: normalizeSpaces(editSubject),
@@ -1841,13 +1878,19 @@ export default function AdminLessons() {
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <Field label="Child Age">
-                <input
+                <select
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   value={editChildAge}
                   onChange={(e) => setEditChildAge(e.target.value)}
-                  placeholder="e.g. 0-6 Months"
                   disabled={saving}
-                />
+                >
+                  <option value="">Select an age group</option>
+                  {lessonAgeOptions.map((ageOption) => (
+                    <option key={ageOption} value={ageOption}>
+                      {ageOption}
+                    </option>
+                  ))}
+                </select>
               </Field>
               <Field label="Term">
                 <select
@@ -1857,11 +1900,11 @@ export default function AdminLessons() {
                   disabled={saving}
                 >
                   <option value="">Select a term</option>
-                  <option value="1">Term 1</option>
-                  <option value="2">Term 2</option>
-                  <option value="3">Term 3</option>
-                  <option value="4">Term 4</option>
-                  <option value="5">Term 5</option>
+                  {lessonTermOptions.map((termOption) => (
+                    <option key={termOption} value={termOption}>
+                      {termOption}
+                    </option>
+                  ))}
                 </select>
               </Field>
               <Field label="Category">
@@ -2029,22 +2072,34 @@ export default function AdminLessons() {
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <Field label="Child Age">
-                <input
+                <select
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   value={newChildAge}
                   onChange={(e) => setNewChildAge(e.target.value)}
-                  placeholder="e.g. 0-6 Months"
                   disabled={saving}
-                />
+                >
+                  <option value="">Select an age group</option>
+                  {lessonAgeOptions.map((ageOption) => (
+                    <option key={ageOption} value={ageOption}>
+                      {ageOption}
+                    </option>
+                  ))}
+                </select>
               </Field>
               <Field label="Term">
-                <input
+                <select
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   value={newTerm}
                   onChange={(e) => setNewTerm(e.target.value)}
-                  placeholder="e.g. Term 1"
                   disabled={saving}
-                />
+                >
+                  <option value="">Select a term</option>
+                  {lessonTermOptions.map((termOption) => (
+                    <option key={termOption} value={termOption}>
+                      {termOption}
+                    </option>
+                  ))}
+                </select>
               </Field>
               <Field label="Category">
                 <input

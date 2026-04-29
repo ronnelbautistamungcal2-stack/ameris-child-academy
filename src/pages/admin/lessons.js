@@ -1,6 +1,7 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import { apiJson } from "@/lib/api";
 import { AGE_GROUPS } from "@/lib/ageUtils";
+import { canonicalizeLessonCategoryName } from "@/lib/lessonCategoryNormalization.mjs";
 import { normalizeSubjectForRef } from "@/lib/subjectNormalization.mjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -29,6 +30,12 @@ function normalizeLessonTerm(value) {
   const numeric = raw.match(/^(?:term\s*)?(\d+)$/i);
   if (numeric) return `Term ${numeric[1]}`;
   return raw;
+}
+
+function normalizeLessonCategory(value) {
+  const raw = normalizeSpaces(value);
+  if (!raw) return "";
+  return canonicalizeLessonCategoryName(raw) || raw;
 }
 
 function byNaturalString(a, b) {
@@ -60,7 +67,59 @@ const REF_DOMAIN_ORDER = new Map([
 ]);
 
 const DEFAULT_LESSON_AGE_OPTIONS = AGE_GROUPS.map((group) => group.label);
+const DEFAULT_LESSON_CATEGORY_OPTIONS = [
+  "Academics",
+  "Cognitive",
+  "Communication",
+  "Creative Arts",
+  "Development",
+  "Fine Arts",
+  "General",
+  "Health And Safety",
+  "Knowledge",
+  "Language And Literacy",
+  "Life Skills",
+  "Lifelong Learning Practices",
+  "Math And Reasoning",
+  "Physical Development",
+  "Science",
+  "Social Skills",
+  "Spiritual",
+  "Talent Exploration",
+  "Task Training",
+  "Well-being",
+];
 const DEFAULT_LESSON_TERM_OPTIONS = ["Term 1", "Term 2", "Term 3", "Term 4", "Term 5"];
+
+function collectCategoryOptions(records, { childAge = "", term = "" } = {}) {
+  const ageKey = normalizeSpaces(childAge);
+  const termKey = normalizeSpaces(term);
+  const categories = new Set();
+
+  for (const record of records) {
+    if (ageKey && normalizeSpaces(record.childAge) !== ageKey) continue;
+    if (termKey && normalizeSpaces(record.term) !== termKey) continue;
+    if (record.category) categories.add(normalizeLessonCategory(record.category));
+  }
+
+  return [...categories].sort((a, b) => byString(a, b));
+}
+
+function collectSubjectOptions(records, { childAge = "", category = "", term = "" } = {}) {
+  const ageKey = normalizeSpaces(childAge);
+  const categoryKey = normalizeLessonCategory(category);
+  const termKey = normalizeSpaces(term);
+  const subjects = new Set();
+
+  for (const record of records) {
+    if (ageKey && normalizeSpaces(record.childAge) !== ageKey) continue;
+    if (categoryKey && normalizeLessonCategory(record.category) !== categoryKey) continue;
+    if (termKey && normalizeSpaces(record.term) !== termKey) continue;
+    if (record.subject) subjects.add(normalizeSpaces(record.subject));
+  }
+
+  return [...subjects].sort((a, b) => byString(a, b));
+}
 
 function parseRefIdParts(value) {
   const raw = normalizeSpaces(value);
@@ -741,7 +800,9 @@ export default function AdminLessons() {
           }),
           childAge: String(pc.age ?? ""),
           term: normalizeLessonTerm(pc.term ?? ""),
-          category: String(pc.category ?? lesson?.category?.name ?? ""),
+          category: normalizeLessonCategory(
+            pc.category ?? lesson?.category?.name ?? "",
+          ),
           progressionStep: String(pc.stepOfProgression ?? goal?.title ?? ""),
           testingQuestion: String(
             pc.testingQuestion ?? goal?.description ?? "",
@@ -786,20 +847,80 @@ export default function AdminLessons() {
   }, [options.terms]);
 
   const subjectOptions = useMemo(() => {
-    const ageKey = normalizeSpaces(age);
-    const catKey = normalizeSpaces(category);
-    const termKey = normalizeSpaces(term);
-    const subjects = new Set();
-
-    for (const r of records) {
-      if (ageKey && normalizeSpaces(r.childAge) !== ageKey) continue;
-      if (catKey && normalizeSpaces(r.category) !== catKey) continue;
-      if (termKey && normalizeSpaces(r.term) !== termKey) continue;
-      if (r.subject) subjects.add(r.subject);
-    }
-
-    return [...subjects].sort((a, b) => byString(a, b));
+    return collectSubjectOptions(records, { childAge: age, category, term });
   }, [records, age, category, term]);
+
+  const lessonCategoryOptions = useMemo(() => {
+    return mergeSelectOptions(DEFAULT_LESSON_CATEGORY_OPTIONS, options.categories);
+  }, [options.categories]);
+
+  const allLessonSubjectOptions = useMemo(() => {
+    return mergeSelectOptions([], options.subjects);
+  }, [options.subjects]);
+
+  const editCategoryOptions = useMemo(() => {
+    const scoped = collectCategoryOptions(records, {
+      childAge: editChildAge,
+      term: editTerm,
+    });
+    const current = normalizeLessonCategory(editCategory);
+    return mergeSelectOptions(
+      scoped.length ? scoped : lessonCategoryOptions,
+      current ? [current] : [],
+    );
+  }, [records, editChildAge, editTerm, lessonCategoryOptions, editCategory]);
+
+  const newCategoryOptions = useMemo(() => {
+    const scoped = collectCategoryOptions(records, {
+      childAge: newChildAge,
+      term: newTerm,
+    });
+    const current = normalizeLessonCategory(newCategory);
+    return mergeSelectOptions(
+      scoped.length ? scoped : lessonCategoryOptions,
+      current ? [current] : [],
+    );
+  }, [records, newChildAge, newTerm, lessonCategoryOptions, newCategory]);
+
+  const editSubjectOptions = useMemo(() => {
+    const scoped = collectSubjectOptions(records, {
+      childAge: editChildAge,
+      category: editCategory,
+      term: editTerm,
+    });
+    const current = normalizeSpaces(editSubject);
+    return mergeSelectOptions(
+      scoped.length ? scoped : allLessonSubjectOptions,
+      current ? [current] : [],
+    );
+  }, [
+    records,
+    editChildAge,
+    editCategory,
+    editTerm,
+    allLessonSubjectOptions,
+    editSubject,
+  ]);
+
+  const newSubjectOptions = useMemo(() => {
+    const scoped = collectSubjectOptions(records, {
+      childAge: newChildAge,
+      category: newCategory,
+      term: newTerm,
+    });
+    const current = normalizeSpaces(newSubject);
+    return mergeSelectOptions(
+      scoped.length ? scoped : allLessonSubjectOptions,
+      current ? [current] : [],
+    );
+  }, [
+    records,
+    newChildAge,
+    newCategory,
+    newTerm,
+    allLessonSubjectOptions,
+    newSubject,
+  ]);
 
   const filtered = useMemo(() => {
     const q = normalizeKey(search);
@@ -923,7 +1044,7 @@ export default function AdminLessons() {
     setEditLessonTitle(String(rec?.lessonTitle || ""));
     setEditChildAge(String(rec?.childAge || ""));
     setEditTerm(normalizeLessonTerm(rec?.term || ""));
-    setEditCategory(String(rec?.category || ""));
+    setEditCategory(normalizeLessonCategory(rec?.category || ""));
     setEditSubject(String(rec?.subject || ""));
     setEditReference(String(rec?.refId || ""));
     setEditStep(String(rec?.progressionStep || ""));
@@ -1005,7 +1126,7 @@ export default function AdminLessons() {
             lessonTitle: normalizeSpaces(newLessonTitle),
             childAge: normalizeSpaces(newChildAge),
             term: normalizeLessonTerm(newTerm),
-            category: normalizeSpaces(newCategory),
+            category: normalizeLessonCategory(newCategory),
             subject: normalizeSubjectForRef({
               subject: normalizeSpaces(newSubject),
               refId: normalizeSpaces(newReference),
@@ -1066,7 +1187,7 @@ export default function AdminLessons() {
               lessonTitle: normalizeSpaces(editLessonTitle),
               childAge: normalizeSpaces(editChildAge),
               term: normalizeLessonTerm(editTerm),
-              category: normalizeSpaces(editCategory),
+              category: normalizeLessonCategory(editCategory),
               subject: normalizeSubjectForRef({
                 subject: normalizeSpaces(editSubject),
                 refId: normalizeSpaces(editReference),
@@ -1908,31 +2029,37 @@ export default function AdminLessons() {
                 </select>
               </Field>
               <Field label="Category">
-                <input
+                <select
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   value={editCategory}
                   onChange={(e) => setEditCategory(e.target.value)}
-                  placeholder="e.g. Cognitive"
-                  list="category-options"
                   disabled={saving}
-                />
-                <datalist id="category-options">
-                  {options.categories.map((c) => (
-                    <option key={c} value={c} />
+                >
+                  <option value="">Select a category</option>
+                  {editCategoryOptions.map((categoryOption) => (
+                    <option key={categoryOption} value={categoryOption}>
+                      {categoryOption}
+                    </option>
                   ))}
-                </datalist>
+                </select>
               </Field>
             </div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <Field label="Subject (optional)">
-                <input
+                <select
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   value={editSubject}
                   onChange={(e) => setEditSubject(e.target.value)}
-                  placeholder="e.g. Science & Exploration"
                   disabled={saving}
-                />
+                >
+                  <option value="">No subject selected</option>
+                  {editSubjectOptions.map((subjectOption) => (
+                    <option key={subjectOption} value={subjectOption}>
+                      {subjectOption}
+                    </option>
+                  ))}
+                </select>
               </Field>
               <Field label="Progression Step (required)">
                 <input
@@ -2102,31 +2229,37 @@ export default function AdminLessons() {
                 </select>
               </Field>
               <Field label="Category">
-                <input
+                <select
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   value={newCategory}
                   onChange={(e) => setNewCategory(e.target.value)}
-                  placeholder="e.g. Cognitive"
-                  list="category-options"
                   disabled={saving}
-                />
-                <datalist id="category-options">
-                  {options.categories.map((c) => (
-                    <option key={c} value={c} />
+                >
+                  <option value="">Select a category</option>
+                  {newCategoryOptions.map((categoryOption) => (
+                    <option key={categoryOption} value={categoryOption}>
+                      {categoryOption}
+                    </option>
                   ))}
-                </datalist>
+                </select>
               </Field>
             </div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <Field label="Subject (optional)">
-                <input
+                <select
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   value={newSubject}
                   onChange={(e) => setNewSubject(e.target.value)}
-                  placeholder="e.g. Science & Exploration"
                   disabled={saving}
-                />
+                >
+                  <option value="">No subject selected</option>
+                  {newSubjectOptions.map((subjectOption) => (
+                    <option key={subjectOption} value={subjectOption}>
+                      {subjectOption}
+                    </option>
+                  ))}
+                </select>
               </Field>
               <Field label="Progression Step (required)">
                 <input

@@ -108,6 +108,39 @@ test.describe("Children API @api", () => {
     expect(data.firstName).toBe("E2E_Updated");
   });
 
+  test("PUT /api/v1/children/:id updates document expiration metadata", async ({ request }) => {
+    if (!createdChildId) test.skip();
+    const cookies = await loginAsAdmin(request);
+    const expirationDate = "2026-12-31";
+
+    const updateRes = await apiPut(
+      request,
+      `/api/v1/children/${createdChildId}`,
+      {
+        healthAssessmentDocuments: [
+          {
+            url: "https://example.com/health.pdf",
+            originalName: "health.pdf",
+            mimeType: "application/pdf",
+            size: 1234,
+            uploadedAt: new Date().toISOString(),
+            documentType: "Health Assessment",
+            expirationDate,
+          },
+        ],
+      },
+      cookies,
+    );
+    expect(updateRes.status()).toBe(200);
+
+    const getRes = await apiGet(request, `/api/v1/children/${createdChildId}`, cookies);
+    expect(getRes.status()).toBe(200);
+    const child = await getRes.json();
+
+    expect(Array.isArray(child.healthAssessmentDocuments)).toBe(true);
+    expect(child.healthAssessmentDocuments[0]?.expirationDate).toBe(expirationDate);
+  });
+
   test("POST /api/v1/children returns 403 for parent role", async ({ request }) => {
     if (!centerId) test.skip();
     const cookies = await loginAsParent(request);

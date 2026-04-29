@@ -38,7 +38,7 @@ async function getOrCreateLesson({ centerId, title, categoryId }) {
 
   const matches = await prisma.lesson.findMany({
     where: { centerId, title: { equals: normalizedTitle, mode: "insensitive" } },
-    orderBy: { createdAt: "asc" },
+    orderBy: { id: "asc" },
   });
 
   if (matches.length) {

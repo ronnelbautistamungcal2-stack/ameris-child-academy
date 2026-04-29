@@ -70,6 +70,10 @@ const DIAPER_TYPE_OPTIONS = [
   { value: "D", label: "D" },
 ];
 
+function supportsBehaviorDetails(type) {
+  return type === "BEHAVIOR";
+}
+
 function toTimeInputValue(date) {
   const value = date instanceof Date ? date : new Date(date || Date.now());
   if (Number.isNaN(value.getTime())) return "";
@@ -449,8 +453,8 @@ export default function TeacherLogs() {
         napStartTime: nextType === "NAP" ? current.napStartTime : "",
         napEndTime: nextType === "NAP" ? current.napEndTime : "",
         diaperType: nextType === "DIAPER_CHANGE" ? current.diaperType || defaults.diaperType : defaults.diaperType,
-        behaviorType: ["BEHAVIOR", "INCIDENT"].includes(nextType) ? current.behaviorType || defaults.behaviorType : defaults.behaviorType,
-        behaviorLevel: ["BEHAVIOR", "INCIDENT"].includes(nextType) ? current.behaviorLevel || defaults.behaviorLevel : defaults.behaviorLevel,
+        behaviorType: supportsBehaviorDetails(nextType) ? current.behaviorType || defaults.behaviorType : defaults.behaviorType,
+        behaviorLevel: supportsBehaviorDetails(nextType) ? current.behaviorLevel || defaults.behaviorLevel : defaults.behaviorLevel,
       };
     });
   }
@@ -763,7 +767,7 @@ export default function TeacherLogs() {
         time: timeValue,
         diaperType: activityFields.diaperType || "W",
       };
-    } else if (["BEHAVIOR", "INCIDENT"].includes(payloadType)) {
+    } else if (payloadType === "BEHAVIOR") {
       details = {
         ...(details || {}),
         time: timeValue,
@@ -1372,7 +1376,7 @@ export default function TeacherLogs() {
                     </label>
                   ) : null}
 
-                  {["BEHAVIOR", "INCIDENT"].includes(type) ? (
+                  {supportsBehaviorDetails(type) ? (
                     <>
                       <label className="block">
                         <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -1418,8 +1422,10 @@ export default function TeacherLogs() {
                         ? "Bottle entries capture the time, quantity, and description."
                         : type === "DIAPER_CHANGE"
                           ? "Diaper entries capture the time, diaper type, and description."
-                          : ["BEHAVIOR", "INCIDENT"].includes(type)
-                            ? "Behavior and incident entries capture type, level, time, and description."
+                          : type === "BEHAVIOR"
+                            ? "Behavior entries capture type, level, time, and description."
+                            : type === "INCIDENT"
+                              ? "Incident entries capture the time and description."
                         : "Other entries capture the time and description."}
                 </div>
               </div>
@@ -1438,6 +1444,8 @@ export default function TeacherLogs() {
                       ? "Add a short rest-time note"
                       : ["MEAL", "SNACK", "BOTTLE"].includes(type)
                         ? "Add meal or feeding details"
+                        : type === "INCIDENT"
+                          ? "Describe the incident"
                         : "Add a short note about the activity"
                   }
                 />

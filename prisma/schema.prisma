@@ -922,6 +922,7 @@ model TimeOffRequest {
   endDate      DateTime
   reason       String?
   status       TimeOffStatus @default(PENDING)
+  coverageName String?
   reviewedBy   User?         @relation("TimeOffReviewed", fields: [reviewedById], references: [id], onDelete: SetNull)
   reviewedById String?
   reviewedAt   DateTime?

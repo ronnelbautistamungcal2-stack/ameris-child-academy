@@ -151,6 +151,10 @@ function arr(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function supportsBehaviorDetails(type) {
+  return type === "BEHAVIOR";
+}
+
 function asObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
@@ -268,11 +272,11 @@ function applyTypeChange(form, nextType) {
           ? currentFields.diaperType || defaults.diaperType
           : defaults.diaperType,
       behaviorType:
-        ["BEHAVIOR", "INCIDENT"].includes(nextType)
+        supportsBehaviorDetails(nextType)
           ? currentFields.behaviorType || defaults.behaviorType
           : defaults.behaviorType,
       behaviorLevel:
-        ["BEHAVIOR", "INCIDENT"].includes(nextType)
+        supportsBehaviorDetails(nextType)
           ? currentFields.behaviorLevel || defaults.behaviorLevel
           : defaults.behaviorLevel,
     },
@@ -427,7 +431,7 @@ function buildPayloadFromForm(form) {
   } else if (payloadType === "DIAPER_CHANGE") {
     details.time = entryTime;
     details.diaperType = fields.diaperType || "W";
-  } else if (["BEHAVIOR", "INCIDENT"].includes(payloadType)) {
+  } else if (payloadType === "BEHAVIOR") {
     details.time = entryTime;
     details.behaviorType = fields.behaviorType || "OTHER";
     details.behaviorLevel = fields.behaviorLevel || "1";
@@ -491,10 +495,13 @@ function formatActivitySummary(activity) {
   if (activity?.type === "DIAPER_CHANGE") {
     return `${details.diaperType || "Routine"}${mediaCount ? ` | ${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : ""}`;
   }
-  if (["BEHAVIOR", "INCIDENT"].includes(activity?.type)) {
+  if (activity?.type === "BEHAVIOR") {
     const parts = [details.behaviorType || "", details.behaviorLevel ? `Level ${details.behaviorLevel}` : ""].filter(Boolean);
     if (mediaCount) parts.push(`${mediaCount} photo${mediaCount === 1 ? "" : "s"}`);
     return parts.join(" | ") || "Behavior entry";
+  }
+  if (activity?.type === "INCIDENT") {
+    return mediaCount ? `${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : "Incident entry";
   }
   return mediaCount ? `${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : "Logged entry";
 }
@@ -549,8 +556,11 @@ function composerHelperText(type) {
   if (type === "DIAPER_CHANGE") {
     return "Diaper entries capture the time, diaper type, and description.";
   }
-  if (["BEHAVIOR", "INCIDENT"].includes(type)) {
-    return "Behavior and incident entries capture type, level, time, and description.";
+  if (type === "BEHAVIOR") {
+    return "Behavior entries capture type, level, time, and description.";
+  }
+  if (type === "INCIDENT") {
+    return "Incident entries capture the time and description.";
   }
   return "Other entries capture the time and description.";
 }
@@ -558,6 +568,7 @@ function composerHelperText(type) {
 function composerDescriptionPlaceholder(type) {
   if (type === "NAP") return "Add a short rest-time note";
   if (["MEAL", "SNACK", "BOTTLE"].includes(type)) return "Add meal or feeding details";
+  if (type === "INCIDENT") return "Describe the incident";
   return "Add a short note about the activity";
 }
 
@@ -990,14 +1001,14 @@ export default function AdminActivityOverrides() {
   }
 
   return (
-    <AdminLayout title="Activity Overrides">
+    <AdminLayout title="Log Activity">
       <Panel style={heroPanelStyle}>
         <div style={{ display: "grid", gap: 18 }}>
           <div style={heroTopRowStyle}>
             <div style={heroIdentityStyle}>
               <div style={heroIconStyle}>AL</div>
               <div>
-                <div style={heroEyebrowStyle}>Admin Activity Overrides</div>
+                <div style={heroEyebrowStyle}>Admin Activity Log</div>
                 <h2 style={{ margin: "6px 0 0", fontSize: 24, fontWeight: 800, color: "var(--admin-text)" }}>
                   {childLabel || selectedCenterName || "Center activity control"}
                 </h2>
@@ -1522,7 +1533,7 @@ function ActivityComposer({
                   </Field>
                 ) : null}
 
-                {["BEHAVIOR", "INCIDENT"].includes(form.type) ? (
+                {supportsBehaviorDetails(form.type) ? (
                   <>
                     <Field label="Behavior type" style={{ minWidth: 0 }}>
                       <select

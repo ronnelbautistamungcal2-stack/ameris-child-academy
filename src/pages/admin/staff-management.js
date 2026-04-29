@@ -154,6 +154,36 @@ function fmtTimeOffRange(start, end) {
   return `${fmtDateTime(start)} — ${fmtDateTime(end)}`;
 }
 
+function fileToBase64(file, timeoutMs = 20000) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    const timer = setTimeout(() => {
+      try {
+        reader.abort();
+      } catch {}
+      reject(new Error(`File read timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    reader.onerror = () => {
+      clearTimeout(timer);
+      reject(new Error("Failed to read file"));
+    };
+
+    reader.onload = () => {
+      clearTimeout(timer);
+      const result = String(reader.result || "");
+      const commaIndex = result.indexOf(",");
+      if (commaIndex === -1) {
+        reject(new Error("Invalid file encoding"));
+        return;
+      }
+      resolve(result.slice(commaIndex + 1));
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function StaffManagement() {
   const [activeTab, setActiveTab] = useState("attendance");
   const [centers, setCenters] = useState([]);
@@ -323,8 +353,15 @@ function AttendanceTab({ centerId, teachers }) {
   const [summaryRecords, setSummaryRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState(ATTENDANCE_INITIAL_FORM);
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [importResult, setImportResult] = useState(null);
+  const [importFileName, setImportFileName] = useState("");
+  const [importFileBase64, setImportFileBase64] = useState("");
+  const [overwriteImportedRows, setOverwriteImportedRows] = useState(true);
 
   const loadRecords = useCallback(async () => {
     setLoading(true);
@@ -374,6 +411,16 @@ function AttendanceTab({ centerId, teachers }) {
     setForm(ATTENDANCE_INITIAL_FORM);
   }, []);
 
+  const closeImport = useCallback(() => {
+    setShowImport(false);
+    setImporting(false);
+    setImportError("");
+    setImportResult(null);
+    setImportFileName("");
+    setImportFileBase64("");
+    setOverwriteImportedRows(true);
+  }, []);
+
   const handleSave = async (e) => {
     e.preventDefault();
     if (!form.userId) return;
@@ -399,6 +446,58 @@ function AttendanceTab({ centerId, teachers }) {
       setSaving(false);
     }
   };
+
+  const handleImportFile = useCallback(async (file) => {
+    if (!file) {
+      setImportFileName("");
+      setImportFileBase64("");
+      return;
+    }
+
+    setImportError("");
+    setImportResult(null);
+
+    try {
+      const base64 = await fileToBase64(file);
+      setImportFileName(file.name || "timesheet");
+      setImportFileBase64(base64);
+    } catch (error) {
+      setImportFileName("");
+      setImportFileBase64("");
+      setImportError(error?.message || "Failed to read file");
+    }
+  }, []);
+
+  const submitImport = useCallback(async (event) => {
+    event.preventDefault();
+    if (!importFileBase64) {
+      setImportError("Choose a CSV or Excel timesheet first.");
+      return;
+    }
+
+    setImporting(true);
+    setImportError("");
+    setImportResult(null);
+    try {
+      const result = await apiJson("/api/v1/staff-attendance/import", {
+        method: "POST",
+        body: JSON.stringify({
+          centerId,
+          fileName: importFileName,
+          fileBase64: importFileBase64,
+          overwriteExisting: overwriteImportedRows,
+        }),
+        timeoutMs: 120000,
+      });
+      setImportResult(result);
+      await loadRecords();
+      await loadSummary();
+    } catch (error) {
+      setImportError(error?.message || "Failed to import timesheet");
+    } finally {
+      setImporting(false);
+    }
+  }, [centerId, importFileBase64, importFileName, loadRecords, loadSummary, overwriteImportedRows]);
 
   // Quick stats from today's records
   const todayStats = {
@@ -450,9 +549,14 @@ function AttendanceTab({ centerId, teachers }) {
               onChange={setDate}
             />
           </div>
-          <PrimaryButton onClick={() => setShowForm(true)}>
-            + Record Attendance
-          </PrimaryButton>
+          <div className="flex flex-wrap gap-2">
+            <SecondaryButton onClick={() => setShowImport(true)}>
+              Import Timesheet
+            </SecondaryButton>
+            <PrimaryButton onClick={() => setShowForm(true)}>
+              + Record Attendance
+            </PrimaryButton>
+          </div>
         </div>
 
         {loading ? (
@@ -709,6 +813,103 @@ function AttendanceTab({ centerId, teachers }) {
           </form>
         </ModalShell>
       )}
+      {showImport && (
+        <ModalShell
+          title="Import Staff Timesheet"
+          subtitle="Upload a CSV, XLSX, or XLS file from your kiosk or payroll export."
+          onClose={closeImport}
+        >
+          <form onSubmit={submitImport} className="space-y-5">
+            <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-4 text-sm text-gray-700">
+              <div className="font-semibold text-gray-900">
+                Accepted columns
+              </div>
+              <div className="mt-2">
+                <code>Employee Name</code> or <code>Email</code>, <code>Date</code>, <code>Clock In</code> or <code>Sign In</code>, <code>Clock Out</code> or <code>Sign Out</code>, optional <code>Status</code>, optional <code>Late Minutes</code>, and optional <code>Notes</code>.
+              </div>
+            </div>
+
+            <label className="block">
+              <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                Timesheet File
+              </div>
+              <input
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                onChange={(event) => handleImportFile(event.target.files?.[0] || null)}
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-medium text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                disabled={importing}
+              />
+              {importFileName ? (
+                <div className="mt-2 text-xs text-gray-500">
+                  Selected: {importFileName}
+                </div>
+              ) : null}
+            </label>
+
+            <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50/60 px-4 py-3 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={overwriteImportedRows}
+                onChange={(event) => setOverwriteImportedRows(event.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                disabled={importing}
+              />
+              <span>
+                Overwrite existing attendance rows when the employee and date already exist.
+              </span>
+            </label>
+
+            {importError ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {importError}
+              </div>
+            ) : null}
+
+            {importResult ? (
+              <div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/40 p-4">
+                <div className="text-sm font-semibold text-emerald-900">
+                  Import complete from {importResult.worksheet || "worksheet"}.
+                </div>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <KpiCard label="Imported" value={importResult.importedCount || 0} color="emerald" />
+                  <KpiCard label="Created" value={importResult.createdCount || 0} color="blue" />
+                  <KpiCard label="Updated" value={importResult.updatedCount || 0} color="sky" />
+                  <KpiCard label="Skipped" value={importResult.skippedCount || 0} color="gray" />
+                </div>
+                {Array.isArray(importResult.errors) && importResult.errors.length ? (
+                  <div className="rounded-xl border border-amber-200 bg-white px-4 py-3 text-sm text-amber-900">
+                    <div className="font-semibold">Rows needing review</div>
+                    <div className="mt-2 space-y-1 text-xs text-amber-800">
+                      {importResult.errors.map((message, index) => (
+                        <div key={`${message}-${index}`}>{message}</div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap justify-end gap-3 border-t border-gray-100 pt-4">
+              <button
+                type="button"
+                onClick={closeImport}
+                className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+                disabled={importing}
+              >
+                Close
+              </button>
+              <button
+                type="submit"
+                className="rounded-xl bg-gradient-to-r from-blue-800 to-sky-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:from-blue-900 hover:to-sky-700 disabled:opacity-50"
+                disabled={importing || !importFileBase64}
+              >
+                {importing ? "Importing…" : "Import Timesheet"}
+              </button>
+            </div>
+          </form>
+        </ModalShell>
+      )}
     </div>
   );
 }
@@ -719,6 +920,12 @@ function TimeOffTab({ centerId, teachers }) {
   const [requests, setRequests] = useState([]);
   const [statusFilter, setStatusFilter] = useState("");
   const [loading, setLoading] = useState(false);
+  const [reviewTarget, setReviewTarget] = useState(null);
+  const [reviewStatus, setReviewStatus] = useState("");
+  const [reviewNotes, setReviewNotes] = useState("");
+  const [coverageName, setCoverageName] = useState("");
+  const [reviewSaving, setReviewSaving] = useState(false);
+  const [reviewError, setReviewError] = useState("");
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
@@ -736,14 +943,42 @@ function TimeOffTab({ centerId, teachers }) {
     loadRequests();
   }, [loadRequests]);
 
-  const handleAction = async (id, status) => {
+  const openReview = useCallback((request, status) => {
+    setReviewTarget(request);
+    setReviewStatus(status);
+    setReviewNotes(status === "APPROVED" ? request?.reviewNotes || "" : "");
+    setCoverageName(status === "APPROVED" ? request?.coverageName || "" : "");
+    setReviewError("");
+  }, []);
+
+  const closeReview = useCallback(() => {
+    setReviewTarget(null);
+    setReviewStatus("");
+    setReviewNotes("");
+    setCoverageName("");
+    setReviewSaving(false);
+    setReviewError("");
+  }, []);
+
+  const handleAction = async () => {
+    if (!reviewTarget?.id || !reviewStatus) return;
+    setReviewSaving(true);
+    setReviewError("");
     try {
-      await apiJson(`/api/v1/time-off/${id}`, {
+      await apiJson(`/api/v1/time-off/${reviewTarget.id}`, {
         method: "PUT",
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({
+          status: reviewStatus,
+          reviewNotes,
+          coverageName: reviewStatus === "APPROVED" ? coverageName : "",
+        }),
       });
+      closeReview();
       loadRequests();
-    } catch {}
+    } catch (error) {
+      setReviewError(error?.message || "Failed to update request");
+      setReviewSaving(false);
+    }
   };
 
   const pending = requests.filter((r) => r.status === "PENDING");
@@ -791,13 +1026,13 @@ function TimeOffTab({ centerId, teachers }) {
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => handleAction(r.id, "APPROVED")}
+                    onClick={() => openReview(r, "APPROVED")}
                     className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition"
                   >
                     ✓ Approve
                   </button>
                   <button
-                    onClick={() => handleAction(r.id, "DENIED")}
+                    onClick={() => openReview(r, "DENIED")}
                     className="rounded-lg bg-red-500 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-red-600 transition"
                   >
                     ✕ Deny
@@ -845,6 +1080,7 @@ function TimeOffTab({ centerId, teachers }) {
                   <th className="px-4 py-3">Type</th>
                   <th className="px-4 py-3">Dates / Times</th>
                   <th className="px-4 py-3">Reason</th>
+                  <th className="px-4 py-3">Coverage</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Reviewed By</th>
                 </tr>
@@ -865,6 +1101,9 @@ function TimeOffTab({ centerId, teachers }) {
                     <td className="px-4 py-3 text-gray-500">
                       {r.reason || ""}
                     </td>
+                    <td className="px-4 py-3 text-gray-500">
+                      {r.coverageName || ""}
+                    </td>
                     <td className="px-4 py-3">
                       <Badge map={TIMEOFF_STATUS_BADGE} value={r.status} />
                     </td>
@@ -878,6 +1117,86 @@ function TimeOffTab({ centerId, teachers }) {
           </div>
         )}
       </Card>
+      {reviewTarget ? (
+        <ModalShell
+          title={reviewStatus === "APPROVED" ? "Approve Time-Off Request" : "Deny Time-Off Request"}
+          subtitle={`${reviewTarget.user?.name || "Employee"} · ${fmtTimeOffRange(reviewTarget.startDate, reviewTarget.endDate)}`}
+          onClose={closeReview}
+        >
+          <div className="space-y-5">
+            {reviewError ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {reviewError}
+              </div>
+            ) : null}
+
+            {reviewStatus === "APPROVED" ? (
+              <label className="block">
+                <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                  Coverage Name
+                </div>
+                <input
+                  type="text"
+                  value={coverageName}
+                  onChange={(event) => setCoverageName(event.target.value)}
+                  list="timeoff-coverage-options"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-medium text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  placeholder="Who is covering this shift?"
+                  disabled={reviewSaving}
+                />
+                <datalist id="timeoff-coverage-options">
+                  {teachers.map((teacher) => (
+                    <option key={teacher.id} value={teacher.name || teacher.email || ""} />
+                  ))}
+                </datalist>
+              </label>
+            ) : null}
+
+            <label className="block">
+              <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                Review Notes
+              </div>
+              <textarea
+                value={reviewNotes}
+                onChange={(event) => setReviewNotes(event.target.value)}
+                rows={4}
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-medium text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                placeholder={reviewStatus === "APPROVED" ? "Optional notes for the approval" : "Optional reason for denying this request"}
+                disabled={reviewSaving}
+              />
+            </label>
+
+            <div className="flex flex-wrap justify-end gap-3 border-t border-gray-100 pt-4">
+              <button
+                type="button"
+                onClick={closeReview}
+                className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+                disabled={reviewSaving}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAction}
+                className={`rounded-xl px-5 py-2.5 text-sm font-bold text-white shadow-sm transition disabled:opacity-50 ${
+                  reviewStatus === "APPROVED"
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : "bg-red-600 hover:bg-red-700"
+                }`}
+                disabled={reviewSaving}
+              >
+                {reviewSaving
+                  ? reviewStatus === "APPROVED"
+                    ? "Approving..."
+                    : "Denying..."
+                  : reviewStatus === "APPROVED"
+                    ? "Approve Request"
+                    : "Deny Request"}
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      ) : null}
     </div>
   );
 }

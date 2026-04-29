@@ -1,11 +1,14 @@
 // @ts-check
 const { test, expect } = require("@playwright/test");
+const XLSX = require("xlsx");
 const { loginAsAdmin, loginAsTeacher } = require("../helpers/auth");
 const { apiGet, apiPost, apiPut } = require("../helpers/api");
 
 test.describe("Staff Management API @api", () => {
   let centerId;
   let teacherUserId;
+  let teacherUserName;
+  let teacherUserEmail;
 
   test.beforeAll(async ({ request }) => {
     const cookies = await loginAsAdmin(request);
@@ -23,6 +26,8 @@ test.describe("Staff Management API @api", () => {
       if (usersRes.status() === 200) {
         const users = await usersRes.json();
         teacherUserId = Array.isArray(users) && users.length > 0 ? users[0].id : null;
+        teacherUserName = Array.isArray(users) && users.length > 0 ? users[0].name : null;
+        teacherUserEmail = Array.isArray(users) && users.length > 0 ? users[0].email : null;
       }
     }
   });
@@ -69,6 +74,47 @@ test.describe("Staff Management API @api", () => {
         cookies,
       );
       expect([200, 201]).toContain(res.status());
+    });
+
+    test("POST /api/v1/staff-attendance/import imports a workbook", async ({ request }) => {
+      if (!centerId || (!teacherUserEmail && !teacherUserName)) test.skip();
+      const cookies = await loginAsAdmin(request);
+      const today = new Date().toISOString().split("T")[0];
+
+      const workbook = XLSX.utils.book_new();
+      const sheet = XLSX.utils.json_to_sheet([
+        {
+          "Employee Email": teacherUserEmail || "",
+          "Employee Name": teacherUserName || "",
+          Date: today,
+          "Clock In": "08:15",
+          "Clock Out": "17:05",
+          Status: "PRESENT",
+          "Late Minutes": 0,
+          Notes: "Imported by API test",
+        },
+      ]);
+      XLSX.utils.book_append_sheet(workbook, sheet, "Timesheet");
+
+      const fileBase64 = XLSX.write(workbook, {
+        type: "buffer",
+        bookType: "xlsx",
+      }).toString("base64");
+
+      const res = await apiPost(
+        request,
+        "/api/v1/staff-attendance/import",
+        {
+          centerId,
+          fileBase64,
+          overwriteExisting: true,
+        },
+        cookies,
+      );
+      expect(res.status()).toBe(200);
+      const data = await res.json();
+      expect(data.importedCount).toBeGreaterThan(0);
+      expect(data.errorCount).toBe(0);
     });
 
     test("GET /api/v1/staff-attendance/summary returns monthly summary", async ({ request }) => {
@@ -195,12 +241,17 @@ test.describe("Staff Management API @api", () => {
       const approveRes = await apiPut(
         request,
         `/api/v1/time-off/${created.id}`,
-        { status: "APPROVED" },
+        {
+          status: "APPROVED",
+          coverageName: "QA Coverage Staff",
+          reviewNotes: "Approved during API coverage test",
+        },
         adminCookies,
       );
       expect(approveRes.status()).toBe(200);
       const approved = await approveRes.json();
       expect(approved.status).toBe("APPROVED");
+      expect(approved.coverageName).toBe("QA Coverage Staff");
     });
   });
 

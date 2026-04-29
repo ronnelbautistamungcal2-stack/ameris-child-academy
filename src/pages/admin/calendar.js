@@ -43,6 +43,37 @@ const FILTER_ITEMS = [
 
 function toDateInput(d) { return d ? new Date(d).toISOString().split("T")[0] : ""; }
 
+function formatDateTimeRange(start, end) {
+  if (!start || !end) return "";
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return "";
+
+  const sameDay =
+    startDate.getFullYear() === endDate.getFullYear() &&
+    startDate.getMonth() === endDate.getMonth() &&
+    startDate.getDate() === endDate.getDate();
+
+  if (sameDay) {
+    return `${startDate.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    })} - ${endDate.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    })}`;
+  }
+
+  const dateTimeOptions = {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  };
+
+  return `${startDate.toLocaleString(undefined, dateTimeOptions)} - ${endDate.toLocaleString(undefined, dateTimeOptions)}`;
+}
+
 function hoursBetween(start, end) {
   if (!start || !end) return 0;
   const startDate = new Date(start);
@@ -56,7 +87,6 @@ const LEGEND = [
   { label: "Shifts", cls: "bg-blue-100" },
   { label: "PTO", cls: "bg-emerald-100" },
   { label: "Sick", cls: "bg-red-100" },
-  { label: "Pending", cls: "bg-amber-200" },
 ];
 
 export default function CalendarPage() {
@@ -69,7 +99,7 @@ export default function CalendarPage() {
   const [staffSummary, setStaffSummary] = useState(null);
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
-  const [calData, setCalData] = useState({ events: [], shifts: [], timeOff: [] });
+  const [calData, setCalData] = useState({ events: [], shifts: [], timeOff: [], pendingTimeOff: [] });
   const [filters, setFilters] = useState({ events: true, shifts: true, timeOff: true });
   const [selectedDay, setSelectedDay] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -104,7 +134,7 @@ export default function CalendarPage() {
     if (!centerId) return;
     try {
       const from = new Date(calYear, calMonth, 1).toISOString();
-      const to = new Date(calYear, calMonth + 1, 0).toISOString();
+      const to = new Date(calYear, calMonth + 1, 0, 23, 59, 59, 999).toISOString();
       const data = await apiJson(`/api/v1/calendar?centerId=${centerId}&from=${from}&to=${to}`);
       setCalData(data);
     } catch (err) { setError(err.message || "Failed to load calendar data"); }
@@ -280,7 +310,7 @@ export default function CalendarPage() {
     events: (calData.events || []).length,
     shifts: (calData.shifts || []).length,
     timeOff: (calData.timeOff || []).length,
-    pendingTimeOff: (calData.timeOff || []).filter(t => t.status === "PENDING").length,
+    pendingTimeOff: (calData.pendingTimeOff || []).length,
   };
 
   function jumpToToday() {
@@ -943,6 +973,9 @@ export default function CalendarPage() {
 
                   {dayItems.map(item => {
                     const badge = SOURCE_BADGE[item._source] || SOURCE_BADGE.event;
+                    const timeRange = item._source === "timeoff"
+                      ? formatDateTimeRange(item._raw?.startDate, item._raw?.endDate)
+                      : "";
                     return (
                       <div key={item.id} style={{
                         padding: "12px 14px", borderRadius: 10, marginBottom: 8,
@@ -1009,9 +1042,19 @@ export default function CalendarPage() {
                             <span style={{ fontWeight: 600 }}>Position:</span> {item._raw.position}{item._raw.notes ? ` \u2022 ${item._raw.notes}` : ""}
                           </div>
                         )}
+                        {item._source === "timeoff" && timeRange && (
+                          <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginTop: 6, display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ fontWeight: 600 }}>Time:</span> {timeRange}
+                          </div>
+                        )}
                         {item._source === "timeoff" && item._raw.reason && (
                           <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginTop: 6, lineHeight: 1.4 }}>
                             {item._raw.reason}
+                          </div>
+                        )}
+                        {item._source === "timeoff" && item._raw.coverageName && (
+                          <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginTop: 6, display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ fontWeight: 600 }}>Coverage:</span> {item._raw.coverageName}
                           </div>
                         )}
                       </div>

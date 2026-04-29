@@ -91,6 +91,50 @@ const CHILD_DOCUMENT_TYPES = [
   { field: "otherDocuments", label: "Other", setter: "setOtherDocuments", filesSetter: "setOtherFiles" },
 ];
 
+function createDocumentExpirations(overrides = {}) {
+  return {
+    healthAssessmentDocuments: "",
+    enrollmentDocuments: "",
+    iefDocuments: "",
+    immunizationDocuments: "",
+    infantDocuments: "",
+    otherDocuments: "",
+    ...overrides,
+  };
+}
+
+function createDocumentExpirationTouched(overrides = {}) {
+  return {
+    healthAssessmentDocuments: false,
+    enrollmentDocuments: false,
+    iefDocuments: false,
+    immunizationDocuments: false,
+    infantDocuments: false,
+    otherDocuments: false,
+    ...overrides,
+  };
+}
+
+function toDocumentDateInput(value) {
+  if (!value) return "";
+  const raw = String(value);
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match) return match[1];
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function getDocumentExpirationInputValue(docs) {
+  const firstWithExpiration = (Array.isArray(docs) ? docs : []).find((doc) => doc?.expirationDate);
+  return toDocumentDateInput(firstWithExpiration?.expirationDate);
+}
+
 function formatDateTime(value) {
   if (!value) return "—";
   const date = new Date(value);
@@ -160,14 +204,10 @@ export default function AdminChildren() {
   const [immunizationFiles, setImmunizationFiles] = useState([]);
   const [infantFiles, setInfantFiles] = useState([]);
   const [otherFiles, setOtherFiles] = useState([]);
-  const [documentExpirations, setDocumentExpirations] = useState({
-    healthAssessmentDocuments: "",
-    enrollmentDocuments: "",
-    iefDocuments: "",
-    immunizationDocuments: "",
-    infantDocuments: "",
-    otherDocuments: "",
-  });
+  const [documentExpirations, setDocumentExpirations] = useState(createDocumentExpirations());
+  const [documentExpirationTouched, setDocumentExpirationTouched] = useState(
+    createDocumentExpirationTouched(),
+  );
   const [docReportType, setDocReportType] = useState("");
   const [docReportExpirationFrom, setDocReportExpirationFrom] = useState("");
   const [docReportExpirationTo, setDocReportExpirationTo] = useState("");
@@ -186,6 +226,7 @@ export default function AdminChildren() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileTransferClassRoomId, setProfileTransferClassRoomId] = useState("");
   const [transferSaving, setTransferSaving] = useState(false);
+  const [attendanceSaving, setAttendanceSaving] = useState(false);
 
   async function refresh() {
     setError("");
@@ -384,14 +425,8 @@ export default function AdminChildren() {
     setImmunizationFiles([]);
     setInfantFiles([]);
     setOtherFiles([]);
-    setDocumentExpirations({
-      healthAssessmentDocuments: "",
-      enrollmentDocuments: "",
-      iefDocuments: "",
-      immunizationDocuments: "",
-      infantDocuments: "",
-      otherDocuments: "",
-    });
+    setDocumentExpirations(createDocumentExpirations());
+    setDocumentExpirationTouched(createDocumentExpirationTouched());
   }, []);
 
   const startEdit = useCallback((child) => {
@@ -418,32 +453,54 @@ export default function AdminChildren() {
     );
     setFeedingBottleNotes(feeding?.bottleNotes || "");
 
-    setHealthAssessmentDocuments(
-      Array.isArray(child.healthAssessmentDocuments)
-        ? child.healthAssessmentDocuments
-        : [],
-    );
-    setEnrollmentDocuments(
-      Array.isArray(child.enrollmentDocuments) ? child.enrollmentDocuments : [],
-    );
-    setIefDocuments(Array.isArray(child.iefDocuments) ? child.iefDocuments : []);
-    setImmunizationDocuments(Array.isArray(child.immunizationDocuments) ? child.immunizationDocuments : []);
-    setInfantDocuments(Array.isArray(child.infantDocuments) ? child.infantDocuments : []);
-    setOtherDocuments(Array.isArray(child.otherDocuments) ? child.otherDocuments : []);
+    const nextHealthAssessmentDocuments = Array.isArray(child.healthAssessmentDocuments)
+      ? child.healthAssessmentDocuments
+      : [];
+    const nextEnrollmentDocuments = Array.isArray(child.enrollmentDocuments)
+      ? child.enrollmentDocuments
+      : [];
+    const nextIefDocuments = Array.isArray(child.iefDocuments)
+      ? child.iefDocuments
+      : [];
+    const nextImmunizationDocuments = Array.isArray(child.immunizationDocuments)
+      ? child.immunizationDocuments
+      : [];
+    const nextInfantDocuments = Array.isArray(child.infantDocuments)
+      ? child.infantDocuments
+      : [];
+    const nextOtherDocuments = Array.isArray(child.otherDocuments)
+      ? child.otherDocuments
+      : [];
+
+    setHealthAssessmentDocuments(nextHealthAssessmentDocuments);
+    setEnrollmentDocuments(nextEnrollmentDocuments);
+    setIefDocuments(nextIefDocuments);
+    setImmunizationDocuments(nextImmunizationDocuments);
+    setInfantDocuments(nextInfantDocuments);
+    setOtherDocuments(nextOtherDocuments);
     setHealthAssessmentFiles([]);
     setEnrollmentFiles([]);
     setIefFiles([]);
     setImmunizationFiles([]);
     setInfantFiles([]);
     setOtherFiles([]);
-    setDocumentExpirations({
-      healthAssessmentDocuments: "",
-      enrollmentDocuments: "",
-      iefDocuments: "",
-      immunizationDocuments: "",
-      infantDocuments: "",
-      otherDocuments: "",
-    });
+    setDocumentExpirations(
+      createDocumentExpirations({
+        healthAssessmentDocuments: getDocumentExpirationInputValue(
+          nextHealthAssessmentDocuments,
+        ),
+        enrollmentDocuments: getDocumentExpirationInputValue(
+          nextEnrollmentDocuments,
+        ),
+        iefDocuments: getDocumentExpirationInputValue(nextIefDocuments),
+        immunizationDocuments: getDocumentExpirationInputValue(
+          nextImmunizationDocuments,
+        ),
+        infantDocuments: getDocumentExpirationInputValue(nextInfantDocuments),
+        otherDocuments: getDocumentExpirationInputValue(nextOtherDocuments),
+      }),
+    );
+    setDocumentExpirationTouched(createDocumentExpirationTouched());
   }, []);
 
   const openCreate = useCallback(() => {
@@ -563,9 +620,29 @@ export default function AdminChildren() {
     const expirationDate = documentExpirations[field] || null;
     return (Array.isArray(docs) ? docs : []).map((doc) => ({
       ...doc,
-      documentType: type?.label || field,
+      documentType: doc?.documentType || type?.label || field,
       expirationDate,
     }));
+  }
+
+  function buildDocumentPayload(existingDocs, uploadedDocs, field) {
+    const persistedDocs = documentExpirationTouched[field]
+      ? withDocumentMeta(existingDocs, field)
+      : (Array.isArray(existingDocs) ? existingDocs : []).map((doc) => {
+          const type = CHILD_DOCUMENT_TYPES.find((item) => item.field === field);
+          return {
+            ...doc,
+            documentType: doc?.documentType || type?.label || field,
+            expirationDate: doc?.expirationDate || null,
+          };
+        });
+
+    return [...persistedDocs, ...withDocumentMeta(uploadedDocs, field)];
+  }
+
+  function updateDocumentExpiration(field, value) {
+    setDocumentExpirations((cur) => ({ ...cur, [field]: value }));
+    setDocumentExpirationTouched((cur) => ({ ...cur, [field]: true }));
   }
 
   function planEndDate(plan) {
@@ -652,12 +729,12 @@ export default function AdminChildren() {
     setError("");
     try {
       const bottlesPerDay = parseOptionalWholeNumber(feedingBottlesPerDay);
-      const newHealthDocs = withDocumentMeta(await uploadFiles(healthAssessmentFiles), "healthAssessmentDocuments");
-      const newEnrollDocs = withDocumentMeta(await uploadFiles(enrollmentFiles), "enrollmentDocuments");
-      const newIefDocs = withDocumentMeta(await uploadFiles(iefFiles), "iefDocuments");
-      const newImmunizationDocs = withDocumentMeta(await uploadFiles(immunizationFiles), "immunizationDocuments");
-      const newInfantDocs = withDocumentMeta(await uploadFiles(infantFiles), "infantDocuments");
-      const newOtherDocs = withDocumentMeta(await uploadFiles(otherFiles), "otherDocuments");
+      const newHealthDocs = await uploadFiles(healthAssessmentFiles);
+      const newEnrollDocs = await uploadFiles(enrollmentFiles);
+      const newIefDocs = await uploadFiles(iefFiles);
+      const newImmunizationDocs = await uploadFiles(immunizationFiles);
+      const newInfantDocs = await uploadFiles(infantFiles);
+      const newOtherDocs = await uploadFiles(otherFiles);
       await apiJson("/api/v1/children", {
         method: "POST",
         body: JSON.stringify({
@@ -672,20 +749,36 @@ export default function AdminChildren() {
           allergies: allergies || null,
           enrollmentStartDate: enrollmentStartDate || null,
           enrollmentEndDate: enrollmentEndDate || null,
-          healthAssessmentDocuments: [
-            ...(Array.isArray(healthAssessmentDocuments)
-              ? healthAssessmentDocuments
-              : []),
-            ...newHealthDocs,
-          ],
-          enrollmentDocuments: [
-            ...(Array.isArray(enrollmentDocuments) ? enrollmentDocuments : []),
-            ...newEnrollDocs,
-          ],
-          iefDocuments: [...(Array.isArray(iefDocuments) ? iefDocuments : []), ...newIefDocs],
-          immunizationDocuments: [...(Array.isArray(immunizationDocuments) ? immunizationDocuments : []), ...newImmunizationDocs],
-          infantDocuments: [...(Array.isArray(infantDocuments) ? infantDocuments : []), ...newInfantDocs],
-          otherDocuments: [...(Array.isArray(otherDocuments) ? otherDocuments : []), ...newOtherDocs],
+          healthAssessmentDocuments: buildDocumentPayload(
+            healthAssessmentDocuments,
+            newHealthDocs,
+            "healthAssessmentDocuments",
+          ),
+          enrollmentDocuments: buildDocumentPayload(
+            enrollmentDocuments,
+            newEnrollDocs,
+            "enrollmentDocuments",
+          ),
+          iefDocuments: buildDocumentPayload(
+            iefDocuments,
+            newIefDocs,
+            "iefDocuments",
+          ),
+          immunizationDocuments: buildDocumentPayload(
+            immunizationDocuments,
+            newImmunizationDocs,
+            "immunizationDocuments",
+          ),
+          infantDocuments: buildDocumentPayload(
+            infantDocuments,
+            newInfantDocs,
+            "infantDocuments",
+          ),
+          otherDocuments: buildDocumentPayload(
+            otherDocuments,
+            newOtherDocs,
+            "otherDocuments",
+          ),
           feedingPlan: isInfant
             ? {
                 foods: feedingFoods || null,
@@ -711,12 +804,12 @@ export default function AdminChildren() {
     setError("");
     try {
       const bottlesPerDay = parseOptionalWholeNumber(feedingBottlesPerDay);
-      const newHealthDocs = withDocumentMeta(await uploadFiles(healthAssessmentFiles), "healthAssessmentDocuments");
-      const newEnrollDocs = withDocumentMeta(await uploadFiles(enrollmentFiles), "enrollmentDocuments");
-      const newIefDocs = withDocumentMeta(await uploadFiles(iefFiles), "iefDocuments");
-      const newImmunizationDocs = withDocumentMeta(await uploadFiles(immunizationFiles), "immunizationDocuments");
-      const newInfantDocs = withDocumentMeta(await uploadFiles(infantFiles), "infantDocuments");
-      const newOtherDocs = withDocumentMeta(await uploadFiles(otherFiles), "otherDocuments");
+      const newHealthDocs = await uploadFiles(healthAssessmentFiles);
+      const newEnrollDocs = await uploadFiles(enrollmentFiles);
+      const newIefDocs = await uploadFiles(iefFiles);
+      const newImmunizationDocs = await uploadFiles(immunizationFiles);
+      const newInfantDocs = await uploadFiles(infantFiles);
+      const newOtherDocs = await uploadFiles(otherFiles);
       await apiJson(`/api/v1/children/${editing.id}`, {
         method: "PUT",
         body: JSON.stringify({
@@ -730,20 +823,36 @@ export default function AdminChildren() {
           allergies: allergies || null,
           enrollmentStartDate: enrollmentStartDate || null,
           enrollmentEndDate: enrollmentEndDate || null,
-          healthAssessmentDocuments: [
-            ...(Array.isArray(healthAssessmentDocuments)
-              ? healthAssessmentDocuments
-              : []),
-            ...newHealthDocs,
-          ],
-          enrollmentDocuments: [
-            ...(Array.isArray(enrollmentDocuments) ? enrollmentDocuments : []),
-            ...newEnrollDocs,
-          ],
-          iefDocuments: [...(Array.isArray(iefDocuments) ? iefDocuments : []), ...newIefDocs],
-          immunizationDocuments: [...(Array.isArray(immunizationDocuments) ? immunizationDocuments : []), ...newImmunizationDocs],
-          infantDocuments: [...(Array.isArray(infantDocuments) ? infantDocuments : []), ...newInfantDocs],
-          otherDocuments: [...(Array.isArray(otherDocuments) ? otherDocuments : []), ...newOtherDocs],
+          healthAssessmentDocuments: buildDocumentPayload(
+            healthAssessmentDocuments,
+            newHealthDocs,
+            "healthAssessmentDocuments",
+          ),
+          enrollmentDocuments: buildDocumentPayload(
+            enrollmentDocuments,
+            newEnrollDocs,
+            "enrollmentDocuments",
+          ),
+          iefDocuments: buildDocumentPayload(
+            iefDocuments,
+            newIefDocs,
+            "iefDocuments",
+          ),
+          immunizationDocuments: buildDocumentPayload(
+            immunizationDocuments,
+            newImmunizationDocs,
+            "immunizationDocuments",
+          ),
+          infantDocuments: buildDocumentPayload(
+            infantDocuments,
+            newInfantDocs,
+            "infantDocuments",
+          ),
+          otherDocuments: buildDocumentPayload(
+            otherDocuments,
+            newOtherDocs,
+            "otherDocuments",
+          ),
           feedingPlan: isInfant
             ? {
                 foods: feedingFoods || null,
@@ -795,6 +904,15 @@ export default function AdminChildren() {
     setProfileLoading(false);
     setProfileTransferClassRoomId("");
     setTransferSaving(false);
+    setAttendanceSaving(false);
+  }
+
+  async function reloadProfileChild(childId) {
+    if (!childId) return null;
+    const updated = await apiJson(`/api/v1/children/${childId}`);
+    setProfileChild(updated || null);
+    setProfileTransferClassRoomId(getEffectiveClassRoomId(updated || null));
+    return updated;
   }
 
   async function saveProfileTransfer(targetClassRoomId = profileTransferClassRoomId) {
@@ -810,14 +928,44 @@ export default function AdminChildren() {
         }),
       });
       await refresh();
-      const updated = await apiJson(`/api/v1/children/${profileChild.id}`);
-      setProfileChild(updated || null);
-      setProfileTransferClassRoomId(getEffectiveClassRoomId(updated || null));
+      await reloadProfileChild(profileChild.id);
       toast.success("Temporary classroom updated for today.");
     } catch (e) {
       setError(e.message || "Failed to update today's classroom");
     } finally {
       setTransferSaving(false);
+    }
+  }
+
+  async function updateProfileAttendance(action) {
+    if (!profileChild) return;
+    setAttendanceSaving(true);
+    setError("");
+    try {
+      const endpoint =
+        action === "CHECK_IN"
+          ? "/api/v1/attendance/check-in"
+          : "/api/v1/attendance/check-out";
+      await apiJson(endpoint, {
+        method: "POST",
+        body: JSON.stringify({ childId: profileChild.id }),
+      });
+      await refresh();
+      await reloadProfileChild(profileChild.id);
+      toast.success(
+        action === "CHECK_IN"
+          ? "Child checked in successfully."
+          : "Child checked out successfully.",
+      );
+    } catch (e) {
+      setError(
+        e.message ||
+          (action === "CHECK_IN"
+            ? "Failed to check child in"
+            : "Failed to check child out"),
+      );
+    } finally {
+      setAttendanceSaving(false);
     }
   }
 
@@ -1225,6 +1373,43 @@ export default function AdminChildren() {
               </div>
 
               <div style={infoBoxStyle}>
+                <SectionHeader icon="🕒" title="Attendance Today" />
+                <div style={{ display: "grid", gap: 10 }}>
+                  <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>
+                    Status: {isChildCheckedInToday(profileChild) ? "Checked in" : "Not checked in"}
+                  </div>
+                  {profileChild.todayAttendance?.checkedInAt ? (
+                    <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>
+                      Checked in at: {formatDateTime(profileChild.todayAttendance.checkedInAt)}
+                    </div>
+                  ) : null}
+                  {profileChild.todayAttendance?.checkedOutAt ? (
+                    <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>
+                      Checked out at: {formatDateTime(profileChild.todayAttendance.checkedOutAt)}
+                    </div>
+                  ) : null}
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      style={secondaryButtonStyle}
+                      onClick={() => updateProfileAttendance("CHECK_IN")}
+                      disabled={isChildCheckedInToday(profileChild) || attendanceSaving || transferSaving}
+                    >
+                      {attendanceSaving && !isChildCheckedInToday(profileChild) ? "Saving..." : "Check In"}
+                    </button>
+                    <button
+                      type="button"
+                      style={secondaryButtonStyle}
+                      onClick={() => updateProfileAttendance("CHECK_OUT")}
+                      disabled={!isChildCheckedInToday(profileChild) || attendanceSaving || transferSaving}
+                    >
+                      {attendanceSaving && isChildCheckedInToday(profileChild) ? "Saving..." : "Check Out"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div style={infoBoxStyle}>
                 <SectionHeader icon="🏫" title="Temporary Classroom Transfer" />
                 <div style={{ display: "grid", gap: 10 }}>
                   <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>
@@ -1621,7 +1806,7 @@ export default function AdminChildren() {
                 <input
                   type="date"
                   value={documentExpirations.healthAssessmentDocuments}
-                  onChange={(e) => setDocumentExpirations((cur) => ({ ...cur, healthAssessmentDocuments: e.target.value }))}
+                  onChange={(e) => updateDocumentExpiration("healthAssessmentDocuments", e.target.value)}
                   style={{ ...inputStyle, marginTop: 6 }}
                   title="Expiration date"
                 />
@@ -1654,7 +1839,7 @@ export default function AdminChildren() {
                 <input
                   type="date"
                   value={documentExpirations.enrollmentDocuments}
-                  onChange={(e) => setDocumentExpirations((cur) => ({ ...cur, enrollmentDocuments: e.target.value }))}
+                  onChange={(e) => updateDocumentExpiration("enrollmentDocuments", e.target.value)}
                   style={{ ...inputStyle, marginTop: 6 }}
                   title="Expiration date"
                 />
@@ -1680,7 +1865,7 @@ export default function AdminChildren() {
                 docs={iefDocuments}
                 onRemove={(idx) => setIefDocuments((cur) => cur.filter((_, i) => i !== idx))}
                 expirationValue={documentExpirations.iefDocuments}
-                onExpirationChange={(value) => setDocumentExpirations((cur) => ({ ...cur, iefDocuments: value }))}
+                onExpirationChange={(value) => updateDocumentExpiration("iefDocuments", value)}
               />
               <DocumentUploadField
                 label="Immunizations"
@@ -1688,7 +1873,9 @@ export default function AdminChildren() {
                 docs={immunizationDocuments}
                 onRemove={(idx) => setImmunizationDocuments((cur) => cur.filter((_, i) => i !== idx))}
                 expirationValue={documentExpirations.immunizationDocuments}
-                onExpirationChange={(value) => setDocumentExpirations((cur) => ({ ...cur, immunizationDocuments: value }))}
+                onExpirationChange={(value) =>
+                  updateDocumentExpiration("immunizationDocuments", value)
+                }
               />
               <DocumentUploadField
                 label="Infant Documents"
@@ -1696,7 +1883,7 @@ export default function AdminChildren() {
                 docs={infantDocuments}
                 onRemove={(idx) => setInfantDocuments((cur) => cur.filter((_, i) => i !== idx))}
                 expirationValue={documentExpirations.infantDocuments}
-                onExpirationChange={(value) => setDocumentExpirations((cur) => ({ ...cur, infantDocuments: value }))}
+                onExpirationChange={(value) => updateDocumentExpiration("infantDocuments", value)}
               />
               <DocumentUploadField
                 label="Other"
@@ -1704,7 +1891,7 @@ export default function AdminChildren() {
                 docs={otherDocuments}
                 onRemove={(idx) => setOtherDocuments((cur) => cur.filter((_, i) => i !== idx))}
                 expirationValue={documentExpirations.otherDocuments}
-                onExpirationChange={(value) => setDocumentExpirations((cur) => ({ ...cur, otherDocuments: value }))}
+                onExpirationChange={(value) => updateDocumentExpiration("otherDocuments", value)}
               />
             </div>
 

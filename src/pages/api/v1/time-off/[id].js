@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     const request = await prisma.timeOffRequest.findUnique({ where: { id } });
     if (!request) return res.status(404).json({ error: "Request not found" });
 
-    const { status, reviewNotes } = req.body || {};
+    const { status, reviewNotes, coverageName } = req.body || {};
 
     // Only admin can approve/deny
     if (["APPROVED", "DENIED"].includes(status) && session.user.role !== "ADMIN") {
@@ -26,6 +26,7 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
+    const normalizedCoverageName = String(coverageName || "").trim();
     const data = {};
     if (status) data.status = status;
     if (["APPROVED", "DENIED"].includes(status)) {
@@ -33,6 +34,13 @@ export default async function handler(req, res) {
       data.reviewedAt = new Date();
     }
     if (reviewNotes !== undefined) data.reviewNotes = reviewNotes;
+    if (status === "APPROVED") {
+      data.coverageName = normalizedCoverageName || null;
+    } else if (status === "DENIED" || status === "CANCELLED") {
+      data.coverageName = null;
+    } else if (coverageName !== undefined && request.status === "APPROVED") {
+      data.coverageName = normalizedCoverageName || null;
+    }
 
     const updated = await prisma.timeOffRequest.update({
       where: { id },

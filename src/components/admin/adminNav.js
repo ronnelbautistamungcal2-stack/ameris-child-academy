@@ -48,7 +48,7 @@ export const ADMIN_NAV_ITEMS = [
       { href: "/admin/curriculum", label: "Curriculum Manager" },
       { href: "/admin/progress", label: "Progression Tracking" },
       { href: "/admin/checklists", label: "Checklists" },
-      { href: "/admin/activity-overrides", label: "Activity Overrides" },
+      { href: "/admin/activity-overrides", label: "Log Activity" },
       { href: "/admin/supply-lists", label: "Supply Lists" },
       { href: "/admin/progress-archive", label: "Progress Archive" },
       { href: "/admin/data-archive", label: "Data Archive" },

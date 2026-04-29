@@ -14,7 +14,6 @@ const LEGEND = [
   { label: "My Shifts", cls: "bg-blue-100" },
   { label: "PTO", cls: "bg-emerald-100" },
   { label: "Sick", cls: "bg-red-100" },
-  { label: "Pending", cls: "bg-amber-200" },
 ];
 
 export default function TeacherCalendarPage() {
@@ -44,7 +43,7 @@ export default function TeacherCalendarPage() {
     if (!centerId) return;
     try {
       const from = new Date(calYear, calMonth, 1).toISOString();
-      const to = new Date(calYear, calMonth + 1, 0).toISOString();
+      const to = new Date(calYear, calMonth + 1, 0, 23, 59, 59, 999).toISOString();
       const data = await apiJson(`/api/v1/calendar?centerId=${centerId}&from=${from}&to=${to}`);
       setCalData(data);
     } catch (err) { setError(err.message || "Failed to load calendar data"); }

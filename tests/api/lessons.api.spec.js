@@ -83,6 +83,32 @@ test.describe("Lessons API @api", () => {
     createdLessonId = data.id;
   });
 
+  test("POST /api/v1/curriculum/records creates a manual curriculum step", async ({ request }) => {
+    if (!centerId) test.skip();
+    const cookies = await loginAsAdmin(request);
+    const suffix = Date.now();
+    const res = await apiPost(
+      request,
+      "/api/v1/curriculum/records",
+      {
+        centerId,
+        lessonTitle: `QA Manual Curriculum ${suffix}`,
+        childAge: "3-5",
+        term: "Term 1",
+        category: "Language",
+        subject: "Phonics",
+        reference: `QA-${suffix}`,
+        progressionStep: `Step ${suffix}`,
+        testingQuestion: "Can the child identify the sound?",
+      },
+      cookies,
+    );
+    expect(res.status()).toBe(201);
+    const data = await res.json();
+    expect(data.goal.title).toBe(`Step ${suffix}`);
+    expect(data.lesson.title).toBe(`QA Manual Curriculum ${suffix}`);
+  });
+
   test("GET /api/v1/lessons/:id returns 200 for valid ID", async ({ request }) => {
     if (!createdLessonId) test.skip();
     const cookies = await loginAsAdmin(request);

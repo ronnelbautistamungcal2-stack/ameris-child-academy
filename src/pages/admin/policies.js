@@ -4,11 +4,12 @@ import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const ROLES = ["ADMIN", "TEACHER", "PARENT", "COACH", "SUBSCRIBER"];
+const ROLES = ["ADMIN", "TEACHER", "OTHER_STAFF", "PARENT", "COACH", "SUBSCRIBER"];
 
 const ROLE_COLORS = {
   ADMIN: { bg: "#DBEAFE", color: "#1E40AF", border: "#93C5FD" },
   TEACHER: { bg: "#D1FAE5", color: "#065F46", border: "#A7F3D0" },
+  OTHER_STAFF: { bg: "#ECFEFF", color: "#0E7490", border: "#A5F3FC" },
   PARENT: { bg: "#FEF3C7", color: "#92400E", border: "#FDE68A" },
   COACH: { bg: "#EDE9FE", color: "#5B21B6", border: "#C4B5FD" },
   SUBSCRIBER: { bg: "#FCE7F3", color: "#9D174D", border: "#F9A8D4" },

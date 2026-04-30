@@ -3,7 +3,7 @@ import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { hasEmployeeRole, normalizeRoles, primaryRoleFromRoles, userRoles } from "@/lib/roles";
 
-const STAFF_ROLES = ["ADMIN", "TEACHER", "COACH"];
+const STAFF_ROLES = ["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"];
 
 function parseOptionalDate(value) {
   if (value === null || value === undefined || value === "") return null;

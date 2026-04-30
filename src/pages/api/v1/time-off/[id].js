@@ -1,10 +1,14 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { isEmployeeRole, isNonAdminEmployeeRole } from "@/lib/roles";
 
 export default async function handler(req, res) {
   try {
     const session = await getSession(req, res);
     if (!session) return res.status(401).json({ error: "Unauthorized" });
+    if (!isEmployeeRole(session.user.role)) {
+      return res.status(403).json({ error: "Only employees can update time off" });
+    }
     if (req.method !== "PUT") {
       res.setHeader("Allow", ["PUT"]);
       return res.status(405).end();
@@ -21,8 +25,11 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Only admins can approve or deny requests" });
     }
 
-    // Teacher can only cancel their own
-    if (status === "CANCELLED" && session.user.role === "TEACHER" && request.userId !== session.user.id) {
+    if (
+      status === "CANCELLED" &&
+      isNonAdminEmployeeRole(session.user.role) &&
+      request.userId !== session.user.id
+    ) {
       return res.status(403).json({ error: "Forbidden" });
     }
 

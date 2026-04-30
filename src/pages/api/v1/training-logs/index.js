@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import {
   createApiHandler,
@@ -12,10 +12,14 @@ import {
   requiredString,
   optionalNumber,
 } from "@/lib/validation";
+import { isEmployeeRole, isNonAdminEmployeeRole } from "@/lib/roles";
 
 export default createApiHandler(async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) throw unauthorized();
+  if (!isEmployeeRole(session.user.role)) {
+    throw forbidden("Only employees can access training logs");
+  }
 
   if (req.method === "GET") {
     const centerId = optionalString(req.query, "centerId");
@@ -24,11 +28,16 @@ export default createApiHandler(async function handler(req, res) {
     const from = optionalDate(req.query, "from");
     const to = optionalDate(req.query, "to");
 
+    if (centerId && session.user.role !== "ADMIN") {
+      const allowed = await hasAccessToCenter(session.user.id, centerId);
+      if (!allowed) throw forbidden();
+    }
+
     const where = {};
     if (centerId) where.centerId = centerId;
     if (category) where.category = category;
 
-    if (session.user.role === "TEACHER") {
+    if (isNonAdminEmployeeRole(session.user.role)) {
       where.userId = session.user.id;
     } else if (userId) {
       where.userId = userId;
@@ -54,12 +63,12 @@ export default createApiHandler(async function handler(req, res) {
     return res.status(200).json(logs);
   }
 
-  if (!["ADMIN", "TEACHER", "COACH"].includes(session.user.role)) {
-    throw forbidden("Only admins, teachers, and coaches can add training logs");
-  }
-
   const body = ensureObject(req.body || {});
   const centerId = requiredString(body, "centerId");
+  if (session.user.role !== "ADMIN") {
+    const allowed = await hasAccessToCenter(session.user.id, centerId);
+    if (!allowed) throw forbidden();
+  }
   const topic = requiredString(body, "topic");
   const date = optionalDate(body, "date");
   const hours = optionalNumber(body, "hours", { min: 0.25 });
@@ -85,7 +94,7 @@ export default createApiHandler(async function handler(req, res) {
     .filter(Boolean);
   const fallbackUserId = optionalString(body, "userId", { nullable: true });
   const targetUserIds =
-    session.user.role === "TEACHER"
+    isNonAdminEmployeeRole(session.user.role)
       ? [session.user.id]
       : normalizedUserIds.length
         ? [...new Set(normalizedUserIds)]

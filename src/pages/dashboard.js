@@ -7,6 +7,7 @@ import { apiJson } from "@/lib/api";
 import { buildParentMessageComposeHref } from "@/lib/parentSupport";
 import AppShell from "@/components/shell/AppShell";
 import { ADMIN_NAV_ITEMS } from "@/components/admin/adminNav";
+import { STAFF_NAV_ITEMS } from "@/components/staff/staffNav";
 import { TEACHER_NAV_ITEMS } from "@/components/teacher/teacherNav";
 import { PARENT_NAV_ITEMS } from "@/components/parent/parentNav";
 import { COACH_NAV_ITEMS } from "@/components/coach/coachNav";
@@ -47,6 +48,9 @@ export default function Dashboard() {
     if (session?.user?.role === "TEACHER") {
       router.replace("/teacher/dashboard");
     }
+    if (session?.user?.role === "OTHER_STAFF") {
+      router.replace("/staff/dashboard");
+    }
     if (session?.user?.role === "COACH") {
       router.replace("/coach/dashboard");
     }
@@ -55,6 +59,7 @@ export default function Dashboard() {
   const nav = useMemo(() => {
     if (role === "ADMIN") return ADMIN_NAV_ITEMS;
     if (role === "TEACHER") return TEACHER_NAV_ITEMS;
+    if (role === "OTHER_STAFF") return STAFF_NAV_ITEMS;
     if (role === "COACH") return COACH_NAV_ITEMS;
     if (role === "SUBSCRIBER") return SUBSCRIBER_NAV_ITEMS;
     if (role === "PARENT") return PARENT_NAV_ITEMS;

@@ -4,13 +4,14 @@ import { useRequireRole } from "@/hooks/useRequireRole";
 import { apiJson } from "@/lib/api";
 import { useToast } from "@/contexts/ToastContext";
 import { ADMIN_NAV_ITEMS } from "@/components/admin/adminNav";
+import { STAFF_NAV_ITEMS } from "@/components/staff/staffNav";
 import { TEACHER_NAV_ITEMS } from "@/components/teacher/teacherNav";
 import { PARENT_NAV_ITEMS } from "@/components/parent/parentNav";
 import { COACH_NAV_ITEMS } from "@/components/coach/coachNav";
 import { SUBSCRIBER_NAV_ITEMS } from "@/components/subscriber/subscriberNav";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const STAFF_ROLES = new Set(["ADMIN", "TEACHER", "COACH"]);
+const STAFF_ROLES = new Set(["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"]);
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set([
   "image/jpeg",
@@ -22,7 +23,7 @@ const ALLOWED_IMAGE_TYPES = new Set([
 export default function SettingsPage() {
   const toast = useToast();
   const { session, status, allowed, update } = useRequireRole(
-    ["ADMIN", "TEACHER", "PARENT", "COACH", "SUBSCRIBER"],
+    ["ADMIN", "TEACHER", "OTHER_STAFF", "PARENT", "COACH", "SUBSCRIBER"],
     "/login",
   );
 
@@ -773,6 +774,7 @@ function StatCard({ label, value, hint, tone = "sky" }) {
 function resolveNavItems(role) {
   if (role === "ADMIN") return ADMIN_NAV_ITEMS;
   if (role === "TEACHER") return TEACHER_NAV_ITEMS;
+  if (role === "OTHER_STAFF") return STAFF_NAV_ITEMS;
   if (role === "COACH") return COACH_NAV_ITEMS;
   if (role === "PARENT") return PARENT_NAV_ITEMS;
   if (role === "SUBSCRIBER") return SUBSCRIBER_NAV_ITEMS;

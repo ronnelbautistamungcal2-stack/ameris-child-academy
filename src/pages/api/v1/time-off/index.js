@@ -1,10 +1,14 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { isEmployeeRole, isNonAdminEmployeeRole } from "@/lib/roles";
 
 export default async function handler(req, res) {
   try {
     const session = await getSession(req, res);
     if (!session) return res.status(401).json({ error: "Unauthorized" });
+    if (!isEmployeeRole(session.user.role)) {
+      return res.status(403).json({ error: "Only employees can access time off" });
+    }
 
     if (req.method === "GET") return handleGet(req, res, session);
     if (req.method === "POST") return handlePost(req, res, session);
@@ -18,13 +22,16 @@ export default async function handler(req, res) {
 
 async function handleGet(req, res, session) {
   const { centerId, userId, status } = req.query;
+  if (centerId && session.user.role !== "ADMIN") {
+    const allowed = await hasAccessToCenter(session.user.id, centerId);
+    if (!allowed) return res.status(403).json({ error: "Forbidden" });
+  }
 
   const where = {};
   if (centerId) where.centerId = centerId;
   if (status) where.status = status;
 
-  // Teachers can only see their own
-  if (session.user.role === "TEACHER") {
+  if (isNonAdminEmployeeRole(session.user.role)) {
     where.userId = session.user.id;
   } else if (userId) {
     where.userId = userId;
@@ -47,6 +54,10 @@ async function handlePost(req, res, session) {
   const { centerId, type, startDate, endDate, reason } = req.body || {};
   if (!centerId || !startDate || !endDate) {
     return res.status(400).json({ error: "centerId, startDate, and endDate are required" });
+  }
+  if (session.user.role !== "ADMIN") {
+    const allowed = await hasAccessToCenter(session.user.id, centerId);
+    if (!allowed) return res.status(403).json({ error: "Forbidden" });
   }
 
   const start = new Date(startDate);

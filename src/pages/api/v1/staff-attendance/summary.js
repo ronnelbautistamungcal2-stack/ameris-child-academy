@@ -1,5 +1,6 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { isNonAdminEmployeeRole } from "@/lib/roles";
 
 export default async function handler(req, res) {
   try {
@@ -9,9 +10,18 @@ export default async function handler(req, res) {
       res.setHeader("Allow", ["GET"]);
       return res.status(405).end();
     }
+    if (!["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"].includes(session.user.role)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
 
     const { centerId, userId, from, to } = req.query;
-    const resolvedUserId = session.user.role === "TEACHER" ? session.user.id : userId;
+    if (centerId && session.user.role !== "ADMIN") {
+      const allowed = await hasAccessToCenter(session.user.id, centerId);
+      if (!allowed) return res.status(403).json({ error: "Forbidden" });
+    }
+    const resolvedUserId = isNonAdminEmployeeRole(session.user.role)
+      ? session.user.id
+      : userId;
 
     const where = {};
     if (centerId) where.centerId = centerId;

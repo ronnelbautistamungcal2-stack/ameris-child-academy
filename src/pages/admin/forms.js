@@ -3,7 +3,7 @@ import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
-const ROLES = ["ADMIN", "TEACHER", "PARENT", "COACH", "SUBSCRIBER"];
+const ROLES = ["ADMIN", "TEACHER", "OTHER_STAFF", "PARENT", "COACH", "SUBSCRIBER"];
 
 export default function AdminForms() {
   const [templates, setTemplates] = useState([]);

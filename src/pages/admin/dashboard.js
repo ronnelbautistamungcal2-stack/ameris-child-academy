@@ -245,6 +245,7 @@ export default function AdminDashboard() {
               <WorkspaceSection title="Quick Links" description="Jump into the busiest admin workflows for this center.">
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <QuickLink href="/admin/users" label="Team Directory" />
+                  <QuickLink href="/admin/time-off" label="My Time Off" />
                   <QuickLink href="/admin/centers" label="Centers" />
                   <QuickLink href={`/admin/classes?centerId=${encodeURIComponent(centerId)}`} label="Classrooms" />
                   <QuickLink href={`/admin/children?centerId=${encodeURIComponent(centerId)}`} label="Children" />

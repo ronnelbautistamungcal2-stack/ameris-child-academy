@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import {
   badRequest,
@@ -14,6 +14,7 @@ import {
   optionalString,
   requiredString,
 } from "@/lib/validation";
+import { userRoles } from "@/lib/roles";
 
 const EVALUATION_STATUSES = ["DRAFT", "SUBMITTED", "ACKNOWLEDGED"];
 
@@ -78,6 +79,12 @@ function buildEvaluationHistoryFilter(from, to) {
 export default createApiHandler(async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) throw unauthorized();
+  if (
+    req.method === "GET" &&
+    !["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"].includes(session.user.role)
+  ) {
+    throw forbidden("Only employees can access evaluations");
+  }
 
   if (req.method === "GET") {
     const centerId = optionalString(req.query, "centerId");
@@ -88,6 +95,11 @@ export default createApiHandler(async function handler(req, res) {
     const to = endOfDay(optionalDate(req.query, "to"));
     validateRangeOrder(from, to, "Filter");
 
+    if (centerId && session.user.role !== "ADMIN") {
+      const allowed = await hasAccessToCenter(session.user.id, centerId);
+      if (!allowed) throw forbidden();
+    }
+
     const where = {};
     if (centerId) where.centerId = centerId;
     if (period) where.period = period;
@@ -95,7 +107,7 @@ export default createApiHandler(async function handler(req, res) {
     const historyFilter = buildEvaluationHistoryFilter(from, to);
     if (historyFilter) where.AND = [historyFilter];
 
-    if (session.user.role === "TEACHER") {
+    if (session.user.role !== "ADMIN") {
       where.teacherId = session.user.id;
     } else if (teacherId) {
       where.teacherId = teacherId;
@@ -120,6 +132,10 @@ export default createApiHandler(async function handler(req, res) {
 
   const body = ensureObject(req.body || {});
   const centerId = requiredString(body, "centerId");
+  if (session.user.role !== "ADMIN") {
+    const allowed = await hasAccessToCenter(session.user.id, centerId);
+    if (!allowed) throw forbidden();
+  }
   const teacherId = requiredString(body, "teacherId");
   const periodStart = optionalDate(body, "periodStart", { nullable: true });
   const periodEnd = optionalDate(body, "periodEnd", { nullable: true });
@@ -134,6 +150,14 @@ export default createApiHandler(async function handler(req, res) {
   const areasForImprovement = optionalString(body, "areasForImprovement", { nullable: true });
   const goals = optionalString(body, "goals", { nullable: true });
   const notes = optionalString(body, "notes", { nullable: true });
+  const targetUser = await prisma.user.findUnique({
+    where: { id: teacherId },
+    select: { role: true, roles: true },
+  });
+  const targetRoles = userRoles(targetUser);
+  if (!targetRoles.some((role) => ["TEACHER", "OTHER_STAFF", "COACH"].includes(role))) {
+    throw badRequest("Evaluations can only be created for staff members");
+  }
 
   const evaluation = await prisma.teacherEvaluation.create({
     data: {

@@ -8,6 +8,8 @@ async function main() {
   const adminPassword = process.env.SEED_ADMIN_PASSWORD || "adminpass";
   const teacherEmail = process.env.SEED_TEACHER_EMAIL || "teacher@demo.com";
   const teacherPassword = process.env.SEED_TEACHER_PASSWORD || "teacherpass";
+  const otherStaffEmail = process.env.SEED_OTHER_STAFF_EMAIL || "otherstaff@demo.com";
+  const otherStaffPassword = process.env.SEED_OTHER_STAFF_PASSWORD || "otherstaffpass";
   const parentEmail = process.env.SEED_PARENT_EMAIL || "parent@demo.com";
   const parentPassword = process.env.SEED_PARENT_PASSWORD || "parentpass";
   const coachEmail = process.env.SEED_COACH_EMAIL || "coach@demo.com";
@@ -17,6 +19,7 @@ async function main() {
     const missingPasswords = [
       !process.env.SEED_ADMIN_PASSWORD && "SEED_ADMIN_PASSWORD",
       !process.env.SEED_TEACHER_PASSWORD && "SEED_TEACHER_PASSWORD",
+      !process.env.SEED_OTHER_STAFF_PASSWORD && "SEED_OTHER_STAFF_PASSWORD",
       !process.env.SEED_PARENT_PASSWORD && "SEED_PARENT_PASSWORD",
       !process.env.SEED_COACH_PASSWORD && "SEED_COACH_PASSWORD",
     ].filter(Boolean);
@@ -30,6 +33,7 @@ async function main() {
 
   const passwordHash = await bcrypt.hash(adminPassword, 10);
   const teacherHash = await bcrypt.hash(teacherPassword, 10);
+  const otherStaffHash = await bcrypt.hash(otherStaffPassword, 10);
   const parentHash = await bcrypt.hash(parentPassword, 10);
   const coachHash = await bcrypt.hash(coachPassword, 10);
 
@@ -87,6 +91,21 @@ async function main() {
     },
   });
 
+  const otherStaff = await prisma.user.upsert({
+    where: { email: otherStaffEmail },
+    update: {
+      name: "Other Staff User",
+      password: otherStaffHash,
+      role: "OTHER_STAFF",
+    },
+    create: {
+      email: otherStaffEmail,
+      name: "Other Staff User",
+      password: otherStaffHash,
+      role: "OTHER_STAFF",
+    },
+  });
+
   const coach = await prisma.user.upsert({
     where: { email: coachEmail },
     update: {
@@ -105,6 +124,7 @@ async function main() {
   for (const membership of [
     { userId: admin.id, centerId: center.id, role: "ADMIN" },
     { userId: teacher.id, centerId: center.id, role: "TEACHER" },
+    { userId: otherStaff.id, centerId: center.id, role: "OTHER_STAFF" },
     { userId: coach.id, centerId: center.id, role: "COACH" },
   ]) {
     await prisma.centerUser.upsert({
@@ -219,6 +239,7 @@ async function main() {
   const invites = [
     { code: "PARENTDEMO", role: "PARENT" },
     { code: "TEACHERDEMO", role: "TEACHER" },
+    { code: "OTHERSTAFFDEMO", role: "OTHER_STAFF" },
     { code: "COACHDEMO", role: "COACH" },
     { code: "SUBSCRIBERDEMO", role: "SUBSCRIBER" },
   ];
@@ -244,6 +265,7 @@ async function main() {
     centerId: center.id,
     adminEmail: admin.email,
     teacherEmail: teacher.email,
+    otherStaffEmail: otherStaff.email,
     parentEmail: parent.email,
     coachEmail: coach.email,
   });

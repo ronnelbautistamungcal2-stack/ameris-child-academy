@@ -10,7 +10,7 @@ export const config = {
   },
 };
 
-const STAFF_ROLE_FILTER = ["ADMIN", "TEACHER", "COACH"];
+const STAFF_ROLE_FILTER = ["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"];
 const VALID_STATUSES = new Set(["PRESENT", "LATE", "ABSENT", "HALF_DAY"]);
 
 const COLUMN_ALIASES = {

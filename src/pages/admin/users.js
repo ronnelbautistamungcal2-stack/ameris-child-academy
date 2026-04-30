@@ -10,6 +10,7 @@ const ROLES = ROLE_OPTIONS;
 const ROLE_CONFIG = {
   ADMIN: { color: "#7c3aed", bg: "#f5f3ff", darkBg: "rgba(124,58,237,0.18)", label: "Admin", icon: "shield" },
   TEACHER: { color: "#2563eb", bg: "#eff6ff", darkBg: "rgba(37,99,235,0.18)", label: "Teacher", icon: "book" },
+  OTHER_STAFF: { color: "#0891b2", bg: "#ecfeff", darkBg: "rgba(8,145,178,0.18)", label: "Other Staff", icon: "briefcase" },
   PARENT: { color: "#059669", bg: "#ecfdf5", darkBg: "rgba(5,150,105,0.18)", label: "Parent", icon: "heart" },
   COACH: { color: "#d97706", bg: "#fffbeb", darkBg: "rgba(217,119,6,0.18)", label: "Coach", icon: "star" },
   SUBSCRIBER: { color: "#6b7280", bg: "#f9fafb", darkBg: "rgba(107,114,128,0.18)", label: "Subscriber", icon: "user" },
@@ -263,7 +264,7 @@ export default function AdminUsers() {
         <StatCard label="Total Users" value={users.length} color="#2563eb" icon={IconUsers} />
         <StatCard label="Teachers" value={roleCounts.TEACHER || 0} color="#2563eb" icon={IconBook} />
         <StatCard label="Parents" value={roleCounts.PARENT || 0} color="#059669" icon={IconHeart} />
-        <StatCard label="Staff" value={(roleCounts.ADMIN || 0) + (roleCounts.COACH || 0)} color="#7c3aed" icon={IconShield} />
+        <StatCard label="Staff" value={(roleCounts.ADMIN || 0) + (roleCounts.COACH || 0) + (roleCounts.OTHER_STAFF || 0)} color="#7c3aed" icon={IconShield} />
       </div>
 
       <Panel>
@@ -456,6 +457,7 @@ export default function AdminUsers() {
             {[
               { key: "ALL", label: "All" },
               { key: "TEACHER", label: "Teachers" },
+              { key: "OTHER_STAFF", label: "Other Staff" },
               { key: "PARENT", label: "Parents" },
               { key: "ADMIN", label: "Admins" },
               { key: "COACH", label: "Coaches" },

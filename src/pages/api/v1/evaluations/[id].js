@@ -45,6 +45,9 @@ export default async function handler(req, res) {
 
 async function handleGet(req, res, session) {
   const { id } = req.query;
+  if (!["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"].includes(session.user.role)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
   const evaluation = await prisma.teacherEvaluation.findUnique({
     where: { id },
     include: {
@@ -55,7 +58,7 @@ async function handleGet(req, res, session) {
 
   if (!evaluation) return res.status(404).json({ error: "Evaluation not found" });
 
-  if (session.user.role === "TEACHER" && evaluation.teacherId !== session.user.id) {
+  if (session.user.role !== "ADMIN" && evaluation.teacherId !== session.user.id) {
     return res.status(403).json({ error: "Forbidden" });
   }
 

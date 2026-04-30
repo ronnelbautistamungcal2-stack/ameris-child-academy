@@ -28,6 +28,7 @@ const PUBLIC_PREFIXES = [
 const ROLE_ROUTES = {
   ADMIN: ["/admin"],
   TEACHER: ["/teacher"],
+  OTHER_STAFF: ["/staff"],
   PARENT: ["/parent"],
   COACH: ["/coach"],
   SUBSCRIBER: ["/subscriber"],

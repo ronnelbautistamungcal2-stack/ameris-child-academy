@@ -221,7 +221,9 @@ export default function StaffManagement() {
           apiJson(`/api/v1/users?centerId=${centerId}&staffOnly=true`).catch(
             () => [],
           ),
-          apiJson(`/api/v1/users?centerId=${centerId}&role=TEACHER`).catch(
+          apiJson(
+            `/api/v1/users?centerId=${centerId}&roles=TEACHER,OTHER_STAFF,COACH`,
+          ).catch(
             () => [],
           ),
         ]);
@@ -3037,7 +3039,7 @@ function EvaluationsTab({ centerId, teachers }) {
         <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
           Use a start date and end date for each evaluation period so shorter
           cycles, including two-week reviews, are tracked correctly. Submitted
-          evaluations continue to appear on the teacher side under{" "}
+          evaluations continue to appear on the employee side under{" "}
           <span className="font-bold">
             My Performance &amp; Training &gt; Evaluations
           </span>

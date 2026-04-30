@@ -6,7 +6,7 @@ export default async function handler(req, res) {
   if (!session) return res.status(401).json({ error: "Unauthorized" });
 
   const role = session.user.role;
-  if (!["ADMIN", "COACH", "TEACHER"].includes(role)) {
+  if (!["ADMIN", "COACH", "TEACHER", "OTHER_STAFF"].includes(role)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     // Verify access to the checklist's center
     const item = await prisma.dailyChecklistItem.findUnique({
       where: { id: itemId },
-      include: { checklist: { select: { centerId: true } } },
+      include: { checklist: { select: { centerId: true, classRoomId: true, category: true } } },
     });
 
     if (!item) return res.status(404).json({ error: "Item not found" });
@@ -28,6 +28,12 @@ export default async function handler(req, res) {
     if (role !== "ADMIN") {
       const ok = await hasAccessToCenter(session.user.id, item.checklist.centerId);
       if (!ok) return res.status(403).json({ error: "Forbidden" });
+    }
+    if (
+      role === "OTHER_STAFF" &&
+      (item.checklist.classRoomId || item.checklist.category === "CLASSROOM")
+    ) {
+      return res.status(403).json({ error: "Other staff cannot complete classroom checklists" });
     }
 
     const completionDate = new Date(date);

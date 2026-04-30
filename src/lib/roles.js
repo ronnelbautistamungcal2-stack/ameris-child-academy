@@ -1,6 +1,6 @@
-export const ROLE_OPTIONS = ["ADMIN", "TEACHER", "PARENT", "COACH", "SUBSCRIBER"];
+export const ROLE_OPTIONS = ["ADMIN", "TEACHER", "OTHER_STAFF", "PARENT", "COACH", "SUBSCRIBER"];
 
-export const EMPLOYEE_ROLES = ["ADMIN", "TEACHER", "COACH"];
+export const EMPLOYEE_ROLES = ["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"];
 
 export function normalizeRoles(value, fallback = "PARENT") {
   const source = Array.isArray(value) ? value : value ? [value] : [];
@@ -30,6 +30,11 @@ export function isEmployeeRole(role) {
   return EMPLOYEE_ROLES.includes(String(role || "").toUpperCase());
 }
 
+export function isNonAdminEmployeeRole(role) {
+  const normalizedRole = String(role || "").toUpperCase();
+  return normalizedRole !== "ADMIN" && isEmployeeRole(normalizedRole);
+}
+
 export function hasEmployeeRole(roles) {
   return normalizeRoles(roles, "").some(isEmployeeRole);
 }
@@ -40,6 +45,8 @@ export function roleHomePath(role) {
       return "/admin/dashboard";
     case "TEACHER":
       return "/teacher/dashboard";
+    case "OTHER_STAFF":
+      return "/staff/dashboard";
     case "COACH":
       return "/coach/dashboard";
     case "PARENT":

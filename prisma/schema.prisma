@@ -10,6 +10,7 @@ datasource db {
 enum Role {
   ADMIN
   TEACHER
+  OTHER_STAFF
   PARENT
   COACH
   SUBSCRIBER

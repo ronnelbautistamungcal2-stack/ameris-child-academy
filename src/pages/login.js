@@ -224,10 +224,11 @@ export default function Login() {
               <p className="text-center text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
                 Portal Access
               </p>
-              <div className="mt-3 grid grid-cols-4 gap-2">
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
                 {[
                   { label: "Parents", color: "bg-sky-50 text-sky-700" },
                   { label: "Teachers", color: "bg-emerald-50 text-emerald-700" },
+                  { label: "Other Staff", color: "bg-cyan-50 text-cyan-700" },
                   { label: "Coaches", color: "bg-indigo-50 text-indigo-700" },
                   { label: "Admin", color: "bg-blue-50 text-blue-800" },
                 ].map((portal) => (
@@ -251,6 +252,7 @@ export default function Login() {
                   {[
                     { role: "Admin", email: "admin@demo.com", pw: "adminpass" },
                     { role: "Teacher", email: "teacher@demo.com", pw: "teacherpass" },
+                    { role: "Other Staff", email: "otherstaff@demo.com", pw: "otherstaffpass" },
                     { role: "Parent", email: "parent@demo.com", pw: "parentpass" },
                     { role: "Coach", email: "coach@demo.com", pw: "coachpass" },
                   ].map((cred) => (

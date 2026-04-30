@@ -1,10 +1,14 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { isEmployeeRole } from "@/lib/roles";
 
 export default async function handler(req, res) {
   try {
     const session = await getSession(req, res);
     if (!session) return res.status(401).json({ error: "Unauthorized" });
+    if (!isEmployeeRole(session.user.role)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     if (req.method !== "GET") {
       res.setHeader("Allow", ["GET"]);
       return res.status(405).end();
@@ -12,6 +16,10 @@ export default async function handler(req, res) {
 
     const { centerId, from, to } = req.query;
     if (!centerId) return res.status(400).json({ error: "centerId is required" });
+    if (session.user.role !== "ADMIN") {
+      const allowed = await hasAccessToCenter(session.user.id, centerId);
+      if (!allowed) return res.status(403).json({ error: "Forbidden" });
+    }
 
     const where = {
       centerId,

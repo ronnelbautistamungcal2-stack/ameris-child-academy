@@ -78,6 +78,7 @@ export const ADMIN_NAV_ITEMS = [
     children: [
       { href: "/admin/calendar", label: "Calendar" },
       { href: "/admin/shifts", label: "Shift Schedules" },
+      { href: "/admin/time-off", label: "My Time Off" },
       { href: "/admin/affiliates", label: "Affiliates & Partners" },
     ],
   },

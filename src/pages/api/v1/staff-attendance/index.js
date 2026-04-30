@@ -1,11 +1,12 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { isNonAdminEmployeeRole } from "@/lib/roles";
 
 export default async function handler(req, res) {
   try {
     const session = await getSession(req, res);
     if (!session) return res.status(401).json({ error: "Unauthorized" });
-    if (!["ADMIN", "TEACHER", "COACH"].includes(session.user.role)) {
+    if (!["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"].includes(session.user.role)) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
@@ -42,11 +43,15 @@ function parseAttendanceTime(date, value) {
 
 async function handleGet(req, res, session) {
   const { centerId, userId, from, to, date } = req.query;
+  if (centerId && session.user.role !== "ADMIN") {
+    const allowed = await hasAccessToCenter(session.user.id, centerId);
+    if (!allowed) return res.status(403).json({ error: "Forbidden" });
+  }
 
   const where = {};
   if (centerId) where.centerId = centerId;
   if (userId) where.userId = userId;
-  if (session.user.role === "TEACHER") where.userId = session.user.id;
+  if (isNonAdminEmployeeRole(session.user.role)) where.userId = session.user.id;
 
   if (date) {
     const d = new Date(date);

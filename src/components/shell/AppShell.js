@@ -103,6 +103,7 @@ export default function AppShell({
         "/dashboard",
         "/admin",
         "/teacher",
+        "/staff",
         "/parent",
         "/coach",
         "/subscriber",
@@ -704,6 +705,8 @@ function getRoleDotClass(role) {
       return "bg-sky-500";
     case "TEACHER":
       return "bg-emerald-500";
+    case "OTHER_STAFF":
+      return "bg-cyan-500";
     case "COACH":
       return "bg-amber-500";
     case "PARENT":

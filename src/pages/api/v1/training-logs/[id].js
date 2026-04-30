@@ -1,10 +1,14 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { isEmployeeRole, isNonAdminEmployeeRole } from "@/lib/roles";
 
 export default async function handler(req, res) {
   try {
     const session = await getSession(req, res);
     if (!session) return res.status(401).json({ error: "Unauthorized" });
+    if (!isEmployeeRole(session.user.role)) {
+      return res.status(403).json({ error: "Only employees can manage training logs" });
+    }
 
     if (req.method === "PUT") return handlePut(req, res, session);
     if (req.method === "DELETE") return handleDelete(req, res, session);
@@ -21,7 +25,7 @@ async function handlePut(req, res, session) {
   const log = await prisma.trainingLog.findUnique({ where: { id } });
   if (!log) return res.status(404).json({ error: "Training log not found" });
 
-  if (session.user.role === "TEACHER" && log.userId !== session.user.id) {
+  if (isNonAdminEmployeeRole(session.user.role) && log.userId !== session.user.id) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -52,10 +56,10 @@ async function handleDelete(req, res, session) {
   const log = await prisma.trainingLog.findUnique({ where: { id } });
   if (!log) return res.status(404).json({ error: "Training log not found" });
 
-  if (session.user.role === "TEACHER" && log.userId !== session.user.id) {
+  if (isNonAdminEmployeeRole(session.user.role) && log.userId !== session.user.id) {
     return res.status(403).json({ error: "Forbidden" });
   }
-  if (session.user.role !== "ADMIN" && session.user.role !== "TEACHER") {
+  if (!["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"].includes(session.user.role)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 

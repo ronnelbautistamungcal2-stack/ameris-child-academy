@@ -1,17 +1,27 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { createApiHandler, unauthorized } from "@/lib/api-error";
 import { optionalDate, optionalString } from "@/lib/validation";
+import { isEmployeeRole, isNonAdminEmployeeRole } from "@/lib/roles";
 
 export default createApiHandler(async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) throw unauthorized();
+  if (!isEmployeeRole(session.user.role)) {
+    return res.status(403).json({ error: "Only employees can access training summaries" });
+  }
 
   const centerId = optionalString(req.query, "centerId");
   const userId = optionalString(req.query, "userId");
   const from = optionalDate(req.query, "from");
   const to = optionalDate(req.query, "to");
-  const resolvedUserId = session.user.role === "TEACHER" ? session.user.id : userId;
+  if (centerId && session.user.role !== "ADMIN") {
+    const allowed = await hasAccessToCenter(session.user.id, centerId);
+    if (!allowed) return res.status(403).json({ error: "Forbidden" });
+  }
+  const resolvedUserId = isNonAdminEmployeeRole(session.user.role)
+    ? session.user.id
+    : userId;
 
   const where = {};
   if (centerId) where.centerId = centerId;

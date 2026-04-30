@@ -35,7 +35,7 @@ export default createApiHandler(async function handler(req, res) {
   if (!session) throw unauthorized();
 
   const role = session.user.role;
-  if (!["ADMIN", "TEACHER"].includes(role)) {
+  if (!["ADMIN", "TEACHER", "OTHER_STAFF"].includes(role)) {
     throw forbidden();
   }
 
@@ -81,7 +81,7 @@ export default createApiHandler(async function handler(req, res) {
         select: { createdAt: true, type: true },
       }),
       prisma.teacherClass.findMany({
-        where: role === "TEACHER" ? { teacherId: userId } : undefined,
+        where: role === "ADMIN" ? undefined : { teacherId: userId },
         select: {
           classId: true,
           classRoom: { select: { id: true, centerId: true } },
@@ -123,7 +123,7 @@ export default createApiHandler(async function handler(req, res) {
   const [childrenCount, progressRows] = await Promise.all([
     role === "ADMIN"
       ? prisma.child.count()
-      : scopedClassIds.length
+      : role === "TEACHER" && scopedClassIds.length
         ? prisma.child.count({ where: { classRoomId: { in: scopedClassIds } } })
         : 0,
     role === "ADMIN"
@@ -132,7 +132,7 @@ export default createApiHandler(async function handler(req, res) {
           select: { status: true, updatedAt: true, childId: true },
           take: 500,
         })
-      : scopedClassIds.length
+      : role === "TEACHER" && scopedClassIds.length
         ? prisma.progress.findMany({
             where: {
               child: { classRoomId: { in: scopedClassIds } },

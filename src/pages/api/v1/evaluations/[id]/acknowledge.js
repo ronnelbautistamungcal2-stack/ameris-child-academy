@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     if (!evaluation) return res.status(404).json({ error: "Evaluation not found" });
 
     if (evaluation.teacherId !== session.user.id) {
-      return res.status(403).json({ error: "Only the evaluated teacher can acknowledge" });
+      return res.status(403).json({ error: "Only the evaluated employee can acknowledge" });
     }
 
     if (evaluation.status !== "SUBMITTED") {

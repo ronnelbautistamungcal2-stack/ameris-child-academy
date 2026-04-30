@@ -6,7 +6,7 @@ export default async function handler(req, res) {
   if (!session) return res.status(401).json({ error: "Unauthorized" });
 
   const role = session.user.role;
-  if (!["ADMIN", "COACH", "TEACHER"].includes(role)) {
+  if (!["ADMIN", "COACH", "TEACHER", "OTHER_STAFF"].includes(role)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -22,6 +22,10 @@ export default async function handler(req, res) {
     if (centerId) where.centerId = centerId;
     if (category) where.category = category;
     if (classRoomId) where.classRoomId = classRoomId;
+    if (role === "OTHER_STAFF") {
+      where.classRoomId = null;
+      where.category = { not: "CLASSROOM" };
+    }
 
     if (!centerId && role !== "ADMIN") {
       const memberships = await prisma.centerUser.findMany({

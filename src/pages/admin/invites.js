@@ -3,7 +3,7 @@ import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
-const ROLES = ["PARENT", "TEACHER", "COACH", "SUBSCRIBER"];
+const ROLES = ["PARENT", "TEACHER", "OTHER_STAFF", "COACH", "SUBSCRIBER"];
 
 export default function AdminInvites() {
   const [invites, setInvites] = useState([]);
@@ -245,4 +245,3 @@ export default function AdminInvites() {
     </AdminLayout>
   );
 }
-

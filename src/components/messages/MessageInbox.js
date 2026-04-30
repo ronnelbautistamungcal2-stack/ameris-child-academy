@@ -9,6 +9,7 @@ const ADMIN_FILTERS = [
   { id: "all", label: "All" },
   { id: "parent", label: "Parents" },
   { id: "teacher", label: "Teachers" },
+  { id: "other_staff", label: "Other Staff" },
   { id: "coach", label: "Coaches" },
   { id: "group", label: "Groups" },
 ];
@@ -82,6 +83,8 @@ function roleBadgeColor(role) {
       "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
     TEACHER:
       "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+    OTHER_STAFF:
+      "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300",
     PARENT:
       "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
     COACH:

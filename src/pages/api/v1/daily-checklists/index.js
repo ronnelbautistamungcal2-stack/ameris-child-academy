@@ -1,5 +1,154 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { getTeacherClassIds } from "@/lib/teacherScope";
+import {
+  checklistMatchesDate,
+  normalizeMonthlyDay,
+  normalizeRepeatDays,
+} from "@/lib/checklistSchedule";
+
+const DAILY_CHECKLIST_INCLUDE = {
+  items: {
+    orderBy: [{ taskTime: "asc" }, { sortOrder: "asc" }],
+    include: {
+      lesson: {
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          media: true,
+          term: true,
+          reference: true,
+          goals: {
+            orderBy: { goalIndex: "asc" },
+            select: {
+              id: true,
+              goalIndex: true,
+              title: true,
+              description: true,
+            },
+          },
+          category: {
+            select: {
+              id: true,
+              name: true,
+              ageRange: true,
+            },
+          },
+        },
+      },
+      policyDocument: {
+        select: {
+          id: true,
+          title: true,
+          url: true,
+        },
+      },
+    },
+  },
+  classRoom: { select: { id: true, name: true } },
+  center: { select: { id: true, name: true } },
+  assignedUser: { select: { id: true, name: true, email: true, role: true } },
+};
+
+function buildCompletionInclude(date) {
+  if (!date) return false;
+  return {
+    where: { date: new Date(date) },
+    include: {
+      completedBy: { select: { id: true, name: true, email: true } },
+    },
+  };
+}
+
+function normalizeChecklistPayload(body = {}) {
+  const normalizedFrequency = ["DAILY", "WEEKLY", "MONTHLY"].includes(
+    String(body.frequency || "").toUpperCase(),
+  )
+    ? String(body.frequency).toUpperCase()
+    : "DAILY";
+
+  const repeatDays =
+    normalizedFrequency === "WEEKLY"
+      ? normalizeRepeatDays(body.repeatDays)
+      : [];
+  const monthlyDay =
+    normalizedFrequency === "MONTHLY"
+      ? normalizeMonthlyDay(body.monthlyDay)
+      : null;
+
+  return {
+    title: body.title,
+    description: body.description || null,
+    centerId: body.centerId,
+    classRoomId: body.classRoomId || null,
+    assignedUserId: body.assignedUserId || null,
+    category: ["OPENING", "CLOSING", "HEALTH_SAFETY", "CLEANING", "MEALS", "CLASSROOM", "OTHER"].includes(body.category)
+      ? body.category
+      : "OTHER",
+    frequency: normalizedFrequency,
+    repeatDays,
+    monthlyDay,
+  };
+}
+
+function applyChecklistPatch(data, body = {}) {
+  if (Object.prototype.hasOwnProperty.call(body, "title")) {
+    data.title = body.title;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "description")) {
+    data.description = body.description || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "centerId")) {
+    data.centerId = body.centerId;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "classRoomId")) {
+    data.classRoomId = body.classRoomId || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "assignedUserId")) {
+    data.assignedUserId = body.assignedUserId || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "category")) {
+    data.category = ["OPENING", "CLOSING", "HEALTH_SAFETY", "CLEANING", "MEALS", "CLASSROOM", "OTHER"].includes(body.category)
+      ? body.category
+      : "OTHER";
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(body, "frequency") ||
+    Object.prototype.hasOwnProperty.call(body, "repeatDays") ||
+    Object.prototype.hasOwnProperty.call(body, "monthlyDay")
+  ) {
+    const frequency = ["DAILY", "WEEKLY", "MONTHLY"].includes(
+      String(body.frequency || data.frequency || "").toUpperCase(),
+    )
+      ? String(body.frequency || data.frequency).toUpperCase()
+      : "DAILY";
+    data.frequency = frequency;
+    data.repeatDays =
+      frequency === "WEEKLY"
+        ? normalizeRepeatDays(body.repeatDays)
+        : [];
+    data.monthlyDay =
+      frequency === "MONTHLY"
+        ? normalizeMonthlyDay(body.monthlyDay)
+        : null;
+  }
+}
+
+function serializeItem(it, sortOrder) {
+  return {
+    title: it.title,
+    description: it.description || null,
+    lessonId: it.lessonId || null,
+    policyDocumentId: it.policyDocumentId || null,
+    policyLink: it.policyLink || null,
+    mediaLink: it.mediaLink || null,
+    directLink: it.directLink || null,
+    directLinkLabel: it.directLinkLabel || null,
+    taskTime: it.taskTime || null,
+    sortOrder,
+  };
+}
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -22,10 +171,6 @@ export default async function handler(req, res) {
     if (centerId) where.centerId = centerId;
     if (category) where.category = category;
     if (classRoomId) where.classRoomId = classRoomId;
-    if (role === "OTHER_STAFF") {
-      where.classRoomId = null;
-      where.category = { not: "CLASSROOM" };
-    }
 
     if (!centerId && role !== "ADMIN") {
       const memberships = await prisma.centerUser.findMany({
@@ -35,27 +180,48 @@ export default async function handler(req, res) {
       where.centerId = { in: memberships.map((m) => m.centerId) };
     }
 
-    // If date provided, include completions for that date
-    const completionWhere = date ? { date: new Date(date) } : undefined;
+    const teacherClassIds =
+      role === "TEACHER" ? await getTeacherClassIds(session.user.id, centerId) : [];
+    const completionInclude = buildCompletionInclude(date);
 
     const lists = await prisma.dailyChecklist.findMany({
       where,
       include: {
+        ...DAILY_CHECKLIST_INCLUDE,
         items: {
-          orderBy: [{ taskTime: "asc" }, { sortOrder: "asc" }],
+          ...DAILY_CHECKLIST_INCLUDE.items,
           include: {
-            completions: completionWhere
-              ? { where: completionWhere, include: { completedBy: { select: { id: true, name: true, email: true } } } }
-              : false,
+            ...DAILY_CHECKLIST_INCLUDE.items.include,
+            completions: completionInclude,
           },
         },
-        classRoom: { select: { id: true, name: true } },
-        center: { select: { id: true, name: true } },
       },
       orderBy: [{ category: "asc" }, { title: "asc" }],
     });
 
-    return res.status(200).json(lists);
+    const filtered = lists.filter((list) => {
+      if (date && !checklistMatchesDate(list, date)) return false;
+
+      if (role === "OTHER_STAFF") {
+        if (list.classRoomId || list.category === "CLASSROOM") return false;
+      }
+
+      if (role === "TEACHER") {
+        if (list.classRoomId && !teacherClassIds.includes(list.classRoomId)) {
+          return false;
+        }
+      }
+
+      if (["TEACHER", "OTHER_STAFF"].includes(role)) {
+        if (list.assignedUserId && list.assignedUserId !== session.user.id) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    return res.status(200).json(filtered);
   }
 
   if (req.method === "POST") {
@@ -63,43 +229,25 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Only admins can create checklists" });
     }
 
-    const { title, description, centerId, classRoomId, category, frequency, items } = req.body || {};
+    const { items } = req.body || {};
+    const normalized = normalizeChecklistPayload(req.body || {});
 
-    if (!title || !centerId) {
+    if (!normalized.title || !normalized.centerId) {
       return res.status(400).json({ error: "title and centerId are required" });
     }
 
-    const validCategories = ["OPENING", "CLOSING", "HEALTH_SAFETY", "CLEANING", "MEALS", "CLASSROOM", "OTHER"];
-    const validFrequencies = ["DAILY", "WEEKLY", "MONTHLY"];
-
     const created = await prisma.dailyChecklist.create({
       data: {
-        title,
-        description: description || null,
-        centerId,
-        classRoomId: classRoomId || null,
-        category: validCategories.includes(category) ? category : "OTHER",
-        frequency: validFrequencies.includes(frequency) ? frequency : "DAILY",
+        ...normalized,
         items: Array.isArray(items)
           ? {
               create: items
                 .filter((it) => it && it.title)
-                .map((it, i) => ({
-                  title: it.title,
-                  description: it.description || null,
-                  policyLink: it.policyLink || null,
-                  mediaLink: it.mediaLink || null,
-                  taskTime: it.taskTime || null,
-                  sortOrder: i,
-                })),
+                .map((it, i) => serializeItem(it, i)),
             }
           : undefined,
       },
-      include: {
-        items: { orderBy: [{ taskTime: "asc" }, { sortOrder: "asc" }] },
-        classRoom: { select: { id: true, name: true } },
-        center: { select: { id: true, name: true } },
-      },
+      include: DAILY_CHECKLIST_INCLUDE,
     });
 
     return res.status(201).json(created);
@@ -110,25 +258,17 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Only admins can update checklists" });
     }
 
-    const { id, title, description, category, frequency, classRoomId, active, items } = req.body || {};
+    const { id, active, items } = req.body || {};
     if (!id) return res.status(400).json({ error: "id is required" });
 
     const data = {};
-    if (title !== undefined) data.title = title;
-    if (description !== undefined) data.description = description || null;
-    if (category !== undefined) data.category = category;
-    if (frequency !== undefined) data.frequency = frequency;
-    if (classRoomId !== undefined) data.classRoomId = classRoomId || null;
+    applyChecklistPatch(data, req.body || {});
     if (active !== undefined) data.active = active;
 
     const updated = await prisma.dailyChecklist.update({
       where: { id },
       data,
-      include: {
-        items: { orderBy: [{ taskTime: "asc" }, { sortOrder: "asc" }] },
-        classRoom: { select: { id: true, name: true } },
-        center: { select: { id: true, name: true } },
-      },
+      include: DAILY_CHECKLIST_INCLUDE,
     });
 
     // If items provided, sync them
@@ -145,11 +285,11 @@ export default async function handler(req, res) {
         if (it.id) {
           await prisma.dailyChecklistItem.update({
             where: { id: it.id },
-            data: { title: it.title, description: it.description || null, policyLink: it.policyLink || null, mediaLink: it.mediaLink || null, taskTime: it.taskTime || null, sortOrder: i },
+            data: serializeItem(it, i),
           });
         } else if (it.title) {
           await prisma.dailyChecklistItem.create({
-            data: { checklistId: id, title: it.title, description: it.description || null, policyLink: it.policyLink || null, mediaLink: it.mediaLink || null, taskTime: it.taskTime || null, sortOrder: i },
+            data: { checklistId: id, ...serializeItem(it, i) },
           });
         }
       }
@@ -158,11 +298,7 @@ export default async function handler(req, res) {
     // Re-fetch with updated items
     const result = await prisma.dailyChecklist.findUnique({
       where: { id },
-      include: {
-        items: { orderBy: [{ taskTime: "asc" }, { sortOrder: "asc" }] },
-        classRoom: { select: { id: true, name: true } },
-        center: { select: { id: true, name: true } },
-      },
+      include: DAILY_CHECKLIST_INCLUDE,
     });
 
     return res.status(200).json(result);

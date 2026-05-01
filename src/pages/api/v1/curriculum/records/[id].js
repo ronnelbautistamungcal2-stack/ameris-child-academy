@@ -53,6 +53,8 @@ export default async function handler(req, res) {
     testingQuestion,
     resource,
     additionalResources,
+    lessonAttachment,
+    lessonImage,
     notes,
   } = req.body || {};
 
@@ -67,21 +69,58 @@ export default async function handler(req, res) {
 
   const previousPc = getPassingCriteriaObject(existing.passingCriteria);
   const sheet = normalizeSpaces(previousPc.sheet) || "Manual";
+  const hasTestingQuestion = Object.prototype.hasOwnProperty.call(
+    req.body || {},
+    "testingQuestion",
+  );
+  const hasResource = Object.prototype.hasOwnProperty.call(req.body || {}, "resource");
+  const hasAdditionalResources = Object.prototype.hasOwnProperty.call(
+    req.body || {},
+    "additionalResources",
+  );
+  const hasLessonAttachment = Object.prototype.hasOwnProperty.call(
+    req.body || {},
+    "lessonAttachment",
+  );
+  const hasLessonImage = Object.prototype.hasOwnProperty.call(
+    req.body || {},
+    "lessonImage",
+  );
+
+  const nextTestingQuestion = hasTestingQuestion
+    ? normalizeSpaces(testingQuestion)
+    : normalizeSpaces(previousPc.testingQuestion);
+  const nextResource = hasResource
+    ? normalizeSpaces(resource)
+    : normalizeSpaces(previousPc.resource);
+  const nextAdditionalResources = hasAdditionalResources
+    ? normalizeSpaces(additionalResources)
+    : normalizeSpaces(previousPc.additionalResources);
+  const nextLessonAttachment = hasLessonAttachment
+    ? normalizeSpaces(lessonAttachment)
+    : normalizeSpaces(previousPc.lessonAttachment);
+  const nextLessonImage = hasLessonImage
+    ? normalizeSpaces(lessonImage)
+    : normalizeSpaces(previousPc.lessonImage);
 
   const updated = await prisma.lessonGoal.update({
     where: { id: goalId },
     data: {
       title: step,
-      description: normalizeSpaces(testingQuestion) || null,
+      description: hasTestingQuestion
+        ? nextTestingQuestion || null
+        : existing.description,
       passingCriteria: {
         ...previousPc,
         reference: normalizeSpaces(reference),
         term: normalizeLessonTerm(term),
         lesson: normalizeSpaces(lessonTitle),
         stepOfProgression: step,
-        testingQuestion: normalizeSpaces(testingQuestion),
-        resource: normalizeSpaces(resource),
-        additionalResources: normalizeSpaces(additionalResources),
+        testingQuestion: nextTestingQuestion,
+        resource: nextResource,
+        additionalResources: nextAdditionalResources,
+        lessonAttachment: nextLessonAttachment,
+        lessonImage: nextLessonImage,
         notes: normalizeSpaces(notes),
         age: normalizeSpaces(childAge),
         category: normalizeSpaces(category),

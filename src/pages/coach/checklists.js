@@ -13,6 +13,7 @@ import {
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
+import { describeChecklistSchedule } from "@/lib/checklistSchedule";
 
 const CATEGORIES = [
   { key: "ALL", label: "All" },
@@ -418,7 +419,7 @@ function ChecklistCard({ checklist, onToggle, completing }) {
                 {checklist.title}
               </div>
               <CoachBadge tone={FREQ_TONES[checklist.frequency] || "slate"}>
-                {FREQ_LABELS[checklist.frequency] || checklist.frequency}
+                {describeChecklistSchedule(checklist)}
               </CoachBadge>
               {checklist.classRoom ? (
                 <CoachBadge tone="sky">{checklist.classRoom.name}</CoachBadge>
@@ -514,6 +515,45 @@ function ChecklistCard({ checklist, onToggle, completing }) {
                       ) : null}
 
                       <div className="mt-3 flex flex-wrap gap-2">
+                        {item.lesson ? (
+                          <details className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-300">
+                            <summary className="cursor-pointer list-none">Lesson</summary>
+                            <div className="mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-3 text-left normal-case tracking-normal text-gray-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                              <div className="font-bold text-gray-900 dark:text-gray-100">{item.lesson.title}</div>
+                              {item.lesson.term || item.lesson.reference ? (
+                                <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
+                                  {[item.lesson.term, item.lesson.reference].filter(Boolean).join(" • ")}
+                                </div>
+                              ) : null}
+                              {item.lesson.description ? (
+                                <p className="mt-2 text-xs leading-5 text-gray-600 dark:text-gray-300">{item.lesson.description}</p>
+                              ) : null}
+                              {item.lesson.goals?.length ? (
+                                <div className="mt-2 text-xs text-gray-600 dark:text-gray-300">
+                                  {item.lesson.goals.length} step{item.lesson.goals.length === 1 ? "" : "s"}
+                                </div>
+                              ) : null}
+                            </div>
+                          </details>
+                        ) : null}
+                        {item.policyDocument ? (
+                          <a
+                            href={item.policyDocument.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-sky-700 transition hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-300"
+                          >
+                            Policy
+                          </a>
+                        ) : null}
+                        {item.directLink ? (
+                          <a
+                            href={item.directLink}
+                            className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-sky-700 transition hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-300"
+                          >
+                            {item.directLinkLabel || "Open link"}
+                          </a>
+                        ) : null}
                         {item.policyLink ? (
                           <a
                             href={item.policyLink}
@@ -521,7 +561,7 @@ function ChecklistCard({ checklist, onToggle, completing }) {
                             rel="noreferrer"
                             className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-sky-700 transition hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-300"
                           >
-                            Policy
+                            Reference
                           </a>
                         ) : null}
                         {item.mediaLink ? (

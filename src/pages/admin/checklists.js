@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import AdminTaskChecklistManager from "@/components/checklists/AdminTaskChecklistManager";
 import Skeleton from "@/components/ui/Skeleton";
 import WeeklyLessonPlanner from "@/components/planning/WeeklyLessonPlanner";
 import { apiJson } from "@/lib/api";
@@ -98,7 +99,6 @@ export default function AdminChecklists() {
   const [centerId, setCenterId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState("planner");
 
   useEffect(() => {
     (async () => {
@@ -117,8 +117,6 @@ export default function AdminChecklists() {
     })();
   }, []);
 
-  const selectedCenter = centers.find((c) => c.id === centerId);
-
   return (
     <AdminLayout title="Checklists">
       {/* ── Page Header ── */}
@@ -126,11 +124,10 @@ export default function AdminChecklists() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-lg font-extrabold tracking-tight text-gray-900">
-              Checklists &amp; Planning
+              Task Checklists
             </h1>
             <p className="mt-1 max-w-lg text-sm text-gray-500">
-              Manage weekly lesson plans, task checklists with per-child tracking, and daily
-              operations routines linked to policies and training videos.
+              Build recurring task checklists, assign them to classrooms or staff, and link each item to lessons, policies, or direct actions.
             </p>
           </div>
 
@@ -165,31 +162,6 @@ export default function AdminChecklists() {
             {error}
           </div>
         )}
-
-        {/* Tab Navigation */}
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
-          {TAB_CONFIG.map(({ key, label, icon: Icon, desc }) => {
-            const active = tab === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setTab(key)}
-                className={[
-                  "group flex items-center gap-2.5 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150",
-                  active
-                    ? "bg-sky-600 text-white shadow-md shadow-sky-200"
-                    : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50 hover:text-gray-900 hover:ring-gray-300",
-                ].join(" ")}
-              >
-                <span className={active ? "text-sky-100" : "text-gray-400 group-hover:text-gray-500"}>
-                  <Icon />
-                </span>
-                <span className="whitespace-nowrap">{label}</span>
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       {/* ── Content ── */}
@@ -204,12 +176,8 @@ export default function AdminChecklists() {
               Choose a center from the dropdown above to view and manage checklists.
             </p>
           </div>
-        ) : tab === "planner" ? (
-          <WeeklyLessonPlanner centerId={centerId} mode="admin" />
-        ) : tab === "daily" ? (
-          <DailyChecklistManager centerId={centerId} />
         ) : (
-          <TaskChecklistManager centerId={centerId} />
+          <AdminTaskChecklistManager centerId={centerId} />
         )}
       </div>
     </AdminLayout>

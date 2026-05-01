@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   const { centerId } = req.query;
 
   if (req.method === "GET") {
-    let where = { roles: { has: user.role } };
+    let where = user.role === "ADMIN" ? {} : { roles: { has: user.role } };
     if (centerId) {
       if (user.role !== "ADMIN") {
         const ok = await hasAccessToCenter(user.id, centerId);
@@ -51,4 +51,3 @@ export default async function handler(req, res) {
   res.setHeader("Allow", ["GET", "POST"]);
   res.status(405).end();
 }
-

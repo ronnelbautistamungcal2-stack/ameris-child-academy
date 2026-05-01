@@ -2,6 +2,7 @@ import TeacherLayout from "@/components/teacher/TeacherLayout";
 import Skeleton from "@/components/ui/Skeleton";
 import WeeklyLessonPlanner from "@/components/planning/WeeklyLessonPlanner";
 import { apiJson } from "@/lib/api";
+import { describeChecklistSchedule } from "@/lib/checklistSchedule";
 import { useEffect, useMemo, useState } from "react";
 
 function formatTaskTime(value) {
@@ -713,7 +714,7 @@ function TeacherDailyChecklist({ centerId }) {
                     {CAT_LABELS[cl.category] || cl.category}
                   </span>
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${FREQ_COLORS_T[cl.frequency] || ""}`}>
-                    {cl.frequency}
+                    {describeChecklistSchedule(cl)}
                   </span>
                   {allDone && (
                     <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
@@ -756,9 +757,40 @@ function TeacherDailyChecklist({ centerId }) {
                           </div>
                           {item.description && <p className="mt-0.5 text-xs text-gray-500">{item.description}</p>}
                           <div className="mt-1 flex flex-wrap gap-1.5">
+                            {item.lesson ? (
+                              <details className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                                <summary className="cursor-pointer list-none">Lesson</summary>
+                                <div className="mt-2 w-64 rounded-lg border border-blue-100 bg-white p-2 text-left text-[11px] text-gray-700 shadow-sm">
+                                  <div className="font-semibold text-gray-900">{item.lesson.title}</div>
+                                  {item.lesson.term || item.lesson.reference ? (
+                                    <div className="mt-1 text-[10px] uppercase tracking-wide text-gray-500">
+                                      {[item.lesson.term, item.lesson.reference].filter(Boolean).join(" • ")}
+                                    </div>
+                                  ) : null}
+                                  {item.lesson.description ? (
+                                    <p className="mt-1 text-[11px] text-gray-600">{item.lesson.description}</p>
+                                  ) : null}
+                                  {item.lesson.goals?.length ? (
+                                    <div className="mt-2 text-[11px] text-gray-600">
+                                      {item.lesson.goals.length} step{item.lesson.goals.length === 1 ? "" : "s"}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </details>
+                            ) : null}
+                            {item.policyDocument ? (
+                              <a href={item.policyDocument.url} target="_blank" rel="noopener noreferrer" className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 hover:bg-blue-100">
+                                Policy
+                              </a>
+                            ) : null}
+                            {item.directLink ? (
+                              <a href={item.directLink} className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 hover:bg-blue-100">
+                                {item.directLinkLabel || "Open link"}
+                              </a>
+                            ) : null}
                             {item.policyLink && (
                               <a href={item.policyLink} target="_blank" rel="noopener noreferrer" className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 hover:bg-blue-100">
-                                Policy
+                                Reference
                               </a>
                             )}
                             {item.mediaLink && (

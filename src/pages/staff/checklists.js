@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/Workspace";
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
+import { describeChecklistSchedule } from "@/lib/checklistSchedule";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const CATEGORY_LABELS = {
@@ -338,7 +339,7 @@ export default function StaffChecklistsPage() {
                               FREQUENCY_BADGE[checklist.frequency] || "bg-gray-100 text-gray-600"
                             }`}
                           >
-                            {checklist.frequency}
+                            {describeChecklistSchedule(checklist)}
                           </span>
                           {allDone ? (
                             <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
@@ -411,6 +412,45 @@ export default function StaffChecklistsPage() {
                                     <p className="mt-1 text-xs text-gray-500">{item.description}</p>
                                   ) : null}
                                   <div className="mt-2 flex flex-wrap gap-2">
+                                    {item.lesson ? (
+                                      <details className="rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+                                        <summary className="cursor-pointer list-none">Lesson</summary>
+                                        <div className="mt-2 w-64 rounded-lg border border-sky-100 bg-white p-2 text-left text-[11px] text-gray-700 shadow-sm">
+                                          <div className="font-semibold text-gray-900">{item.lesson.title}</div>
+                                          {item.lesson.term || item.lesson.reference ? (
+                                            <div className="mt-1 text-[10px] uppercase tracking-wide text-gray-500">
+                                              {[item.lesson.term, item.lesson.reference].filter(Boolean).join(" • ")}
+                                            </div>
+                                          ) : null}
+                                          {item.lesson.description ? (
+                                            <p className="mt-1 text-[11px] text-gray-600">{item.lesson.description}</p>
+                                          ) : null}
+                                          {item.lesson.goals?.length ? (
+                                            <div className="mt-2 text-[11px] text-gray-600">
+                                              {item.lesson.goals.length} step{item.lesson.goals.length === 1 ? "" : "s"}
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      </details>
+                                    ) : null}
+                                    {item.policyDocument ? (
+                                      <a
+                                        href={item.policyDocument.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700 hover:bg-sky-100"
+                                      >
+                                        Policy
+                                      </a>
+                                    ) : null}
+                                    {item.directLink ? (
+                                      <a
+                                        href={item.directLink}
+                                        className="rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700 hover:bg-sky-100"
+                                      >
+                                        {item.directLinkLabel || "Open link"}
+                                      </a>
+                                    ) : null}
                                     {item.policyLink ? (
                                       <a
                                         href={item.policyLink}
@@ -418,7 +458,7 @@ export default function StaffChecklistsPage() {
                                         rel="noreferrer"
                                         className="rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700 hover:bg-sky-100"
                                       >
-                                        Policy
+                                        Reference
                                       </a>
                                     ) : null}
                                     {item.mediaLink ? (

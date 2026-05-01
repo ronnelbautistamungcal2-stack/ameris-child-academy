@@ -121,6 +121,18 @@ function collectSubjectOptions(records, { childAge = "", category = "", term = "
   return [...subjects].sort((a, b) => byString(a, b));
 }
 
+function collectManagerCategoryOptions(categories, { childAge = "" } = {}) {
+  const ageKey = normalizeSpaces(childAge);
+  const values = new Set();
+
+  for (const category of Array.isArray(categories) ? categories : []) {
+    if (ageKey && normalizeSpaces(category?.ageRange) !== ageKey) continue;
+    if (category?.name) values.add(normalizeLessonCategory(category.name));
+  }
+
+  return [...values].sort((a, b) => byString(a, b));
+}
+
 function parseRefIdParts(value) {
   const raw = normalizeSpaces(value);
   if (!raw) return null;
@@ -224,6 +236,12 @@ function isProbablyLink(value) {
   return (
     s.startsWith("http://") || s.startsWith("https://") || s.startsWith("/")
   );
+}
+
+function isImageUrl(value) {
+  const s = String(value || "").trim();
+  if (!s) return false;
+  return /\.(png|jpe?g|gif|webp|svg)$/i.test(s);
 }
 
 function splitResources(value) {
@@ -677,6 +695,7 @@ function Field({ label, children }) {
 export default function AdminLessons() {
   const [centers, setCenters] = useState([]);
   const [lessons, setLessons] = useState([]);
+  const [lessonCategories, setLessonCategories] = useState([]);
   const [loadingCenters, setLoadingCenters] = useState(true);
   const [loadingLessons, setLoadingLessons] = useState(true);
   const [importing, setImporting] = useState(false);
@@ -777,6 +796,22 @@ export default function AdminLessons() {
     }
   }, [mainCenter?.id]);
 
+  const refreshLessonCategories = useCallback(async () => {
+    if (!mainCenter?.id) {
+      setLessonCategories([]);
+      return;
+    }
+
+    try {
+      const data = await apiJson(
+        `/api/v1/lesson-categories?centerId=${encodeURIComponent(mainCenter.id)}`,
+      );
+      setLessonCategories(Array.isArray(data) ? data : []);
+    } catch {
+      setLessonCategories([]);
+    }
+  }, [mainCenter?.id]);
+
   useEffect(() => {
     refreshCenters();
   }, [refreshCenters]);
@@ -784,6 +819,10 @@ export default function AdminLessons() {
   useEffect(() => {
     refreshLessons();
   }, [refreshLessons]);
+
+  useEffect(() => {
+    refreshLessonCategories();
+  }, [refreshLessonCategories]);
 
   const records = useMemo(() => {
     const out = [];
@@ -809,6 +848,8 @@ export default function AdminLessons() {
           ),
           resource: String(pc.resource ?? ""),
           additionalResources: String(pc.additionalResources ?? ""),
+          lessonAttachment: String(pc.lessonAttachment ?? pc.resource ?? ""),
+          lessonImage: String(pc.lessonImage ?? pc.additionalResources ?? ""),
           notes: String(pc.notes ?? ""),
           sheet: String(pc.sheet ?? ""),
         });
@@ -851,36 +892,38 @@ export default function AdminLessons() {
   }, [records, age, category, term]);
 
   const lessonCategoryOptions = useMemo(() => {
-    return mergeSelectOptions(DEFAULT_LESSON_CATEGORY_OPTIONS, options.categories);
-  }, [options.categories]);
+    const managerCategories = collectManagerCategoryOptions(lessonCategories);
+    return mergeSelectOptions(
+      DEFAULT_LESSON_CATEGORY_OPTIONS,
+      [...options.categories, ...managerCategories],
+    );
+  }, [lessonCategories, options.categories]);
 
   const allLessonSubjectOptions = useMemo(() => {
     return mergeSelectOptions([], options.subjects);
   }, [options.subjects]);
 
   const editCategoryOptions = useMemo(() => {
-    const scoped = collectCategoryOptions(records, {
+    const scoped = collectManagerCategoryOptions(lessonCategories, {
       childAge: editChildAge,
-      term: editTerm,
     });
     const current = normalizeLessonCategory(editCategory);
     return mergeSelectOptions(
       scoped.length ? scoped : lessonCategoryOptions,
       current ? [current] : [],
     );
-  }, [records, editChildAge, editTerm, lessonCategoryOptions, editCategory]);
+  }, [lessonCategories, editChildAge, lessonCategoryOptions, editCategory]);
 
   const newCategoryOptions = useMemo(() => {
-    const scoped = collectCategoryOptions(records, {
+    const scoped = collectManagerCategoryOptions(lessonCategories, {
       childAge: newChildAge,
-      term: newTerm,
     });
     const current = normalizeLessonCategory(newCategory);
     return mergeSelectOptions(
       scoped.length ? scoped : lessonCategoryOptions,
       current ? [current] : [],
     );
-  }, [records, newChildAge, newTerm, lessonCategoryOptions, newCategory]);
+  }, [lessonCategories, newChildAge, lessonCategoryOptions, newCategory]);
 
   const editSubjectOptions = useMemo(() => {
     const scoped = collectSubjectOptions(records, {
@@ -1049,8 +1092,8 @@ export default function AdminLessons() {
     setEditReference(String(rec?.refId || ""));
     setEditStep(String(rec?.progressionStep || ""));
     setEditTestingQuestion(String(rec?.testingQuestion || ""));
-    setEditResource(String(rec?.resource || ""));
-    setEditAdditionalResources(String(rec?.additionalResources || ""));
+    setEditResource(String(rec?.lessonAttachment || ""));
+    setEditAdditionalResources(String(rec?.lessonImage || ""));
     setEditNotes(String(rec?.notes || ""));
     setEditOpen(true);
   }, []);
@@ -1133,9 +1176,8 @@ export default function AdminLessons() {
             }),
             reference: normalizeSpaces(newReference),
             progressionStep: step,
-            testingQuestion: String(newTestingQuestion || ""),
-            resource: String(newResource || ""),
-            additionalResources: String(newAdditionalResources || ""),
+            lessonAttachment: String(newResource || ""),
+            lessonImage: String(newAdditionalResources || ""),
             notes: String(newNotes || ""),
           }),
         });
@@ -1161,7 +1203,6 @@ export default function AdminLessons() {
       newStep,
       newSubject,
       newTerm,
-      newTestingQuestion,
       refreshLessons,
     ],
   );
@@ -1194,9 +1235,8 @@ export default function AdminLessons() {
               }),
               reference: normalizeSpaces(editReference),
               progressionStep: step,
-              testingQuestion: String(editTestingQuestion || ""),
-              resource: String(editResource || ""),
-              additionalResources: String(editAdditionalResources || ""),
+              lessonAttachment: String(editResource || ""),
+              lessonImage: String(editAdditionalResources || ""),
               notes: String(editNotes || ""),
             }),
           },
@@ -1224,7 +1264,6 @@ export default function AdminLessons() {
       editStep,
       editSubject,
       editTerm,
-      editTestingQuestion,
       refreshLessons,
     ],
   );
@@ -1249,6 +1288,21 @@ export default function AdminLessons() {
     },
     [],
   );
+
+  const uploadSingleToField = useCallback(async (files, setValue, setUploading) => {
+    const file = Array.from(files || [])[0];
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      const [uploaded] = await uploadFiles([file]);
+      setValue(uploaded?.url || "");
+    } catch (err) {
+      setError(err.message || "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }, []);
 
   const confirmDelete = useCallback(
     async () => {
@@ -1313,9 +1367,8 @@ export default function AdminLessons() {
                     "Term",
                     "Category",
                     "Progression Step",
-                    "Testing Question",
-                    "Resource",
-                    "Additional Resources",
+                    "Lesson Attachment",
+                    "Image",
                     "Notes",
                     "Sheet",
                   ],
@@ -1327,9 +1380,8 @@ export default function AdminLessons() {
                     r.term,
                     r.category,
                     r.progressionStep,
-                    r.testingQuestion,
-                    r.resource,
-                    r.additionalResources,
+                    r.lessonAttachment,
+                    r.lessonImage,
                     r.notes,
                     r.sheet,
                   ]),
@@ -1880,15 +1932,6 @@ export default function AdminLessons() {
             <div className="space-y-4">
               <div className="rounded-xl border border-gray-200 bg-white p-5">
                 <div className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
-                  Testing Question
-                </div>
-                <div className="whitespace-pre-wrap text-sm text-gray-800 leading-relaxed">
-                  {detailsRecord?.testingQuestion || <span className="italic text-gray-400">No testing question</span>}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-gray-200 bg-white p-5">
-                <div className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
                   Notes
                 </div>
                 <div className="whitespace-pre-wrap text-sm text-gray-800 leading-relaxed">
@@ -1900,16 +1943,16 @@ export default function AdminLessons() {
 
           <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
             <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Resources
+              Lesson Assets
             </div>
             <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <div className="text-xs font-semibold text-gray-700">
-                  Resource
+                  Lesson Attachment
                 </div>
-                {detailsRecord?.resource ? (
+                {detailsRecord?.lessonAttachment ? (
                   <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-                    {splitResources(detailsRecord.resource).map((r) => (
+                    {splitResources(detailsRecord.lessonAttachment).map((r) => (
                       <li key={r}>
                         {isProbablyLink(r) ? (
                           <a
@@ -1933,10 +1976,30 @@ export default function AdminLessons() {
 
               <div>
                 <div className="text-xs font-semibold text-gray-700">
-                  Additional Resources
+                  Image
                 </div>
-                {detailsRecord?.additionalResources ? (
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                {detailsRecord?.lessonImage ? (
+                  <div className="mt-2 space-y-2">
+                    {isImageUrl(detailsRecord.lessonImage) ? (
+                      <img
+                        src={detailsRecord.lessonImage}
+                        alt={detailsRecord.lessonTitle || "Lesson image"}
+                        className="max-h-48 rounded-xl border border-gray-200 object-cover"
+                      />
+                    ) : null}
+                    {isProbablyLink(detailsRecord.lessonImage) ? (
+                      <a
+                        href={detailsRecord.lessonImage}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-blue-600 hover:text-blue-700"
+                      >
+                        {detailsRecord.lessonImage}
+                      </a>
+                    ) : null}
+                  </div>
+                ) : false ? (
+                  <ul className="mt-2 hidden list-disc space-y-1 pl-5 text-sm">
                     {splitResources(detailsRecord.additionalResources).map(
                       (r) => (
                         <li key={r}>
@@ -2047,19 +2110,19 @@ export default function AdminLessons() {
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <Field label="Subject (optional)">
-                <select
+                <input
+                  list="edit-subject-options"
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   value={editSubject}
                   onChange={(e) => setEditSubject(e.target.value)}
+                  placeholder="Type a subject"
                   disabled={saving}
-                >
-                  <option value="">No subject selected</option>
+                />
+                <datalist id="edit-subject-options">
                   {editSubjectOptions.map((subjectOption) => (
-                    <option key={subjectOption} value={subjectOption}>
-                      {subjectOption}
-                    </option>
+                    <option key={subjectOption} value={subjectOption} />
                   ))}
-                </select>
+                </datalist>
               </Field>
               <Field label="Progression Step (required)">
                 <input
@@ -2073,60 +2136,59 @@ export default function AdminLessons() {
               </Field>
             </div>
 
-            <Field label="Testing Question (optional)">
-              <textarea
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                value={editTestingQuestion}
-                onChange={(e) => setEditTestingQuestion(e.target.value)}
-                rows={3}
-                disabled={saving}
-              />
-            </Field>
-
             <div className="flex flex-col md:flex-row md:space-x-4 space-y-3 md:space-y-0">
-              {/* Resource */}
-              <Field label="Resource (optional)" className="flex-1">
+              <Field label="Lesson Attachment (optional)" className="flex-1">
                 <input
                   type="file"
-                  multiple
-                  accept=".png,.jpg,.jpeg,.webp,.gif,.pdf"
+                  accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.webp"
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm disabled:opacity-60"
                   disabled={saving || uploadingResource}
                   onChange={async (e) => {
                     const files = e.target.files;
-                    await uploadAndAppendToField(
-                      files,
-                      editResource,
-                      setEditResource,
-                      setUploadingResource,
-                    );
+                    await uploadSingleToField(files, setEditResource, setUploadingResource);
                     e.target.value = "";
                   }}
                 />
+                {editResource ? (
+                  <a href={editResource} target="_blank" rel="noreferrer" className="mt-2 block text-xs text-blue-600 hover:text-blue-700">
+                    {editResource}
+                  </a>
+                ) : null}
                 {uploadingResource && (
                   <div className="text-xs text-gray-500 mt-1">Uploading...</div>
                 )}
               </Field>
 
-              {/* Additional Resources */}
-              <Field label="Additional Resources (optional)" className="flex-1">
+              <Field label="Image (optional)" className="flex-1">
                 <input
                   type="file"
-                  multiple
-                  accept=".png,.jpg,.jpeg,.webp,.gif,.pdf"
+                  accept=".png,.jpg,.jpeg,.webp,.gif"
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm disabled:opacity-60"
                   disabled={saving || uploadingAdditionalResources}
                   onChange={async (e) => {
                     const files = e.target.files;
-                    await uploadAndAppendToField(
+                    await uploadSingleToField(
                       files,
-                      editAdditionalResources,
                       setEditAdditionalResources,
                       setUploadingAdditionalResources,
                     );
                     e.target.value = "";
                   }}
                 />
+                {editAdditionalResources ? (
+                  <div className="mt-2 space-y-2">
+                    {isImageUrl(editAdditionalResources) ? (
+                      <img
+                        src={editAdditionalResources}
+                        alt="Lesson"
+                        className="max-h-28 rounded-lg border border-gray-200 object-cover"
+                      />
+                    ) : null}
+                    <a href={editAdditionalResources} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 hover:text-blue-700">
+                      {editAdditionalResources}
+                    </a>
+                  </div>
+                ) : null}
                 {uploadingAdditionalResources && (
                   <div className="text-xs text-gray-500 mt-1">Uploading...</div>
                 )}
@@ -2247,19 +2309,19 @@ export default function AdminLessons() {
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <Field label="Subject (optional)">
-                <select
+                <input
+                  list="new-subject-options"
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   value={newSubject}
                   onChange={(e) => setNewSubject(e.target.value)}
+                  placeholder="Type a subject"
                   disabled={saving}
-                >
-                  <option value="">No subject selected</option>
+                />
+                <datalist id="new-subject-options">
                   {newSubjectOptions.map((subjectOption) => (
-                    <option key={subjectOption} value={subjectOption}>
-                      {subjectOption}
-                    </option>
+                    <option key={subjectOption} value={subjectOption} />
                   ))}
-                </select>
+                </datalist>
               </Field>
               <Field label="Progression Step (required)">
                 <input
@@ -2273,36 +2335,55 @@ export default function AdminLessons() {
               </Field>
             </div>
 
-            <Field label="Testing Question (optional)">
-              <textarea
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                value={newTestingQuestion}
-                onChange={(e) => setNewTestingQuestion(e.target.value)}
-                rows={3}
-                disabled={saving}
-              />
-            </Field>
-
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <Field label="Resource (optional)">
-                <textarea
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  value={newResource}
-                  onChange={(e) => setNewResource(e.target.value)}
-                  rows={3}
-                  placeholder="Links or text..."
-                  disabled={saving}
+              <Field label="Lesson Attachment (optional)">
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.webp"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm disabled:opacity-60"
+                  disabled={saving || uploadingResource}
+                  onChange={async (e) => {
+                    const files = e.target.files;
+                    await uploadSingleToField(files, setNewResource, setUploadingResource);
+                    e.target.value = "";
+                  }}
                 />
+                {newResource ? (
+                  <a href={newResource} target="_blank" rel="noreferrer" className="mt-2 block text-xs text-blue-600 hover:text-blue-700">
+                    {newResource}
+                  </a>
+                ) : null}
               </Field>
-              <Field label="Additional Resources (optional)">
-                <textarea
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  value={newAdditionalResources}
-                  onChange={(e) => setNewAdditionalResources(e.target.value)}
-                  rows={3}
-                  placeholder="Links or text..."
-                  disabled={saving}
+              <Field label="Image (optional)">
+                <input
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.webp,.gif"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm disabled:opacity-60"
+                  disabled={saving || uploadingAdditionalResources}
+                  onChange={async (e) => {
+                    const files = e.target.files;
+                    await uploadSingleToField(
+                      files,
+                      setNewAdditionalResources,
+                      setUploadingAdditionalResources,
+                    );
+                    e.target.value = "";
+                  }}
                 />
+                {newAdditionalResources ? (
+                  <div className="mt-2 space-y-2">
+                    {isImageUrl(newAdditionalResources) ? (
+                      <img
+                        src={newAdditionalResources}
+                        alt="Lesson"
+                        className="max-h-28 rounded-lg border border-gray-200 object-cover"
+                      />
+                    ) : null}
+                    <a href={newAdditionalResources} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 hover:text-blue-700">
+                      {newAdditionalResources}
+                    </a>
+                  </div>
+                ) : null}
               </Field>
             </div>
 

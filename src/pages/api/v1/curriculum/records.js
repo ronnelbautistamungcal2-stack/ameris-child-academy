@@ -94,6 +94,8 @@ export default async function handler(req, res) {
     testingQuestion,
     resource,
     additionalResources,
+    lessonAttachment,
+    lessonImage,
     notes,
   } = req.body || {};
 
@@ -121,20 +123,34 @@ export default async function handler(req, res) {
   });
   const goalIndex = Number(maxGoal?._max?.goalIndex || 0) + 1;
 
+  const hasTestingQuestion = Object.prototype.hasOwnProperty.call(
+    req.body || {},
+    "testingQuestion",
+  );
+  const hasResource = Object.prototype.hasOwnProperty.call(req.body || {}, "resource");
+  const hasAdditionalResources = Object.prototype.hasOwnProperty.call(
+    req.body || {},
+    "additionalResources",
+  );
+
   const goal = await prisma.lessonGoal.create({
     data: {
       lessonId: lesson.id,
       goalIndex,
       title: step,
-      description: normalizeSpaces(testingQuestion) || null,
+      description: hasTestingQuestion ? normalizeSpaces(testingQuestion) || null : null,
       passingCriteria: {
         reference: normalizeSpaces(reference),
         term: normalizeLessonTerm(term),
         lesson: normalizeSpaces(lessonTitle),
         stepOfProgression: step,
-        testingQuestion: normalizeSpaces(testingQuestion),
-        resource: normalizeSpaces(resource),
-        additionalResources: normalizeSpaces(additionalResources),
+        testingQuestion: hasTestingQuestion ? normalizeSpaces(testingQuestion) : "",
+        resource: hasResource ? normalizeSpaces(resource) : "",
+        additionalResources: hasAdditionalResources
+          ? normalizeSpaces(additionalResources)
+          : "",
+        lessonAttachment: normalizeSpaces(lessonAttachment),
+        lessonImage: normalizeSpaces(lessonImage),
         notes: normalizeSpaces(notes),
         age: normalizeSpaces(childAge),
         category: normalizeSpaces(category),

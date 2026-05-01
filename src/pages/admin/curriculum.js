@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 const TABS = [
   { key: "categories", label: "Categories", icon: TabIconCategories },
-  { key: "lessons", label: "Lessons & Goals", icon: TabIconLessons },
+  { key: "lessons", label: "Steps of Progression", icon: TabIconLessons },
   { key: "remediations", label: "Remediations", icon: TabIconRemediations },
 ];
 
@@ -47,7 +47,7 @@ export default function CurriculumManager() {
               </div>
               <div>
                 <h2 className="text-xl font-extrabold text-gray-900">Curriculum Manager</h2>
-                <p className="text-sm text-gray-500">Manage categories, lessons, goals, and corrective learning paths</p>
+                <p className="text-sm text-gray-500">Manage categories, steps of progression, and corrective learning paths</p>
               </div>
             </div>
 
@@ -394,11 +394,21 @@ function LessonsTab({ centerId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ title: "", description: "", categoryId: "", policyDocumentId: "", media: [] });
+  const [form, setForm] = useState({
+    title: "",
+    description: "",
+    categoryId: "",
+    subCategory: "",
+    term: "",
+    reference: "",
+    linkedLessonId: "",
+    media: [],
+  });
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState({});
   const [categoryFilter, setCategoryFilter] = useState("");
   const [ageFilter, setAgeFilter] = useState("");
+  const [termFilter, setTermFilter] = useState("");
   const [formAgeRange, setFormAgeRange] = useState("");
   const [query, setQuery] = useState("");
 
@@ -427,18 +437,26 @@ function LessonsTab({ centerId }) {
     return lessons.filter((l) => {
       if (categoryFilter && (l.category?.id || "") !== categoryFilter) return false;
       if (ageFilter && (l.category?.ageRange || "") !== ageFilter) return false;
+      if (termFilter && (l.term || "") !== termFilter) return false;
       if (!q) return true;
       return (
         (l.title || "").toLowerCase().includes(q) ||
+        (l.term || "").toLowerCase().includes(q) ||
+        (l.subCategory || "").toLowerCase().includes(q) ||
+        (l.reference || "").toLowerCase().includes(q) ||
         (l.category?.name || "").toLowerCase().includes(q) ||
         (l.category?.ageRange || "").toLowerCase().includes(q)
       );
     });
-  }, [lessons, ageFilter, categoryFilter, query]);
+  }, [lessons, ageFilter, categoryFilter, query, termFilter]);
 
   const ageOptions = useMemo(() => {
     return Array.from(new Set(categories.map((cat) => cat.ageRange || "").filter(Boolean))).sort();
   }, [categories]);
+
+  const termOptions = useMemo(() => {
+    return Array.from(new Set(lessons.map((lesson) => lesson.term || "").filter(Boolean))).sort();
+  }, [lessons]);
 
   const formCategoryOptions = useMemo(() => {
     if (!formAgeRange) return categories;
@@ -452,7 +470,16 @@ function LessonsTab({ centerId }) {
 
   function openCreate() {
     setEditing("new");
-    setForm({ title: "", description: "", categoryId: "", policyDocumentId: "", media: [] });
+    setForm({
+      title: "",
+      description: "",
+      categoryId: "",
+      subCategory: "",
+      term: "",
+      reference: "",
+      linkedLessonId: "",
+      media: [],
+    });
     setFormAgeRange(ageFilter || "");
   }
 
@@ -462,7 +489,10 @@ function LessonsTab({ centerId }) {
       title: lesson.title || "",
       description: lesson.description || "",
       categoryId: lesson.categoryId || "",
-      policyDocumentId: lesson.policyDocumentId || "",
+      subCategory: lesson.subCategory || "",
+      term: lesson.term || "",
+      reference: lesson.reference || "",
+      linkedLessonId: lesson.linkedLessonId || "",
       media: lesson.media || [],
     });
     setFormAgeRange(lesson.category?.ageRange || "");
@@ -521,9 +551,12 @@ function LessonsTab({ centerId }) {
       const payload = {
         title: form.title,
         description: form.description,
+        subCategory: form.subCategory || null,
+        term: form.term || null,
+        reference: form.reference || null,
         media: form.media,
         categoryId: form.categoryId || null,
-        policyDocumentId: form.policyDocumentId || null,
+        linkedLessonId: form.linkedLessonId || null,
       };
 
       if (editing === "new") {
@@ -587,10 +620,10 @@ function LessonsTab({ centerId }) {
     <div className="space-y-4">
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="Lessons" value={loading ? "..." : lessons.length} color="indigo" icon={
+        <StatCard label="Steps" value={loading ? "..." : lessons.length} color="indigo" icon={
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
         } />
-        <StatCard label="Total Goals" value={loading ? "..." : totalGoals} color="emerald" icon={
+        <StatCard label="Total Steps" value={loading ? "..." : totalGoals} color="emerald" icon={
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
         } />
         <StatCard label="Categories" value={loading ? "..." : categories.length} color="sky" icon={
@@ -607,7 +640,7 @@ function LessonsTab({ centerId }) {
             <svg className="h-4 w-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
-            Lessons & Goals
+            Steps of Progression
             {!loading && (
               <span className="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">
                 {filtered.length}{filtered.length !== lessons.length ? ` / ${lessons.length}` : ""}
@@ -618,7 +651,7 @@ function LessonsTab({ centerId }) {
             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
-            Add Lesson
+            Add Step
           </button>
         </div>
 
@@ -639,10 +672,10 @@ function LessonsTab({ centerId }) {
                 <span className={`flex h-6 w-6 items-center justify-center rounded-lg text-xs text-white ${editing === "new" ? "bg-indigo-500" : "bg-amber-500"}`}>
                   {editing === "new" ? "+" : "E"}
                 </span>
-                {editing === "new" ? "New Lesson" : "Edit Lesson"}
+                {editing === "new" ? "New Step" : "Edit Step"}
               </h4>
               <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                <FormField label="Title" required>
+                <FormField label="Step" required>
                   <input className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Counting to 10" />
                 </FormField>
                 <FormField label="Age Group">
@@ -667,14 +700,23 @@ function LessonsTab({ centerId }) {
                     </div>
                   )}
                 </FormField>
-                <FormField label="Linked Policy">
-                  <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={form.policyDocumentId} onChange={(e) => setForm({ ...form, policyDocumentId: e.target.value })}>
+                <FormField label="Sub Category">
+                  <input className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={form.subCategory} onChange={(e) => setForm({ ...form, subCategory: e.target.value })} placeholder="Optional sub category" />
+                </FormField>
+                <FormField label="Term">
+                  <input className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={form.term} onChange={(e) => setForm({ ...form, term: e.target.value })} placeholder="e.g. Term 1" />
+                </FormField>
+                <FormField label="Reference">
+                  <input className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} placeholder="Reference code" />
+                </FormField>
+                <FormField label="Linked Lesson">
+                  <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={form.linkedLessonId} onChange={(e) => setForm({ ...form, linkedLessonId: e.target.value })}>
                     <option value="">None</option>
-                    {policies.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+                    {lessons.filter((lesson) => lesson.id !== editing).map((lesson) => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}
                   </select>
                 </FormField>
-                <FormField label="Description" className="md:col-span-2">
-                  <textarea className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Brief lesson description..." />
+                <FormField label="Testing Question" className="md:col-span-2">
+                  <textarea className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Testing question..." />
                 </FormField>
               </div>
 
@@ -702,7 +744,7 @@ function LessonsTab({ centerId }) {
 
               <div className="mt-4 flex gap-2">
                 <button type="button" className="rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-60" onClick={save} disabled={saving || !form.title.trim()}>
-                  {saving ? "Saving..." : editing === "new" ? "Create Lesson" : "Update Lesson"}
+                  {saving ? "Saving..." : editing === "new" ? "Create Step" : "Update Step"}
                 </button>
                 <button type="button" className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 active:scale-[0.98]" onClick={() => setEditing(null)}>
                   Cancel
@@ -717,7 +759,16 @@ function LessonsTab({ centerId }) {
               <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-              <input className="w-full rounded-xl border border-gray-200 bg-gray-50/50 pl-10 pr-4 py-2.5 text-sm transition focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100" placeholder="Search lessons..." value={query} onChange={(e) => setQuery(e.target.value)} />
+              <input className="w-full rounded-xl border border-gray-200 bg-gray-50/50 pl-10 pr-4 py-2.5 text-sm transition focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100" placeholder="Search step..." value={query} onChange={(e) => setQuery(e.target.value)} />
+            </div>
+            <div className="relative md:w-44">
+              <select className="w-full appearance-none rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 pr-10 text-sm transition focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100" value={termFilter} onChange={(e) => setTermFilter(e.target.value)}>
+                <option value="">All terms</option>
+                {termOptions.map((termOption) => <option key={termOption} value={termOption}>{termOption}</option>)}
+              </select>
+              <svg className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
             </div>
             <div className="relative md:w-48">
               <select className="w-full appearance-none rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 pr-10 text-sm transition focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100" value={ageFilter} onChange={(e) => handleAgeFilterChange(e.target.value)}>
@@ -745,9 +796,9 @@ function LessonsTab({ centerId }) {
           ) : filtered.length === 0 ? (
             <EmptyState
               icon={<svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>}
-              title={query || categoryFilter || ageFilter ? "No lessons match your filters" : "No lessons yet"}
-              description={query || categoryFilter || ageFilter ? "Try adjusting your search, category, or age filter" : "Create your first lesson to build your curriculum"}
-              action={!query && !categoryFilter && !ageFilter ? <button type="button" className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700" onClick={openCreate}>Create First Lesson</button> : null}
+              title={query || categoryFilter || ageFilter || termFilter ? "No steps match your filters" : "No steps yet"}
+              description={query || categoryFilter || ageFilter || termFilter ? "Try adjusting your search, category, age, or term filter" : "Create your first step to build your curriculum"}
+              action={!query && !categoryFilter && !ageFilter && !termFilter ? <button type="button" className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700" onClick={openCreate}>Create First Step</button> : null}
             />
           ) : (
             <div className="space-y-3">
@@ -775,15 +826,29 @@ function LessonsTab({ centerId }) {
                             {lesson.category.ageRange}
                           </span>
                         )}
-                        {lesson.policyDocument && (
-                          <a href={lesson.policyDocument.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-0.5 text-[11px] font-semibold text-violet-700 no-underline transition hover:bg-violet-100">
-                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                            {lesson.policyDocument.title}
-                          </a>
+                        {lesson.term && (
+                          <span className="inline-flex items-center rounded-full bg-violet-50 px-2.5 py-0.5 text-[11px] font-semibold text-violet-700">
+                            {lesson.term}
+                          </span>
+                        )}
+                        {lesson.subCategory && (
+                          <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                            {lesson.subCategory}
+                          </span>
+                        )}
+                        {lesson.reference && (
+                          <span className="inline-flex items-center rounded-full bg-white px-2.5 py-0.5 font-mono text-[11px] font-semibold text-gray-600 ring-1 ring-gray-200">
+                            {lesson.reference}
+                          </span>
+                        )}
+                        {lesson.linkedLesson && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-0.5 text-[11px] font-semibold text-violet-700">
+                            Linked: {lesson.linkedLesson.title}
+                          </span>
                         )}
                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
                           <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                          {lesson.goals?.length || 0} goal{(lesson.goals?.length || 0) !== 1 ? "s" : ""}
+                          {lesson.goals?.length || 0} step{(lesson.goals?.length || 0) !== 1 ? "s" : ""}
                         </span>
                         {lesson.media?.length > 0 && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700">
@@ -1259,11 +1324,11 @@ function GoalEditor({ lessonId, goals, onUpdate }) {
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <div className="text-xs font-bold uppercase tracking-wider text-gray-400">Goals / Steps</div>
+        <div className="text-xs font-bold uppercase tracking-wider text-gray-400">Steps of Progression</div>
         {!adding && !editingId && (
           <button type="button" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50" onClick={openAdd}>
             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-            Add Goal
+            Add Step
           </button>
         )}
       </div>
@@ -1279,8 +1344,8 @@ function GoalEditor({ lessonId, goals, onUpdate }) {
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <div>
-            <p className="text-xs font-semibold text-gray-500">No goals defined</p>
-            <p className="text-[11px] text-gray-400">Add goals to enable multi-step progression tracking</p>
+            <p className="text-xs font-semibold text-gray-500">No steps defined</p>
+            <p className="text-[11px] text-gray-400">Add steps to enable multi-step progression tracking</p>
           </div>
         </div>
       )}
@@ -1292,13 +1357,13 @@ function GoalEditor({ lessonId, goals, onUpdate }) {
               <div className="flex-1 space-y-2">
                 <input
                   className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                  placeholder="Goal title"
+                  placeholder="Step"
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
                 />
                 <input
                   className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                  placeholder="Description (optional)"
+                  placeholder="Testing question (optional)"
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                 />
@@ -1332,20 +1397,20 @@ function GoalEditor({ lessonId, goals, onUpdate }) {
         <div className="mt-2 rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50/50 to-sky-50/30 p-4 space-y-3">
           <input
             className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-            placeholder="Goal title (e.g. Recognize 5 colors)"
+            placeholder="Step (e.g. Recognize 5 colors)"
             value={form.title}
             onChange={(e) => setForm({ ...form, title: e.target.value })}
             autoFocus
           />
           <input
             className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-            placeholder="Description (optional)"
+            placeholder="Testing question (optional)"
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
           <div className="flex gap-2">
             <button type="button" className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60" onClick={saveGoal} disabled={saving || !form.title.trim()}>
-              {saving ? "Saving..." : `Add as Step ${(goals.length || 0) + 1}`}
+              {saving ? "Saving..." : `Add Step ${(goals.length || 0) + 1}`}
             </button>
             <button type="button" className="text-xs font-semibold text-gray-500 transition hover:text-gray-700" onClick={cancel}>Cancel</button>
           </div>

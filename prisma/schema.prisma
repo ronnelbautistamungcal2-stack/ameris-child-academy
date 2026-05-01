@@ -216,6 +216,7 @@ model User {
   coachFollowUpsCreated        CoachFollowUp[]            @relation("CoachFollowUpsCreated")
   coachFollowUpsAssigned       CoachFollowUp[]            @relation("CoachFollowUpsAssigned")
   dailyChecklistCompletions    DailyChecklistCompletion[] @relation("DailyChecklistCompletedBy")
+  assignedDailyChecklists      DailyChecklist[]           @relation("DailyChecklistAssignedUser")
 }
 
 model Center {
@@ -366,12 +367,18 @@ model Lesson {
   id               String              @id @default(uuid())
   title            String
   description      String?
+  subCategory      String?
+  term             String?
+  reference        String?
   center           Center              @relation(fields: [centerId], references: [id])
   centerId         String
   category         LessonCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   categoryId       String?
   policyDocument   PolicyDocument?     @relation(fields: [policyDocumentId], references: [id], onDelete: SetNull)
   policyDocumentId String?
+  linkedLesson     Lesson?             @relation("LessonLinkedLesson", fields: [linkedLessonId], references: [id], onDelete: SetNull)
+  linkedLessonId   String?
+  linkedFrom       Lesson[]            @relation("LessonLinkedLesson")
   media            String[]            @default([])
   goals            LessonGoal[]
   progress         Progress[]
@@ -380,8 +387,11 @@ model Lesson {
   milestoneChecklistItems MilestoneChecklistItem[]
   behaviorPlanGoals BehaviorPlanGoal[]
   supplies         LessonSupply[]
+  dailyChecklistItems DailyChecklistItem[]
 
   @@index([policyDocumentId])
+  @@index([linkedLessonId])
+  @@index([centerId, term])
 }
 
 model LessonGoal {
@@ -696,6 +706,7 @@ model PolicyDocument {
   updatedAt   DateTime @default(now()) @updatedAt
   milestoneChecklistItems MilestoneChecklistItem[]
   lessons     Lesson[]
+  dailyChecklistItems DailyChecklistItem[]
 }
 
 model AuditLog {
@@ -1197,10 +1208,14 @@ model DailyChecklist {
   centerId    String
   classRoom   ClassRoom?         @relation(fields: [classRoomId], references: [id], onDelete: SetNull)
   classRoomId String?
+  assignedUser   User?           @relation("DailyChecklistAssignedUser", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  assignedUserId String?
   title       String
   description String?
   category    ChecklistCategory  @default(OTHER)
   frequency   ChecklistFrequency @default(DAILY)
+  repeatDays  Int[]              @default([])
+  monthlyDay  Int?
   active      Boolean            @default(true)
   items       DailyChecklistItem[]
   createdAt   DateTime           @default(now())
@@ -1208,6 +1223,7 @@ model DailyChecklist {
 
   @@index([centerId, category])
   @@index([centerId, classRoomId])
+  @@index([assignedUserId])
 }
 
 model DailyChecklistItem {
@@ -1217,14 +1233,22 @@ model DailyChecklistItem {
   sortOrder   Int                 @default(0)
   title       String
   description String?
+  lesson      Lesson?             @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  lessonId    String?
+  policyDocument   PolicyDocument? @relation(fields: [policyDocumentId], references: [id], onDelete: SetNull)
+  policyDocumentId String?
   policyLink  String?
   mediaLink   String?
+  directLink  String?
+  directLinkLabel String?
   taskTime    String?
   completions DailyChecklistCompletion[]
   createdAt   DateTime            @default(now())
 
   @@index([checklistId, sortOrder])
   @@index([checklistId, taskTime])
+  @@index([lessonId])
+  @@index([policyDocumentId])
 }
 
 model DailyChecklistCompletion {

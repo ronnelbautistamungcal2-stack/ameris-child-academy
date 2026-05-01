@@ -1,6 +1,22 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
+const LESSON_INCLUDE = {
+  category: true,
+  goals: { orderBy: { goalIndex: "asc" } },
+  remediationsFrom: { include: { toLesson: true } },
+  supplies: { orderBy: { name: "asc" } },
+  policyDocument: true,
+  linkedLesson: {
+    select: {
+      id: true,
+      title: true,
+      term: true,
+      reference: true,
+    },
+  },
+};
+
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
@@ -24,13 +40,7 @@ export default async function handler(req, res) {
 
     const lessons = await prisma.lesson.findMany({
       where: centerId ? { centerId } : {},
-      include: {
-        category: true,
-        goals: { orderBy: { goalIndex: "asc" } },
-        remediationsFrom: { include: { toLesson: true } },
-        supplies: { orderBy: { name: "asc" } },
-        policyDocument: true,
-      },
+      include: LESSON_INCLUDE,
     });
     return res.status(200).json(lessons);
   }
@@ -40,7 +50,19 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    const { title, description, centerId: cId, media, categoryId, policyDocumentId, supplies } = req.body;
+    const {
+      title,
+      description,
+      subCategory,
+      term,
+      reference,
+      centerId: cId,
+      media,
+      categoryId,
+      policyDocumentId,
+      linkedLessonId,
+      supplies,
+    } = req.body;
     if (!title || !cId)
       return res.status(400).json({ error: "Title and centerId required" });
 
@@ -48,10 +70,14 @@ export default async function handler(req, res) {
       data: {
         title,
         description,
+        subCategory: subCategory || null,
+        term: term || null,
+        reference: reference || null,
         centerId: cId,
         media: media || [],
         categoryId: categoryId || null,
         policyDocumentId: policyDocumentId || null,
+        linkedLessonId: linkedLessonId || null,
         supplies: supplies && Array.isArray(supplies) && supplies.length
           ? {
               create: supplies.map((s) => ({
@@ -65,13 +91,7 @@ export default async function handler(req, res) {
             }
           : undefined,
       },
-      include: {
-        category: true,
-        goals: { orderBy: { goalIndex: "asc" } },
-        remediationsFrom: { include: { toLesson: true } },
-        supplies: { orderBy: { name: "asc" } },
-        policyDocument: true,
-      },
+      include: LESSON_INCLUDE,
     });
 
     return res.status(201).json(lesson);

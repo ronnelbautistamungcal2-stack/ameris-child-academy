@@ -1,5 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { getTeacherClassIds } from "@/lib/teacherScope";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -20,7 +21,16 @@ export default async function handler(req, res) {
     // Verify access to the checklist's center
     const item = await prisma.dailyChecklistItem.findUnique({
       where: { id: itemId },
-      include: { checklist: { select: { centerId: true, classRoomId: true, category: true } } },
+      include: {
+        checklist: {
+          select: {
+            centerId: true,
+            classRoomId: true,
+            category: true,
+            assignedUserId: true,
+          },
+        },
+      },
     });
 
     if (!item) return res.status(404).json({ error: "Item not found" });
@@ -34,6 +44,19 @@ export default async function handler(req, res) {
       (item.checklist.classRoomId || item.checklist.category === "CLASSROOM")
     ) {
       return res.status(403).json({ error: "Other staff cannot complete classroom checklists" });
+    }
+    if (
+      ["TEACHER", "OTHER_STAFF"].includes(role) &&
+      item.checklist.assignedUserId &&
+      item.checklist.assignedUserId !== session.user.id
+    ) {
+      return res.status(403).json({ error: "This checklist is assigned to another staff member" });
+    }
+    if (role === "TEACHER" && item.checklist.classRoomId) {
+      const teacherClassIds = await getTeacherClassIds(session.user.id, item.checklist.centerId);
+      if (!teacherClassIds.includes(item.checklist.classRoomId)) {
+        return res.status(403).json({ error: "You do not have access to this classroom checklist" });
+      }
     }
 
     const completionDate = new Date(date);

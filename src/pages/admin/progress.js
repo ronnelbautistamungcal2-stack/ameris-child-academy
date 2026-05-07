@@ -533,8 +533,23 @@ export default function AdminProgress() {
               </div>
               <div>
                 <h2 className="text-xl font-extrabold text-gray-900">Progression Tracking</h2>
-                <p className="text-sm text-gray-500">Track goals across classrooms, age groups, and individual children</p>
+                <p className="text-sm text-gray-500">
+                  Record milestones and child progress here. Create or adjust the
+                  goal steps in Steps of Progression Manager.
+                </p>
               </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-violet-100 bg-white/80 p-3 text-sm text-gray-600">
+              Goal setup lives in{" "}
+              <a
+                href="/admin/curriculum"
+                className="font-semibold text-violet-700 underline underline-offset-2"
+              >
+                Steps of Progression Manager
+              </a>
+              . This page is where you assign and record progress against those
+              steps for each child.
             </div>
 
             {error && (

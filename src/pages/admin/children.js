@@ -227,6 +227,9 @@ export default function AdminChildren() {
   const [profileTransferClassRoomId, setProfileTransferClassRoomId] = useState("");
   const [transferSaving, setTransferSaving] = useState(false);
   const [attendanceSaving, setAttendanceSaving] = useState(false);
+  const [rowAttendanceSavingId, setRowAttendanceSavingId] = useState("");
+  const [rowTransferSavingId, setRowTransferSavingId] = useState("");
+  const [quickTransferClassRoomIds, setQuickTransferClassRoomIds] = useState({});
 
   async function refresh() {
     setError("");
@@ -238,10 +241,17 @@ export default function AdminChildren() {
         apiJson("/api/v1/classes"),
         apiJson("/api/v1/users"),
       ]);
-      setChildren(Array.isArray(kids) ? kids : []);
+      const nextChildren = Array.isArray(kids) ? kids : [];
+      setChildren(nextChildren);
       setCenters(Array.isArray(c) ? c : []);
       setClasses(Array.isArray(cls) ? cls : []);
       setUsers(Array.isArray(u) ? u : []);
+      setQuickTransferClassRoomIds((current) => {
+        const allowedIds = new Set(nextChildren.map((child) => child.id));
+        return Object.fromEntries(
+          Object.entries(current).filter(([childId]) => allowedIds.has(childId)),
+        );
+      });
     } catch (e) {
       setError(e.message || "Failed to load children");
     } finally {
@@ -915,6 +925,83 @@ export default function AdminChildren() {
     return updated;
   }
 
+  function quickTransferValue(child) {
+    if (Object.prototype.hasOwnProperty.call(quickTransferClassRoomIds, child.id)) {
+      return quickTransferClassRoomIds[child.id];
+    }
+    return getEffectiveClassRoomId(child) || "";
+  }
+
+  function updateQuickTransferValue(childId, value) {
+    setQuickTransferClassRoomIds((current) => ({
+      ...current,
+      [childId]: value,
+    }));
+  }
+
+  async function updateChildAttendanceFromCard(child, action) {
+    if (!child?.id) return;
+    setRowAttendanceSavingId(child.id);
+    setError("");
+    try {
+      const endpoint =
+        action === "CHECK_IN"
+          ? "/api/v1/attendance/check-in"
+          : "/api/v1/attendance/check-out";
+      await apiJson(endpoint, {
+        method: "POST",
+        body: JSON.stringify({ childId: child.id }),
+      });
+      await refresh();
+      if (profileChild?.id === child.id) {
+        await reloadProfileChild(child.id);
+      }
+      toast.success(
+        action === "CHECK_IN"
+          ? "Child checked in successfully."
+          : "Child checked out successfully.",
+      );
+    } catch (e) {
+      setError(
+        e.message ||
+          (action === "CHECK_IN"
+            ? "Failed to check child in"
+            : "Failed to check child out"),
+      );
+    } finally {
+      setRowAttendanceSavingId("");
+    }
+  }
+
+  async function saveChildTransferFromCard(child, targetClassRoomId = quickTransferValue(child)) {
+    if (!child?.id) return;
+    setRowTransferSavingId(child.id);
+    setError("");
+    try {
+      await apiJson("/api/v1/attendance/transfer-classroom", {
+        method: "POST",
+        body: JSON.stringify({
+          childId: child.id,
+          targetClassRoomId: targetClassRoomId || null,
+        }),
+      });
+      await refresh();
+      if (profileChild?.id === child.id) {
+        await reloadProfileChild(child.id);
+      }
+      setQuickTransferClassRoomIds((current) => {
+        const next = { ...current };
+        delete next[child.id];
+        return next;
+      });
+      toast.success("Temporary classroom updated for today.");
+    } catch (e) {
+      setError(e.message || "Failed to update today's classroom");
+    } finally {
+      setRowTransferSavingId("");
+    }
+  }
+
   async function saveProfileTransfer(targetClassRoomId = profileTransferClassRoomId) {
     if (!profileChild) return;
     setTransferSaving(true);
@@ -1200,6 +1287,10 @@ export default function AdminChildren() {
                 const className = effectiveClassRoomId ? (classById[effectiveClassRoomId]?.name || effectiveClassRoomId) : null;
                 const defaultClassName = defaultClassRoomId ? (classById[defaultClassRoomId]?.name || defaultClassRoomId) : null;
                 const movedToday = !!ch.hasTemporaryClassRoomToday;
+                const checkedInToday = isChildCheckedInToday(ch);
+                const rowAttendanceSaving = rowAttendanceSavingId === ch.id;
+                const rowTransferSaving = rowTransferSavingId === ch.id;
+                const selectedTransferClassRoomId = quickTransferValue(ch);
                 const linkedParents = getLinkedParentUsers(ch).map(formatLinkedParentAccount).filter(Boolean);
                 const parentSummaries = getParentContacts(ch)
                   .map((contact) => formatContactLine(contact))
@@ -1287,6 +1378,83 @@ export default function AdminChildren() {
                           Default classroom: {defaultClassName}
                         </div>
                       ) : null}
+
+                      <div
+                        style={{
+                          marginTop: 10,
+                          display: "grid",
+                          gap: 8,
+                          borderTop: "1px solid var(--admin-border)",
+                          paddingTop: 10,
+                        }}
+                      >
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--admin-text-muted)" }}>
+                            Today: {checkedInToday ? "Checked in" : "Not checked in"}
+                          </span>
+                          <button
+                            type="button"
+                            style={secondaryButtonStyle}
+                            onClick={() => updateChildAttendanceFromCard(ch, "CHECK_IN")}
+                            disabled={checkedInToday || rowAttendanceSaving || rowTransferSaving}
+                          >
+                            {rowAttendanceSaving && !checkedInToday ? "Saving..." : "Check In"}
+                          </button>
+                          <button
+                            type="button"
+                            style={secondaryButtonStyle}
+                            onClick={() => updateChildAttendanceFromCard(ch, "CHECK_OUT")}
+                            disabled={!checkedInToday || rowAttendanceSaving || rowTransferSaving}
+                          >
+                            {rowAttendanceSaving && checkedInToday ? "Saving..." : "Check Out"}
+                          </button>
+                        </div>
+
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          <select
+                            value={selectedTransferClassRoomId}
+                            onChange={(e) => updateQuickTransferValue(ch.id, e.target.value)}
+                            style={{ ...inputStyle, minWidth: 240, maxWidth: 320, background: "#fff" }}
+                            disabled={!checkedInToday || rowTransferSaving}
+                          >
+                            <option value="">Return to default classroom</option>
+                            {classes
+                              .filter((cl) => cl.centerId === ch.centerId)
+                              .map((cl) => (
+                                <option key={cl.id} value={cl.id}>
+                                  {cl.name}
+                                </option>
+                              ))}
+                          </select>
+                          <button
+                            type="button"
+                            style={secondaryButtonStyle}
+                            onClick={() => saveChildTransferFromCard(ch, selectedTransferClassRoomId)}
+                            disabled={!checkedInToday || rowTransferSaving}
+                          >
+                            {rowTransferSaving ? "Saving..." : "Transfer for Today"}
+                          </button>
+                          {ch.hasTemporaryClassRoomToday ? (
+                            <button
+                              type="button"
+                              style={secondaryButtonStyle}
+                              onClick={() => {
+                                updateQuickTransferValue(ch.id, "");
+                                saveChildTransferFromCard(ch, "");
+                              }}
+                              disabled={!checkedInToday || rowTransferSaving}
+                            >
+                              Return to Default
+                            </button>
+                          ) : null}
+                        </div>
+
+                        {!checkedInToday ? (
+                          <div style={{ fontSize: 11, color: "var(--admin-text-muted)" }}>
+                            Temporary classroom transfer is available after the child is checked in.
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
 
                     {/* Actions */}

@@ -266,7 +266,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
         }),
       });
       closeForm();
-      setSuccess(editingChecklistId ? "Task checklist updated." : "Task checklist created.");
+      setSuccess(editingChecklistId ? "Checklist updated." : "Checklist created.");
       await loadData();
     } catch (nextError) {
       setError(nextError.message || "Failed to save checklist");
@@ -400,7 +400,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
               ].join(" ")}
             >
               <span className="text-base leading-none">+</span>
-              {showCreate ? "Cancel" : "New Task Checklist"}
+            {showCreate ? "Cancel" : "New Checklist"}
             </button>
 
             <input
@@ -445,7 +445,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
         {showCreate ? (
           <form onSubmit={saveChecklist} className="mt-4 space-y-4 border-t border-gray-100 pt-4">
             <h3 className="text-sm font-bold text-gray-900">
-              {editingChecklistId ? "Edit Task Checklist" : "New Task Checklist"}
+              {editingChecklistId ? "Edit Checklist" : "New Checklist"}
             </h3>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
@@ -732,7 +732,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white py-14 text-center">
           <div className="text-sm font-bold text-gray-900">
-            {search || filterCategory || filterFrequency ? "No matching task checklists" : "No task checklists yet"}
+            {search || filterCategory || filterFrequency ? "No matching checklists" : "No checklists yet"}
           </div>
           <p className="mt-1 max-w-md text-xs text-gray-500">
             {search || filterCategory || filterFrequency

@@ -77,11 +77,28 @@ export default function AdminTeachers() {
     return list;
   }, [teachers, search]);
 
-  const availableClasses = useMemo(() => {
-    if (!selectedCenterIds.length) return classes;
-    const set = new Set(selectedCenterIds);
-    return classes.filter((c) => set.has(c.centerId));
+  const availableClassIds = useMemo(() => {
+    if (!selectedCenterIds.length) return [];
+    const selectedCenterIdSet = new Set(selectedCenterIds);
+    return classes
+      .filter((c) => selectedCenterIdSet.has(c.centerId))
+      .map((c) => c.id);
   }, [classes, selectedCenterIds]);
+
+  const availableClasses = useMemo(() => {
+    if (!availableClassIds.length) return [];
+    const availableClassIdSet = new Set(availableClassIds);
+    return classes.filter((c) => availableClassIdSet.has(c.id));
+  }, [availableClassIds, classes]);
+
+  useEffect(() => {
+    setSelectedClassIds((current) => {
+      if (!current.length) return current;
+      const availableClassIdSet = new Set(availableClassIds);
+      const next = current.filter((id) => availableClassIdSet.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [availableClassIds]);
 
   function toggleInList(list, id) {
     return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
@@ -366,6 +383,7 @@ export default function AdminTeachers() {
                       <button
                         key={c.id}
                         type="button"
+                        aria-pressed={active}
                         className={[
                           "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-sm font-semibold transition",
                           active
@@ -413,6 +431,7 @@ export default function AdminTeachers() {
                       <button
                         key={cl.id}
                         type="button"
+                        aria-pressed={active}
                         className={[
                           "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-sm font-semibold transition",
                           active
@@ -430,7 +449,9 @@ export default function AdminTeachers() {
                       </button>
                     );
                   })}
-                  {availableClasses.length === 0 && (
+                  {selectedCenterIds.length === 0 ? (
+                    <p className="text-xs text-gray-500">Select at least one center to choose classrooms.</p>
+                  ) : availableClasses.length === 0 && (
                     <p className="text-xs text-gray-500">No classrooms available.</p>
                   )}
                 </div>

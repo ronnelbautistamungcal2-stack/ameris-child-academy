@@ -217,6 +217,7 @@ model User {
   coachFollowUpsAssigned       CoachFollowUp[]            @relation("CoachFollowUpsAssigned")
   dailyChecklistCompletions    DailyChecklistCompletion[] @relation("DailyChecklistCompletedBy")
   assignedDailyChecklists      DailyChecklist[]           @relation("DailyChecklistAssignedUser")
+  dailyChecklistNotes          DailyChecklistNote[]       @relation("DailyChecklistNotesCreatedBy")
 }
 
 model Center {
@@ -1218,6 +1219,7 @@ model DailyChecklist {
   monthlyDay  Int?
   active      Boolean            @default(true)
   items       DailyChecklistItem[]
+  notes       DailyChecklistNote[]
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 
@@ -1264,4 +1266,20 @@ model DailyChecklistCompletion {
   @@unique([itemId, completedById, date])
   @@index([itemId, date])
   @@index([completedById, date])
+}
+
+model DailyChecklistNote {
+  id          String         @id @default(uuid())
+  checklist   DailyChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  checklistId String
+  createdBy   User           @relation("DailyChecklistNotesCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  createdById String
+  date        DateTime       @db.Date
+  notes       String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([checklistId, createdById, date])
+  @@index([checklistId, date])
+  @@index([createdById, date])
 }

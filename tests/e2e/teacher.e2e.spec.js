@@ -7,9 +7,13 @@ test.describe("Teacher Workflows", () => {
   });
 
   test("can navigate to children page", async ({ page }) => {
-    const sidebar = page.locator("aside").first();
-    await sidebar.getByRole("button", { name: "Child Progress" }).click();
-    await sidebar.getByRole("link", { name: "Children" }).click();
+    await page.getByRole("button", { name: "Child Progress" }).click();
+    const childrenLink = page.getByRole("link", { name: "Children", exact: true });
+    await expect(childrenLink).toBeVisible();
+    await Promise.all([
+      page.waitForURL(/\/teacher\/children/),
+      childrenLink.click(),
+    ]);
     await waitForLoadingDone(page);
     await expect(page).toHaveURL(/\/teacher\/children/);
   });

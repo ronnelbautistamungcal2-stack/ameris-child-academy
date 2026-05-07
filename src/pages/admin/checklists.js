@@ -124,10 +124,10 @@ export default function AdminChecklists() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-lg font-extrabold tracking-tight text-gray-900">
-              Task Checklists
+              Checklists
             </h1>
             <p className="mt-1 max-w-lg text-sm text-gray-500">
-              Build recurring task checklists, assign them to classrooms or staff, and link each item to lessons, policies, or direct actions.
+              Build recurring checklists, assign them to classrooms or staff, and link each item to lessons, policies, or direct actions.
             </p>
           </div>
 

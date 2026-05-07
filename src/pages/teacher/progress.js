@@ -549,7 +549,10 @@ export default function TeacherProgress() {
               </div>
               <div>
                 <h2 className="text-xl font-extrabold text-gray-900">Progression Tracking</h2>
-                <p className="text-sm text-gray-500">Record milestones, monitor goal progression, and plan corrective paths</p>
+                <p className="text-sm text-gray-500">
+                  Record milestones and monitor goal progression here. Goal
+                  steps are managed by admin in Steps of Progression Manager.
+                </p>
               </div>
             </div>
 

@@ -32,7 +32,7 @@ export default function CurriculumManager() {
   }, []);
 
   return (
-    <AdminLayout title="Curriculum Manager">
+    <AdminLayout title="Steps of Progression Manager">
       <div className="space-y-5">
         {/* Page Header */}
         <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-6">
@@ -46,7 +46,7 @@ export default function CurriculumManager() {
                 </svg>
               </div>
               <div>
-                <h2 className="text-xl font-extrabold text-gray-900">Curriculum Manager</h2>
+                <h2 className="text-xl font-extrabold text-gray-900">Steps of Progression Manager</h2>
                 <p className="text-sm text-gray-500">Manage categories, steps of progression, and corrective learning paths</p>
               </div>
             </div>

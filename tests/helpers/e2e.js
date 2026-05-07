@@ -41,9 +41,11 @@ async function loginAsTeacher(page, request) {
     const setCookieHeader = await loginAsTeacherCookie(request);
     await page.context().addCookies([buildBrowserSessionCookie(setCookieHeader)]);
     await page.goto("/dashboard");
+    await page.waitForURL(/\/teacher\/dashboard(?:\?.*)?$/, { timeout: 30000 });
     return;
   }
   await loginViaUI(page, "teacher@demo.com", "teacherpass");
+  await page.waitForURL(/\/teacher\/dashboard(?:\?.*)?$/, { timeout: 30000 });
 }
 
 async function loginAsParent(page, request) {

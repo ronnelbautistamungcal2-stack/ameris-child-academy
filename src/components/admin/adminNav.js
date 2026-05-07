@@ -45,7 +45,7 @@ export const ADMIN_NAV_ITEMS = [
     ),
     children: [
       { href: "/admin/lessons", label: "Curriculum List" },
-      { href: "/admin/curriculum", label: "Curriculum Manager" },
+      { href: "/admin/curriculum", label: "Steps of Progression Manager" },
       { href: "/admin/progress", label: "Progression Tracking" },
       { href: "/admin/checklists", label: "Checklists" },
       { href: "/admin/activity-overrides", label: "Log Activity" },

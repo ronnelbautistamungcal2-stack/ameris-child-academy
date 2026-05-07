@@ -7,50 +7,6 @@ import {
   normalizeRepeatDays,
 } from "@/lib/checklistSchedule";
 
-const DAILY_CHECKLIST_INCLUDE = {
-  items: {
-    orderBy: [{ taskTime: "asc" }, { sortOrder: "asc" }],
-    include: {
-      lesson: {
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          media: true,
-          term: true,
-          reference: true,
-          goals: {
-            orderBy: { goalIndex: "asc" },
-            select: {
-              id: true,
-              goalIndex: true,
-              title: true,
-              description: true,
-            },
-          },
-          category: {
-            select: {
-              id: true,
-              name: true,
-              ageRange: true,
-            },
-          },
-        },
-      },
-      policyDocument: {
-        select: {
-          id: true,
-          title: true,
-          url: true,
-        },
-      },
-    },
-  },
-  classRoom: { select: { id: true, name: true } },
-  center: { select: { id: true, name: true } },
-  assignedUser: { select: { id: true, name: true, email: true, role: true } },
-};
-
 function buildCompletionInclude(date) {
   if (!date) return false;
   return {
@@ -58,6 +14,68 @@ function buildCompletionInclude(date) {
     include: {
       completedBy: { select: { id: true, name: true, email: true } },
     },
+  };
+}
+
+function buildNotesInclude(date) {
+  if (!date) return false;
+  return {
+    where: { date: new Date(date) },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    include: {
+      createdBy: { select: { id: true, name: true, email: true } },
+    },
+  };
+}
+
+function buildDailyChecklistInclude(date) {
+  const completionInclude = buildCompletionInclude(date);
+  const notesInclude = buildNotesInclude(date);
+
+  return {
+    items: {
+      orderBy: [{ taskTime: "asc" }, { sortOrder: "asc" }],
+      include: {
+        lesson: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            media: true,
+            term: true,
+            reference: true,
+            goals: {
+              orderBy: { goalIndex: "asc" },
+              select: {
+                id: true,
+                goalIndex: true,
+                title: true,
+                description: true,
+              },
+            },
+            category: {
+              select: {
+                id: true,
+                name: true,
+                ageRange: true,
+              },
+            },
+          },
+        },
+        policyDocument: {
+          select: {
+            id: true,
+            title: true,
+            url: true,
+          },
+        },
+        ...(completionInclude ? { completions: completionInclude } : {}),
+      },
+    },
+    classRoom: { select: { id: true, name: true } },
+    center: { select: { id: true, name: true } },
+    assignedUser: { select: { id: true, name: true, email: true, role: true } },
+    ...(notesInclude ? { notes: notesInclude } : {}),
   };
 }
 
@@ -182,20 +200,11 @@ export default async function handler(req, res) {
 
     const teacherClassIds =
       role === "TEACHER" ? await getTeacherClassIds(session.user.id, centerId) : [];
-    const completionInclude = buildCompletionInclude(date);
+    const include = buildDailyChecklistInclude(date);
 
     const lists = await prisma.dailyChecklist.findMany({
       where,
-      include: {
-        ...DAILY_CHECKLIST_INCLUDE,
-        items: {
-          ...DAILY_CHECKLIST_INCLUDE.items,
-          include: {
-            ...DAILY_CHECKLIST_INCLUDE.items.include,
-            completions: completionInclude,
-          },
-        },
-      },
+      include,
       orderBy: [{ category: "asc" }, { title: "asc" }],
     });
 
@@ -221,7 +230,17 @@ export default async function handler(req, res) {
       return true;
     });
 
-    return res.status(200).json(filtered);
+    return res.status(200).json(
+      filtered.map((list) => ({
+        ...list,
+        notes: Array.isArray(list.notes)
+          ? list.notes.map((note) => ({
+              ...note,
+              mine: note.createdById === session.user.id,
+            }))
+          : [],
+      })),
+    );
   }
 
   if (req.method === "POST") {
@@ -247,7 +266,7 @@ export default async function handler(req, res) {
             }
           : undefined,
       },
-      include: DAILY_CHECKLIST_INCLUDE,
+      include: buildDailyChecklistInclude(),
     });
 
     return res.status(201).json(created);
@@ -268,7 +287,7 @@ export default async function handler(req, res) {
     const updated = await prisma.dailyChecklist.update({
       where: { id },
       data,
-      include: DAILY_CHECKLIST_INCLUDE,
+      include: buildDailyChecklistInclude(),
     });
 
     // If items provided, sync them
@@ -298,7 +317,7 @@ export default async function handler(req, res) {
     // Re-fetch with updated items
     const result = await prisma.dailyChecklist.findUnique({
       where: { id },
-      include: DAILY_CHECKLIST_INCLUDE,
+      include: buildDailyChecklistInclude(),
     });
 
     return res.status(200).json(result);

@@ -32,6 +32,7 @@ export const authOptions = {
             role: primaryRoleFromRoles(user.roles, user.role),
             roles: normalizeRoles(user.roles, user.role),
             pictureUrl: user.pictureUrl,
+            mustChangePassword: Boolean(user.mustChangePassword),
           };
         } catch (error) {
           console.error("NextAuth authorize error:", error);
@@ -49,7 +50,9 @@ export const authOptions = {
         token.roles = normalizeRoles(user.roles, user.role);
         token.role = token.roles.includes(user.role) ? user.role : token.roles[0];
         token.id = user.id;
+        token.email = user.email;
         token.pictureUrl = user.pictureUrl || null;
+        token.mustChangePassword = Boolean(user.mustChangePassword);
         token.pictureUrlFetchedAt = Date.now();
         return token;
       }
@@ -57,6 +60,10 @@ export const authOptions = {
       if (trigger === "update" && session?.user) {
         if ("pictureUrl" in session.user) token.pictureUrl = session.user.pictureUrl || null;
         if ("name" in session.user) token.name = session.user.name || token.name;
+        if ("email" in session.user) token.email = session.user.email || token.email;
+        if ("mustChangePassword" in session.user) {
+          token.mustChangePassword = Boolean(session.user.mustChangePassword);
+        }
         if ("role" in session.user) {
           const requestedRole = String(session.user.role || "").toUpperCase();
           const allowedRoles = normalizeRoles(token.roles, token.role);
@@ -70,6 +77,10 @@ export const authOptions = {
         // Some callers may send top-level fields.
         if ("pictureUrl" in session) token.pictureUrl = session.pictureUrl || null;
         if ("name" in session) token.name = session.name || token.name;
+        if ("email" in session) token.email = session.email || token.email;
+        if ("mustChangePassword" in session) {
+          token.mustChangePassword = Boolean(session.mustChangePassword);
+        }
         if ("role" in session) {
           const requestedRole = String(session.role || "").toUpperCase();
           const allowedRoles = normalizeRoles(token.roles, token.role);
@@ -88,7 +99,14 @@ export const authOptions = {
 
       const dbUser = await prisma.user.findUnique({
         where: { id: String(userId) },
-        select: { role: true, roles: true, pictureUrl: true, name: true, email: true },
+        select: {
+          role: true,
+          roles: true,
+          pictureUrl: true,
+          name: true,
+          email: true,
+          mustChangePassword: true,
+        },
       });
       if (!dbUser) return token;
 
@@ -97,6 +115,7 @@ export const authOptions = {
       token.pictureUrl = dbUser.pictureUrl || null;
       token.name = dbUser.name || token.name;
       token.email = dbUser.email || token.email;
+      token.mustChangePassword = Boolean(dbUser.mustChangePassword);
       token.pictureUrlFetchedAt = Date.now();
 
       return token;
@@ -104,9 +123,11 @@ export const authOptions = {
     async session({ session, token }) {
       if (token) {
         session.user.id = token.id;
+        session.user.email = token.email;
         session.user.role = token.role;
         session.user.roles = normalizeRoles(token.roles, token.role);
         session.user.pictureUrl = token.pictureUrl || null;
+        session.user.mustChangePassword = Boolean(token.mustChangePassword);
       }
       return session;
     },

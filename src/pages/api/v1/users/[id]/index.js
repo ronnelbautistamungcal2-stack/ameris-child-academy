@@ -10,6 +10,10 @@ function parseDateOrNull(value) {
   return d;
 }
 
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
 function sanitizeUser(user) {
   if (!user) return user;
   const { password, ...safeUser } = user;
@@ -45,12 +49,27 @@ export default async function handler(req, res) {
     }
 
     const body = req.body || {};
-    const { name, role, roles, dob, hireDate, aboutMe, pictureUrl, password } = body;
+    const { email, name, role, roles, dob, hireDate, aboutMe, pictureUrl, password } = body;
     const updateData = {};
     const assignedRoles = "roles" in body || "role" in body
       ? normalizeRoles(roles || role, role || "PARENT")
       : null;
     const isEmployee = assignedRoles ? hasEmployeeRole(assignedRoles) : true;
+
+    if ("email" in body) {
+      const normalizedEmail = normalizeEmail(email);
+      if (!normalizedEmail) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+      const existing = await prisma.user.findUnique({
+        where: { email: normalizedEmail },
+        select: { id: true },
+      });
+      if (existing && existing.id !== id) {
+        return res.status(409).json({ error: "Email already exists" });
+      }
+      updateData.email = normalizedEmail;
+    }
 
     if ("name" in body) updateData.name = name ? String(name) : null;
     if (assignedRoles && session.user.role === "ADMIN") {
@@ -91,13 +110,22 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "Password must be at least 8 characters" });
       }
       updateData.password = await bcrypt.hash(String(password), 10);
+      updateData.mustChangePassword = session.user.id !== id;
     }
 
-    const user = await prisma.user.update({
-      where: { id },
-      data: updateData,
-      include: { centers: true },
-    });
+    let user;
+    try {
+      user = await prisma.user.update({
+        where: { id },
+        data: updateData,
+        include: { centers: true },
+      });
+    } catch (error) {
+      if (error?.code === "P2002") {
+        return res.status(409).json({ error: "Email already exists" });
+      }
+      throw error;
+    }
 
     return res.status(200).json(sanitizeUser(user));
   }

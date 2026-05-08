@@ -1,6 +1,7 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
 import MonthlyCalendar from "@/components/calendar/MonthlyCalendar";
 import { apiJson } from "@/lib/api";
+import { getTimeOffTypeLabel } from "@/lib/time-off";
 import { useEffect, useState, useCallback } from "react";
 
 const SOURCE_BADGE = {
@@ -12,8 +13,8 @@ const SOURCE_BADGE = {
 const LEGEND = [
   { label: "Events", cls: "bg-indigo-100" },
   { label: "My Shifts", cls: "bg-blue-100" },
-  { label: "PTO", cls: "bg-emerald-100" },
-  { label: "Sick", cls: "bg-red-100" },
+  { label: "Paid", cls: "bg-emerald-100" },
+  { label: "Unpaid", cls: "bg-gray-200" },
 ];
 
 export default function TeacherCalendarPage() {
@@ -93,7 +94,7 @@ export default function TeacherCalendarPage() {
           startDate: t.startDate,
           endDate: t.endDate,
           user: t.user,
-          label: `${t.type} (${t.status})`,
+          label: `${t.typeLabel || getTimeOffTypeLabel(t.type)} (${t.status})`,
           _raw: t,
         });
       }

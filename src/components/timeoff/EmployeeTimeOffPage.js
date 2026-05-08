@@ -2,6 +2,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import MonthlyCalendar from "@/components/calendar/MonthlyCalendar";
 import { apiJson } from "@/lib/api";
+import { TIME_OFF_TYPE_OPTIONS } from "@/lib/time-off";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -76,6 +77,11 @@ const STATUS_BADGE = {
   CANCELLED: "border-gray-200 bg-gray-50 text-gray-600",
 };
 
+const CALENDAR_LEGEND = [
+  { label: "Paid", cls: "bg-emerald-100" },
+  { label: "Unpaid", cls: "bg-gray-200" },
+];
+
 export default function EmployeeTimeOffPage({
   LayoutComponent,
   title = "Time Off",
@@ -90,7 +96,7 @@ export default function EmployeeTimeOffPage({
 
   const [requests, setRequests] = useState([]);
   const [attendanceSummary, setAttendanceSummary] = useState(null);
-  const [approvedHours, setApprovedHours] = useState(0);
+  const [balanceSummary, setBalanceSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -100,7 +106,7 @@ export default function EmployeeTimeOffPage({
   const [endDate, setEndDate] = useState(toDateInputValue(new Date()));
   const [startTime, setStartTime] = useState(toTimeInputValue(new Date()) || "08:00");
   const [endTime, setEndTime] = useState("17:00");
-  const [requestType, setRequestType] = useState("PTO");
+  const [requestType, setRequestType] = useState("PAID");
   const [reason, setReason] = useState("");
   const [cancelTarget, setCancelTarget] = useState(null);
 
@@ -150,33 +156,26 @@ export default function EmployeeTimeOffPage({
   useEffect(() => {
     if (!centerId || !userId) {
       setAttendanceSummary(null);
-      setApprovedHours(0);
+      setBalanceSummary(null);
       return;
     }
 
     (async () => {
       try {
         const yearStart = `${new Date().getFullYear()}-01-01`;
-        const [attendance, requestRows] = await Promise.all([
+        const [attendance, balanceData] = await Promise.all([
           apiJson(
             `/api/v1/staff-attendance/summary?centerId=${encodeURIComponent(centerId)}&userId=${encodeURIComponent(userId)}&from=${yearStart}&to=${toDateInputValue(new Date())}`,
           ),
           apiJson(
-            `/api/v1/time-off?centerId=${encodeURIComponent(centerId)}&userId=${encodeURIComponent(userId)}`,
+            `/api/v1/time-off/balances?centerId=${encodeURIComponent(centerId)}&userId=${encodeURIComponent(userId)}`,
           ),
         ]);
         setAttendanceSummary(attendance);
-        const usedHours = (Array.isArray(requestRows) ? requestRows : [])
-          .filter((row) => row.status === "APPROVED")
-          .reduce(
-            (sum, row) =>
-              sum + Math.max(0, (new Date(row.endDate) - new Date(row.startDate)) / (1000 * 60 * 60)),
-            0,
-          );
-        setApprovedHours(Math.round(usedHours * 100) / 100);
+        setBalanceSummary(balanceData?.summary || null);
       } catch {
         setAttendanceSummary(null);
-        setApprovedHours(0);
+        setBalanceSummary(null);
       }
     })();
   }, [centerId, userId]);
@@ -320,8 +319,8 @@ export default function EmployeeTimeOffPage({
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <MiniSummaryCard label="Late" value={attendanceSummary?.late ?? 0} />
                 <MiniSummaryCard label="Absent" value={attendanceSummary?.absent ?? 0} />
-                <MiniSummaryCard label="Late Minutes" value={attendanceSummary?.totalLateMinutes ?? 0} />
-                <MiniSummaryCard label="Approved Hours" value={approvedHours} />
+                <MiniSummaryCard label="Paid Hours Available" value={balanceSummary?.paidAvailable ?? 0} />
+                <MiniSummaryCard label="Unpaid Hours Available" value={balanceSummary?.unpaidAvailable ?? 0} />
               </div>
 
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -378,9 +377,9 @@ export default function EmployeeTimeOffPage({
                         onChange={(event) => setRequestType(event.target.value)}
                         className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
                       >
-                        {["PTO", "Sick", "Unpaid", "Other"].map((value) => (
-                          <option key={value} value={value}>
-                            {value}
+                        {TIME_OFF_TYPE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
                           </option>
                         ))}
                       </select>
@@ -421,7 +420,7 @@ export default function EmployeeTimeOffPage({
                           <div className="mb-1 text-xs font-semibold text-emerald-700">Approved time off</div>
                           {approved.map((request) => (
                             <div key={request.id} className="text-sm text-emerald-800">
-                              {request.type} - {fmtRange(request.startDate, request.endDate)}
+                              {request.typeLabel || request.type} - {fmtRange(request.startDate, request.endDate)}
                               {request.reason ? <span className="ml-1 text-emerald-700">({request.reason})</span> : null}
                             </div>
                           ))}
@@ -432,7 +431,7 @@ export default function EmployeeTimeOffPage({
                         <div key={request.id} className="rounded-xl border border-amber-200 bg-amber-50 p-3">
                           <div className="flex items-center justify-between gap-3">
                             <div>
-                              <div className="text-sm font-extrabold text-gray-900">{request.type || "Time off"}</div>
+                              <div className="text-sm font-extrabold text-gray-900">{request.typeLabel || request.type || "Time off"}</div>
                               <div className="mt-1 text-sm text-gray-700">{fmtRange(request.startDate, request.endDate)}</div>
                               {request.reason ? <div className="mt-1 text-xs text-gray-600">{request.reason}</div> : null}
                             </div>
@@ -455,7 +454,7 @@ export default function EmployeeTimeOffPage({
                       {other.map((request) => (
                         <div key={request.id} className={`rounded-xl border p-3 ${STATUS_BADGE[request.status] || STATUS_BADGE.CANCELLED}`}>
                           <div className="flex items-center justify-between gap-3">
-                            <div className="text-sm font-extrabold text-gray-900">{request.type || "Time off"}</div>
+                            <div className="text-sm font-extrabold text-gray-900">{request.typeLabel || request.type || "Time off"}</div>
                             <span className="rounded-full border border-gray-200 bg-white px-2 py-1 text-[11px] font-extrabold text-gray-700">
                               {request.status}
                             </span>
@@ -480,6 +479,7 @@ export default function EmployeeTimeOffPage({
                     year={calYear}
                     month={calMonth}
                     events={calEvents}
+                    legendItems={CALENDAR_LEGEND}
                     onMonthChange={(nextYear, nextMonth) => {
                       setCalYear(nextYear);
                       setCalMonth(nextMonth);

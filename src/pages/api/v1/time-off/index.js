@@ -1,6 +1,40 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { isEmployeeRole, isNonAdminEmployeeRole } from "@/lib/roles";
+import {
+  decorateTimeOffRequest,
+  normalizeTimeOffType,
+} from "@/lib/time-off";
+
+function applyRequestDateRange(where, from, to) {
+  const startDate = from ? new Date(from) : null;
+  const endDate = to ? new Date(to) : null;
+  if (!startDate && !endDate) return;
+
+  if (startDate && endDate) {
+    where.startDate = { lte: endDate };
+    where.endDate = { gte: startDate };
+    return;
+  }
+
+  if (startDate) {
+    where.endDate = { gte: startDate };
+    return;
+  }
+
+  where.startDate = { lte: endDate };
+}
+
+function applySubmittedRange(where, submittedFrom, submittedTo) {
+  if (!submittedFrom && !submittedTo) return;
+  where.createdAt = {};
+  if (submittedFrom) where.createdAt.gte = new Date(submittedFrom);
+  if (submittedTo) {
+    const end = new Date(submittedTo);
+    end.setHours(23, 59, 59, 999);
+    where.createdAt.lte = end;
+  }
+}
 
 export default async function handler(req, res) {
   try {
@@ -21,7 +55,7 @@ export default async function handler(req, res) {
 }
 
 async function handleGet(req, res, session) {
-  const { centerId, userId, status } = req.query;
+  const { centerId, userId, status, from, to, submittedFrom, submittedTo } = req.query;
   if (centerId && session.user.role !== "ADMIN") {
     const allowed = await hasAccessToCenter(session.user.id, centerId);
     if (!allowed) return res.status(403).json({ error: "Forbidden" });
@@ -30,6 +64,8 @@ async function handleGet(req, res, session) {
   const where = {};
   if (centerId) where.centerId = centerId;
   if (status) where.status = status;
+  applyRequestDateRange(where, from, to);
+  applySubmittedRange(where, submittedFrom, submittedTo);
 
   if (isNonAdminEmployeeRole(session.user.role)) {
     where.userId = session.user.id;
@@ -43,11 +79,11 @@ async function handleGet(req, res, session) {
       user: { select: { id: true, name: true, email: true } },
       reviewedBy: { select: { name: true } },
     },
-    orderBy: { createdAt: "desc" },
-    take: 200,
+    orderBy: [{ startDate: "asc" }, { createdAt: "desc" }],
+    take: 500,
   });
 
-  return res.status(200).json(requests);
+  return res.status(200).json(requests.map(decorateTimeOffRequest));
 }
 
 async function handlePost(req, res, session) {
@@ -68,7 +104,7 @@ async function handlePost(req, res, session) {
     data: {
       userId: session.user.id,
       centerId,
-      type: type || "PTO",
+      type: normalizeTimeOffType(type),
       startDate: start,
       endDate: end,
       reason: reason || null,
@@ -78,5 +114,5 @@ async function handlePost(req, res, session) {
     },
   });
 
-  return res.status(201).json(request);
+  return res.status(201).json(decorateTimeOffRequest(request));
 }

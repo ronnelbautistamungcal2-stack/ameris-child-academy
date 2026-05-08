@@ -130,7 +130,8 @@ export default function TeacherChecklists() {
             <p className="mt-0.5 text-xs text-gray-600">
               Work from one checklist view for the selected day. Click any item
               to review linked lessons, policies, or reference material, and
-              leave notes at the bottom of each checklist when needed.
+              leave notes at the bottom of each checklist when needed. Teachers
+              can only complete the current day's checklist.
             </p>
           </div>
           <div className="grid w-full grid-cols-1 gap-3 md:max-w-xl md:grid-cols-2">
@@ -155,23 +156,15 @@ export default function TeacherChecklists() {
 
             <label className="block">
               <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Date
+                Current day
               </div>
-              <div className="flex gap-2">
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(event) => setSelectedDate(event.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                />
-                <button
-                  type="button"
-                  onClick={() => setSelectedDate(todayStr())}
-                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                >
-                  Today
-                </button>
-              </div>
+              <input
+                type="date"
+                value={selectedDate}
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600"
+                disabled
+                readOnly
+              />
             </label>
           </div>
         </div>

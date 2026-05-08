@@ -60,6 +60,12 @@ export async function middleware(request) {
     return NextResponse.redirect(loginUrl);
   }
 
+  if (token.mustChangePassword && pathname !== "/settings") {
+    const settingsUrl = new URL("/settings", request.url);
+    settingsUrl.searchParams.set("forcePasswordChange", "1");
+    return NextResponse.redirect(settingsUrl);
+  }
+
   const userRole = token.role;
   for (const [role, prefixes] of Object.entries(ROLE_ROUTES)) {
     for (const prefix of prefixes) {

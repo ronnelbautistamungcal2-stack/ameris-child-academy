@@ -24,15 +24,22 @@ function normalizeDocs(value) {
     .map((d) => (d && typeof d === "object" ? d : null))
     .filter(Boolean)
     .map((d) => ({
-      url: typeof d.url === "string" ? d.url : "",
+      url: typeof d.url === "string" && d.url.trim() ? d.url : null,
       originalName: typeof d.originalName === "string" ? d.originalName : null,
       mimeType: typeof d.mimeType === "string" ? d.mimeType : null,
       size: Number.isFinite(Number(d.size)) ? Number(d.size) : null,
       uploadedAt: d.uploadedAt ? String(d.uploadedAt) : null,
       expirationDate: d.expirationDate ? String(d.expirationDate) : null,
       documentType: typeof d.documentType === "string" ? d.documentType : null,
+      isManualEntry: Boolean(d.isManualEntry) && !(typeof d.url === "string" && d.url.trim()),
     }))
-    .filter((d) => d.url);
+    .filter(
+      (d) =>
+        d.url ||
+        d.expirationDate ||
+        d.originalName ||
+        d.documentType,
+    );
 }
 
 function normalizeFeedingPlan(value) {

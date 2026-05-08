@@ -1,6 +1,10 @@
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", ["POST"]);
@@ -8,8 +12,9 @@ export default async function handler(req, res) {
   }
 
   const { email, password, name, inviteCode } = req.body || {};
+  const normalizedEmail = normalizeEmail(email);
 
-  if (!email || !password || !inviteCode) {
+  if (!normalizedEmail || !password || !inviteCode) {
     return res
       .status(400)
       .json({ error: "Email, password, and invite code are required" });
@@ -21,7 +26,7 @@ export default async function handler(req, res) {
       .json({ error: "Password must be at least 8 characters" });
   }
 
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
   if (existing) return res.status(409).json({ error: "Email already exists" });
 
   const code = String(inviteCode).trim().replace(/\s+/g, "").toUpperCase();
@@ -39,9 +44,10 @@ export default async function handler(req, res) {
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await prisma.user.create({
     data: {
-      email,
+      email: normalizedEmail,
       name: name || null,
       password: passwordHash,
+      mustChangePassword: false,
       role: invite.role,
       centers: {
         create: {

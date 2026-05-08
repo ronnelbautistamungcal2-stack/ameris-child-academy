@@ -1,6 +1,7 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
+import { getTimeOffTypeLabel } from "@/lib/time-off";
 import { useEffect, useState, useCallback, useMemo } from "react";
 
 const TABS = [
@@ -542,7 +543,7 @@ function AttendanceTab({ centerId, teachers }) {
       )}
 
       <Card>
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-center gap-3">
             <FilterInput
               label="Date"
@@ -921,6 +922,11 @@ function AttendanceTab({ centerId, teachers }) {
 function TimeOffTab({ centerId, teachers }) {
   const [requests, setRequests] = useState([]);
   const [statusFilter, setStatusFilter] = useState("");
+  const [requestFrom, setRequestFrom] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  });
+  const [requestTo, setRequestTo] = useState(() => addDays(today(), 60));
   const [loading, setLoading] = useState(false);
   const [reviewTarget, setReviewTarget] = useState(null);
   const [reviewStatus, setReviewStatus] = useState("");
@@ -928,22 +934,81 @@ function TimeOffTab({ centerId, teachers }) {
   const [coverageName, setCoverageName] = useState("");
   const [reviewSaving, setReviewSaving] = useState(false);
   const [reviewError, setReviewError] = useState("");
+  const [balanceUserId, setBalanceUserId] = useState("");
+  const [balanceData, setBalanceData] = useState(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [balanceError, setBalanceError] = useState("");
+  const [balanceSaving, setBalanceSaving] = useState(false);
+  const [balanceForm, setBalanceForm] = useState({
+    earnedDate: today(),
+    paidHours: "",
+    unpaidHours: "",
+    note: "",
+  });
+
+  useEffect(() => {
+    if (!teachers.length) {
+      setBalanceUserId("");
+      return;
+    }
+    setBalanceUserId((current) =>
+      current && teachers.some((teacher) => teacher.id === current)
+        ? current
+        : teachers[0].id,
+    );
+  }, [teachers]);
 
   const loadRequests = useCallback(async () => {
+    if (!centerId) {
+      setRequests([]);
+      return;
+    }
     setLoading(true);
     try {
-      const qs = `centerId=${centerId}${statusFilter ? `&status=${statusFilter}` : ""}`;
-      const data = await apiJson(`/api/v1/time-off?${qs}`);
+      const qs = new URLSearchParams({
+        centerId,
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...(requestFrom ? { from: requestFrom } : {}),
+        ...(requestTo ? { to: requestTo } : {}),
+      });
+      const data = await apiJson(`/api/v1/time-off?${qs.toString()}`);
       setRequests(Array.isArray(data) ? data : []);
     } catch {
+      setRequests([]);
     } finally {
       setLoading(false);
     }
-  }, [centerId, statusFilter]);
+  }, [centerId, requestFrom, requestTo, statusFilter]);
 
   useEffect(() => {
     loadRequests();
   }, [loadRequests]);
+
+  const loadBalanceData = useCallback(async () => {
+    if (!centerId || !balanceUserId) {
+      setBalanceData(null);
+      return;
+    }
+    setBalanceLoading(true);
+    setBalanceError("");
+    try {
+      const qs = new URLSearchParams({
+        centerId,
+        userId: balanceUserId,
+      });
+      const data = await apiJson(`/api/v1/time-off/balances?${qs.toString()}`);
+      setBalanceData(data);
+    } catch (error) {
+      setBalanceData(null);
+      setBalanceError(error?.message || "Failed to load time-off balances");
+    } finally {
+      setBalanceLoading(false);
+    }
+  }, [balanceUserId, centerId]);
+
+  useEffect(() => {
+    loadBalanceData();
+  }, [loadBalanceData]);
 
   const openReview = useCallback((request, status) => {
     setReviewTarget(request);
@@ -975,19 +1040,207 @@ function TimeOffTab({ centerId, teachers }) {
           coverageName: reviewStatus === "APPROVED" ? coverageName : "",
         }),
       });
+      const reviewedUserId = reviewTarget?.user?.id || "";
       closeReview();
-      loadRequests();
+      await loadRequests();
+      if (reviewedUserId && reviewedUserId === balanceUserId) {
+        await loadBalanceData();
+      }
     } catch (error) {
       setReviewError(error?.message || "Failed to update request");
       setReviewSaving(false);
     }
   };
 
+  const handleBalanceSave = async (event) => {
+    event.preventDefault();
+    if (!centerId || !balanceUserId) return;
+    setBalanceSaving(true);
+    setBalanceError("");
+    try {
+      const data = await apiJson("/api/v1/time-off/balances", {
+        method: "POST",
+        body: JSON.stringify({
+          centerId,
+          userId: balanceUserId,
+          earnedDate: balanceForm.earnedDate,
+          paidHours: balanceForm.paidHours,
+          unpaidHours: balanceForm.unpaidHours,
+          note: balanceForm.note || null,
+        }),
+      });
+      setBalanceData(data);
+      setBalanceForm({
+        earnedDate: today(),
+        paidHours: "",
+        unpaidHours: "",
+        note: "",
+      });
+    } catch (error) {
+      setBalanceError(error?.message || "Failed to save time-off balance");
+    } finally {
+      setBalanceSaving(false);
+    }
+  };
+
   const pending = requests.filter((r) => r.status === "PENDING");
   const rest = requests.filter((r) => r.status !== "PENDING");
+  const tableRows = statusFilter ? requests : rest;
+  const selectedBalanceUser =
+    teachers.find((teacher) => teacher.id === balanceUserId) || null;
+  const balanceSummary = balanceData?.summary || null;
+  const balanceEntries = Array.isArray(balanceData?.entries)
+    ? balanceData.entries
+    : [];
 
   return (
     <div className="space-y-4">
+      <Card>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <SectionTitle icon="Hours" title="Time-Off Balances" />
+          <div className="grid w-full gap-3 md:max-w-3xl md:grid-cols-4">
+            <FilterSelect
+              label="Employee"
+              value={balanceUserId}
+              onChange={setBalanceUserId}
+              disabled={!teachers.length}
+            >
+              <option value="">Select employee</option>
+              {teachers.map((teacher) => (
+                <option key={teacher.id} value={teacher.id}>
+                  {teacher.name || teacher.email}
+                </option>
+              ))}
+            </FilterSelect>
+            <FilterInput
+              label="Earned Date"
+              type="date"
+              value={balanceForm.earnedDate}
+              onChange={(value) =>
+                setBalanceForm((current) => ({ ...current, earnedDate: value }))
+              }
+            />
+            <FilterInput
+              label="Paid Hours"
+              type="number"
+              value={balanceForm.paidHours}
+              onChange={(value) =>
+                setBalanceForm((current) => ({ ...current, paidHours: value }))
+              }
+            />
+            <FilterInput
+              label="Unpaid Hours"
+              type="number"
+              value={balanceForm.unpaidHours}
+              onChange={(value) =>
+                setBalanceForm((current) => ({ ...current, unpaidHours: value }))
+              }
+            />
+          </div>
+        </div>
+
+        {balanceError ? (
+          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {balanceError}
+          </div>
+        ) : null}
+
+        {!selectedBalanceUser ? (
+          <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+            Select an employee to manage paid and unpaid time-off balances.
+          </div>
+        ) : (
+          <>
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+              <KpiCard
+                label="Paid Available"
+                value={balanceLoading ? "..." : balanceSummary?.paidAvailable ?? 0}
+                color="emerald"
+              />
+              <KpiCard
+                label="Unpaid Available"
+                value={balanceLoading ? "..." : balanceSummary?.unpaidAvailable ?? 0}
+                color="sky"
+              />
+              <KpiCard
+                label="Paid Earned"
+                value={balanceLoading ? "..." : balanceSummary?.paidEarned ?? 0}
+                color="gray"
+              />
+              <KpiCard
+                label="Unpaid Earned"
+                value={balanceLoading ? "..." : balanceSummary?.unpaidEarned ?? 0}
+                color="gray"
+              />
+            </div>
+
+            <form
+              onSubmit={handleBalanceSave}
+              className="mt-4 space-y-4 rounded-xl border border-blue-100 bg-blue-50/30 p-5"
+            >
+              <TextArea
+                label="Admin Note"
+                value={balanceForm.note}
+                onChange={(value) =>
+                  setBalanceForm((current) => ({ ...current, note: value }))
+                }
+              />
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={balanceSaving}
+                  className="rounded-xl bg-gradient-to-r from-blue-800 to-sky-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:from-blue-900 hover:to-sky-700 disabled:opacity-50"
+                >
+                  {balanceSaving ? "Saving..." : "Add Balance Hours"}
+                </button>
+              </div>
+            </form>
+
+            <div className="mt-4 overflow-x-auto rounded-xl border border-gray-100">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50/80 text-left text-xs font-bold uppercase tracking-wider text-gray-400">
+                    <th className="px-4 py-3">Type</th>
+                    <th className="px-4 py-3">Hours</th>
+                    <th className="px-4 py-3">Earned Date</th>
+                    <th className="px-4 py-3">Added By</th>
+                    <th className="px-4 py-3">Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {balanceEntries.length ? (
+                    balanceEntries.map((entry) => (
+                      <tr
+                        key={entry.id}
+                        className="border-b border-gray-50 transition hover:bg-blue-50/30"
+                      >
+                        <td className="px-4 py-3 font-semibold text-gray-900">
+                          {getTimeOffTypeLabel(entry.balanceType)}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">{entry.hours}</td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {fmtDate(entry.earnedDate)}
+                        </td>
+                        <td className="px-4 py-3 text-gray-500">
+                          {entry.createdBy?.name || entry.createdBy?.email || ""}
+                        </td>
+                        <td className="px-4 py-3 text-gray-500">{entry.note || ""}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td className="px-4 py-6 text-sm text-gray-500" colSpan={5}>
+                        No balance entries have been added for {selectedBalanceUser.name || selectedBalanceUser.email}.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </Card>
+
       {/* Pending Requests */}
       {pending.length > 0 && (
         <div className="rounded-2xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50/30 p-6">
@@ -1016,13 +1269,16 @@ function TimeOffTab({ centerId, teachers }) {
                     </div>
                     <div className="text-xs text-gray-500">
                       <span className="font-semibold text-gray-700">
-                        {r.type}
+                        {r.typeLabel || getTimeOffTypeLabel(r.type)}
                       </span>
                       {" · "}
                       {fmtTimeOffRange(r.startDate, r.endDate)}
                       {r.reason && (
                         <span className="ml-2 text-gray-400">({r.reason})</span>
                       )}
+                    </div>
+                    <div className="mt-1 text-[11px] text-gray-400">
+                      Submitted {fmtDateTime(r.createdAt)}
                     </div>
                   </div>
                 </div>
@@ -1061,16 +1317,18 @@ function TimeOffTab({ centerId, teachers }) {
             <option value="DENIED">Denied</option>
             <option value="CANCELLED">Cancelled</option>
           </FilterSelect>
+          <FilterInput label="From" type="date" value={requestFrom} onChange={setRequestFrom} />
+          <FilterInput label="To" type="date" value={requestTo} onChange={setRequestTo} />
         </div>
         {loading ? (
           <Loading />
-        ) : rest.length === 0 && pending.length === 0 ? (
+        ) : tableRows.length === 0 && pending.length === 0 ? (
           <div className="mt-6 py-8 text-center">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-xl">
               🏖️
             </div>
             <p className="mt-3 text-sm font-semibold text-gray-600">
-              No time-off requests.
+              No time-off requests in this time frame.
             </p>
           </div>
         ) : (
@@ -1081,6 +1339,7 @@ function TimeOffTab({ centerId, teachers }) {
                   <th className="px-4 py-3">Employee</th>
                   <th className="px-4 py-3">Type</th>
                   <th className="px-4 py-3">Dates / Times</th>
+                  <th className="px-4 py-3">Submitted At</th>
                   <th className="px-4 py-3">Reason</th>
                   <th className="px-4 py-3">Coverage</th>
                   <th className="px-4 py-3">Status</th>
@@ -1088,7 +1347,7 @@ function TimeOffTab({ centerId, teachers }) {
                 </tr>
               </thead>
               <tbody>
-                {(statusFilter ? requests : rest).map((r) => (
+                {tableRows.map((r) => (
                   <tr
                     key={r.id}
                     className="border-b border-gray-50 transition hover:bg-blue-50/30"
@@ -1096,9 +1355,14 @@ function TimeOffTab({ centerId, teachers }) {
                     <td className="px-4 py-3 font-semibold text-gray-900">
                       {r.user?.name || "—"}
                     </td>
-                    <td className="px-4 py-3">{r.type}</td>
+                    <td className="px-4 py-3">
+                      {r.typeLabel || getTimeOffTypeLabel(r.type)}
+                    </td>
                     <td className="px-4 py-3 text-gray-600">
                       {fmtTimeOffRange(r.startDate, r.endDate)}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500">
+                      {fmtDateTime(r.createdAt)}
                     </td>
                     <td className="px-4 py-3 text-gray-500">
                       {r.reason || ""}

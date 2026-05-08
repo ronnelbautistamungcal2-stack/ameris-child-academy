@@ -217,6 +217,7 @@ export default function AdminUsers() {
       await apiJson(`/api/v1/users/${editing.id}`, {
         method: "PUT",
         body: JSON.stringify({
+          email,
           name: name || null,
           roles,
           password: password || undefined,
@@ -354,8 +355,7 @@ export default function AdminUsers() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       style={inputStyle}
-                      required={!editing}
-                      disabled={!!editing}
+                      required
                       placeholder="e.g. jane@example.com"
                       type="email"
                     />

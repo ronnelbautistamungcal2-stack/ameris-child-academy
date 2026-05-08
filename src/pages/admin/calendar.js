@@ -2,6 +2,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import MonthlyCalendar from "@/components/calendar/MonthlyCalendar";
 import { apiJson } from "@/lib/api";
+import { getTimeOffTypeLabel } from "@/lib/time-off";
 import { useEffect, useState, useCallback } from "react";
 
 const EVENT_TYPES = [
@@ -85,8 +86,8 @@ function hoursBetween(start, end) {
 const LEGEND = [
   { label: "Events", cls: "bg-indigo-100" },
   { label: "Shifts", cls: "bg-blue-100" },
-  { label: "PTO", cls: "bg-emerald-100" },
-  { label: "Sick", cls: "bg-red-100" },
+  { label: "Paid", cls: "bg-emerald-100" },
+  { label: "Unpaid", cls: "bg-gray-200" },
 ];
 
 export default function CalendarPage() {
@@ -171,22 +172,20 @@ export default function CalendarPage() {
         from: staffSummaryFrom,
         to: staffSummaryTo,
       });
-      const [attendance, requests] = await Promise.all([
+      const [attendance, requests, balances] = await Promise.all([
         apiJson(`/api/v1/staff-attendance/summary?${qs.toString()}`),
         apiJson(`/api/v1/time-off?centerId=${centerId}&userId=${selectedUserId}`),
+        apiJson(`/api/v1/time-off/balances?centerId=${centerId}&userId=${selectedUserId}`),
       ]);
       const filteredRequests = (Array.isArray(requests) ? requests : []).filter((request) => {
         const requestStart = toDateInput(request.startDate);
         const requestEnd = toDateInput(request.endDate);
         return (!staffSummaryFrom || requestEnd >= staffSummaryFrom) && (!staffSummaryTo || requestStart <= staffSummaryTo);
       });
-      const approvedHours = filteredRequests
-        .filter((request) => request.status === "APPROVED")
-        .reduce((sum, request) => sum + hoursBetween(request.startDate, request.endDate), 0);
       setStaffSummary({
         attendance,
         requests: filteredRequests,
-        approvedHours: Math.round(approvedHours * 100) / 100,
+        balanceSummary: balances?.summary || null,
       });
     } catch {
       setStaffSummary(null);
@@ -221,7 +220,8 @@ export default function CalendarPage() {
         items.push({
           id: t.id, _source: "timeoff", type: t.type, status: t.status,
           startDate: t.startDate, endDate: t.endDate,
-          user: t.user, label: `${t.user?.name || "\u2014"} (${t.type})`,
+          user: t.user,
+          label: `${t.user?.name || "\u2014"} (${t.typeLabel || getTimeOffTypeLabel(t.type)})`,
           _raw: t,
         });
       }
@@ -601,7 +601,7 @@ export default function CalendarPage() {
                   Employee Summary
                 </div>
                 <div style={{ marginTop: 4, fontSize: 13, color: "var(--admin-text-muted)" }}>
-                  View time off, approved hours, lates, and absences for a specific staff member.
+                  View time off, paid and unpaid hours available, lates, and absences for a specific staff member.
                 </div>
               </div>
               <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", width: "min(720px, 100%)" }}>
@@ -655,7 +655,8 @@ export default function CalendarPage() {
                   <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--admin-text-muted)" }}>Time Off</div>
                   <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
                     <SummaryStat label="Requests" value={staffSummary.requests.length} />
-                    <SummaryStat label="Approved Hours" value={staffSummary.approvedHours} />
+                    <SummaryStat label="Paid Available" value={staffSummary.balanceSummary?.paidAvailable ?? 0} />
+                    <SummaryStat label="Unpaid Available" value={staffSummary.balanceSummary?.unpaidAvailable ?? 0} />
                   </div>
                 </div>
 

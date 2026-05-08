@@ -181,7 +181,7 @@ export default function StaffChecklistsPage() {
               ? `${selectedCenterName} daily operations`
               : "Daily operations checklists"
           }
-          description="Track center-wide opening, safety, cleaning, meals, and closing tasks without classroom-only checklist noise."
+          description="Track center-wide opening, safety, cleaning, meals, and closing tasks without classroom-only checklist noise. Other staff can only complete today's checklist."
           meta={
             <>
               <WorkspacePill tone="amber">{selectedDate}</WorkspacePill>
@@ -214,23 +214,15 @@ export default function StaffChecklistsPage() {
               </label>
               <label className="block">
                 <div className="mb-1.5 text-xs font-black uppercase tracking-[0.16em] text-gray-500">
-                  Checklist Date
+                  Current day
                 </div>
-                <div className="flex gap-2">
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(event) => setSelectedDate(event.target.value)}
-                    className={workspaceInputClass}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setSelectedDate(todayString())}
-                    className={[workspaceSecondaryButtonClass, "shrink-0 px-4"].join(" ")}
-                  >
-                    Today
-                  </button>
-                </div>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  className={`${workspaceInputClass} bg-gray-50 text-gray-600`}
+                  disabled
+                  readOnly
+                />
               </label>
             </div>
           }

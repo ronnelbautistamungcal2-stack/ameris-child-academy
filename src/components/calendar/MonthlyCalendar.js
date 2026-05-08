@@ -12,6 +12,8 @@ const STATUS_COLORS = {
 };
 
 const TYPE_COLORS = {
+  PAID: "bg-emerald-100 text-emerald-700",
+  UNPAID: "bg-gray-200 text-gray-600",
   PTO: "bg-emerald-100 text-emerald-700",
   Sick: "bg-red-100 text-red-700",
   Unpaid: "bg-gray-200 text-gray-600",

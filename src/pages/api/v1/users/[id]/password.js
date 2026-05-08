@@ -25,9 +25,11 @@ export default async function handler(req, res) {
 
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) return res.status(404).json({ error: "User not found" });
+  const isSelf = session.user.id === id;
+  const skipCurrentPasswordCheck = isSelf && user.mustChangePassword;
 
   // Non-admin users must verify current password
-  if (session.user.role !== "ADMIN") {
+  if (session.user.role !== "ADMIN" && !skipCurrentPasswordCheck) {
     if (!currentPassword) {
       return res.status(400).json({ error: "Current password is required" });
     }
@@ -40,7 +42,10 @@ export default async function handler(req, res) {
   const hashed = await bcrypt.hash(String(newPassword), 10);
   await prisma.user.update({
     where: { id },
-    data: { password: hashed },
+    data: {
+      password: hashed,
+      mustChangePassword: session.user.role === "ADMIN" && !isSelf,
+    },
   });
 
   return res.status(200).json({ message: "Password updated successfully" });

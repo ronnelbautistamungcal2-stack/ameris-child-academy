@@ -91,6 +91,24 @@ const CHILD_DOCUMENT_TYPES = [
   { field: "otherDocuments", label: "Other", setter: "setOtherDocuments", filesSetter: "setOtherFiles" },
 ];
 
+function getDocumentTypeMeta(field) {
+  return CHILD_DOCUMENT_TYPES.find((item) => item.field === field) || null;
+}
+
+function createManualDocumentEntry(field, expirationDate) {
+  const meta = getDocumentTypeMeta(field);
+  return {
+    url: null,
+    originalName: meta?.label ? `${meta.label} expiration` : "Expiration record",
+    mimeType: null,
+    size: null,
+    uploadedAt: null,
+    expirationDate: expirationDate || null,
+    documentType: meta?.label || field,
+    isManualEntry: true,
+  };
+}
+
 function createDocumentExpirations(overrides = {}) {
   return {
     healthAssessmentDocuments: "",
@@ -172,6 +190,7 @@ export default function AdminChildren() {
   const [modalOpen, setModalOpen] = useState(false);
   const [q, setQ] = useState("");
   const [classroomFilter, setClassroomFilter] = useState("");
+  const [copyContactsFromChildId, setCopyContactsFromChildId] = useState("");
 
   const [editing, setEditing] = useState(null);
   const [firstName, setFirstName] = useState("");
@@ -296,6 +315,14 @@ export default function AdminChildren() {
       .sort((a, b) => (a.firstName || "").localeCompare(b.firstName || ""));
   }, [children, classroomFilter, q]);
 
+  const contactTemplateChildren = useMemo(() => {
+    return [...children]
+      .filter((child) => !centerId || child.centerId === centerId)
+      .sort((left, right) =>
+        childFullName(left).localeCompare(childFullName(right)),
+      );
+  }, [centerId, children]);
+
   const documentReportRows = useMemo(() => {
     const rows = [];
     for (const child of children) {
@@ -406,6 +433,7 @@ export default function AdminChildren() {
 
   const resetForm = useCallback(() => {
     setEditing(null);
+    setCopyContactsFromChildId("");
     setFirstName("");
     setLastName("");
     setBirthDate("");
@@ -441,6 +469,7 @@ export default function AdminChildren() {
 
   const startEdit = useCallback((child) => {
     setEditing(child);
+    setCopyContactsFromChildId("");
     setFirstName(child.firstName || "");
     setLastName(child.lastName || "");
     setBirthDate(child.birthDate ? child.birthDate.slice(0, 10) : "");
@@ -626,33 +655,64 @@ export default function AdminChildren() {
   }
 
   function withDocumentMeta(docs, field) {
-    const type = CHILD_DOCUMENT_TYPES.find((item) => item.field === field);
+    const type = getDocumentTypeMeta(field);
     const expirationDate = documentExpirations[field] || null;
     return (Array.isArray(docs) ? docs : []).map((doc) => ({
       ...doc,
       documentType: doc?.documentType || type?.label || field,
       expirationDate,
+      isManualEntry: Boolean(doc?.isManualEntry) && !doc?.url,
     }));
   }
 
   function buildDocumentPayload(existingDocs, uploadedDocs, field) {
+    const existingList = Array.isArray(existingDocs) ? existingDocs : [];
+    const realExistingDocs = existingList.filter((doc) => doc?.url);
+    const manualExistingDocs = existingList.filter(
+      (doc) => !doc?.url && (doc?.expirationDate || doc?.originalName || doc?.documentType),
+    );
+    const uploadedWithMeta = withDocumentMeta(uploadedDocs, field);
+
     const persistedDocs = documentExpirationTouched[field]
-      ? withDocumentMeta(existingDocs, field)
-      : (Array.isArray(existingDocs) ? existingDocs : []).map((doc) => {
-          const type = CHILD_DOCUMENT_TYPES.find((item) => item.field === field);
+      ? withDocumentMeta(realExistingDocs, field)
+      : realExistingDocs.map((doc) => {
+          const type = getDocumentTypeMeta(field);
           return {
             ...doc,
             documentType: doc?.documentType || type?.label || field,
             expirationDate: doc?.expirationDate || null,
+            isManualEntry: false,
           };
         });
 
-    return [...persistedDocs, ...withDocumentMeta(uploadedDocs, field)];
+    if (!persistedDocs.length && !uploadedWithMeta.length) {
+      if (documentExpirationTouched[field]) {
+        return documentExpirations[field]
+          ? [createManualDocumentEntry(field, documentExpirations[field])]
+          : [];
+      }
+      if (manualExistingDocs.length) {
+        return manualExistingDocs.map((doc) => ({
+          ...doc,
+          isManualEntry: true,
+        }));
+      }
+    }
+
+    return [...persistedDocs, ...uploadedWithMeta];
   }
 
   function updateDocumentExpiration(field, value) {
     setDocumentExpirations((cur) => ({ ...cur, [field]: value }));
     setDocumentExpirationTouched((cur) => ({ ...cur, [field]: true }));
+  }
+
+  function applyContactTemplate(childId) {
+    const sourceChild = children.find((child) => child.id === childId);
+    if (!sourceChild) return;
+    setParentAccountIds(createParentAccountIds(getLinkedParentIds(sourceChild)));
+    setParentContacts(createParentContacts(getParentContacts(sourceChild)));
+    setEmergencyContacts(createEmergencyContacts(getEmergencyContacts(sourceChild)));
   }
 
   function planEndDate(plan) {
@@ -1827,6 +1887,39 @@ export default function AdminChildren() {
                 </Field>
               ))}
             </div>
+
+            {!editing ? (
+              <>
+                <SectionHeader
+                  icon="Copy"
+                  title="Copy Family Contacts"
+                  style={{ marginTop: 20 }}
+                />
+                <div style={formGridStyle}>
+                  <Field label="Copy from another child">
+                    <select
+                      value={copyContactsFromChildId}
+                      onChange={(e) => {
+                        const nextChildId = e.target.value;
+                        setCopyContactsFromChildId(nextChildId);
+                        if (nextChildId) applyContactTemplate(nextChildId);
+                      }}
+                      style={inputStyle}
+                    >
+                      <option value="">(optional)</option>
+                      {contactTemplateChildren.map((child) => (
+                        <option key={child.id} value={child.id}>
+                          {childFullName(child)}
+                        </option>
+                      ))}
+                    </select>
+                    <div style={{ marginTop: 6, fontSize: 12, color: "var(--admin-text-muted)" }}>
+                      Copies linked parent accounts, parent contacts, and emergency contacts into this new child record.
+                    </div>
+                  </Field>
+                </div>
+              </>
+            ) : null}
 
             <SectionHeader icon="👪" title="Parent Contacts" style={{ marginTop: 20 }} />
             <div style={formGridStyle}>

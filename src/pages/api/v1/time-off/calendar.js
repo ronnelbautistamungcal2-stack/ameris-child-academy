@@ -1,6 +1,7 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { isEmployeeRole } from "@/lib/roles";
+import { decorateTimeOffRequest } from "@/lib/time-off";
 
 export default async function handler(req, res) {
   try {
@@ -46,7 +47,7 @@ export default async function handler(req, res) {
       orderBy: { startDate: "asc" },
     });
 
-    return res.status(200).json(requests);
+    return res.status(200).json(requests.map(decorateTimeOffRequest));
   } catch (e) {
     console.error("time-off/calendar error:", e);
     return res.status(500).json({ error: "Internal server error" });

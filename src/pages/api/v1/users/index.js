@@ -106,6 +106,7 @@ export default async function handler(req, res) {
           email: normalizedEmail,
           name: name ? String(name) : null,
           password: passwordHash,
+          mustChangePassword: true,
           dob: isEmployee ? parseOptionalDate(dob) : null,
           hireDate: isEmployee ? parseOptionalDate(hireDate) : null,
           aboutMe: isEmployee && aboutMe ? String(aboutMe).slice(0, 5000) : null,

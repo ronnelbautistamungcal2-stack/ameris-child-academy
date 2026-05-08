@@ -253,6 +253,76 @@ test.describe("Staff Management API @api", () => {
       expect(approved.status).toBe("APPROVED");
       expect(approved.coverageName).toBe("QA Coverage Staff");
     });
+
+    test("approved paid requests reduce paid hours available", async ({ request }) => {
+      if (!centerId || !teacherUserId) test.skip();
+
+      const adminCookies = await loginAsAdmin(request);
+      const teacherCookies = await loginAsTeacher(request);
+
+      const earnedDate = "2026-04-01";
+      const addBalanceRes = await apiPost(
+        request,
+        "/api/v1/time-off/balances",
+        {
+          centerId,
+          userId: teacherUserId,
+          earnedDate,
+          paidHours: 12,
+          unpaidHours: 0,
+          note: "API balance test",
+        },
+        adminCookies,
+      );
+      expect(addBalanceRes.status()).toBe(201);
+
+      const beforeRes = await apiGet(
+        request,
+        `/api/v1/time-off/balances?centerId=${centerId}&userId=${teacherUserId}`,
+        adminCookies,
+      );
+      expect(beforeRes.status()).toBe(200);
+      const before = await beforeRes.json();
+
+      const createRes = await apiPost(
+        request,
+        "/api/v1/time-off",
+        {
+          centerId,
+          type: "PAID",
+          startDate: "2026-04-10T08:00:00.000Z",
+          endDate: "2026-04-10T12:00:00.000Z",
+          reason: "Balance usage test",
+        },
+        teacherCookies,
+      );
+      expect([200, 201]).toContain(createRes.status());
+      const created = await createRes.json();
+
+      const approveRes = await apiPut(
+        request,
+        `/api/v1/time-off/${created.id}`,
+        {
+          status: "APPROVED",
+          reviewNotes: "Approved for balance usage test",
+        },
+        adminCookies,
+      );
+      expect(approveRes.status()).toBe(200);
+
+      const afterRes = await apiGet(
+        request,
+        `/api/v1/time-off/balances?centerId=${centerId}&userId=${teacherUserId}`,
+        adminCookies,
+      );
+      expect(afterRes.status()).toBe(200);
+      const after = await afterRes.json();
+
+      expect(after.summary.paidAvailable).toBeCloseTo(
+        before.summary.paidAvailable - 4,
+        5,
+      );
+    });
   });
 
   // ── Training Logs ─────────────────────────────────────────────

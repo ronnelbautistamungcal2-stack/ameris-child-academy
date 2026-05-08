@@ -1,7 +1,7 @@
 // @ts-check
 const { test, expect } = require("@playwright/test");
 const { loginAsAdmin } = require("../helpers/auth");
-const { apiGet, apiPost, apiDelete } = require("../helpers/api");
+const { apiGet, apiPost, apiPut, apiDelete } = require("../helpers/api");
 
 test.describe("Users API @api", () => {
   let centerId;
@@ -86,5 +86,39 @@ test.describe("Users API @api", () => {
     expect(data.centers).toHaveLength(1);
     expect(data.centers[0].centerId).toBe(centerId);
     createdUserIds.push(data.id);
+  });
+
+  test("PUT /api/v1/users/:id lets admin update email", async ({ request }) => {
+    const cookies = await loginAsAdmin(request);
+    const createRes = await apiPost(
+      request,
+      "/api/v1/users",
+      {
+        email: `editable-user-${Date.now()}@example.com`,
+        name: "Editable User",
+        password: "password123",
+        roles: ["PARENT"],
+      },
+      cookies,
+    );
+
+    expect(createRes.status()).toBe(201);
+    const created = await createRes.json();
+    createdUserIds.push(created.id);
+
+    const nextEmail = `updated-user-${Date.now()}@example.com`;
+    const updateRes = await apiPut(
+      request,
+      `/api/v1/users/${created.id}`,
+      {
+        email: nextEmail,
+        name: "Editable User",
+      },
+      cookies,
+    );
+
+    expect(updateRes.status()).toBe(200);
+    const updated = await updateRes.json();
+    expect(updated.email).toBe(nextEmail);
   });
 });

@@ -160,6 +160,11 @@ enum TimeOffStatus {
   CANCELLED
 }
 
+enum TimeOffBalanceType {
+  PAID
+  UNPAID
+}
+
 enum EvaluationStatus {
   DRAFT
   SUBMITTED
@@ -171,6 +176,7 @@ model User {
   email              String              @unique
   name               String?
   password           String?
+  mustChangePassword Boolean             @default(false)
   dob                DateTime?
   hireDate           DateTime?
   aboutMe            String?
@@ -202,6 +208,8 @@ model User {
   staffAttendancesRecorded     StaffAttendance[]         @relation("StaffAttendancesRecorded")
   timeOffRequests              TimeOffRequest[]          @relation("TimeOffRequests")
   timeOffReviewed              TimeOffRequest[]          @relation("TimeOffReviewed")
+  timeOffBalanceEntries        TimeOffBalanceEntry[]     @relation("TimeOffBalanceEntries")
+  timeOffBalanceEntriesCreated TimeOffBalanceEntry[]     @relation("TimeOffBalanceEntriesCreated")
   trainingLogs                 TrainingLog[]             @relation("TrainingLogs")
   trainingLogsRecorded         TrainingLog[]             @relation("TrainingLogsRecorded")
   evaluationsReceived          TeacherEvaluation[]       @relation("EvaluationsReceived")
@@ -243,6 +251,7 @@ model Center {
   teacherPerformanceSnapshots TeacherPerformanceSnapshot[]
   staffAttendances StaffAttendance[]
   timeOffRequests  TimeOffRequest[]
+  timeOffBalanceEntries TimeOffBalanceEntry[]
   trainingLogs     TrainingLog[]
   classroomBudgets ClassroomBudget[]
   teacherEvaluations TeacherEvaluation[]
@@ -945,6 +954,25 @@ model TimeOffRequest {
 
   @@index([userId, status])
   @@index([centerId, startDate])
+}
+
+model TimeOffBalanceEntry {
+  id          String             @id @default(uuid())
+  user        User               @relation("TimeOffBalanceEntries", fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  center      Center             @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  balanceType TimeOffBalanceType
+  hours       Float
+  earnedDate  DateTime
+  note        String?
+  createdBy   User?              @relation("TimeOffBalanceEntriesCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([userId, centerId, balanceType, earnedDate])
+  @@index([centerId, earnedDate])
 }
 
 model TrainingLog {

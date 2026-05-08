@@ -28,6 +28,7 @@ export default function SettingsPage() {
   );
 
   const role = session?.user?.role || "";
+  const mustChangePassword = Boolean(session?.user?.mustChangePassword);
   const isStaffRole = STAFF_ROLES.has(role);
   const navItems = useMemo(() => resolveNavItems(role), [role]);
 
@@ -36,6 +37,7 @@ export default function SettingsPage() {
   const [error, setError] = useState("");
 
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [dob, setDob] = useState("");
   const [doh, setDoh] = useState("");
   const [aboutMe, setAboutMe] = useState("");
@@ -54,6 +56,12 @@ export default function SettingsPage() {
   const livePictureUrl = pictureUrl ?? session?.user?.pictureUrl ?? "";
   const displayName =
     name.trim() || session?.user?.name || session?.user?.email || "Account";
+
+  useEffect(() => {
+    if (mustChangePassword) {
+      setShowPasswordForm(true);
+    }
+  }, [mustChangePassword]);
 
   const profileCompletion = useMemo(() => {
     const signals = [
@@ -79,6 +87,7 @@ export default function SettingsPage() {
         const user = await apiJson(`/api/v1/users/${session.user.id}`);
         if (cancelled) return;
         setName(user?.name || "");
+        setEmail(user?.email || session.user.email || "");
         setDob(user?.dob ? String(user.dob).slice(0, 10) : "");
         setDoh(user?.hireDate ? String(user.hireDate).slice(0, 10) : "");
         setAboutMe(user?.aboutMe || "");
@@ -192,7 +201,7 @@ export default function SettingsPage() {
       await apiJson(`/api/v1/users/${session.user.id}/password`, {
         method: "PUT",
         body: JSON.stringify({
-          currentPassword,
+          currentPassword: mustChangePassword ? undefined : currentPassword,
           newPassword,
         }),
       });
@@ -201,6 +210,11 @@ export default function SettingsPage() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+      await update?.({
+        user: {
+          mustChangePassword: false,
+        },
+      });
     } catch (e) {
       setPasswordError(e.message || "Failed to change password.");
     } finally {
@@ -217,6 +231,7 @@ export default function SettingsPage() {
 
     try {
       const payload = {
+        email: email.trim() || null,
         name: name.trim() || null,
         dob: dob || null,
         aboutMe: aboutMe.trim() || null,
@@ -232,6 +247,7 @@ export default function SettingsPage() {
       });
 
       setName(savedUser?.name || "");
+      setEmail(savedUser?.email || "");
       setDob(savedUser?.dob ? String(savedUser.dob).slice(0, 10) : "");
       setDoh(savedUser?.hireDate ? String(savedUser.hireDate).slice(0, 10) : "");
       setAboutMe(savedUser?.aboutMe || "");
@@ -239,6 +255,7 @@ export default function SettingsPage() {
 
       await update?.({
         user: {
+          email: savedUser?.email || null,
           name: savedUser?.name || null,
           pictureUrl: savedUser?.pictureUrl || livePictureUrl || null,
         },
@@ -340,7 +357,7 @@ export default function SettingsPage() {
               <AvatarUploader
                 imageUrl={livePictureUrl}
                 displayName={displayName}
-                email={session?.user?.email}
+                email={email || session?.user?.email}
                 busy={profileBusy}
                 uploading={avatarUploading}
                 removing={avatarRemoving}
@@ -355,7 +372,7 @@ export default function SettingsPage() {
             >
               <div className="space-y-4">
                 <SnapshotRow label="Name" value={displayName} />
-                <SnapshotRow label="Email" value={session?.user?.email || "-"} />
+                <SnapshotRow label="Email" value={email || session?.user?.email || "-"} />
                 <SnapshotRow label="Role" value={formatRoleLabel(role)} />
                 <div className="rounded-2xl border border-gray-200 bg-gray-50/80 px-4 py-3">
                   <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-gray-500">
@@ -390,6 +407,18 @@ export default function SettingsPage() {
                       className={inputClassName}
                       placeholder="How your name should appear"
                       disabled={profileBusy}
+                    />
+                  </FormField>
+
+                  <FormField label="Email address">
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className={inputClassName}
+                      placeholder="you@example.com"
+                      disabled={profileBusy}
+                      required
                     />
                   </FormField>
 
@@ -466,8 +495,17 @@ export default function SettingsPage() {
 
             <SettingsCard
               title="Password"
-              description="Change your account password and keep access secure."
+              description={
+                mustChangePassword
+                  ? "Change your password before continuing to the rest of the app."
+                  : "Change your account password and keep access secure."
+              }
             >
+              {mustChangePassword ? (
+                <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
+                  Your account is using a temporary password. Set a new password now to unlock the rest of the system.
+                </div>
+              ) : null}
               {!showPasswordForm ? (
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
@@ -483,17 +521,19 @@ export default function SettingsPage() {
                 </div>
               ) : (
                 <form onSubmit={handlePasswordChange} className="space-y-4">
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                    <FormField label="Current password">
-                      <input
-                        type="password"
-                        value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
-                        required
-                        className={inputClassName}
-                        disabled={changingPassword}
-                      />
-                    </FormField>
+                  <div className={`grid grid-cols-1 gap-4 ${mustChangePassword ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+                    {!mustChangePassword ? (
+                      <FormField label="Current password">
+                        <input
+                          type="password"
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                          required
+                          className={inputClassName}
+                          disabled={changingPassword}
+                        />
+                      </FormField>
+                    ) : null}
 
                     <FormField label="New password">
                       <input
@@ -534,19 +574,21 @@ export default function SettingsPage() {
                     >
                       {changingPassword ? "Changing..." : "Update password"}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowPasswordForm(false);
-                        setCurrentPassword("");
-                        setNewPassword("");
-                        setConfirmPassword("");
-                        setPasswordError("");
-                      }}
-                      className="rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-                    >
-                      Cancel
-                    </button>
+                    {!mustChangePassword ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowPasswordForm(false);
+                          setCurrentPassword("");
+                          setNewPassword("");
+                          setConfirmPassword("");
+                          setPasswordError("");
+                        }}
+                        className="rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                      >
+                        Cancel
+                      </button>
+                    ) : null}
                   </div>
                 </form>
               )}

@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/Workspace";
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
+import { hasChecklistClassroomScope } from "@/lib/dailyChecklistClassrooms";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -123,7 +124,7 @@ export default function StaffDashboardPage() {
 
       setChecklists(
         (Array.isArray(checklistRows) ? checklistRows : []).filter(
-          (checklist) => !checklist?.classRoomId && checklist?.category !== "CLASSROOM",
+          (checklist) => !hasChecklistClassroomScope(checklist) && checklist?.category !== "CLASSROOM",
         ),
       );
       setCalendarData({

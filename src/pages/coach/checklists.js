@@ -14,6 +14,7 @@ import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { collectChecklistLessonAttachments } from "@/lib/checklistLessonResources";
+import { getChecklistClassRooms } from "@/lib/dailyChecklistClassrooms";
 import {
   describeChecklistSchedule,
   summarizeChecklistFrequency,
@@ -406,6 +407,7 @@ function ChecklistCard({ checklist, onToggle, completing }) {
   const tone = CATEGORY_TONES[checklist.category] || "slate";
   const scheduleKey = summarizeChecklistFrequency(checklist);
   const scheduleLabel = summarizeChecklistSchedule(checklist);
+  const checklistRooms = getChecklistClassRooms(checklist);
 
   return (
     <div
@@ -433,8 +435,13 @@ function ChecklistCard({ checklist, onToggle, completing }) {
               <CoachBadge tone={FREQ_TONES[scheduleKey] || "slate"}>
                 {scheduleLabel}
               </CoachBadge>
-              {checklist.classRoom ? (
-                <CoachBadge tone="sky">{checklist.classRoom.name}</CoachBadge>
+              {checklistRooms.slice(0, 2).map((room) => (
+                <CoachBadge key={room.id} tone="sky">
+                  {room.name}
+                </CoachBadge>
+              ))}
+              {checklistRooms.length > 2 ? (
+                <CoachBadge tone="sky">+{checklistRooms.length - 2} more</CoachBadge>
               ) : null}
               {allDone ? <CoachBadge tone="emerald">Complete</CoachBadge> : null}
             </div>

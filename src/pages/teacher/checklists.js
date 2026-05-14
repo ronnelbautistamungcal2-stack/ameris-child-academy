@@ -2,6 +2,7 @@ import TeacherLayout from "@/components/teacher/TeacherLayout";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { collectChecklistLessonAttachments } from "@/lib/checklistLessonResources";
+import { getChecklistClassRooms } from "@/lib/dailyChecklistClassrooms";
 import {
   describeChecklistSchedule,
   getEffectiveItemSchedule,
@@ -354,6 +355,7 @@ function TeacherDailyChecklist({ centerId, selectedDate }) {
           const scheduleLabel =
             checklist.scheduleLabel || summarizeChecklistSchedule(checklist);
           const canSaveNotes = checklist.source !== "SCHEDULED_LESSON_PLAN";
+          const checklistRooms = getChecklistClassRooms(checklist);
 
           return (
             <div
@@ -380,6 +382,19 @@ function TeacherDailyChecklist({ centerId, selectedDate }) {
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
                     {completedCount}/{items.length} complete
                   </span>
+                  {checklistRooms.slice(0, 2).map((room) => (
+                    <span
+                      key={room.id}
+                      className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700"
+                    >
+                      {room.name}
+                    </span>
+                  ))}
+                  {checklistRooms.length > 2 ? (
+                    <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
+                      +{checklistRooms.length - 2} more classrooms
+                    </span>
+                  ) : null}
                   {allDone ? (
                     <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
                       Finished

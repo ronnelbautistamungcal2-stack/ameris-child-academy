@@ -1,4 +1,8 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
+import {
+  canTeacherAccessChecklist,
+  hasChecklistClassroomScope,
+} from "@/lib/dailyChecklistClassrooms";
 import prisma from "@/lib/prisma";
 import { getTeacherClassIds } from "@/lib/teacherScope";
 
@@ -30,6 +34,11 @@ async function loadChecklist(checklistId) {
       id: true,
       centerId: true,
       classRoomId: true,
+      classrooms: {
+        select: {
+          classRoomId: true,
+        },
+      },
       category: true,
       assignedUserId: true,
     },
@@ -52,7 +61,7 @@ async function assertChecklistAccess(session, checklist) {
 
   if (
     role === "OTHER_STAFF" &&
-    (checklist.classRoomId || checklist.category === "CLASSROOM")
+    (hasChecklistClassroomScope(checklist) || checklist.category === "CLASSROOM")
   ) {
     return {
       ok: false,
@@ -73,9 +82,9 @@ async function assertChecklistAccess(session, checklist) {
     };
   }
 
-  if (role === "TEACHER" && checklist.classRoomId) {
+  if (role === "TEACHER") {
     const teacherClassIds = await getTeacherClassIds(session.user.id, checklist.centerId);
-    if (!teacherClassIds.includes(checklist.classRoomId)) {
+    if (!canTeacherAccessChecklist(checklist, teacherClassIds)) {
       return {
         ok: false,
         status: 403,

@@ -289,6 +289,7 @@ model ClassRoom {
   budgets  ClassroomBudget[]
   coachObservations CoachObservation[]
   dailyChecklists   DailyChecklist[]
+  dailyChecklistAssignments DailyChecklistClassroom[]
 }
 
 model TeacherClass {
@@ -1257,6 +1258,7 @@ model DailyChecklist {
   centerId    String
   classRoom   ClassRoom?         @relation(fields: [classRoomId], references: [id], onDelete: SetNull)
   classRoomId String?
+  classrooms  DailyChecklistClassroom[]
   assignedUser   User?           @relation("DailyChecklistAssignedUser", fields: [assignedUserId], references: [id], onDelete: SetNull)
   assignedUserId String?
   title       String
@@ -1274,6 +1276,18 @@ model DailyChecklist {
   @@index([centerId, category])
   @@index([centerId, classRoomId])
   @@index([assignedUserId])
+}
+
+model DailyChecklistClassroom {
+  id          String         @id @default(uuid())
+  checklist   DailyChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  checklistId String
+  classRoom   ClassRoom      @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+  classRoomId String
+  createdAt   DateTime       @default(now())
+
+  @@unique([checklistId, classRoomId])
+  @@index([classRoomId])
 }
 
 model DailyChecklistItem {

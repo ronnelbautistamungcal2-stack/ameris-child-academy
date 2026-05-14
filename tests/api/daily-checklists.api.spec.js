@@ -1,7 +1,7 @@
 // @ts-check
 const { test, expect } = require("@playwright/test");
 const { PrismaClient } = require("@prisma/client");
-const { loginAsTeacher } = require("../helpers/auth");
+const { loginAsAdmin, loginAsTeacher } = require("../helpers/auth");
 const { apiGet, apiPost } = require("../helpers/api");
 
 const prisma = new PrismaClient();
@@ -38,6 +38,10 @@ test.describe("Daily Checklists API @api", () => {
 
     const classRoom = await prisma.classRoom.create({
       data: { centerId: center.id, name: `QA Checklist Class ${suffix}` },
+    });
+
+    const classRoomTwo = await prisma.classRoom.create({
+      data: { centerId: center.id, name: `QA Checklist Class Two ${suffix}` },
     });
 
     await prisma.teacherClass.create({
@@ -98,6 +102,7 @@ test.describe("Daily Checklists API @api", () => {
       teacherId: teacher.id,
       center,
       classRoom,
+      classRoomTwo,
       category,
       lesson,
       goal,
@@ -109,6 +114,9 @@ test.describe("Daily Checklists API @api", () => {
 
   test.afterAll(async () => {
     if (fixture) {
+      await prisma.dailyChecklist.deleteMany({
+        where: { centerId: fixture.center.id },
+      });
       await prisma.milestoneChecklistPlan.deleteMany({
         where: { id: fixture.plan.id },
       });
@@ -118,10 +126,12 @@ test.describe("Daily Checklists API @api", () => {
       await prisma.teacherClass.deleteMany({
         where: {
           teacherId: fixture.teacherId,
-          classId: fixture.classRoom.id,
+          classId: { in: [fixture.classRoom.id, fixture.classRoomTwo.id] },
         },
       });
-      await prisma.classRoom.deleteMany({ where: { id: fixture.classRoom.id } });
+      await prisma.classRoom.deleteMany({
+        where: { id: { in: [fixture.classRoom.id, fixture.classRoomTwo.id] } },
+      });
       await prisma.centerUser.deleteMany({
         where: {
           userId: fixture.teacherId,
@@ -132,6 +142,58 @@ test.describe("Daily Checklists API @api", () => {
     }
 
     await prisma.$disconnect();
+  });
+
+  test("admin can assign one checklist to multiple classrooms", async ({ request }) => {
+    const adminCookies = await loginAsAdmin(request);
+    const teacherCookies = await loginAsTeacher(request);
+
+    const createRes = await apiPost(
+      request,
+      "/api/v1/daily-checklists",
+      {
+        centerId: fixture.center.id,
+        title: `QA Multi-Class Checklist ${Date.now()}`,
+        description: "One checklist shared across two classrooms",
+        category: "OPENING",
+        classRoomIds: [fixture.classRoom.id, fixture.classRoomTwo.id],
+        items: [{ title: "Unlock classroom doors", frequency: "DAILY" }],
+      },
+      adminCookies,
+    );
+
+    expect(createRes.status()).toBe(201);
+    const created = await createRes.json();
+    expect(created.classRoomIds.sort()).toEqual(
+      [fixture.classRoom.id, fixture.classRoomTwo.id].sort(),
+    );
+    expect(created.classRooms.map((room) => room.id).sort()).toEqual(
+      [fixture.classRoom.id, fixture.classRoomTwo.id].sort(),
+    );
+
+    const teacherListRes = await apiGet(
+      request,
+      `/api/v1/daily-checklists?centerId=${fixture.center.id}&date=${fixture.today}`,
+      teacherCookies,
+    );
+
+    expect(teacherListRes.status()).toBe(200);
+    const teacherLists = await teacherListRes.json();
+    const visibleChecklist = teacherLists.find((list) => list.id === created.id);
+    expect(visibleChecklist).toBeTruthy();
+    expect(visibleChecklist.classRoomIds.sort()).toEqual(
+      [fixture.classRoom.id, fixture.classRoomTwo.id].sort(),
+    );
+
+    const filteredRes = await apiGet(
+      request,
+      `/api/v1/daily-checklists?centerId=${fixture.center.id}&classRoomId=${fixture.classRoom.id}&date=${fixture.today}`,
+      teacherCookies,
+    );
+
+    expect(filteredRes.status()).toBe(200);
+    const filteredLists = await filteredRes.json();
+    expect(filteredLists.some((list) => list.id === created.id)).toBeTruthy();
   });
 
   test("teacher daily checklist includes and completes scheduled lesson items", async ({ request }) => {

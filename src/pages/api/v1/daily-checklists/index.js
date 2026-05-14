@@ -1,4 +1,11 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
+import {
+  canTeacherAccessChecklist,
+  getChecklistClassRoomIds,
+  getChecklistClassRooms,
+  hasChecklistClassroomScope,
+  normalizeChecklistClassRoomIds,
+} from "@/lib/dailyChecklistClassrooms";
 import prisma from "@/lib/prisma";
 import { getTeacherClassIds } from "@/lib/teacherScope";
 import {
@@ -92,9 +99,64 @@ function buildDailyChecklistInclude(date) {
       },
     },
     classRoom: { select: { id: true, name: true } },
+    classrooms: {
+      orderBy: { classRoomId: "asc" },
+      include: {
+        classRoom: { select: { id: true, name: true } },
+      },
+    },
     center: { select: { id: true, name: true } },
     assignedUser: { select: { id: true, name: true, email: true, role: true } },
     ...(notesInclude ? { notes: notesInclude } : {}),
+  };
+}
+
+function serializeDailyChecklist(checklist) {
+  const classRooms = getChecklistClassRooms(checklist);
+  const classRoomIds = getChecklistClassRoomIds({
+    ...checklist,
+    classRooms,
+  });
+  const { classrooms, ...rest } = checklist;
+
+  return {
+    ...rest,
+    classRoomId: checklist.classRoomId || classRoomIds[0] || null,
+    classRoom: checklist.classRoom || classRooms[0] || null,
+    classRoomIds,
+    classRooms,
+  };
+}
+
+async function validateChecklistClassRoomIds(centerId, classRoomIds) {
+  if (!classRoomIds.length) return [];
+
+  const rooms = await prisma.classRoom.findMany({
+    where: {
+      centerId,
+      id: { in: classRoomIds },
+    },
+    select: { id: true },
+  });
+
+  if (rooms.length !== classRoomIds.length) {
+    throw new Error("One or more selected classrooms are invalid for this center");
+  }
+
+  return classRoomIds;
+}
+
+function buildChecklistClassroomScopeData(classRoomIds) {
+  return {
+    classRoomId: classRoomIds[0] || null,
+    classrooms: {
+      deleteMany: {},
+      ...(classRoomIds.length
+        ? {
+            create: classRoomIds.map((classRoomId) => ({ classRoomId })),
+          }
+        : {}),
+    },
   };
 }
 
@@ -138,6 +200,8 @@ function scheduledPlanToChecklist(plan) {
     active: plan.active,
     classRoom: null,
     classRoomId: null,
+    classRoomIds: [],
+    classRooms: [],
     center: plan.center || null,
     centerId: plan.centerId,
     assignedUser: null,
@@ -223,7 +287,7 @@ function normalizeChecklistPayload(body = {}) {
     title: body.title,
     description: body.description || null,
     centerId: body.centerId,
-    classRoomId: body.classRoomId || null,
+    classRoomIds: normalizeChecklistClassRoomIds(body.classRoomIds, body.classRoomId),
     assignedUserId: body.assignedUserId || null,
     category: ["OPENING", "CLOSING", "HEALTH_SAFETY", "CLEANING", "MEALS", "CLASSROOM", "OTHER"].includes(body.category)
       ? body.category
@@ -243,9 +307,6 @@ function applyChecklistPatch(data, body = {}) {
   }
   if (Object.prototype.hasOwnProperty.call(body, "centerId")) {
     data.centerId = body.centerId;
-  }
-  if (Object.prototype.hasOwnProperty.call(body, "classRoomId")) {
-    data.classRoomId = body.classRoomId || null;
   }
   if (Object.prototype.hasOwnProperty.call(body, "assignedUserId")) {
     data.assignedUserId = body.assignedUserId || null;
@@ -317,7 +378,17 @@ export default async function handler(req, res) {
     let where = role === "ADMIN" && !date ? {} : { active: true };
     if (centerId) where.centerId = centerId;
     if (category) where.category = category;
-    if (classRoomId) where.classRoomId = classRoomId;
+    if (classRoomId) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : []),
+        {
+          OR: [
+            { classRoomId },
+            { classrooms: { some: { classRoomId } } },
+          ],
+        },
+      ];
+    }
 
     if (!centerId && role !== "ADMIN") {
       const memberships = await prisma.centerUser.findMany({
@@ -348,11 +419,11 @@ export default async function handler(req, res) {
         if (date && (!Array.isArray(list.items) || list.items.length === 0)) return false;
 
         if (role === "OTHER_STAFF") {
-          if (list.classRoomId || list.category === "CLASSROOM") return false;
+          if (hasChecklistClassroomScope(list) || list.category === "CLASSROOM") return false;
         }
 
         if (role === "TEACHER") {
-          if (list.classRoomId && !teacherClassIds.includes(list.classRoomId)) {
+          if (!canTeacherAccessChecklist(list, teacherClassIds)) {
             return false;
           }
         }
@@ -367,7 +438,7 @@ export default async function handler(req, res) {
       });
 
     const routineLists = filtered.map((list) => ({
-      ...list,
+      ...serializeDailyChecklist(list),
       notes: Array.isArray(list.notes)
         ? list.notes.map((note) => ({
             ...note,
@@ -396,9 +467,29 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "title and centerId are required" });
     }
 
+    let classRoomIds;
+    try {
+      classRoomIds = await validateChecklistClassRoomIds(
+        normalized.centerId,
+        normalized.classRoomIds,
+      );
+    } catch (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    const { classRoomIds: _classRoomIds, ...checklistData } = normalized;
+
     const created = await prisma.dailyChecklist.create({
       data: {
-        ...normalized,
+        ...checklistData,
+        classRoomId: classRoomIds[0] || null,
+        ...(classRoomIds.length
+          ? {
+              classrooms: {
+                create: classRoomIds.map((classRoomId) => ({ classRoomId })),
+              },
+            }
+          : {}),
         items: Array.isArray(items)
           ? {
               create: items
@@ -410,7 +501,7 @@ export default async function handler(req, res) {
       include: buildDailyChecklistInclude(),
     });
 
-    return res.status(201).json(created);
+    return res.status(201).json(serializeDailyChecklist(created));
   }
 
   if (req.method === "PUT") {
@@ -421,9 +512,37 @@ export default async function handler(req, res) {
     const { id, active, items } = req.body || {};
     if (!id) return res.status(400).json({ error: "id is required" });
 
+    const existingChecklist = await prisma.dailyChecklist.findUnique({
+      where: { id },
+      select: { centerId: true },
+    });
+    if (!existingChecklist) {
+      return res.status(404).json({ error: "Checklist not found" });
+    }
+
     const data = {};
     applyChecklistPatch(data, req.body || {});
     if (active !== undefined) data.active = active;
+
+    const hasClassroomScopePatch =
+      Object.prototype.hasOwnProperty.call(req.body || {}, "classRoomIds") ||
+      Object.prototype.hasOwnProperty.call(req.body || {}, "classRoomId");
+    const nextCenterId = data.centerId || existingChecklist.centerId;
+
+    if (hasClassroomScopePatch) {
+      let classRoomIds;
+      try {
+        classRoomIds = await validateChecklistClassRoomIds(
+          nextCenterId,
+          normalizeChecklistClassRoomIds(req.body?.classRoomIds, req.body?.classRoomId),
+        );
+      } catch (error) {
+        return res.status(400).json({ error: error.message });
+      }
+      Object.assign(data, buildChecklistClassroomScopeData(classRoomIds));
+    } else if (Object.prototype.hasOwnProperty.call(req.body || {}, "centerId")) {
+      Object.assign(data, buildChecklistClassroomScopeData([]));
+    }
 
     const updated = await prisma.dailyChecklist.update({
       where: { id },
@@ -461,7 +580,7 @@ export default async function handler(req, res) {
       include: buildDailyChecklistInclude(),
     });
 
-    return res.status(200).json(result);
+    return res.status(200).json(serializeDailyChecklist(result));
   }
 
   if (req.method === "DELETE") {

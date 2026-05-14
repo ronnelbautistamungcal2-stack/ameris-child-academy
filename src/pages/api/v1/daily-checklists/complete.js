@@ -1,4 +1,8 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
+import {
+  canTeacherAccessChecklist,
+  hasChecklistClassroomScope,
+} from "@/lib/dailyChecklistClassrooms";
 import prisma from "@/lib/prisma";
 import { getTeacherClassIds } from "@/lib/teacherScope";
 
@@ -147,6 +151,11 @@ export default async function handler(req, res) {
           select: {
             centerId: true,
             classRoomId: true,
+            classrooms: {
+              select: {
+                classRoomId: true,
+              },
+            },
             category: true,
             assignedUserId: true,
           },
@@ -162,7 +171,7 @@ export default async function handler(req, res) {
     }
     if (
       role === "OTHER_STAFF" &&
-      (item.checklist.classRoomId || item.checklist.category === "CLASSROOM")
+      (hasChecklistClassroomScope(item.checklist) || item.checklist.category === "CLASSROOM")
     ) {
       return res.status(403).json({ error: "Other staff cannot complete classroom checklists" });
     }
@@ -173,9 +182,9 @@ export default async function handler(req, res) {
     ) {
       return res.status(403).json({ error: "This checklist is assigned to another staff member" });
     }
-    if (role === "TEACHER" && item.checklist.classRoomId) {
+    if (role === "TEACHER") {
       const teacherClassIds = await getTeacherClassIds(session.user.id, item.checklist.centerId);
-      if (!teacherClassIds.includes(item.checklist.classRoomId)) {
+      if (!canTeacherAccessChecklist(item.checklist, teacherClassIds)) {
         return res.status(403).json({ error: "You do not have access to this classroom checklist" });
       }
     }

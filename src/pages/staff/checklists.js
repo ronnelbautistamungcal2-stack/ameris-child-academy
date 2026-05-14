@@ -12,6 +12,7 @@ import {
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
 import { collectChecklistLessonAttachments } from "@/lib/checklistLessonResources";
+import { hasChecklistClassroomScope } from "@/lib/dailyChecklistClassrooms";
 import {
   describeChecklistSchedule,
   summarizeChecklistFrequency,
@@ -114,7 +115,7 @@ export default function StaffChecklistsPage() {
         `/api/v1/daily-checklists?centerId=${encodeURIComponent(centerId)}&date=${encodeURIComponent(selectedDate)}`,
       );
       const filtered = (Array.isArray(data) ? data : []).filter(
-        (checklist) => !checklist?.classRoomId && checklist?.category !== "CLASSROOM",
+        (checklist) => !hasChecklistClassroomScope(checklist) && checklist?.category !== "CLASSROOM",
       );
       setChecklists(filtered);
     } catch (nextError) {

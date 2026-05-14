@@ -1,6 +1,10 @@
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import {
+  getChecklistClassRooms,
+  normalizeChecklistClassRoomIds,
+} from "@/lib/dailyChecklistClassrooms";
+import {
   CHECKLIST_FREQUENCY_OPTIONS,
   WEEKDAY_OPTIONS,
   describeChecklistSchedule,
@@ -105,6 +109,30 @@ function toggleRepeatDay(days, dayValue) {
   return [...set].sort((a, b) => a - b);
 }
 
+function toggleClassroomSelection(ids, classRoomId) {
+  const set = new Set(normalizeChecklistClassRoomIds(ids));
+  if (set.has(classRoomId)) set.delete(classRoomId);
+  else set.add(classRoomId);
+  return [...set];
+}
+
+function selectedClassroomSummary(classrooms, selectedIds) {
+  const selected = classrooms.filter((room) => selectedIds.includes(room.id));
+  if (!selected.length) {
+    return {
+      title: "All classrooms",
+    };
+  }
+  if (selected.length === 1) {
+    return {
+      title: selected[0].name,
+    };
+  }
+  return {
+    title: `${selected.length} classrooms selected`,
+  };
+}
+
 function checklistMatchesFrequency(checklist, frequency) {
   if (!frequency) return true;
   return (checklist.items || []).some(
@@ -134,7 +162,8 @@ export default function AdminTaskChecklistManager({ centerId }) {
   const [newFrequency, setNewFrequency] = useState("DAILY");
   const [newRepeatDays, setNewRepeatDays] = useState([]);
   const [newMonthlyDay, setNewMonthlyDay] = useState("");
-  const [newClassRoomId, setNewClassRoomId] = useState("");
+  const [newClassRoomIds, setNewClassRoomIds] = useState([]);
+  const [classroomAccordionOpen, setClassroomAccordionOpen] = useState(false);
   const [newAssignedUserId, setNewAssignedUserId] = useState("");
   const [newItems, setNewItems] = useState([blankItemRow()]);
   const [saving, setSaving] = useState(false);
@@ -181,7 +210,8 @@ export default function AdminTaskChecklistManager({ centerId }) {
     setNewFrequency("DAILY");
     setNewRepeatDays([]);
     setNewMonthlyDay("");
-    setNewClassRoomId("");
+    setNewClassRoomIds([]);
+    setClassroomAccordionOpen(false);
     setNewAssignedUserId("");
     setNewItems([blankItemRow()]);
   }
@@ -208,7 +238,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
     setNewFrequency(checklist.frequency || "DAILY");
     setNewRepeatDays(normalizeRepeatDays(checklist.repeatDays));
     setNewMonthlyDay(checklist.monthlyDay ? String(checklist.monthlyDay) : "");
-    setNewClassRoomId(checklist.classRoomId || "");
+    setNewClassRoomIds(normalizeChecklistClassRoomIds(checklist.classRoomIds, checklist.classRoomId));
     setNewAssignedUserId(checklist.assignedUserId || "");
     const rows = sortByTaskTime(checklist.items).map((item) => {
       const schedule = getEffectiveItemSchedule(item, checklist);
@@ -293,7 +323,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
           frequency: newFrequency,
           repeatDays: newFrequency === "WEEKLY" ? normalizeRepeatDays(newRepeatDays) : [],
           monthlyDay: newFrequency === "MONTHLY" ? normalizeMonthlyDay(newMonthlyDay) : null,
-          classRoomId: newClassRoomId || null,
+          classRoomIds: normalizeChecklistClassRoomIds(newClassRoomIds),
           assignedUserId: newAssignedUserId || null,
           items: newItems
             .filter((item) => item.title.trim())
@@ -379,6 +409,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
         checklist.title,
         checklist.description,
         checklist.classRoom?.name,
+        ...(checklist.classRooms || []).map((room) => room.name),
         checklist.assignedUser?.name,
         checklist.assignedUser?.email,
         ...(checklist.items || []).flatMap((item) => [
@@ -413,6 +444,16 @@ export default function AdminTaskChecklistManager({ centerId }) {
     }
     return counts;
   }, [checklists]);
+
+  const selectedRooms = useMemo(
+    () => classrooms.filter((room) => newClassRoomIds.includes(room.id)),
+    [classrooms, newClassRoomIds],
+  );
+
+  const classroomScopeSummary = useMemo(
+    () => selectedClassroomSummary(classrooms, newClassRoomIds),
+    [classrooms, newClassRoomIds],
+  );
 
   return (
     <div className="space-y-4">
@@ -523,19 +564,78 @@ export default function AdminTaskChecklistManager({ centerId }) {
                 </select>
               </label>
               <label className="block">
-                <div className="mb-1 text-xs font-semibold text-gray-500">Classroom</div>
-                <select
-                  value={newClassRoomId}
-                  onChange={(event) => setNewClassRoomId(event.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:border-sky-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-200"
-                >
-                  <option value="">All classrooms</option>
-                  {classrooms.map((room) => (
-                    <option key={room.id} value={room.id}>
-                      {room.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="mb-1 text-xs font-semibold text-gray-500">Classrooms</div>
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                  <button
+                    type="button"
+                    onClick={() => setClassroomAccordionOpen((current) => !current)}
+                    className="flex w-full items-center justify-between gap-3 text-left"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-900">
+                        {classroomScopeSummary.title}
+                      </div>
+                    </div>
+                    <svg
+                      className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${classroomAccordionOpen ? "rotate-180" : ""}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                    </svg>
+                  </button>
+
+                  {classroomAccordionOpen ? (
+                    <div className="mt-3 space-y-2 border-t border-gray-200 pt-3">
+                      <label className="flex cursor-pointer items-center gap-3 rounded-lg bg-white px-3 py-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={newClassRoomIds.length === 0}
+                          onChange={() => setNewClassRoomIds([])}
+                          className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+                        />
+                        <span className="font-medium">All classrooms</span>
+                      </label>
+
+                      <div className="space-y-2">
+                        {classrooms.map((room) => {
+                          const selected = newClassRoomIds.includes(room.id);
+                          return (
+                            <label
+                              key={room.id}
+                              className="flex cursor-pointer items-center gap-3 rounded-lg bg-white px-3 py-2 text-sm text-gray-700"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={() =>
+                                  setNewClassRoomIds((current) => toggleClassroomSelection(current, room.id))
+                                }
+                                className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+                              />
+                              <span>{room.name}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {selectedRooms.length ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {selectedRooms.map((room) => (
+                        <span
+                          key={room.id}
+                          className="rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-medium text-sky-700"
+                        >
+                          {room.name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               </label>
               <label className="block">
                 <div className="mb-1 text-xs font-semibold text-gray-500">Teacher / Staff</div>
@@ -827,6 +927,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
               {lists.map((checklist) => {
                 const stylesForCard = CATEGORY_STYLES[checklist.category] || CATEGORY_STYLES.OTHER;
                 const items = sortByTaskTime(checklist.items);
+                const checklistRooms = getChecklistClassRooms(checklist);
                 const expanded = expandedId === checklist.id;
                 const scheduleKey = summarizeChecklistFrequency(checklist);
                 const scheduleLabel = summarizeChecklistSchedule(checklist);
@@ -861,9 +962,17 @@ export default function AdminTaskChecklistManager({ centerId }) {
                             <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600">
                               {items.length} {items.length === 1 ? "item" : "items"}
                             </span>
-                            {checklist.classRoom ? (
+                            {checklistRooms.slice(0, 2).map((room) => (
+                              <span
+                                key={room.id}
+                                className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700"
+                              >
+                                {room.name}
+                              </span>
+                            ))}
+                            {checklistRooms.length > 2 ? (
                               <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
-                                {checklist.classRoom.name}
+                                +{checklistRooms.length - 2} more
                               </span>
                             ) : null}
                             {checklist.assignedUser ? (

@@ -13,7 +13,12 @@ import {
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
-import { describeChecklistSchedule } from "@/lib/checklistSchedule";
+import { collectChecklistLessonAttachments } from "@/lib/checklistLessonResources";
+import {
+  describeChecklistSchedule,
+  summarizeChecklistFrequency,
+  summarizeChecklistSchedule,
+} from "@/lib/checklistSchedule";
 
 const CATEGORIES = [
   { key: "ALL", label: "All" },
@@ -25,8 +30,13 @@ const CATEGORIES = [
   { key: "CLASSROOM", label: "Classroom" },
 ];
 
-const FREQ_LABELS = { DAILY: "Daily", WEEKLY: "Weekly", MONTHLY: "Monthly" };
-const FREQ_TONES = { DAILY: "sky", WEEKLY: "amber", MONTHLY: "rose" };
+const FREQ_TONES = {
+  DAILY: "sky",
+  WEEKLY: "amber",
+  MONTHLY: "rose",
+  ONE_TIME: "rose",
+  MIXED: "slate",
+};
 const CATEGORY_TONES = {
   OPENING: "amber",
   CLOSING: "sky",
@@ -394,6 +404,8 @@ function ChecklistCard({ checklist, onToggle, completing }) {
   const percent = items.length > 0 ? Math.round((completedCount / items.length) * 100) : 0;
   const allDone = items.length > 0 && completedCount === items.length;
   const tone = CATEGORY_TONES[checklist.category] || "slate";
+  const scheduleKey = summarizeChecklistFrequency(checklist);
+  const scheduleLabel = summarizeChecklistSchedule(checklist);
 
   return (
     <div
@@ -418,8 +430,8 @@ function ChecklistCard({ checklist, onToggle, completing }) {
               <div className="text-base font-black text-gray-900 dark:text-gray-100">
                 {checklist.title}
               </div>
-              <CoachBadge tone={FREQ_TONES[checklist.frequency] || "slate"}>
-                {describeChecklistSchedule(checklist)}
+              <CoachBadge tone={FREQ_TONES[scheduleKey] || "slate"}>
+                {scheduleLabel}
               </CoachBadge>
               {checklist.classRoom ? (
                 <CoachBadge tone="sky">{checklist.classRoom.name}</CoachBadge>
@@ -467,6 +479,10 @@ function ChecklistCard({ checklist, onToggle, completing }) {
               const done = (item.completions || []).length > 0;
               const completion = (item.completions || [])[0];
               const isCompleting = completing === item.id;
+              const lessonAttachments = collectChecklistLessonAttachments(
+                item.lesson,
+                item.lessonGoal,
+              );
 
               return (
                 <div
@@ -531,6 +547,21 @@ function ChecklistCard({ checklist, onToggle, completing }) {
                               {item.lesson.goals?.length ? (
                                 <div className="mt-2 text-xs text-gray-600 dark:text-gray-300">
                                   {item.lesson.goals.length} step{item.lesson.goals.length === 1 ? "" : "s"}
+                                </div>
+                              ) : null}
+                              {lessonAttachments.length ? (
+                                <div className="mt-3 flex flex-wrap gap-1.5">
+                                  {lessonAttachments.map((attachment) => (
+                                    <a
+                                      key={attachment.href}
+                                      href={attachment.href}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700 transition hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-300"
+                                    >
+                                      Attachment: {attachment.label}
+                                    </a>
+                                  ))}
                                 </div>
                               ) : null}
                             </div>

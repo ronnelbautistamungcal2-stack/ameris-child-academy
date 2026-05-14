@@ -2,10 +2,52 @@ import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getTeacherClassIds } from "@/lib/teacherScope";
 import {
-  checklistMatchesDate,
+  itemMatchesDate,
+  normalizeChecklistFrequency,
   normalizeMonthlyDay,
+  normalizeOneTimeDate,
   normalizeRepeatDays,
 } from "@/lib/checklistSchedule";
+
+const LESSON_SELECT = {
+  id: true,
+  title: true,
+  description: true,
+  media: true,
+  term: true,
+  reference: true,
+  goals: {
+    orderBy: { goalIndex: "asc" },
+    select: {
+      id: true,
+      goalIndex: true,
+      title: true,
+      description: true,
+      passingCriteria: true,
+    },
+  },
+  category: {
+    select: {
+      id: true,
+      name: true,
+      ageRange: true,
+    },
+  },
+};
+
+function parseDateOnly(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+}
+
+function formatTaskTimeFromDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
 
 function buildCompletionInclude(date) {
   if (!date) return false;
@@ -37,30 +79,7 @@ function buildDailyChecklistInclude(date) {
       orderBy: [{ taskTime: "asc" }, { sortOrder: "asc" }],
       include: {
         lesson: {
-          select: {
-            id: true,
-            title: true,
-            description: true,
-            media: true,
-            term: true,
-            reference: true,
-            goals: {
-              orderBy: { goalIndex: "asc" },
-              select: {
-                id: true,
-                goalIndex: true,
-                title: true,
-                description: true,
-              },
-            },
-            category: {
-              select: {
-                id: true,
-                name: true,
-                ageRange: true,
-              },
-            },
-          },
+          select: LESSON_SELECT,
         },
         policyDocument: {
           select: {
@@ -77,6 +96,111 @@ function buildDailyChecklistInclude(date) {
     assignedUser: { select: { id: true, name: true, email: true, role: true } },
     ...(notesInclude ? { notes: notesInclude } : {}),
   };
+}
+
+function scheduledPlanToChecklist(plan) {
+  const items = (plan.items || []).map((item) => ({
+    id: item.id,
+    source: "SCHEDULED_LESSON",
+    sourcePlanId: plan.id,
+    sortOrder: item.sortOrder,
+    title: item.title || item.lesson?.title || item.lessonGoal?.title || "Scheduled lesson",
+    description: item.notes || item.lessonGoal?.description || item.lesson?.description || null,
+    lesson: item.lesson || null,
+    lessonId: item.lessonId || null,
+    lessonGoal: item.lessonGoal || null,
+    lessonGoalId: item.lessonGoalId || null,
+    policyDocument: item.policyDocument || null,
+    policyDocumentId: item.policyDocumentId || null,
+    directLink: item.url || null,
+    directLinkLabel: item.url ? "Open scheduled resource" : null,
+    policyLink: null,
+    mediaLink: item.kind === "VIDEO" ? item.url || null : null,
+    taskTime: formatTaskTimeFromDate(item.dueAt),
+    completions: Array.isArray(item.staffCompletions)
+      ? item.staffCompletions.map((completion) => ({
+          id: completion.id,
+          completedAt: completion.completedAt,
+          completedBy: completion.completedBy,
+        }))
+      : [],
+  }));
+
+  return {
+    id: `scheduled:${plan.id}`,
+    source: "SCHEDULED_LESSON_PLAN",
+    sourcePlanId: plan.id,
+    title: plan.title || "Scheduled Lessons",
+    description: plan.description || null,
+    category: "CLASSROOM",
+    frequency: "ONE_TIME",
+    scheduleLabel: "Scheduled today",
+    active: plan.active,
+    classRoom: null,
+    classRoomId: null,
+    center: plan.center || null,
+    centerId: plan.centerId,
+    assignedUser: null,
+    assignedUserId: null,
+    notes: [],
+    items,
+    createdAt: plan.createdAt,
+    updatedAt: plan.updatedAt,
+  };
+}
+
+async function loadScheduledLessonChecklists({ centerId, date, role }) {
+  if (!centerId || !date || !["ADMIN", "TEACHER"].includes(role)) return [];
+
+  const day = parseDateOnly(date);
+  if (!day) return [];
+
+  const plans = await prisma.milestoneChecklistPlan.findMany({
+    where: {
+      centerId,
+      active: true,
+      period: "DAY",
+      periodStart: day,
+    },
+    include: {
+      center: { select: { id: true, name: true } },
+      items: {
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        include: {
+          lesson: { select: LESSON_SELECT },
+          lessonGoal: {
+            select: {
+              id: true,
+              lessonId: true,
+              goalIndex: true,
+              title: true,
+              description: true,
+              passingCriteria: true,
+            },
+          },
+          policyDocument: {
+            select: {
+              id: true,
+              title: true,
+              url: true,
+            },
+          },
+          staffCompletions: {
+            where: { date: day },
+            include: {
+              completedBy: { select: { id: true, name: true, email: true } },
+            },
+          },
+        },
+      },
+    },
+    orderBy: [{ periodStart: "asc" }, { title: "asc" }],
+    take: 50,
+  });
+
+  return plans
+    .map(scheduledPlanToChecklist)
+    .filter((plan) => (plan.items || []).length > 0);
 }
 
 function normalizeChecklistPayload(body = {}) {
@@ -154,9 +278,14 @@ function applyChecklistPatch(data, body = {}) {
 }
 
 function serializeItem(it, sortOrder) {
+  const frequency = normalizeChecklistFrequency(it.frequency);
   return {
     title: it.title,
     description: it.description || null,
+    frequency,
+    repeatDays: frequency === "WEEKLY" ? normalizeRepeatDays(it.repeatDays) : [],
+    monthlyDay: frequency === "MONTHLY" ? normalizeMonthlyDay(it.monthlyDay) : null,
+    oneTimeDate: frequency === "ONE_TIME" ? normalizeOneTimeDate(it.oneTimeDate) : null,
     lessonId: it.lessonId || null,
     policyDocumentId: it.policyDocumentId || null,
     policyLink: it.policyLink || null,
@@ -208,39 +337,51 @@ export default async function handler(req, res) {
       orderBy: [{ category: "asc" }, { title: "asc" }],
     });
 
-    const filtered = lists.filter((list) => {
-      if (date && !checklistMatchesDate(list, date)) return false;
-
-      if (role === "OTHER_STAFF") {
-        if (list.classRoomId || list.category === "CLASSROOM") return false;
-      }
-
-      if (role === "TEACHER") {
-        if (list.classRoomId && !teacherClassIds.includes(list.classRoomId)) {
-          return false;
-        }
-      }
-
-      if (["TEACHER", "OTHER_STAFF"].includes(role)) {
-        if (list.assignedUserId && list.assignedUserId !== session.user.id) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-
-    return res.status(200).json(
-      filtered.map((list) => ({
+    const filtered = lists
+      .map((list) => ({
         ...list,
-        notes: Array.isArray(list.notes)
-          ? list.notes.map((note) => ({
-              ...note,
-              mine: note.createdById === session.user.id,
-            }))
-          : [],
-      })),
-    );
+        items: date
+          ? (list.items || []).filter((item) => itemMatchesDate(item, date, list))
+          : list.items,
+      }))
+      .filter((list) => {
+        if (date && (!Array.isArray(list.items) || list.items.length === 0)) return false;
+
+        if (role === "OTHER_STAFF") {
+          if (list.classRoomId || list.category === "CLASSROOM") return false;
+        }
+
+        if (role === "TEACHER") {
+          if (list.classRoomId && !teacherClassIds.includes(list.classRoomId)) {
+            return false;
+          }
+        }
+
+        if (["TEACHER", "OTHER_STAFF"].includes(role)) {
+          if (list.assignedUserId && list.assignedUserId !== session.user.id) {
+            return false;
+          }
+        }
+
+        return true;
+      });
+
+    const routineLists = filtered.map((list) => ({
+      ...list,
+      notes: Array.isArray(list.notes)
+        ? list.notes.map((note) => ({
+            ...note,
+            mine: note.createdById === session.user.id,
+          }))
+        : [],
+    }));
+
+    const scheduledLessonLists =
+      date && !classRoomId && (!category || category === "CLASSROOM")
+        ? await loadScheduledLessonChecklists({ centerId, date, role })
+        : [];
+
+    return res.status(200).json([...routineLists, ...scheduledLessonLists]);
   }
 
   if (req.method === "POST") {

@@ -24,6 +24,7 @@ async function getAuthCookie(request, email, password) {
       password,
       callbackUrl: `${PLAYWRIGHT_BASE_URL}/dashboard`,
     },
+    maxRedirects: 0,
     failOnStatusCode: false,
   });
 

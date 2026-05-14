@@ -1,7 +1,13 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
-import { describeChecklistSchedule } from "@/lib/checklistSchedule";
+import { collectChecklistLessonAttachments } from "@/lib/checklistLessonResources";
+import {
+  describeChecklistSchedule,
+  getEffectiveItemSchedule,
+  summarizeChecklistFrequency,
+  summarizeChecklistSchedule,
+} from "@/lib/checklistSchedule";
 import { useEffect, useMemo, useState } from "react";
 
 const CATEGORY_LABELS = {
@@ -28,6 +34,8 @@ const FREQUENCY_COLORS = {
   DAILY: "bg-sky-50 text-sky-700",
   WEEKLY: "bg-violet-50 text-violet-700",
   MONTHLY: "bg-amber-50 text-amber-700",
+  ONE_TIME: "bg-rose-50 text-rose-700",
+  MIXED: "bg-slate-100 text-slate-700",
 };
 
 function todayStr() {
@@ -72,11 +80,16 @@ function sortByTaskTime(items) {
 function itemHasLinkedResources(item) {
   return !!(
     item?.lesson ||
+    item?.lessonGoal ||
     item?.policyDocument ||
     item?.directLink ||
     item?.policyLink ||
     item?.mediaLink
   );
+}
+
+function completionKey(item) {
+  return `${item?.source || "ROUTINE"}:${item?.id || ""}`;
 }
 
 function buildNoteDrafts(checklists, previousDrafts = {}, replaceDraftId = "") {
@@ -128,10 +141,9 @@ export default function TeacherChecklists() {
           <div>
             <h2 className="text-base font-extrabold text-gray-900">Checklists</h2>
             <p className="mt-0.5 text-xs text-gray-600">
-              Work from one checklist view for the selected day. Click any item
-              to review linked lessons, policies, or reference material, and
-              leave notes at the bottom of each checklist when needed. Teachers
-              can only complete the current day's checklist.
+              Work from one checklist view for the selected day. Routine tasks
+              and scheduled lessons appear together, while reusable templates
+              stay managed separately by admins.
             </p>
           </div>
           <div className="grid w-full grid-cols-1 gap-3 md:max-w-xl md:grid-cols-2">
@@ -232,14 +244,15 @@ function TeacherDailyChecklist({ centerId, selectedDate }) {
     setSelectedDetail(null);
   }, [centerId, selectedDate]);
 
-  async function toggleItem(itemId, isCompleted) {
-    setCompleting(itemId);
+  async function toggleItem(item, isCompleted) {
+    setCompleting(completionKey(item));
     setError("");
     try {
       await apiJson("/api/v1/daily-checklists/complete", {
         method: "POST",
         body: JSON.stringify({
-          itemId,
+          itemId: item.id,
+          source: item.source || "ROUTINE",
           date: selectedDate,
           undo: isCompleted,
         }),
@@ -337,6 +350,10 @@ function TeacherDailyChecklist({ centerId, selectedDate }) {
           const notes = Array.isArray(checklist.notes) ? checklist.notes : [];
           const ownNote = notes.find((note) => note.mine);
           const noteDraft = noteDrafts[checklist.id] || "";
+          const scheduleKey = summarizeChecklistFrequency(checklist);
+          const scheduleLabel =
+            checklist.scheduleLabel || summarizeChecklistSchedule(checklist);
+          const canSaveNotes = checklist.source !== "SCHEDULED_LESSON_PLAN";
 
           return (
             <div
@@ -355,10 +372,10 @@ function TeacherDailyChecklist({ centerId, selectedDate }) {
                   </span>
                   <span
                     className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                      FREQUENCY_COLORS[checklist.frequency] || ""
+                      FREQUENCY_COLORS[scheduleKey] || ""
                     }`}
                   >
-                    {describeChecklistSchedule(checklist)}
+                    {scheduleLabel}
                   </span>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
                     {completedCount}/{items.length} complete
@@ -381,7 +398,7 @@ function TeacherDailyChecklist({ centerId, selectedDate }) {
                   {items.map((item) => {
                     const completion = (item.completions || [])[0];
                     const isDone = !!completion;
-                    const busy = completing === item.id;
+                    const busy = completing === completionKey(item);
                     const hasResources = itemHasLinkedResources(item);
 
                     return (
@@ -393,7 +410,7 @@ function TeacherDailyChecklist({ centerId, selectedDate }) {
                       >
                         <button
                           type="button"
-                          onClick={() => toggleItem(item.id, isDone)}
+                          onClick={() => toggleItem(item, isDone)}
                           disabled={busy}
                           className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition ${
                             isDone
@@ -458,6 +475,11 @@ function TeacherDailyChecklist({ centerId, selectedDate }) {
                                 Lesson
                               </span>
                             ) : null}
+                            {item.source === "SCHEDULED_LESSON" ? (
+                              <span className="rounded-md bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                                Scheduled
+                              </span>
+                            ) : null}
                             {item.policyDocument ? (
                               <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
                                 Policy
@@ -493,77 +515,79 @@ function TeacherDailyChecklist({ centerId, selectedDate }) {
                   })}
                 </div>
 
-                <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
-                      <div className="text-xs font-bold uppercase tracking-wide text-gray-500">
-                        Checklist Notes
+                {canSaveNotes ? (
+                  <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <div className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                          Checklist Notes
+                        </div>
+                        <div className="mt-0.5 text-xs text-gray-500">
+                          Save notes for this checklist and selected date.
+                        </div>
                       </div>
-                      <div className="mt-0.5 text-xs text-gray-500">
-                        Save notes for this checklist and selected date.
-                      </div>
+                      {ownNote?.updatedAt ? (
+                        <div className="text-[11px] text-gray-500">
+                          Last saved {formatDateTime(ownNote.updatedAt)}
+                        </div>
+                      ) : null}
                     </div>
-                    {ownNote?.updatedAt ? (
+                    <textarea
+                      value={noteDraft}
+                      onChange={(event) =>
+                        setNoteDrafts((current) => ({
+                          ...current,
+                          [checklist.id]: event.target.value,
+                        }))
+                      }
+                      rows={3}
+                      placeholder="Add any notes teachers should keep with this checklist..."
+                      className="mt-3 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                    />
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                       <div className="text-[11px] text-gray-500">
-                        Last saved {formatDateTime(ownNote.updatedAt)}
+                        Clear the text and save again to remove your note.
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => saveChecklistNote(checklist.id)}
+                        disabled={savingNoteId === checklist.id}
+                        className="rounded-lg bg-sky-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {savingNoteId === checklist.id ? "Saving..." : "Save Note"}
+                      </button>
+                    </div>
+
+                    {notes.length ? (
+                      <div className="mt-3 grid gap-2">
+                        {notes.map((note) => (
+                          <div
+                            key={note.id}
+                            className={`rounded-lg border px-3 py-2 text-xs ${
+                              note.mine
+                                ? "border-sky-200 bg-sky-50 text-sky-900"
+                                : "border-gray-200 bg-white text-gray-700"
+                            }`}
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-semibold">
+                                {note.mine
+                                  ? "Your note"
+                                  : note.createdBy?.name ||
+                                    note.createdBy?.email ||
+                                    "Staff note"}
+                              </span>
+                              <span className="text-[10px] opacity-75">
+                                {formatDateTime(note.updatedAt || note.createdAt)}
+                              </span>
+                            </div>
+                            <p className="mt-1 whitespace-pre-wrap">{note.notes}</p>
+                          </div>
+                        ))}
                       </div>
                     ) : null}
                   </div>
-                  <textarea
-                    value={noteDraft}
-                    onChange={(event) =>
-                      setNoteDrafts((current) => ({
-                        ...current,
-                        [checklist.id]: event.target.value,
-                      }))
-                    }
-                    rows={3}
-                    placeholder="Add any notes teachers should keep with this checklist..."
-                    className="mt-3 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                  />
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-[11px] text-gray-500">
-                      Clear the text and save again to remove your note.
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => saveChecklistNote(checklist.id)}
-                      disabled={savingNoteId === checklist.id}
-                      className="rounded-lg bg-sky-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {savingNoteId === checklist.id ? "Saving..." : "Save Note"}
-                    </button>
-                  </div>
-
-                  {notes.length ? (
-                    <div className="mt-3 grid gap-2">
-                      {notes.map((note) => (
-                        <div
-                          key={note.id}
-                          className={`rounded-lg border px-3 py-2 text-xs ${
-                            note.mine
-                              ? "border-sky-200 bg-sky-50 text-sky-900"
-                              : "border-gray-200 bg-white text-gray-700"
-                          }`}
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="font-semibold">
-                              {note.mine
-                                ? "Your note"
-                                : note.createdBy?.name ||
-                                  note.createdBy?.email ||
-                                  "Staff note"}
-                            </span>
-                            <span className="text-[10px] opacity-75">
-                              {formatDateTime(note.updatedAt || note.createdAt)}
-                            </span>
-                          </div>
-                          <p className="mt-1 whitespace-pre-wrap">{note.notes}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
+                ) : null}
               </div>
             </div>
           );
@@ -585,6 +609,21 @@ function ChecklistItemDetailModal({ detail, onClose }) {
   const lesson = item.lesson || null;
   const policy = item.policyDocument || null;
   const goalCount = Array.isArray(lesson?.goals) ? lesson.goals.length : 0;
+  const lessonAttachments = collectChecklistLessonAttachments(
+    lesson,
+    item.lessonGoal,
+  );
+  const itemSchedule = getEffectiveItemSchedule(item, checklist);
+  const detailScheduleLabel =
+    item.source === "SCHEDULED_LESSON"
+      ? checklist.scheduleLabel || "Scheduled today"
+      : describeChecklistSchedule(itemSchedule);
+  const hasLinkedResources =
+    lessonAttachments.length > 0 ||
+    !!policy?.url ||
+    !!item.directLink ||
+    !!item.policyLink ||
+    !!item.mediaLink;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4 py-6">
@@ -601,7 +640,7 @@ function ChecklistItemDetailModal({ detail, onClose }) {
               <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
                 {CATEGORY_LABELS[checklist.category] || checklist.category}
               </span>
-              <span>{describeChecklistSchedule(checklist)}</span>
+              <span>{detailScheduleLabel}</span>
               {item.taskTime ? <span>{formatTaskTime(item.taskTime)}</span> : null}
             </div>
           </div>
@@ -692,6 +731,17 @@ function ChecklistItemDetailModal({ detail, onClose }) {
               Linked Resources
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
+              {lessonAttachments.map((attachment) => (
+                <a
+                  key={attachment.href}
+                  href={attachment.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                >
+                  Open attachment: {attachment.label}
+                </a>
+              ))}
               {policy?.url ? (
                 <a
                   href={policy.url}
@@ -732,10 +782,10 @@ function ChecklistItemDetailModal({ detail, onClose }) {
                   Open training video
                 </a>
               ) : null}
-              {!lesson && !policy?.url && !item.directLink && !item.policyLink && !item.mediaLink ? (
+              {!hasLinkedResources ? (
                 <div className="text-sm text-gray-500">
-                  No linked lesson, policy, or reference has been added to this
-                  item yet.
+                  No linked files, policy links, or reference material has been
+                  added to this item yet.
                 </div>
               ) : null}
             </div>

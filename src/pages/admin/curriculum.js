@@ -228,7 +228,10 @@ function CategoriesTab({ centerId }) {
     }
   }
 
-  const totalLessons = categories.reduce((sum, c) => sum + (c._count?.lessons ?? 0), 0);
+  const totalLessons = categories.reduce(
+    (sum, c) => sum + (c.lessonCount ?? c._count?.lessons ?? 0),
+    0,
+  );
 
   return (
     <div className="space-y-4">
@@ -359,7 +362,7 @@ function CategoriesTab({ centerId }) {
                       </td>
                       <td className="px-4 py-3.5 text-center">
                         <span className="inline-flex min-w-[2rem] items-center justify-center rounded-full bg-sky-50 px-2 py-0.5 text-xs font-bold text-sky-700">
-                          {cat._count?.lessons ?? 0}
+                          {cat.lessonCount ?? cat._count?.lessons ?? 0}
                         </span>
                       </td>
                       <td className="px-4 py-3.5">

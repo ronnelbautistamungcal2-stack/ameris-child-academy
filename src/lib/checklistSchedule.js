@@ -8,6 +8,20 @@ export const WEEKDAY_OPTIONS = [
   { value: 6, label: "Saturday", shortLabel: "Sat" },
 ];
 
+export const CHECKLIST_FREQUENCY_OPTIONS = [
+  { value: "DAILY", label: "Daily" },
+  { value: "WEEKLY", label: "Weekly" },
+  { value: "MONTHLY", label: "Monthly" },
+  { value: "ONE_TIME", label: "One Time" },
+];
+
+export function normalizeChecklistFrequency(value) {
+  const normalized = String(value || "DAILY").toUpperCase();
+  return ["DAILY", "WEEKLY", "MONTHLY", "ONE_TIME"].includes(normalized)
+    ? normalized
+    : "DAILY";
+}
+
 export function normalizeRepeatDays(value) {
   const source = Array.isArray(value) ? value : value == null ? [] : [value];
   const seen = new Set();
@@ -32,8 +46,42 @@ export function normalizeMonthlyDay(value) {
 
 function toDate(value) {
   if (value instanceof Date) return value;
+  if (typeof value === "string") {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) {
+      const year = Number(match[1]);
+      const month = Number(match[2]) - 1;
+      const day = Number(match[3]);
+      const parsed = new Date(year, month, day);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+  }
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function normalizeOneTimeDate(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const date = toDate(value);
+  if (!date) return null;
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function sameCalendarDate(left, right) {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
+
+export function formatDateInputValue(value) {
+  const date = normalizeOneTimeDate(value);
+  if (!date) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function ordinal(value) {
@@ -53,7 +101,7 @@ function ordinal(value) {
 }
 
 export function describeChecklistSchedule(checklist) {
-  const frequency = String(checklist?.frequency || "DAILY").toUpperCase();
+  const frequency = normalizeChecklistFrequency(checklist?.frequency);
   if (frequency === "WEEKLY") {
     const days = normalizeRepeatDays(checklist?.repeatDays);
     if (!days.length) return "Weekly";
@@ -69,14 +117,25 @@ export function describeChecklistSchedule(checklist) {
     return day ? `Monthly on the ${ordinal(day)}` : "Monthly";
   }
 
+  if (frequency === "ONE_TIME") {
+    const date = normalizeOneTimeDate(checklist?.oneTimeDate);
+    return date
+      ? `One time on ${date.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })}`
+      : "One time";
+  }
+
   return "Daily";
 }
 
-export function checklistMatchesDate(checklist, value) {
+export function scheduleMatchesDate(checklist, value) {
   const date = toDate(value);
   if (!date) return true;
 
-  const frequency = String(checklist?.frequency || "DAILY").toUpperCase();
+  const frequency = normalizeChecklistFrequency(checklist?.frequency);
   if (frequency === "WEEKLY") {
     const days = normalizeRepeatDays(checklist?.repeatDays);
     if (!days.length) return true;
@@ -89,5 +148,87 @@ export function checklistMatchesDate(checklist, value) {
     return date.getDate() === day;
   }
 
+  if (frequency === "ONE_TIME") {
+    const oneTimeDate = normalizeOneTimeDate(checklist?.oneTimeDate);
+    if (!oneTimeDate) return true;
+    return sameCalendarDate(oneTimeDate, date);
+  }
+
   return true;
+}
+
+export function checklistMatchesDate(checklist, value) {
+  return scheduleMatchesDate(checklist, value);
+}
+
+export function getEffectiveItemSchedule(item, checklist) {
+  const frequency = normalizeChecklistFrequency(
+    item?.frequency || checklist?.frequency,
+  );
+
+  return {
+    frequency,
+    repeatDays:
+      frequency === "WEEKLY"
+        ? normalizeRepeatDays(
+            Array.isArray(item?.repeatDays) && item.repeatDays.length
+              ? item.repeatDays
+              : checklist?.repeatDays,
+          )
+        : [],
+    monthlyDay:
+      frequency === "MONTHLY"
+        ? normalizeMonthlyDay(item?.monthlyDay ?? checklist?.monthlyDay)
+        : null,
+    oneTimeDate:
+      frequency === "ONE_TIME" ? normalizeOneTimeDate(item?.oneTimeDate) : null,
+  };
+}
+
+export function itemMatchesDate(item, value, checklist) {
+  return scheduleMatchesDate(getEffectiveItemSchedule(item, checklist), value);
+}
+
+function scheduleSignature(schedule) {
+  const frequency = normalizeChecklistFrequency(schedule?.frequency);
+  const repeatDays =
+    frequency === "WEEKLY" ? normalizeRepeatDays(schedule?.repeatDays).join(",") : "";
+  const monthlyDay = frequency === "MONTHLY" ? String(normalizeMonthlyDay(schedule?.monthlyDay) || "") : "";
+  const oneTimeDate =
+    frequency === "ONE_TIME" && normalizeOneTimeDate(schedule?.oneTimeDate)
+      ? formatDateInputValue(schedule.oneTimeDate)
+      : "";
+  return `${frequency}|${repeatDays}|${monthlyDay}|${oneTimeDate}`;
+}
+
+export function summarizeChecklistFrequency(checklist) {
+  const items = Array.isArray(checklist?.items) ? checklist.items : [];
+  if (!items.length) return normalizeChecklistFrequency(checklist?.frequency);
+
+  const values = new Set(
+    items.map((item) => getEffectiveItemSchedule(item, checklist).frequency),
+  );
+  return values.size === 1 ? [...values][0] : "MIXED";
+}
+
+export function summarizeChecklistSchedule(checklist) {
+  const items = Array.isArray(checklist?.items) ? checklist.items : [];
+  if (!items.length) return describeChecklistSchedule(checklist);
+
+  const signatures = new Map();
+  for (const item of items) {
+    const schedule = getEffectiveItemSchedule(item, checklist);
+    signatures.set(scheduleSignature(schedule), schedule);
+  }
+
+  if (signatures.size === 1) {
+    return describeChecklistSchedule([...signatures.values()][0]);
+  }
+
+  const frequency = summarizeChecklistFrequency(checklist);
+  if (frequency === "WEEKLY") return "Weekly (mixed days)";
+  if (frequency === "MONTHLY") return "Monthly (mixed days)";
+  if (frequency === "ONE_TIME") return "One-time items";
+  if (frequency === "DAILY") return "Daily";
+  return "Mixed schedules";
 }

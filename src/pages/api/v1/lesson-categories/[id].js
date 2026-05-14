@@ -1,4 +1,5 @@
 import { getSession } from "@/lib/auth";
+import { attachLessonCountsToCategories } from "@/lib/lessonCategoryCounts";
 import prisma from "@/lib/prisma";
 
 export default async function handler(req, res) {
@@ -17,8 +18,31 @@ export default async function handler(req, res) {
   });
   if (!category) return res.status(404).json({ error: "Category not found" });
 
+  async function getCategoryWithLessonCount() {
+    const lessons = await prisma.lesson.findMany({
+      where: { centerId: category.centerId },
+      select: {
+        id: true,
+        categoryId: true,
+        category: {
+          select: {
+            id: true,
+          },
+        },
+        goals: {
+          orderBy: { goalIndex: "asc" },
+          select: {
+            passingCriteria: true,
+          },
+        },
+      },
+    });
+
+    return attachLessonCountsToCategories([category], lessons)[0];
+  }
+
   if (req.method === "GET") {
-    return res.status(200).json(category);
+    return res.status(200).json(await getCategoryWithLessonCount());
   }
 
   if (req.method === "PUT") {
@@ -42,9 +66,10 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "DELETE") {
-    if (category._count.lessons > 0) {
+    const categoryWithLessonCount = await getCategoryWithLessonCount();
+    if ((categoryWithLessonCount?.lessonCount || 0) > 0) {
       return res.status(400).json({
-        error: `Cannot delete category with ${category._count.lessons} lesson(s). Remove or reassign lessons first.`,
+        error: `Cannot delete category with ${categoryWithLessonCount.lessonCount} lesson(s). Remove or reassign lessons first.`,
       });
     }
 

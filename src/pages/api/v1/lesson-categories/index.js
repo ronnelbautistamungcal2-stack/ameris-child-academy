@@ -1,4 +1,5 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { attachLessonCountsToCategories } from "@/lib/lessonCategoryCounts";
 import prisma from "@/lib/prisma";
 
 export default async function handler(req, res) {
@@ -27,7 +28,26 @@ export default async function handler(req, res) {
       orderBy: { sortOrder: "asc" },
     });
 
-    return res.status(200).json(categories);
+    const lessons = await prisma.lesson.findMany({
+      where: centerId ? { centerId } : {},
+      select: {
+        id: true,
+        categoryId: true,
+        category: {
+          select: {
+            id: true,
+          },
+        },
+        goals: {
+          orderBy: { goalIndex: "asc" },
+          select: {
+            passingCriteria: true,
+          },
+        },
+      },
+    });
+
+    return res.status(200).json(attachLessonCountsToCategories(categories, lessons));
   }
 
   if (req.method === "POST") {

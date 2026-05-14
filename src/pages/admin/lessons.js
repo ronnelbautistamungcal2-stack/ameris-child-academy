@@ -133,6 +133,17 @@ function collectManagerCategoryOptions(categories, { childAge = "" } = {}) {
   return [...values].sort((a, b) => byString(a, b));
 }
 
+function collectManagerAgeRangeOptions(categories) {
+  const values = new Set();
+
+  for (const category of Array.isArray(categories) ? categories : []) {
+    const ageRange = normalizeSpaces(category?.ageRange);
+    if (ageRange) values.add(ageRange);
+  }
+
+  return [...values].sort(byNaturalString);
+}
+
 function parseRefIdParts(value) {
   const raw = normalizeSpaces(value);
   if (!raw) return null;
@@ -880,8 +891,12 @@ export default function AdminLessons() {
   }, [records]);
 
   const lessonAgeOptions = useMemo(() => {
-    return mergeSelectOptions(DEFAULT_LESSON_AGE_OPTIONS, options.ages);
-  }, [options.ages]);
+    const managedAgeOptions = collectManagerAgeRangeOptions(lessonCategories);
+    const baseAgeOptions = managedAgeOptions.length
+      ? managedAgeOptions
+      : DEFAULT_LESSON_AGE_OPTIONS;
+    return mergeSelectOptions(baseAgeOptions, options.ages);
+  }, [lessonCategories, options.ages]);
 
   const lessonTermOptions = useMemo(() => {
     return mergeSelectOptions(DEFAULT_LESSON_TERM_OPTIONS, options.terms);
@@ -1027,12 +1042,10 @@ export default function AdminLessons() {
   }, [filtered, page, pageSize]);
 
   const stats = useMemo(() => {
-    const lessonSet = new Set();
     const termSet = new Set();
     const catCounts = new Map();
 
     for (const r of records) {
-      if (r.lessonTitle) lessonSet.add(normalizeKey(r.lessonTitle));
       if (r.term) termSet.add(normalizeKey(r.term));
       if (r.category) {
         const label = normalizeSpaces(r.category);
@@ -1055,7 +1068,7 @@ export default function AdminLessons() {
       .slice(0, 2);
 
     return {
-      totalLessons: lessonSet.size,
+      totalLessons: Array.isArray(lessons) ? lessons.length : 0,
       totalRecords: records.length,
       activeTerms: termSet.size,
       secondary: spiritual
@@ -1069,7 +1082,7 @@ export default function AdminLessons() {
           ? { label: fallbacks[1][0], count: fallbacks[1][1] }
           : { label: "Modules", count: 0 },
     };
-  }, [records]);
+  }, [lessons, records]);
 
   const openDetails = useCallback((rec) => {
     setDetailsRecord(rec || null);
@@ -2075,6 +2088,13 @@ export default function AdminLessons() {
                     </option>
                   ))}
                 </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  Manage age groups in{" "}
+                  <a href="/admin/curriculum" className="font-semibold text-sky-700 hover:text-sky-800">
+                    Steps of Progression Manager
+                  </a>
+                  {" "}under Categories.
+                </p>
               </Field>
               <Field label="Term">
                 <select
@@ -2274,6 +2294,13 @@ export default function AdminLessons() {
                     </option>
                   ))}
                 </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  Manage age groups in{" "}
+                  <a href="/admin/curriculum" className="font-semibold text-sky-700 hover:text-sky-800">
+                    Steps of Progression Manager
+                  </a>
+                  {" "}under Categories.
+                </p>
               </Field>
               <Field label="Term">
                 <select

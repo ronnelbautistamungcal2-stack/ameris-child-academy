@@ -11,7 +11,12 @@ import {
 } from "@/components/ui/Workspace";
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
-import { describeChecklistSchedule } from "@/lib/checklistSchedule";
+import { collectChecklistLessonAttachments } from "@/lib/checklistLessonResources";
+import {
+  describeChecklistSchedule,
+  summarizeChecklistFrequency,
+  summarizeChecklistSchedule,
+} from "@/lib/checklistSchedule";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const CATEGORY_LABELS = {
@@ -36,6 +41,8 @@ const FREQUENCY_BADGE = {
   DAILY: "bg-sky-50 text-sky-700",
   WEEKLY: "bg-violet-50 text-violet-700",
   MONTHLY: "bg-amber-50 text-amber-700",
+  ONE_TIME: "bg-rose-50 text-rose-700",
+  MIXED: "bg-slate-100 text-slate-700",
 };
 
 function todayString() {
@@ -310,6 +317,8 @@ export default function StaffChecklistsPage() {
                     (item) => Array.isArray(item.completions) && item.completions.length > 0,
                   ).length;
                   const allDone = items.length > 0 && doneCount === items.length;
+                  const scheduleKey = summarizeChecklistFrequency(checklist);
+                  const scheduleLabel = summarizeChecklistSchedule(checklist);
 
                   return (
                     <WorkspaceSection
@@ -328,10 +337,10 @@ export default function StaffChecklistsPage() {
                           </span>
                           <span
                             className={`rounded-full px-3 py-1 text-xs font-bold ${
-                              FREQUENCY_BADGE[checklist.frequency] || "bg-gray-100 text-gray-600"
+                              FREQUENCY_BADGE[scheduleKey] || "bg-gray-100 text-gray-600"
                             }`}
                           >
-                            {describeChecklistSchedule(checklist)}
+                            {scheduleLabel}
                           </span>
                           {allDone ? (
                             <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
@@ -353,6 +362,10 @@ export default function StaffChecklistsPage() {
                               : null;
                             const isDone = !!completion;
                             const busy = completingId === item.id;
+                            const lessonAttachments = collectChecklistLessonAttachments(
+                              item.lesson,
+                              item.lessonGoal,
+                            );
 
                             return (
                               <div
@@ -420,6 +433,21 @@ export default function StaffChecklistsPage() {
                                           {item.lesson.goals?.length ? (
                                             <div className="mt-2 text-[11px] text-gray-600">
                                               {item.lesson.goals.length} step{item.lesson.goals.length === 1 ? "" : "s"}
+                                            </div>
+                                          ) : null}
+                                          {lessonAttachments.length ? (
+                                            <div className="mt-2 flex flex-wrap gap-1.5">
+                                              {lessonAttachments.map((attachment) => (
+                                                <a
+                                                  key={attachment.href}
+                                                  href={attachment.href}
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                  className="rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700 hover:bg-sky-100"
+                                                >
+                                                  Attachment: {attachment.label}
+                                                </a>
+                                              ))}
                                             </div>
                                           ) : null}
                                         </div>

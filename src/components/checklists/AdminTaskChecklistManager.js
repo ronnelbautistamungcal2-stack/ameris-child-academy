@@ -1,10 +1,16 @@
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import {
+  CHECKLIST_FREQUENCY_OPTIONS,
   WEEKDAY_OPTIONS,
   describeChecklistSchedule,
+  formatDateInputValue,
+  getEffectiveItemSchedule,
   normalizeMonthlyDay,
+  normalizeOneTimeDate,
   normalizeRepeatDays,
+  summarizeChecklistFrequency,
+  summarizeChecklistSchedule,
 } from "@/lib/checklistSchedule";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -28,22 +34,24 @@ const CATEGORY_STYLES = {
   OTHER: { border: "border-l-gray-400", bg: "bg-gray-50", text: "text-gray-700" },
 };
 
-const FREQUENCY_OPTIONS = [
-  { value: "DAILY", label: "Daily" },
-  { value: "WEEKLY", label: "Weekly" },
-  { value: "MONTHLY", label: "Monthly" },
-];
+const FREQUENCY_OPTIONS = CHECKLIST_FREQUENCY_OPTIONS;
 
 const FREQUENCY_STYLES = {
   DAILY: "bg-sky-50 text-sky-700",
   WEEKLY: "bg-violet-50 text-violet-700",
   MONTHLY: "bg-amber-50 text-amber-700",
+  ONE_TIME: "bg-rose-50 text-rose-700",
+  MIXED: "bg-slate-100 text-slate-700",
 };
 
 function blankItemRow() {
   return {
     title: "",
     description: "",
+    frequency: "DAILY",
+    repeatDays: [],
+    monthlyDay: "",
+    oneTimeDate: "",
     lessonId: "",
     policyDocumentId: "",
     directLinkLabel: "",
@@ -81,6 +89,7 @@ function roleLabel(role) {
 
 function summaryForItem(item) {
   const labels = [];
+  labels.push(`Repeat: ${describeChecklistSchedule(item)}`);
   if (item.lesson?.title) labels.push(`Lesson: ${item.lesson.title}`);
   if (item.policyDocument?.title) labels.push(`Policy: ${item.policyDocument.title}`);
   if (item.directLink) labels.push(item.directLinkLabel || "Direct link");
@@ -94,6 +103,13 @@ function toggleRepeatDay(days, dayValue) {
   if (set.has(dayValue)) set.delete(dayValue);
   else set.add(dayValue);
   return [...set].sort((a, b) => a - b);
+}
+
+function checklistMatchesFrequency(checklist, frequency) {
+  if (!frequency) return true;
+  return (checklist.items || []).some(
+    (item) => getEffectiveItemSchedule(item, checklist).frequency === frequency,
+  );
 }
 
 export default function AdminTaskChecklistManager({ centerId }) {
@@ -194,10 +210,20 @@ export default function AdminTaskChecklistManager({ centerId }) {
     setNewMonthlyDay(checklist.monthlyDay ? String(checklist.monthlyDay) : "");
     setNewClassRoomId(checklist.classRoomId || "");
     setNewAssignedUserId(checklist.assignedUserId || "");
-    const rows = sortByTaskTime(checklist.items).map((item) => ({
+    const rows = sortByTaskTime(checklist.items).map((item) => {
+      const schedule = getEffectiveItemSchedule(item, checklist);
+      return {
       id: item.id,
       title: item.title || "",
       description: item.description || "",
+      frequency: schedule.frequency,
+      repeatDays: schedule.repeatDays,
+      monthlyDay: schedule.monthlyDay
+        ? String(schedule.monthlyDay)
+        : "",
+      oneTimeDate: schedule.oneTimeDate
+        ? formatDateInputValue(schedule.oneTimeDate)
+        : "",
       lessonId: item.lessonId || "",
       policyDocumentId: item.policyDocumentId || "",
       directLinkLabel: item.directLinkLabel || "",
@@ -205,21 +231,41 @@ export default function AdminTaskChecklistManager({ centerId }) {
       policyLink: item.policyLink || "",
       mediaLink: item.mediaLink || "",
       taskTime: item.taskTime || "",
-    }));
+      };
+    });
     setNewItems(rows.length ? rows : [blankItemRow()]);
     setShowCreate(true);
   }
 
   function validateForm() {
     if (!newTitle.trim()) return "Checklist title is required.";
-    if (newFrequency === "WEEKLY" && normalizeRepeatDays(newRepeatDays).length === 0) {
-      return "Pick at least one weekday for a weekly checklist.";
-    }
-    if (newFrequency === "MONTHLY" && !normalizeMonthlyDay(newMonthlyDay)) {
-      return "Enter a valid monthly day between 1 and 31.";
-    }
     if (!newItems.some((item) => item.title.trim())) {
       return "Add at least one task item.";
+    }
+    const invalidItem = newItems.find((item) => {
+      if (!item.title.trim()) return false;
+      if (item.frequency === "WEEKLY") {
+        return normalizeRepeatDays(item.repeatDays).length === 0;
+      }
+      if (item.frequency === "MONTHLY") {
+        return !normalizeMonthlyDay(item.monthlyDay);
+      }
+      if (item.frequency === "ONE_TIME") {
+        return !normalizeOneTimeDate(item.oneTimeDate);
+      }
+      return false;
+    });
+    if (invalidItem) {
+      const itemNumber = newItems.indexOf(invalidItem) + 1;
+      if (invalidItem.frequency === "WEEKLY") {
+        return `Task item ${itemNumber} must include at least one weekday.`;
+      }
+      if (invalidItem.frequency === "MONTHLY") {
+        return `Task item ${itemNumber} needs a valid day of month between 1 and 31.`;
+      }
+      if (invalidItem.frequency === "ONE_TIME") {
+        return `Task item ${itemNumber} needs a one-time date.`;
+      }
     }
     return "";
   }
@@ -255,6 +301,10 @@ export default function AdminTaskChecklistManager({ centerId }) {
               id: item.id,
               title: item.title.trim(),
               description: item.description.trim() || null,
+              frequency: item.frequency || "DAILY",
+              repeatDays: item.frequency === "WEEKLY" ? normalizeRepeatDays(item.repeatDays) : [],
+              monthlyDay: item.frequency === "MONTHLY" ? normalizeMonthlyDay(item.monthlyDay) : null,
+              oneTimeDate: item.frequency === "ONE_TIME" ? item.oneTimeDate || null : null,
               lessonId: item.lessonId || null,
               policyDocumentId: item.policyDocumentId || null,
               directLinkLabel: item.directLinkLabel.trim() || null,
@@ -322,7 +372,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
     const needle = String(search || "").trim().toLowerCase();
     return checklists.filter((checklist) => {
       if (filterCategory && checklist.category !== filterCategory) return false;
-      if (filterFrequency && checklist.frequency !== filterFrequency) return false;
+      if (!checklistMatchesFrequency(checklist, filterFrequency)) return false;
       if (!needle) return true;
 
       const haystack = [
@@ -473,25 +523,6 @@ export default function AdminTaskChecklistManager({ centerId }) {
                 </select>
               </label>
               <label className="block">
-                <div className="mb-1 text-xs font-semibold text-gray-500">Repeat</div>
-                <select
-                  value={newFrequency}
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    setNewFrequency(next);
-                    if (next !== "WEEKLY") setNewRepeatDays([]);
-                    if (next !== "MONTHLY") setNewMonthlyDay("");
-                  }}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:border-sky-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-200"
-                >
-                  {FREQUENCY_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block">
                 <div className="mb-1 text-xs font-semibold text-gray-500">Classroom</div>
                 <select
                   value={newClassRoomId}
@@ -532,46 +563,9 @@ export default function AdminTaskChecklistManager({ centerId }) {
               </label>
             </div>
 
-            {newFrequency === "WEEKLY" ? (
-              <div>
-                <div className="mb-2 text-xs font-semibold text-gray-500">Show on these weekdays</div>
-                <div className="flex flex-wrap gap-2">
-                  {WEEKDAY_OPTIONS.map((option) => {
-                    const active = normalizeRepeatDays(newRepeatDays).includes(option.value);
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => setNewRepeatDays((current) => toggleRepeatDay(current, option.value))}
-                        className={[
-                          "rounded-full px-3 py-1.5 text-xs font-semibold transition",
-                          active
-                            ? "bg-sky-600 text-white"
-                            : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
-                        ].join(" ")}
-                      >
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
-
-            {newFrequency === "MONTHLY" ? (
-              <label className="block max-w-xs">
-                <div className="mb-1 text-xs font-semibold text-gray-500">Day of month</div>
-                <input
-                  type="number"
-                  min="1"
-                  max="31"
-                  value={newMonthlyDay}
-                  onChange={(event) => setNewMonthlyDay(event.target.value)}
-                  placeholder="20"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:border-sky-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-200"
-                />
-              </label>
-            ) : null}
+            <div className="rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+              Each checklist item now has its own repeat schedule. You can mix daily, weekly, monthly, and one-time tasks in the same checklist.
+            </div>
 
             <div>
               <div className="mb-2 flex items-center justify-between">
@@ -605,7 +599,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
                       </button>
                     </div>
 
-                    <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
                       <label className="block">
                         <div className="mb-1 text-xs font-semibold text-gray-500">Time</div>
                         <input
@@ -625,6 +619,26 @@ export default function AdminTaskChecklistManager({ centerId }) {
                         />
                       </label>
                       <label className="block">
+                        <div className="mb-1 text-xs font-semibold text-gray-500">Repeat</div>
+                        <select
+                          value={item.frequency || "DAILY"}
+                          onChange={(event) => {
+                            const next = event.target.value;
+                            updateItemRow(index, "frequency", next);
+                            if (next !== "WEEKLY") updateItemRow(index, "repeatDays", []);
+                            if (next !== "MONTHLY") updateItemRow(index, "monthlyDay", "");
+                            if (next !== "ONE_TIME") updateItemRow(index, "oneTimeDate", "");
+                          }}
+                          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-200"
+                        >
+                          {FREQUENCY_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block">
                         <div className="mb-1 text-xs font-semibold text-gray-500">Lesson</div>
                         <select
                           value={item.lessonId}
@@ -639,7 +653,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
                           ))}
                         </select>
                       </label>
-                      <label className="block xl:col-span-2">
+                      <label className="block xl:col-span-3">
                         <div className="mb-1 text-xs font-semibold text-gray-500">Details</div>
                         <input
                           value={item.description}
@@ -648,7 +662,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
                           className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-200"
                         />
                       </label>
-                      <label className="block">
+                      <label className="block xl:col-span-2">
                         <div className="mb-1 text-xs font-semibold text-gray-500">Policy</div>
                         <select
                           value={item.policyDocumentId}
@@ -663,7 +677,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
                           ))}
                         </select>
                       </label>
-                      <label className="block">
+                      <label className="block xl:col-span-2">
                         <div className="mb-1 text-xs font-semibold text-gray-500">Direct Link Label</div>
                         <input
                           value={item.directLinkLabel}
@@ -681,7 +695,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
                           className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-200"
                         />
                       </label>
-                      <label className="block">
+                      <label className="block xl:col-span-2">
                         <div className="mb-1 text-xs font-semibold text-gray-500">Reference URL</div>
                         <input
                           value={item.policyLink}
@@ -690,7 +704,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
                           className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-200"
                         />
                       </label>
-                      <label className="block">
+                      <label className="block xl:col-span-2">
                         <div className="mb-1 text-xs font-semibold text-gray-500">Training Video URL</div>
                         <input
                           value={item.mediaLink}
@@ -700,6 +714,61 @@ export default function AdminTaskChecklistManager({ centerId }) {
                         />
                       </label>
                     </div>
+
+                    {item.frequency === "WEEKLY" ? (
+                      <div className="mt-3">
+                        <div className="mb-2 text-xs font-semibold text-gray-500">Show this task on these weekdays</div>
+                        <div className="flex flex-wrap gap-2">
+                          {WEEKDAY_OPTIONS.map((option) => {
+                            const active = normalizeRepeatDays(item.repeatDays).includes(option.value);
+                            return (
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={() =>
+                                  updateItemRow(index, "repeatDays", toggleRepeatDay(item.repeatDays, option.value))
+                                }
+                                className={[
+                                  "rounded-full px-3 py-1.5 text-xs font-semibold transition",
+                                  active
+                                    ? "bg-sky-600 text-white"
+                                    : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                                ].join(" ")}
+                              >
+                                {option.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {item.frequency === "MONTHLY" ? (
+                      <label className="mt-3 block max-w-xs">
+                        <div className="mb-1 text-xs font-semibold text-gray-500">Day of month</div>
+                        <input
+                          type="number"
+                          min="1"
+                          max="31"
+                          value={item.monthlyDay || ""}
+                          onChange={(event) => updateItemRow(index, "monthlyDay", event.target.value)}
+                          placeholder="20"
+                          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-200"
+                        />
+                      </label>
+                    ) : null}
+
+                    {item.frequency === "ONE_TIME" ? (
+                      <label className="mt-3 block max-w-xs">
+                        <div className="mb-1 text-xs font-semibold text-gray-500">One-time date</div>
+                        <input
+                          type="date"
+                          value={item.oneTimeDate || ""}
+                          onChange={(event) => updateItemRow(index, "oneTimeDate", event.target.value)}
+                          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-200"
+                        />
+                      </label>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -737,7 +806,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
           <p className="mt-1 max-w-md text-xs text-gray-500">
             {search || filterCategory || filterFrequency
               ? "Adjust the filters or search terms and try again."
-              : "Create a recurring checklist and assign it to a classroom or staff member so it appears on the right day."}
+              : "Create a checklist and set the schedule on each task so only the right items appear on the right day."}
           </p>
         </div>
       ) : (
@@ -759,6 +828,8 @@ export default function AdminTaskChecklistManager({ centerId }) {
                 const stylesForCard = CATEGORY_STYLES[checklist.category] || CATEGORY_STYLES.OTHER;
                 const items = sortByTaskTime(checklist.items);
                 const expanded = expandedId === checklist.id;
+                const scheduleKey = summarizeChecklistFrequency(checklist);
+                const scheduleLabel = summarizeChecklistSchedule(checklist);
                 return (
                   <div
                     key={checklist.id}
@@ -784,8 +855,8 @@ export default function AdminTaskChecklistManager({ centerId }) {
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-sm font-bold text-gray-900">{checklist.title}</span>
-                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${FREQUENCY_STYLES[checklist.frequency] || FREQUENCY_STYLES.DAILY}`}>
-                              {describeChecklistSchedule(checklist)}
+                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${FREQUENCY_STYLES[scheduleKey] || FREQUENCY_STYLES.DAILY}`}>
+                              {scheduleLabel}
                             </span>
                             <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600">
                               {items.length} {items.length === 1 ? "item" : "items"}
@@ -860,6 +931,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
                           <div className="space-y-2">
                             {items.map((item, index) => {
                               const links = summaryForItem(item);
+                              const itemSchedule = getEffectiveItemSchedule(item, checklist);
                               return (
                                 <div key={item.id} className="rounded-xl border border-gray-200 bg-white p-3">
                                   <div className="flex items-start gap-3">
@@ -876,6 +948,11 @@ export default function AdminTaskChecklistManager({ centerId }) {
                                       {item.description ? (
                                         <p className="mt-1 text-xs text-gray-500">{item.description}</p>
                                       ) : null}
+                                      <div className="mt-1">
+                                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${FREQUENCY_STYLES[itemSchedule.frequency] || FREQUENCY_STYLES.DAILY}`}>
+                                          {describeChecklistSchedule(itemSchedule)}
+                                        </span>
+                                      </div>
                                       {links.length ? (
                                         <div className="mt-2 flex flex-wrap gap-1.5">
                                           {links.map((label) => (

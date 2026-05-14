@@ -223,6 +223,7 @@ model User {
   coachObservationsReceived    CoachObservation[]         @relation("CoachObservationsReceived")
   coachFollowUpsCreated        CoachFollowUp[]            @relation("CoachFollowUpsCreated")
   coachFollowUpsAssigned       CoachFollowUp[]            @relation("CoachFollowUpsAssigned")
+  milestoneChecklistStaffCompletions MilestoneChecklistStaffCompletion[] @relation("MilestoneChecklistStaffCompletedBy")
   dailyChecklistCompletions    DailyChecklistCompletion[] @relation("DailyChecklistCompletedBy")
   assignedDailyChecklists      DailyChecklist[]           @relation("DailyChecklistAssignedUser")
   dailyChecklistNotes          DailyChecklistNote[]       @relation("DailyChecklistNotesCreatedBy")
@@ -556,6 +557,7 @@ model MilestoneChecklistItem {
   assignedToId     String?
   assignedTo       User?                  @relation("ChecklistItemAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
   completions      MilestoneChecklistItemCompletion[]
+  staffCompletions MilestoneChecklistStaffCompletion[]
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
 
@@ -582,6 +584,23 @@ model MilestoneChecklistItemCompletion {
   @@unique([childId, itemId])
   @@index([childId, completedAt])
   @@index([itemId, completedAt])
+}
+
+model MilestoneChecklistStaffCompletion {
+  id            String                 @id @default(uuid())
+  item          MilestoneChecklistItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId        String
+  completedBy   User                   @relation("MilestoneChecklistStaffCompletedBy", fields: [completedById], references: [id], onDelete: Cascade)
+  completedById String
+  date          DateTime               @db.Date
+  notes         String?
+  completedAt   DateTime               @default(now())
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  @@unique([itemId, completedById, date])
+  @@index([itemId, date])
+  @@index([completedById, date])
 }
 
 model Task {
@@ -1229,6 +1248,7 @@ enum ChecklistFrequency {
   DAILY
   WEEKLY
   MONTHLY
+  ONE_TIME
 }
 
 model DailyChecklist {
@@ -1263,6 +1283,10 @@ model DailyChecklistItem {
   sortOrder   Int                 @default(0)
   title       String
   description String?
+  frequency   ChecklistFrequency  @default(DAILY)
+  repeatDays  Int[]               @default([])
+  monthlyDay  Int?
+  oneTimeDate DateTime?           @db.Date
   lesson      Lesson?             @relation(fields: [lessonId], references: [id], onDelete: SetNull)
   lessonId    String?
   policyDocument   PolicyDocument? @relation(fields: [policyDocumentId], references: [id], onDelete: SetNull)
@@ -1277,7 +1301,9 @@ model DailyChecklistItem {
 
   @@index([checklistId, sortOrder])
   @@index([checklistId, taskTime])
+  @@index([checklistId, frequency])
   @@index([lessonId])
+  @@index([oneTimeDate])
   @@index([policyDocumentId])
 }
 

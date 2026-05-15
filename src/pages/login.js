@@ -73,7 +73,7 @@ export default function Login() {
       {/* Header */}
       <header className="relative z-10 px-6 py-6">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <Link href="/" className="flex items-center">
+          <Link href="/" className="block w-[clamp(124px,30vw,156px)] sm:w-[136px]">
             <AmerisLogo size="md" showText={false} />
           </Link>
           <div className="flex items-center gap-3">
@@ -106,8 +106,7 @@ export default function Login() {
           {/* Login card */}
           <div className="rounded-3xl border border-gray-200 bg-white/90 p-8 shadow-sm backdrop-blur animate-[modalIn_0.4s_ease-out] dark:border-gray-700 dark:bg-gray-900/90">
             <div className="text-center">
-              <AmerisLogo size="lg" showText={false} className="mx-auto drop-shadow-sm" />
-              <h1 className="mt-4 text-2xl font-extrabold text-gray-900 dark:text-gray-100">Welcome back</h1>
+              <h1 className="text-2xl font-extrabold text-gray-900 dark:text-gray-100">Welcome back</h1>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 Sign in to your Ameris Academy account
               </p>

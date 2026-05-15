@@ -389,15 +389,9 @@ function SignupHeader() {
   return (
     <header className="relative z-10 px-6 py-6">
       <div className="mx-auto flex max-w-6xl items-center justify-between">
-        <div className="flex items-center gap-3">
+        <Link href="/" className="block w-[clamp(124px,30vw,156px)] sm:w-[136px]">
           <AmerisLogo size="md" showText={false} />
-          <div>
-            <div className="text-sm font-extrabold text-gray-900">
-              Ameris Academy
-            </div>
-            <div className="text-xs text-gray-500">Childcare</div>
-          </div>
-        </div>
+        </Link>
         <div className="flex items-center gap-3">
           <button
             type="button"

@@ -26,7 +26,8 @@ export default function AmerisLogo({
     <span
       className={`relative block shrink-0 overflow-hidden ${className}`.trim()}
       style={{
-        width: `min(100%, ${dims.maxWidth}px)`,
+        width: `${dims.maxWidth}px`,
+        maxWidth: "100%",
         aspectRatio: SOURCE_ASPECT_RATIO,
         ...style,
       }}

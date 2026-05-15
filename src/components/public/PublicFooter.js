@@ -1,7 +1,7 @@
 import Link from "next/link";
 import AmerisLogo from "@/components/ui/AmerisLogo";
 import { MailIcon, MapPinIcon, PhoneIcon } from "./icons";
-import { PUBLIC_CONTACT, PUBLIC_NAV_LINKS, SITE_NAME, SITE_TAGLINE } from "./siteData";
+import { PUBLIC_CONTACT, PUBLIC_NAV_LINKS, SITE_TAGLINE } from "./siteData";
 
 const PORTAL_LINKS = [
   { href: "/login", label: "Family Portal" },
@@ -16,15 +16,9 @@ export default function PublicFooter() {
       <div className="mx-auto w-full max-w-7xl px-6 py-12">
         <div className="grid grid-cols-1 gap-8 md:grid-cols-[1.35fr_0.9fr_0.9fr_1.1fr]">
           <div className="min-w-0">
-            <div className="flex items-center gap-3">
-              <AmerisLogo size="md" showText={false} className="drop-shadow-sm" />
-              <div className="min-w-0">
-                <div className="truncate text-sm font-extrabold text-gray-900">{SITE_NAME}</div>
-                <div className="truncate text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">
-                  Early Learning
-                </div>
-              </div>
-            </div>
+            <Link href="/" className="block w-[clamp(132px,34vw,188px)] sm:w-[clamp(148px,24vw,204px)]">
+              <AmerisLogo size="xl" showText={false} className="drop-shadow-sm" />
+            </Link>
             <p className="mt-4 max-w-sm text-sm text-gray-600">{SITE_TAGLINE}</p>
             <div className="mt-5 grid gap-3 text-sm text-gray-600">
               <a href={PUBLIC_CONTACT.phoneHref} className="flex items-start gap-3 rounded-2xl bg-white/85 px-4 py-3 hover:text-sky-700">
@@ -108,7 +102,7 @@ export default function PublicFooter() {
         </div>
 
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-gray-200 pt-6 text-xs text-gray-500 sm:flex-row">
-          <span>&copy; {new Date().getFullYear()} {SITE_NAME}. All rights reserved.</span>
+          <span>&copy; {new Date().getFullYear()} Ameris Academy. All rights reserved.</span>
           <div className="flex flex-wrap items-center justify-center gap-4">
             <a href={PUBLIC_CONTACT.phoneHref} className="hover:text-sky-700">
               {PUBLIC_CONTACT.phoneDisplay}

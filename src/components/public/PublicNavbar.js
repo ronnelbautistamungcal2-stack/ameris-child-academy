@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { MoonIcon, SunIcon, MenuIcon, XIcon } from "./icons";
 import AmerisLogo from "@/components/ui/AmerisLogo";
-import { PUBLIC_NAV_LINKS, SITE_NAME } from "./siteData";
+import { PUBLIC_NAV_LINKS } from "./siteData";
 
 export default function PublicNavbar() {
   const router = useRouter();
@@ -42,12 +42,8 @@ export default function PublicNavbar() {
   return (
     <header className="sticky top-0 z-50 border-b border-white/60 bg-white/75 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-        <Link href="/" className="flex items-center gap-3">
-          <AmerisLogo size="md" showText={false} className="drop-shadow-sm" />
-          <div className="min-w-0">
-            <div className="truncate text-sm font-extrabold text-gray-900">{SITE_NAME}</div>
-            <div className="truncate text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Early Learning</div>
-          </div>
+        <Link href="/" className="block w-[clamp(124px,32vw,168px)] sm:w-[clamp(140px,24vw,184px)]">
+          <AmerisLogo size="lg" showText={false} className="drop-shadow-sm" />
         </Link>
 
         <nav className="hidden items-center gap-1 rounded-full border border-white/70 bg-white/70 p-1 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)] lg:flex">

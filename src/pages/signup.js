@@ -390,7 +390,7 @@ function SignupHeader() {
     <header className="relative z-10 px-6 py-6">
       <div className="mx-auto flex max-w-6xl items-center justify-between">
         <div className="flex items-center gap-3">
-          <AmerisLogo size="sm" showText={false} className="h-10 w-10 rounded-2xl" />
+          <AmerisLogo size="md" showText={false} />
           <div>
             <div className="text-sm font-extrabold text-gray-900">
               Ameris Academy

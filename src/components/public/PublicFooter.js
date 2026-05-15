@@ -17,7 +17,7 @@ export default function PublicFooter() {
         <div className="grid grid-cols-1 gap-8 md:grid-cols-[1.35fr_0.9fr_0.9fr_1.1fr]">
           <div className="min-w-0">
             <div className="flex items-center gap-3">
-              <AmerisLogo size="sm" showText={false} className="h-10 w-10 rounded-2xl shadow-sm" />
+              <AmerisLogo size="md" showText={false} className="drop-shadow-sm" />
               <div className="min-w-0">
                 <div className="truncate text-sm font-extrabold text-gray-900">{SITE_NAME}</div>
                 <div className="truncate text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">

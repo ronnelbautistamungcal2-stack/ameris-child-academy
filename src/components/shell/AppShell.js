@@ -117,17 +117,9 @@ export default function AppShell({
 
   const Sidebar = (
     <aside className="sticky top-0 flex h-screen w-72 flex-col border-r border-white/60 bg-white/75 backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900/85">
-      <div className="px-6 pb-5 pt-6">
-        <Link href="/dashboard" className="flex items-center gap-3">
-          <AmerisLogo size="sm" showText={false} className="h-11 w-11 rounded-2xl shadow-md shadow-blue-200 dark:shadow-blue-900/40" />
-          <div className="min-w-0">
-            <div className="truncate text-sm font-extrabold text-gray-900 dark:text-gray-100">
-              Ameris Academy
-            </div>
-            <div className="truncate text-xs font-semibold text-blue-700 dark:text-blue-400">
-              Operations Platform
-            </div>
-          </div>
+      <div className="px-6 pb-6 pt-6">
+        <Link href="/dashboard" className="flex justify-center">
+          <AmerisLogo size="lg" showText={false} className="max-w-full" />
         </Link>
       </div>
 
@@ -324,16 +316,8 @@ export default function AppShell({
               <div className="mx-auto w-full max-w-6xl px-4 py-10">
                 <div className="grid grid-cols-1 gap-10 md:grid-cols-[1.4fr_1fr_1fr_1.2fr]">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-3">
-                      <AmerisLogo size="sm" showText={false} className="h-10 w-10 rounded-2xl shadow-md shadow-blue-200 dark:shadow-blue-900/40" />
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-extrabold text-gray-900 dark:text-gray-100">
-                          Ameris Academy
-                        </div>
-                        <div className="truncate text-xs text-gray-500 dark:text-gray-400">
-                          Operations Platform
-                        </div>
-                      </div>
+                    <div className="flex items-center">
+                      <AmerisLogo size="md" showText={false} />
                     </div>
                     <p className="mt-4 max-w-sm text-sm text-gray-600 dark:text-gray-400">
                       A shared workspace for admins, teachers, coaches, and

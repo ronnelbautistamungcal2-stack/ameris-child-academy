@@ -1,6 +1,7 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
+import { formatTermDaysLabel, normalizeTermDaySelections, TERM_DAY_OPTIONS } from "@/lib/lessonScheduling";
 import { useEffect, useMemo, useState } from "react";
 
 const TABS = [
@@ -390,6 +391,13 @@ function lessonCategoryLabel(category) {
   return category.ageRange ? `${category.name} (${category.ageRange})` : category.name;
 }
 
+function toggleTermDaySelection(days, dayValue) {
+  const set = new Set(normalizeTermDaySelections(days));
+  if (set.has(dayValue)) set.delete(dayValue);
+  else set.add(dayValue);
+  return [...set].sort((left, right) => left - right);
+}
+
 function LessonsTab({ centerId }) {
   const [lessons, setLessons] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -403,6 +411,8 @@ function LessonsTab({ centerId }) {
     categoryId: "",
     subCategory: "",
     term: "",
+    termDays: [],
+    lessonSlot: "",
     reference: "",
     linkedLessonId: "",
     media: [],
@@ -445,6 +455,7 @@ function LessonsTab({ centerId }) {
       return (
         (l.title || "").toLowerCase().includes(q) ||
         (l.term || "").toLowerCase().includes(q) ||
+        (l.lessonSlot || "").toLowerCase().includes(q) ||
         (l.subCategory || "").toLowerCase().includes(q) ||
         (l.reference || "").toLowerCase().includes(q) ||
         (l.category?.name || "").toLowerCase().includes(q) ||
@@ -479,6 +490,8 @@ function LessonsTab({ centerId }) {
       categoryId: "",
       subCategory: "",
       term: "",
+      termDays: [],
+      lessonSlot: "",
       reference: "",
       linkedLessonId: "",
       media: [],
@@ -494,6 +507,8 @@ function LessonsTab({ centerId }) {
       categoryId: lesson.categoryId || "",
       subCategory: lesson.subCategory || "",
       term: lesson.term || "",
+      termDays: normalizeTermDaySelections(lesson.termDays),
+      lessonSlot: lesson.lessonSlot || "",
       reference: lesson.reference || "",
       linkedLessonId: lesson.linkedLessonId || "",
       media: lesson.media || [],
@@ -556,6 +571,8 @@ function LessonsTab({ centerId }) {
         description: form.description,
         subCategory: form.subCategory || null,
         term: form.term || null,
+        termDays: normalizeTermDaySelections(form.termDays),
+        lessonSlot: form.lessonSlot || null,
         reference: form.reference || null,
         media: form.media,
         categoryId: form.categoryId || null,
@@ -709,6 +726,9 @@ function LessonsTab({ centerId }) {
                 <FormField label="Term">
                   <input className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={form.term} onChange={(e) => setForm({ ...form, term: e.target.value })} placeholder="e.g. Term 1" />
                 </FormField>
+                <FormField label="Lesson Slot">
+                  <input className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={form.lessonSlot} onChange={(e) => setForm({ ...form, lessonSlot: e.target.value })} placeholder="e.g. Large Group 1" />
+                </FormField>
                 <FormField label="Reference">
                   <input className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} placeholder="Reference code" />
                 </FormField>
@@ -717,6 +737,36 @@ function LessonsTab({ centerId }) {
                     <option value="">None</option>
                     {lessons.filter((lesson) => lesson.id !== editing).map((lesson) => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}
                   </select>
+                </FormField>
+                <FormField label="Term Days" className="md:col-span-2">
+                  <div className="flex flex-wrap gap-2">
+                    {TERM_DAY_OPTIONS.map((option) => {
+                      const active = normalizeTermDaySelections(form.termDays).includes(option.value);
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() =>
+                            setForm((prev) => ({
+                              ...prev,
+                              termDays: toggleTermDaySelection(prev.termDays, option.value),
+                            }))
+                          }
+                          className={[
+                            "rounded-full px-3 py-1.5 text-xs font-semibold transition",
+                            active
+                              ? "bg-indigo-600 text-white"
+                              : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                          ].join(" ")}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2 text-xs text-gray-500">
+                    Select every day in the term when this lesson should be pulled automatically.
+                  </div>
                 </FormField>
                 <FormField label="Testing Question" className="md:col-span-2">
                   <textarea className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Testing question..." />
@@ -832,6 +882,16 @@ function LessonsTab({ centerId }) {
                         {lesson.term && (
                           <span className="inline-flex items-center rounded-full bg-violet-50 px-2.5 py-0.5 text-[11px] font-semibold text-violet-700">
                             {lesson.term}
+                          </span>
+                        )}
+                        {lesson.lessonSlot && (
+                          <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700">
+                            Slot: {lesson.lessonSlot}
+                          </span>
+                        )}
+                        {normalizeTermDaySelections(lesson.termDays).length > 0 && (
+                          <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700">
+                            {formatTermDaysLabel(lesson.termDays)}
                           </span>
                         )}
                         {lesson.subCategory && (

@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/Workspace";
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
+import { toCalendarDay } from "@/lib/calendar";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const SOURCE_BADGE = {
@@ -111,6 +112,7 @@ export default function StaffCalendarPage() {
           status: "ACTIVE",
           startDate: event.startDate,
           endDate: event.endDate,
+          allDay: event.allDay,
           user: event.createdBy,
           label: event.title,
           _raw: event,
@@ -158,8 +160,9 @@ export default function StaffCalendarPage() {
 
     const target = new Date(calYear, calMonth, selectedDay);
     return normalizedEvents.filter((item) => {
-      const start = new Date(new Date(item.startDate).toDateString());
-      const end = new Date(new Date(item.endDate).toDateString());
+      const start = toCalendarDay(item.startDate, { allDay: !!item._raw?.allDay });
+      const end = toCalendarDay(item.endDate, { allDay: !!item._raw?.allDay });
+      if (!start || !end) return false;
       return target >= start && target <= end;
     });
   }, [calMonth, calYear, normalizedEvents, selectedDay]);

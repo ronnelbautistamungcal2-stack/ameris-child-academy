@@ -1,14 +1,11 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { getClockedInTeacherIds, startOfDay } from "@/lib/compliance";
 import prisma from "@/lib/prisma";
 
 function daysAgo(n) {
   const d = new Date();
   d.setDate(d.getDate() - n);
   return d;
-}
-
-function startOfDay(date = new Date()) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
 export default async function handler(req, res) {
@@ -48,10 +45,19 @@ export default async function handler(req, res) {
   });
 
   const teacherIds = teachers.map((t) => t.id);
-  const logs = teacherIds.length
+  const clockedInTeacherIds = await getClockedInTeacherIds({
+    teacherIds,
+    centerId: centerId || null,
+    date: now,
+  });
+  const eligibleTeachers = teachers.filter((teacher) =>
+    clockedInTeacherIds.has(teacher.id),
+  );
+  const eligibleTeacherIds = eligibleTeachers.map((teacher) => teacher.id);
+  const logs = eligibleTeacherIds.length
     ? await prisma.activityLog.findMany({
         where: {
-          recordedById: { in: teacherIds },
+          recordedById: { in: eligibleTeacherIds },
           createdAt: { gte: since },
         },
         select: { recordedById: true, createdAt: true },
@@ -74,7 +80,7 @@ export default async function handler(req, res) {
   const last30Days = daysAgo(30);
 
   const counts = new Map();
-  for (const t of teachers) {
+  for (const t of eligibleTeachers) {
     counts.set(t.id, { last7Days: 0, last24Hours: 0 });
   }
 
@@ -99,7 +105,7 @@ export default async function handler(req, res) {
       month: activityLogs.filter((row) => row.createdAt >= last30Days).length,
       byType: activityByType,
     },
-    teachers: teachers.map((t) => ({
+    teachers: eligibleTeachers.map((t) => ({
       ...t,
       logs: counts.get(t.id) || { last7Days: 0, last24Hours: 0 },
     })),

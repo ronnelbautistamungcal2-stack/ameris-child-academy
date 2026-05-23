@@ -212,6 +212,7 @@ model User {
   timeOffBalanceEntriesCreated TimeOffBalanceEntry[]     @relation("TimeOffBalanceEntriesCreated")
   trainingLogs                 TrainingLog[]             @relation("TrainingLogs")
   trainingLogsRecorded         TrainingLog[]             @relation("TrainingLogsRecorded")
+  createdTeacherTrainingPathways TeacherTrainingPathway[] @relation("TeacherTrainingPathwaysCreated")
   evaluationsReceived          TeacherEvaluation[]       @relation("EvaluationsReceived")
   evaluationsGiven             TeacherEvaluation[]       @relation("EvaluationsGiven")
   budgetExpensesRecorded       BudgetExpense[]           @relation("BudgetExpensesRecorded")
@@ -254,6 +255,7 @@ model Center {
   timeOffRequests  TimeOffRequest[]
   timeOffBalanceEntries TimeOffBalanceEntry[]
   trainingLogs     TrainingLog[]
+  teacherTrainingPathways TeacherTrainingPathway[]
   classroomBudgets ClassroomBudget[]
   teacherEvaluations TeacherEvaluation[]
   events           Event[]
@@ -262,6 +264,7 @@ model Center {
   coachObservations CoachObservation[]
   coachFollowUps   CoachFollowUp[]
   dailyChecklists  DailyChecklist[]
+  lessonTermCalendars LessonTermCalendar[]
   createdAt        DateTime         @default(now())
 }
 
@@ -381,6 +384,8 @@ model Lesson {
   description      String?
   subCategory      String?
   term             String?
+  termDays         Int[]               @default([])
+  lessonSlot       String?
   reference        String?
   center           Center              @relation(fields: [centerId], references: [id])
   centerId         String
@@ -404,6 +409,21 @@ model Lesson {
   @@index([policyDocumentId])
   @@index([linkedLessonId])
   @@index([centerId, term])
+  @@index([centerId, lessonSlot])
+}
+
+model LessonTermCalendar {
+  id        String   @id @default(uuid())
+  center    Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId  String
+  term      String
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([centerId, term])
+  @@index([centerId, startDate, endDate])
 }
 
 model LessonGoal {
@@ -1018,6 +1038,41 @@ model TrainingLog {
   @@index([centerId, date])
 }
 
+model TeacherTrainingPathway {
+  id          String                @id @default(uuid())
+  center      Center                @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  title       String
+  description String?
+  effectiveDate DateTime            @default(now())
+  active      Boolean               @default(true)
+  createdBy   User?                 @relation("TeacherTrainingPathwaysCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  topics      TeacherTrainingTopic[]
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  @@index([centerId, active, effectiveDate])
+  @@index([createdById])
+}
+
+model TeacherTrainingTopic {
+  id           String                 @id @default(uuid())
+  pathway      TeacherTrainingPathway @relation(fields: [pathwayId], references: [id], onDelete: Cascade)
+  pathwayId    String
+  sortOrder    Int                    @default(0)
+  title        String
+  description  String?
+  resourceUrl  String?
+  durationHours Float?
+  required     Boolean                @default(true)
+  notes        String?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  @@index([pathwayId, sortOrder])
+}
+
 model ClassroomBudget {
   id              String         @id @default(uuid())
   classRoom       ClassRoom      @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
@@ -1301,6 +1356,8 @@ model DailyChecklistItem {
   repeatDays  Int[]               @default([])
   monthlyDay  Int?
   oneTimeDate DateTime?           @db.Date
+  lessonSource String             @default("NONE")
+  lessonSlot   String?
   lesson      Lesson?             @relation(fields: [lessonId], references: [id], onDelete: SetNull)
   lessonId    String?
   policyDocument   PolicyDocument? @relation(fields: [policyDocumentId], references: [id], onDelete: SetNull)
@@ -1317,6 +1374,7 @@ model DailyChecklistItem {
   @@index([checklistId, taskTime])
   @@index([checklistId, frequency])
   @@index([lessonId])
+  @@index([lessonSource, lessonSlot])
   @@index([oneTimeDate])
   @@index([policyDocumentId])
 }

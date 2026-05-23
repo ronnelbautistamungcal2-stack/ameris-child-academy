@@ -75,13 +75,15 @@ export default function AdminDashboard() {
     })();
   }, [centerId]);
 
-  const redFlags = useMemo(() => {
-    const flags = [];
+  const flaggedChildren = useMemo(() => {
+    const flagged = [];
     for (const child of children) {
-      if (!child.birthDate) flags.push({ type: "Missing DOB", child });
-      if (!child.classRoomId) flags.push({ type: "Missing classroom", child });
+      const issues = [];
+      if (!child.birthDate) issues.push("Missing DOB");
+      if (!child.classRoomId) issues.push("Missing classroom");
+      if (issues.length) flagged.push({ child, issues });
     }
-    return flags;
+    return flagged;
   }, [children]);
 
   const missedTeacherLogs = useMemo(() => {
@@ -107,6 +109,17 @@ export default function AdminDashboard() {
   const selectedCenterName =
     centers.find((center) => center.id === centerId)?.name || "";
   const headerDate = useMemo(() => formatHeaderDate(new Date()), []);
+  const profileFlagsHref = useMemo(() => {
+    if (!centerId) return "/admin/children";
+    const params = new URLSearchParams({
+      centerId,
+      profileFlag: "missing-profile",
+    });
+    if (flaggedChildren.length === 1) {
+      params.set("childId", flaggedChildren[0].child.id);
+    }
+    return `/admin/children?${params.toString()}`;
+  }, [centerId, flaggedChildren]);
 
   return (
     <AdminLayout
@@ -198,10 +211,10 @@ export default function AdminDashboard() {
             />
             <Tile
               title="Profile Flags"
-              value={String(redFlags.length)}
+              value={String(flaggedChildren.length)}
               subtitle="Children missing DOB or classroom"
-              href={`/admin/children?centerId=${encodeURIComponent(centerId)}`}
-              color={redFlags.length > 0 ? "amber" : "emerald"}
+              href={profileFlagsHref}
+              color={flaggedChildren.length > 0 ? "amber" : "emerald"}
               icon={
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />

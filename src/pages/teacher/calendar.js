@@ -1,6 +1,7 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
 import MonthlyCalendar from "@/components/calendar/MonthlyCalendar";
 import { apiJson } from "@/lib/api";
+import { toCalendarDay } from "@/lib/calendar";
 import { getTimeOffTypeLabel } from "@/lib/time-off";
 import { useEffect, useState, useCallback } from "react";
 
@@ -63,6 +64,7 @@ export default function TeacherCalendarPage() {
           status: "ACTIVE",
           startDate: evt.startDate,
           endDate: evt.endDate,
+          allDay: evt.allDay,
           user: evt.createdBy,
           label: evt.title,
           _raw: evt,
@@ -102,12 +104,13 @@ export default function TeacherCalendarPage() {
     return items;
   })();
 
-  function getDayItems(day) {
+function getDayItems(day) {
     if (!day) return [];
     const d = new Date(calYear, calMonth, day);
     return normalizedEvents.filter(evt => {
-      const s = new Date(new Date(evt.startDate).toDateString());
-      const e = new Date(new Date(evt.endDate).toDateString());
+      const s = toCalendarDay(evt.startDate, { allDay: !!evt._raw?.allDay });
+      const e = toCalendarDay(evt.endDate, { allDay: !!evt._raw?.allDay });
+      if (!s || !e) return false;
       return d >= s && d <= e;
     });
   }

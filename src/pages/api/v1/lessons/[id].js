@@ -1,4 +1,5 @@
 import { getSession } from "@/lib/auth";
+import { normalizeLessonSlot, normalizeTermDaySelections } from "@/lib/lessonScheduling";
 import prisma from "@/lib/prisma";
 
 const LESSON_INCLUDE = {
@@ -46,6 +47,8 @@ export default async function handler(req, res) {
       description,
       subCategory,
       term,
+      termDays,
+      lessonSlot,
       reference,
       media,
       categoryId,
@@ -84,6 +87,14 @@ export default async function handler(req, res) {
           term:
             Object.prototype.hasOwnProperty.call(req.body, "term")
               ? term || null
+              : undefined,
+          termDays:
+            Object.prototype.hasOwnProperty.call(req.body, "termDays")
+              ? normalizeTermDaySelections(termDays)
+              : undefined,
+          lessonSlot:
+            Object.prototype.hasOwnProperty.call(req.body, "lessonSlot")
+              ? normalizeLessonSlot(lessonSlot)
               : undefined,
           reference:
             Object.prototype.hasOwnProperty.call(req.body, "reference")

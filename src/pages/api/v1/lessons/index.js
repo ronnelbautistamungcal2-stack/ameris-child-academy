@@ -1,4 +1,5 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { normalizeLessonSlot, normalizeTermDaySelections } from "@/lib/lessonScheduling";
 import prisma from "@/lib/prisma";
 
 const LESSON_INCLUDE = {
@@ -55,6 +56,8 @@ export default async function handler(req, res) {
       description,
       subCategory,
       term,
+      termDays,
+      lessonSlot,
       reference,
       centerId: cId,
       media,
@@ -72,6 +75,8 @@ export default async function handler(req, res) {
         description,
         subCategory: subCategory || null,
         term: term || null,
+        termDays: normalizeTermDaySelections(termDays),
+        lessonSlot: normalizeLessonSlot(lessonSlot),
         reference: reference || null,
         centerId: cId,
         media: media || [],

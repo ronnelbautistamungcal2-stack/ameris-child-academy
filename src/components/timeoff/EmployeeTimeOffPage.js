@@ -78,9 +78,15 @@ const STATUS_BADGE = {
 };
 
 const CALENDAR_LEGEND = [
-  { label: "Paid", cls: "bg-emerald-100" },
-  { label: "Unpaid", cls: "bg-gray-200" },
+  { label: "Events", cls: "bg-indigo-100" },
+  { label: "Pending Requests", cls: "bg-amber-200" },
+  { label: "Approved Time Off", cls: "bg-emerald-100" },
 ];
+
+function formatHours(value) {
+  const num = Number(value || 0);
+  return Number.isFinite(num) ? num.toFixed(num % 1 === 0 ? 0 : 2) : "0";
+}
 
 export default function EmployeeTimeOffPage({
   LayoutComponent,
@@ -109,6 +115,7 @@ export default function EmployeeTimeOffPage({
   const [requestType, setRequestType] = useState("PAID");
   const [reason, setReason] = useState("");
   const [cancelTarget, setCancelTarget] = useState(null);
+  const [warningState, setWarningState] = useState(null);
 
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
@@ -191,7 +198,7 @@ export default function EmployeeTimeOffPage({
       const lastDay = new Date(calYear, calMonth + 1, 0).getDate();
       const to = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
       const data = await apiJson(
-        `/api/v1/time-off/calendar?centerId=${encodeURIComponent(centerId)}&from=${from}&to=${to}`,
+        `/api/v1/time-off/calendar?centerId=${encodeURIComponent(centerId)}&from=${from}&to=${to}&includeEvents=1&includePending=1`,
       );
       setCalEvents(Array.isArray(data) ? data : []);
     } catch {
@@ -203,8 +210,7 @@ export default function EmployeeTimeOffPage({
     loadCalendarEvents();
   }, [loadCalendarEvents]);
 
-  async function submit(event) {
-    event.preventDefault();
+  async function submitRequest({ overrideBalanceWarning = false } = {}) {
     if (!centerId) {
       setError("Select a center first.");
       return;
@@ -230,18 +236,37 @@ export default function EmployeeTimeOffPage({
           startDate: start.toISOString(),
           endDate: end.toISOString(),
           reason: reason || null,
+          overrideBalanceWarning,
         }),
       });
 
       setReason("");
+      setWarningState(null);
       setSuccess("Time-off request submitted.");
       await loadRequests();
       await loadCalendarEvents();
     } catch (nextError) {
+      if (nextError?.status === 409 && nextError?.data?.code === "TIME_OFF_BALANCE_WARNING") {
+        setWarningState({
+          startDate,
+          endDate,
+          startTime,
+          endTime,
+          requestType,
+          reason,
+          warning: nextError.data.warning || null,
+        });
+        return;
+      }
       setError(nextError.message || "Failed to submit request");
     } finally {
       setSaving(false);
     }
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    await submitRequest();
   }
 
   async function cancelRequest(id) {
@@ -472,7 +497,7 @@ export default function EmployeeTimeOffPage({
               <div className="rounded-2xl border border-gray-200 bg-white p-5">
                 <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Calendar view</div>
                 <p className="mt-1 text-sm text-gray-600">
-                  Approved time off across the selected center appears here so coverage is easier to coordinate.
+                  Center events plus pending and approved time-off requests appear here so you can avoid conflicts before submitting.
                 </p>
                 <div className="mt-3">
                   <MonthlyCalendar
@@ -499,6 +524,18 @@ export default function EmployeeTimeOffPage({
         variant="danger"
         onConfirm={() => cancelRequest(cancelTarget)}
         onCancel={() => setCancelTarget(null)}
+      />
+      <ConfirmDialog
+        open={!!warningState}
+        title="Proceed With Overage?"
+        message={
+          warningState?.warning
+            ? `This ${String(warningState.warning.balanceType || "").toLowerCase()} request uses ${formatHours(warningState.warning.requestedHours)} hours, but only ${formatHours(warningState.warning.availableHours)} hour${Number(warningState.warning.availableHours) === 1 ? "" : "s"} are available. Submit it anyway?`
+            : "This request exceeds the available time-off balance. Submit it anyway?"
+        }
+        confirmLabel="Submit Anyway"
+        onConfirm={() => submitRequest({ overrideBalanceWarning: true })}
+        onCancel={() => setWarningState(null)}
       />
     </LayoutComponent>
   );

@@ -2,6 +2,7 @@ import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { isEmployeeRole, isNonAdminEmployeeRole } from "@/lib/roles";
 import {
+  getTimeOffAvailabilityWarning,
   decorateTimeOffRequest,
   normalizeTimeOffType,
 } from "@/lib/time-off";
@@ -87,7 +88,7 @@ async function handleGet(req, res, session) {
 }
 
 async function handlePost(req, res, session) {
-  const { centerId, type, startDate, endDate, reason } = req.body || {};
+  const { centerId, type, startDate, endDate, reason, overrideBalanceWarning } = req.body || {};
   if (!centerId || !startDate || !endDate) {
     return res.status(400).json({ error: "centerId, startDate, and endDate are required" });
   }
@@ -100,11 +101,28 @@ async function handlePost(req, res, session) {
   const end = new Date(endDate);
   if (end < start) return res.status(400).json({ error: "endDate must be after startDate" });
 
+  const normalizedType = normalizeTimeOffType(type);
+  const warning = await getTimeOffAvailabilityWarning(prisma, {
+    userId: session.user.id,
+    centerId,
+    type: normalizedType,
+    startDate: start,
+    endDate: end,
+  });
+  if (warning.overLimit && !overrideBalanceWarning) {
+    return res.status(409).json({
+      error: `This request exceeds the employee's ${warning.balanceType.toLowerCase()} hours available`,
+      code: "TIME_OFF_BALANCE_WARNING",
+      canProceed: true,
+      warning,
+    });
+  }
+
   const request = await prisma.timeOffRequest.create({
     data: {
       userId: session.user.id,
       centerId,
-      type: normalizeTimeOffType(type),
+      type: normalizedType,
       startDate: start,
       endDate: end,
       reason: reason || null,

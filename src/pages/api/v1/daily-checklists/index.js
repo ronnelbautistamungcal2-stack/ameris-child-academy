@@ -6,6 +6,12 @@ import {
   hasChecklistClassroomScope,
   normalizeChecklistClassRoomIds,
 } from "@/lib/dailyChecklistClassrooms";
+import {
+  normalizeLessonSlot,
+  normalizeLessonSource,
+  resolveAutoLessonMatch,
+  resolveTermCalendarEntry,
+} from "@/lib/lessonScheduling";
 import prisma from "@/lib/prisma";
 import { getTeacherClassIds } from "@/lib/teacherScope";
 import {
@@ -22,6 +28,8 @@ const LESSON_SELECT = {
   description: true,
   media: true,
   term: true,
+  termDays: true,
+  lessonSlot: true,
   reference: true,
   goals: {
     orderBy: { goalIndex: "asc" },
@@ -98,11 +106,11 @@ function buildDailyChecklistInclude(date) {
         ...(completionInclude ? { completions: completionInclude } : {}),
       },
     },
-    classRoom: { select: { id: true, name: true } },
+    classRoom: { select: { id: true, name: true, ageRange: true } },
     classrooms: {
       orderBy: { classRoomId: "asc" },
       include: {
-        classRoom: { select: { id: true, name: true } },
+        classRoom: { select: { id: true, name: true, ageRange: true } },
       },
     },
     center: { select: { id: true, name: true } },
@@ -340,6 +348,11 @@ function applyChecklistPatch(data, body = {}) {
 
 function serializeItem(it, sortOrder) {
   const frequency = normalizeChecklistFrequency(it.frequency);
+  const lessonSource = normalizeLessonSource(
+    it.lessonSource,
+    it.lessonId,
+    it.lessonSlot,
+  );
   return {
     title: it.title,
     description: it.description || null,
@@ -347,7 +360,9 @@ function serializeItem(it, sortOrder) {
     repeatDays: frequency === "WEEKLY" ? normalizeRepeatDays(it.repeatDays) : [],
     monthlyDay: frequency === "MONTHLY" ? normalizeMonthlyDay(it.monthlyDay) : null,
     oneTimeDate: frequency === "ONE_TIME" ? normalizeOneTimeDate(it.oneTimeDate) : null,
-    lessonId: it.lessonId || null,
+    lessonSource,
+    lessonSlot: lessonSource === "AUTO_SLOT" ? normalizeLessonSlot(it.lessonSlot) : null,
+    lessonId: lessonSource === "FIXED" ? it.lessonId || null : null,
     policyDocumentId: it.policyDocumentId || null,
     policyLink: it.policyLink || null,
     mediaLink: it.mediaLink || null,
@@ -355,6 +370,86 @@ function serializeItem(it, sortOrder) {
     directLinkLabel: it.directLinkLabel || null,
     taskTime: it.taskTime || null,
     sortOrder,
+  };
+}
+
+function getChecklistClassRoomDetails(checklist) {
+  const ordered = [];
+  const seen = new Set();
+
+  function pushRoom(room) {
+    if (!room?.id || seen.has(room.id)) return;
+    seen.add(room.id);
+    ordered.push({
+      id: room.id,
+      name: room.name || room.id,
+      ageRange: room.ageRange || null,
+    });
+  }
+
+  if (Array.isArray(checklist?.classrooms)) {
+    for (const assignment of checklist.classrooms) {
+      pushRoom(assignment?.classRoom || null);
+    }
+  }
+
+  pushRoom(checklist?.classRoom || null);
+
+  return ordered;
+}
+
+function resolveChecklistItemsForDate(checklist, lessons, termCalendars, date) {
+  if (!date) return checklist;
+
+  const termEntry = resolveTermCalendarEntry(termCalendars, date);
+  const checklistClassRooms = getChecklistClassRoomDetails(checklist);
+  const resolvedItems = (checklist.items || []).map((item) => {
+    const lessonSource = normalizeLessonSource(
+      item.lessonSource,
+      item.lessonId,
+      item.lessonSlot,
+    );
+
+    if (lessonSource !== "AUTO_SLOT") {
+      return {
+        ...item,
+        lessonSource,
+        lessonSlot: normalizeLessonSlot(item.lessonSlot),
+        lessonTermDay: termEntry?.termDay || null,
+        lessonTermLabel: termEntry?.term || null,
+      };
+    }
+
+    const resolvedLesson = resolveAutoLessonMatch({
+      lessons,
+      checklistClassRooms,
+      lessonSlot: item.lessonSlot,
+      term: termEntry?.term || "",
+      termDay: termEntry?.termDay || null,
+    });
+
+    return {
+      ...item,
+      lessonSource,
+      lessonSlot: normalizeLessonSlot(item.lessonSlot),
+      lesson: resolvedLesson || null,
+      lessonId: resolvedLesson?.id || null,
+      lessonTermDay: termEntry?.termDay || null,
+      lessonTermLabel: termEntry?.term || null,
+    };
+  });
+
+  return {
+    ...checklist,
+    items: resolvedItems,
+    lessonTermCalendar: termEntry
+      ? {
+          term: termEntry.term,
+          termDay: termEntry.termDay,
+          startDate: termEntry.startDate,
+          endDate: termEntry.endDate,
+        }
+      : null,
   };
 }
 
@@ -437,15 +532,49 @@ export default async function handler(req, res) {
         return true;
       });
 
-    const routineLists = filtered.map((list) => ({
-      ...serializeDailyChecklist(list),
+    const hasAutoSlotItems =
+      !!date &&
+      !!centerId &&
+      filtered.some((list) =>
+        (list.items || []).some(
+          (item) =>
+            normalizeLessonSource(item.lessonSource, item.lessonId, item.lessonSlot) ===
+            "AUTO_SLOT",
+        ),
+      );
+
+    const [termCalendars, autoLessons] = hasAutoSlotItems
+      ? await Promise.all([
+          prisma.lessonTermCalendar.findMany({
+            where: { centerId },
+            orderBy: [{ startDate: "asc" }, { term: "asc" }],
+          }),
+          prisma.lesson.findMany({
+            where: { centerId },
+            select: LESSON_SELECT,
+            orderBy: [{ title: "asc" }],
+          }),
+        ])
+      : [[], []];
+
+    const routineLists = filtered.map((list) => {
+      const resolvedList = resolveChecklistItemsForDate(
+        list,
+        autoLessons,
+        termCalendars,
+        date,
+      );
+
+      return {
+      ...serializeDailyChecklist(resolvedList),
       notes: Array.isArray(list.notes)
         ? list.notes.map((note) => ({
             ...note,
             mine: note.createdById === session.user.id,
           }))
         : [],
-    }));
+      };
+    });
 
     const scheduledLessonLists =
       date && !classRoomId && (!category || category === "CLASSROOM")

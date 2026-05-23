@@ -16,6 +16,10 @@ import {
   summarizeChecklistFrequency,
   summarizeChecklistSchedule,
 } from "@/lib/checklistSchedule";
+import {
+  LESSON_SOURCE_OPTIONS,
+  normalizeLessonSource,
+} from "@/lib/lessonScheduling";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const CATEGORY_OPTIONS = [
@@ -56,6 +60,8 @@ function blankItemRow() {
     repeatDays: [],
     monthlyDay: "",
     oneTimeDate: "",
+    lessonSource: "NONE",
+    lessonSlot: "",
     lessonId: "",
     policyDocumentId: "",
     directLinkLabel: "",
@@ -94,7 +100,16 @@ function roleLabel(role) {
 function summaryForItem(item) {
   const labels = [];
   labels.push(`Repeat: ${describeChecklistSchedule(item)}`);
-  if (item.lesson?.title) labels.push(`Lesson: ${item.lesson.title}`);
+  const lessonSource = normalizeLessonSource(
+    item.lessonSource,
+    item.lessonId,
+    item.lessonSlot,
+  );
+  if (lessonSource === "AUTO_SLOT" && item.lessonSlot) {
+    labels.push(`Auto lesson slot: ${item.lessonSlot}`);
+  } else if (item.lesson?.title) {
+    labels.push(`Lesson: ${item.lesson.title}`);
+  }
   if (item.policyDocument?.title) labels.push(`Policy: ${item.policyDocument.title}`);
   if (item.directLink) labels.push(item.directLinkLabel || "Direct link");
   if (item.mediaLink) labels.push("Training video");
@@ -133,6 +148,14 @@ function selectedClassroomSummary(classrooms, selectedIds) {
   };
 }
 
+function blankTermCalendarRow() {
+  return {
+    term: "",
+    startDate: "",
+    endDate: "",
+  };
+}
+
 function checklistMatchesFrequency(checklist, frequency) {
   if (!frequency) return true;
   return (checklist.items || []).some(
@@ -144,6 +167,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
   const [checklists, setChecklists] = useState([]);
   const [classrooms, setClassrooms] = useState([]);
   const [lessons, setLessons] = useState([]);
+  const [termCalendars, setTermCalendars] = useState([blankTermCalendarRow()]);
   const [policies, setPolicies] = useState([]);
   const [staffMembers, setStaffMembers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -167,21 +191,32 @@ export default function AdminTaskChecklistManager({ centerId }) {
   const [newAssignedUserId, setNewAssignedUserId] = useState("");
   const [newItems, setNewItems] = useState([blankItemRow()]);
   const [saving, setSaving] = useState(false);
+  const [savingTermCalendars, setSavingTermCalendars] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const [lists, rooms, lessonRows, policyRows, userRows] = await Promise.all([
+      const [lists, rooms, lessonRows, calendarRows, policyRows, userRows] = await Promise.all([
         apiJson(`/api/v1/daily-checklists?centerId=${encodeURIComponent(centerId)}`),
         apiJson(`/api/v1/classes?centerId=${encodeURIComponent(centerId)}`),
         apiJson(`/api/v1/lessons?centerId=${encodeURIComponent(centerId)}`),
+        apiJson(`/api/v1/lesson-term-calendars?centerId=${encodeURIComponent(centerId)}`).catch(() => []),
         apiJson(`/api/v1/policies?centerId=${encodeURIComponent(centerId)}`).catch(() => []),
         apiJson(`/api/v1/users?centerId=${encodeURIComponent(centerId)}&roles=TEACHER,OTHER_STAFF,COACH`),
       ]);
       setChecklists(Array.isArray(lists) ? lists : []);
       setClassrooms(Array.isArray(rooms) ? rooms : []);
       setLessons(Array.isArray(lessonRows) ? lessonRows : []);
+      setTermCalendars(
+        Array.isArray(calendarRows) && calendarRows.length
+          ? calendarRows.map((row) => ({
+              term: row.term || "",
+              startDate: formatDateInputValue(row.startDate),
+              endDate: formatDateInputValue(row.endDate),
+            }))
+          : [blankTermCalendarRow()],
+      );
       setPolicies(Array.isArray(policyRows) ? policyRows : []);
       setStaffMembers(Array.isArray(userRows) ? userRows : []);
     } catch (nextError) {
@@ -242,25 +277,32 @@ export default function AdminTaskChecklistManager({ centerId }) {
     setNewAssignedUserId(checklist.assignedUserId || "");
     const rows = sortByTaskTime(checklist.items).map((item) => {
       const schedule = getEffectiveItemSchedule(item, checklist);
+      const lessonSource = normalizeLessonSource(
+        item.lessonSource,
+        item.lessonId,
+        item.lessonSlot,
+      );
       return {
-      id: item.id,
-      title: item.title || "",
-      description: item.description || "",
-      frequency: schedule.frequency,
-      repeatDays: schedule.repeatDays,
-      monthlyDay: schedule.monthlyDay
-        ? String(schedule.monthlyDay)
-        : "",
-      oneTimeDate: schedule.oneTimeDate
-        ? formatDateInputValue(schedule.oneTimeDate)
-        : "",
-      lessonId: item.lessonId || "",
-      policyDocumentId: item.policyDocumentId || "",
-      directLinkLabel: item.directLinkLabel || "",
-      directLink: item.directLink || "",
-      policyLink: item.policyLink || "",
-      mediaLink: item.mediaLink || "",
-      taskTime: item.taskTime || "",
+        id: item.id,
+        title: item.title || "",
+        description: item.description || "",
+        frequency: schedule.frequency,
+        repeatDays: schedule.repeatDays,
+        monthlyDay: schedule.monthlyDay
+          ? String(schedule.monthlyDay)
+          : "",
+        oneTimeDate: schedule.oneTimeDate
+          ? formatDateInputValue(schedule.oneTimeDate)
+          : "",
+        lessonSource,
+        lessonSlot: item.lessonSlot || "",
+        lessonId: lessonSource === "FIXED" ? item.lessonId || "" : "",
+        policyDocumentId: item.policyDocumentId || "",
+        directLinkLabel: item.directLinkLabel || "",
+        directLink: item.directLink || "",
+        policyLink: item.policyLink || "",
+        mediaLink: item.mediaLink || "",
+        taskTime: item.taskTime || "",
       };
     });
     setNewItems(rows.length ? rows : [blankItemRow()]);
@@ -283,6 +325,13 @@ export default function AdminTaskChecklistManager({ centerId }) {
       if (item.frequency === "ONE_TIME") {
         return !normalizeOneTimeDate(item.oneTimeDate);
       }
+      if (
+        normalizeLessonSource(item.lessonSource, item.lessonId, item.lessonSlot) ===
+          "AUTO_SLOT" &&
+        !String(item.lessonSlot || "").trim()
+      ) {
+        return true;
+      }
       return false;
     });
     if (invalidItem) {
@@ -295,6 +344,15 @@ export default function AdminTaskChecklistManager({ centerId }) {
       }
       if (invalidItem.frequency === "ONE_TIME") {
         return `Task item ${itemNumber} needs a one-time date.`;
+      }
+      if (
+        normalizeLessonSource(
+          invalidItem.lessonSource,
+          invalidItem.lessonId,
+          invalidItem.lessonSlot,
+        ) === "AUTO_SLOT"
+      ) {
+        return `Task item ${itemNumber} needs a lesson slot name for automatic matching.`;
       }
     }
     return "";
@@ -335,7 +393,21 @@ export default function AdminTaskChecklistManager({ centerId }) {
               repeatDays: item.frequency === "WEEKLY" ? normalizeRepeatDays(item.repeatDays) : [],
               monthlyDay: item.frequency === "MONTHLY" ? normalizeMonthlyDay(item.monthlyDay) : null,
               oneTimeDate: item.frequency === "ONE_TIME" ? item.oneTimeDate || null : null,
-              lessonId: item.lessonId || null,
+              lessonSource: normalizeLessonSource(
+                item.lessonSource,
+                item.lessonId,
+                item.lessonSlot,
+              ),
+              lessonSlot:
+                normalizeLessonSource(item.lessonSource, item.lessonId, item.lessonSlot) ===
+                "AUTO_SLOT"
+                  ? String(item.lessonSlot || "").trim() || null
+                  : null,
+              lessonId:
+                normalizeLessonSource(item.lessonSource, item.lessonId, item.lessonSlot) ===
+                "FIXED"
+                  ? item.lessonId || null
+                  : null,
               policyDocumentId: item.policyDocumentId || null,
               directLinkLabel: item.directLinkLabel.trim() || null,
               directLink: item.directLink.trim() || null,
@@ -398,6 +470,63 @@ export default function AdminTaskChecklistManager({ centerId }) {
     );
   }
 
+  function addTermCalendarRow() {
+    setTermCalendars((current) => [...current, blankTermCalendarRow()]);
+  }
+
+  function removeTermCalendarRow(index) {
+    setTermCalendars((current) =>
+      current.length <= 1
+        ? [blankTermCalendarRow()]
+        : current.filter((_, rowIndex) => rowIndex !== index),
+    );
+  }
+
+  function updateTermCalendarRow(index, field, value) {
+    setTermCalendars((current) =>
+      current.map((row, rowIndex) =>
+        rowIndex === index ? { ...row, [field]: value } : row,
+      ),
+    );
+  }
+
+  async function saveTermCalendarRows() {
+    setSavingTermCalendars(true);
+    setError("");
+    setSuccess("");
+    try {
+      const saved = await apiJson(
+        `/api/v1/lesson-term-calendars?centerId=${encodeURIComponent(centerId)}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            calendars: termCalendars
+              .map((row) => ({
+                term: String(row.term || "").trim(),
+                startDate: row.startDate || null,
+                endDate: row.endDate || null,
+              }))
+              .filter((row) => row.term || row.startDate || row.endDate),
+          }),
+        },
+      );
+      setTermCalendars(
+        Array.isArray(saved) && saved.length
+          ? saved.map((row) => ({
+              term: row.term || "",
+              startDate: formatDateInputValue(row.startDate),
+              endDate: formatDateInputValue(row.endDate),
+            }))
+          : [blankTermCalendarRow()],
+      );
+      setSuccess("Term calendar updated.");
+    } catch (nextError) {
+      setError(nextError.message || "Failed to save term calendar");
+    } finally {
+      setSavingTermCalendars(false);
+    }
+  }
+
   const filtered = useMemo(() => {
     const needle = String(search || "").trim().toLowerCase();
     return checklists.filter((checklist) => {
@@ -416,6 +545,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
           item.title,
           item.description,
           item.lesson?.title,
+          item.lessonSlot,
           item.policyDocument?.title,
           item.directLinkLabel,
         ]),
@@ -454,6 +584,22 @@ export default function AdminTaskChecklistManager({ centerId }) {
     () => selectedClassroomSummary(classrooms, newClassRoomIds),
     [classrooms, newClassRoomIds],
   );
+
+  const lessonSlotOptions = useMemo(() => {
+    const values = new Set();
+
+    for (const lesson of lessons) {
+      if (lesson.lessonSlot) values.add(lesson.lessonSlot);
+    }
+
+    for (const checklist of checklists) {
+      for (const item of checklist.items || []) {
+        if (item.lessonSlot) values.add(item.lessonSlot);
+      }
+    }
+
+    return [...values].sort((left, right) => left.localeCompare(right));
+  }, [checklists, lessons]);
 
   return (
     <div className="space-y-4">
@@ -533,11 +679,90 @@ export default function AdminTaskChecklistManager({ centerId }) {
           </div>
         </div>
 
+        <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50/50 p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-gray-900">Term Calendar</h3>
+              <p className="mt-1 max-w-2xl text-xs text-gray-600">
+                Set each term's start and end date here. Automatic checklist lessons use this
+                to figure out today's term and day number.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={saveTermCalendarRows}
+              disabled={savingTermCalendars}
+              className="rounded-xl bg-sky-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {savingTermCalendars ? "Saving..." : "Save Term Calendar"}
+            </button>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {termCalendars.map((row, index) => (
+              <div
+                key={`term-calendar-${index}`}
+                className="grid grid-cols-1 gap-3 rounded-2xl border border-sky-100 bg-white p-3 md:grid-cols-[minmax(0,1.2fr)_1fr_1fr_auto]"
+              >
+                <label className="block">
+                  <div className="mb-1 text-xs font-semibold text-gray-500">Term</div>
+                  <input
+                    value={row.term}
+                    onChange={(event) => updateTermCalendarRow(index, "term", event.target.value)}
+                    placeholder="e.g. Term 1"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-200"
+                  />
+                </label>
+                <label className="block">
+                  <div className="mb-1 text-xs font-semibold text-gray-500">Start Date</div>
+                  <input
+                    type="date"
+                    value={row.startDate}
+                    onChange={(event) => updateTermCalendarRow(index, "startDate", event.target.value)}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-200"
+                  />
+                </label>
+                <label className="block">
+                  <div className="mb-1 text-xs font-semibold text-gray-500">End Date</div>
+                  <input
+                    type="date"
+                    value={row.endDate}
+                    onChange={(event) => updateTermCalendarRow(index, "endDate", event.target.value)}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-200"
+                  />
+                </label>
+                <div className="flex items-end justify-end">
+                  <button
+                    type="button"
+                    onClick={() => removeTermCalendarRow(index)}
+                    className="rounded-xl px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={addTermCalendarRow}
+            className="mt-3 rounded-xl px-3 py-2 text-xs font-semibold text-sky-700 hover:bg-sky-100"
+          >
+            + Add another term
+          </button>
+        </div>
+
         {showCreate ? (
           <form onSubmit={saveChecklist} className="mt-4 space-y-4 border-t border-gray-100 pt-4">
             <h3 className="text-sm font-bold text-gray-900">
               {editingChecklistId ? "Edit Checklist" : "New Checklist"}
             </h3>
+            <datalist id="lesson-slot-options">
+              {lessonSlotOptions.map((slot) => (
+                <option key={slot} value={slot} />
+              ))}
+            </datalist>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
               <label className="block">
@@ -739,21 +964,54 @@ export default function AdminTaskChecklistManager({ centerId }) {
                         </select>
                       </label>
                       <label className="block">
-                        <div className="mb-1 text-xs font-semibold text-gray-500">Lesson</div>
+                        <div className="mb-1 text-xs font-semibold text-gray-500">Lesson Source</div>
                         <select
-                          value={item.lessonId}
-                          onChange={(event) => updateItemRow(index, "lessonId", event.target.value)}
+                          value={normalizeLessonSource(item.lessonSource, item.lessonId, item.lessonSlot)}
+                          onChange={(event) => {
+                            const nextSource = event.target.value;
+                            updateItemRow(index, "lessonSource", nextSource);
+                            if (nextSource !== "FIXED") updateItemRow(index, "lessonId", "");
+                            if (nextSource !== "AUTO_SLOT") updateItemRow(index, "lessonSlot", "");
+                          }}
                           className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-200"
                         >
-                          <option value="">No linked lesson</option>
-                          {lessons.map((lesson) => (
-                            <option key={lesson.id} value={lesson.id}>
-                              {lesson.title}
+                          {LESSON_SOURCE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
                             </option>
                           ))}
                         </select>
                       </label>
-                      <label className="block xl:col-span-3">
+                      {normalizeLessonSource(item.lessonSource, item.lessonId, item.lessonSlot) === "FIXED" ? (
+                        <label className="block">
+                          <div className="mb-1 text-xs font-semibold text-gray-500">Fixed Lesson</div>
+                          <select
+                            value={item.lessonId}
+                            onChange={(event) => updateItemRow(index, "lessonId", event.target.value)}
+                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-200"
+                          >
+                            <option value="">Select a lesson</option>
+                            {lessons.map((lesson) => (
+                              <option key={lesson.id} value={lesson.id}>
+                                {lesson.title}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
+                      {normalizeLessonSource(item.lessonSource, item.lessonId, item.lessonSlot) === "AUTO_SLOT" ? (
+                        <label className="block">
+                          <div className="mb-1 text-xs font-semibold text-gray-500">Lesson Slot</div>
+                          <input
+                            list="lesson-slot-options"
+                            value={item.lessonSlot}
+                            onChange={(event) => updateItemRow(index, "lessonSlot", event.target.value)}
+                            placeholder="e.g. Large Group 1"
+                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-200"
+                          />
+                        </label>
+                      ) : null}
+                      <label className="block xl:col-span-2">
                         <div className="mb-1 text-xs font-semibold text-gray-500">Details</div>
                         <input
                           value={item.description}

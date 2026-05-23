@@ -4,24 +4,6 @@ import { apiJson } from "@/lib/api";
 import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback } from "react";
 
-function byString(a, b) {
-  return String(a || "").localeCompare(String(b || ""));
-}
-
-function startOfDay(date = new Date()) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function startOfWeekMonday(date = new Date()) {
-  const d = startOfDay(date);
-  const day = d.getDay(); // 0=Sun
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  return d;
-}
-
 function formatDateLabel(value, options) {
   if (!value) return "-";
   const date = new Date(value);
@@ -84,25 +66,10 @@ export default function TeacherTraining() {
       setLoadingPlans(true);
       setError("");
       try {
-        const today = startOfDay(new Date());
-        const week = startOfWeekMonday(new Date());
-        const [daily, weekly] = await Promise.all([
-          apiJson(
-            `/api/v1/milestone-checklists?centerId=${encodeURIComponent(centerId)}&period=DAY&start=${encodeURIComponent(
-              today.toISOString(),
-            )}`,
-          ).catch(() => []),
-          apiJson(
-            `/api/v1/milestone-checklists?centerId=${encodeURIComponent(centerId)}&period=WEEK&start=${encodeURIComponent(
-              week.toISOString(),
-            )}`,
-          ).catch(() => []),
-        ]);
-        const merged = [
-          ...(Array.isArray(daily) ? daily : []),
-          ...(Array.isArray(weekly) ? weekly : []),
-        ];
-        setPlans(merged);
+        const data = await apiJson(
+          `/api/v1/teacher-training-pathways?centerId=${encodeURIComponent(centerId)}`,
+        ).catch(() => []);
+        setPlans(Array.isArray(data) ? data : []);
       } catch (e) {
         setError(e.message || "Failed to load training pathway");
       } finally {
@@ -148,11 +115,11 @@ export default function TeacherTraining() {
   const sortedPlans = useMemo(() => {
     return (plans || [])
       .slice()
-      .sort((a, b) => {
-        const cmpPeriod = byString(a.period, b.period);
-        if (cmpPeriod !== 0) return cmpPeriod;
-        return new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime();
-      })
+      .sort(
+        (a, b) =>
+          new Date(b.effectiveDate || b.createdAt).getTime() -
+          new Date(a.effectiveDate || a.createdAt).getTime(),
+      )
       .slice(0, 6);
   }, [plans]);
 
@@ -302,27 +269,21 @@ export default function TeacherTraining() {
                       Training pathway
                     </div>
                     <p className="mt-1 text-sm text-gray-600">
-                      Daily/weekly pathway items linked to policies, procedures, videos, and lessons.
+                      Teacher-specific pathway topics managed separately from children&apos;s steps of progression.
                     </p>
 
-                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-1">
                       <Link
                         href="/teacher/lessons"
                         className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
                       >
                         Lesson Plans & Media
                       </Link>
-                      <Link
-                        href="/teacher/milestone-checklists"
-                        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
-                      >
-                        Training Pathway View
-                      </Link>
                     </div>
 
                     {!centerId ? (
                       <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                        Select a center to preview today's training pathway.
+                        Select a center to preview the active teacher training pathway.
                       </div>
                     ) : loadingPlans ? (
                       <div className="mt-3"><Skeleton count={3} /></div>
@@ -334,15 +295,39 @@ export default function TeacherTraining() {
                               {p.title}
                             </div>
                             <div className="mt-1 text-xs text-gray-600">
-                              {p.period} • {new Date(p.periodStart).toLocaleDateString()} •{" "}
-                              {(p.items || []).length} items
+                              Effective {new Date(p.effectiveDate || p.createdAt).toLocaleDateString()} •{" "}
+                              {(p.topics || []).length} topics
                             </div>
+                            {p.description ? (
+                              <div className="mt-2 text-xs text-gray-600">{p.description}</div>
+                            ) : null}
+                            {(p.topics || []).length ? (
+                              <div className="mt-3 space-y-2">
+                                {(p.topics || []).slice(0, 4).map((topic) => (
+                                  <div key={topic.id} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                                    <div className="text-xs font-extrabold text-gray-900">{topic.title}</div>
+                                    <div className="mt-1 text-[11px] text-gray-600">
+                                      {topic.durationHours ? `${topic.durationHours}h` : "No hours set"} •{" "}
+                                      {topic.required ? "Required" : "Optional"}
+                                    </div>
+                                    {topic.description ? (
+                                      <div className="mt-1 text-[11px] text-gray-500">{topic.description}</div>
+                                    ) : null}
+                                  </div>
+                                ))}
+                                {(p.topics || []).length > 4 ? (
+                                  <div className="text-[11px] font-semibold text-gray-500">
+                                    +{(p.topics || []).length - 4} more topics
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
                           </div>
                         ))}
                       </div>
                     ) : (
                       <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                        No pathway plans found for today/this week.
+                        No active teacher training pathways have been set up for this center.
                       </div>
                     )}
                   </div>

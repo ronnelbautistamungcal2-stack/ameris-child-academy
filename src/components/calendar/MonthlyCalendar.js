@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { toCalendarDay } from "@/lib/calendar";
+import { useMemo } from "react";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -43,9 +44,8 @@ function sameDay(d1, d2) {
     d1.getDate() === d2.getDate();
 }
 
-function normalizeDate(d) {
-  const date = new Date(d);
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+function normalizeDate(event, fieldName) {
+  return toCalendarDay(event?.[fieldName], { allDay: !!event?.allDay });
 }
 
 export default function MonthlyCalendar({ year, month, events = [], onMonthChange, onDayClick, selectedDay, legendItems }) {
@@ -76,8 +76,9 @@ export default function MonthlyCalendar({ year, month, events = [], onMonthChang
   const eventsByDay = useMemo(() => {
     const map = {};
     for (const evt of events) {
-      const start = normalizeDate(evt.startDate);
-      const end = normalizeDate(evt.endDate);
+      const start = normalizeDate(evt, "startDate");
+      const end = normalizeDate(evt, "endDate");
+      if (!start || !end) continue;
       for (let d = 1; d <= daysInMonth; d++) {
         const current = new Date(year, month, d);
         if (current >= start && current <= end) {

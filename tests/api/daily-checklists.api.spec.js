@@ -37,11 +37,19 @@ test.describe("Daily Checklists API @api", () => {
     });
 
     const classRoom = await prisma.classRoom.create({
-      data: { centerId: center.id, name: `QA Checklist Class ${suffix}` },
+      data: {
+        centerId: center.id,
+        name: `QA Checklist Class ${suffix}`,
+        ageRange: "3 years",
+      },
     });
 
     const classRoomTwo = await prisma.classRoom.create({
-      data: { centerId: center.id, name: `QA Checklist Class Two ${suffix}` },
+      data: {
+        centerId: center.id,
+        name: `QA Checklist Class Two ${suffix}`,
+        ageRange: "4-5 years",
+      },
     });
 
     await prisma.teacherClass.create({
@@ -53,7 +61,7 @@ test.describe("Daily Checklists API @api", () => {
         centerId: center.id,
         name: `QA Seasonal Lessons ${suffix}`,
         kind: "PACKAGE",
-        ageRange: "3-5",
+        ageRange: "3 years",
       },
     });
 
@@ -117,12 +125,17 @@ test.describe("Daily Checklists API @api", () => {
       await prisma.dailyChecklist.deleteMany({
         where: { centerId: fixture.center.id },
       });
-      await prisma.milestoneChecklistPlan.deleteMany({
-        where: { id: fixture.plan.id },
+      await prisma.lessonTermCalendar.deleteMany({
+        where: { centerId: fixture.center.id },
       });
-      await prisma.lessonGoal.deleteMany({ where: { id: fixture.goal.id } });
-      await prisma.lesson.deleteMany({ where: { id: fixture.lesson.id } });
-      await prisma.lessonCategory.deleteMany({ where: { id: fixture.category.id } });
+      await prisma.milestoneChecklistPlan.deleteMany({
+        where: { centerId: fixture.center.id },
+      });
+      await prisma.lessonGoal.deleteMany({
+        where: { lesson: { centerId: fixture.center.id } },
+      });
+      await prisma.lesson.deleteMany({ where: { centerId: fixture.center.id } });
+      await prisma.lessonCategory.deleteMany({ where: { centerId: fixture.center.id } });
       await prisma.teacherClass.deleteMany({
         where: {
           teacherId: fixture.teacherId,
@@ -243,5 +256,87 @@ test.describe("Daily Checklists API @api", () => {
       (list) => list.source === "SCHEDULED_LESSON_PLAN",
     );
     expect(completedScheduled.items[0].completions).toHaveLength(1);
+  });
+
+  test("daily checklist auto-matches lessons by term day and slot", async ({ request }) => {
+    const adminCookies = await loginAsAdmin(request);
+
+    const monday = new Date();
+    const dayOfWeek = monday.getDay();
+    const daysUntilMonday = (8 - (dayOfWeek || 7)) % 7;
+    monday.setDate(monday.getDate() + daysUntilMonday);
+    monday.setHours(0, 0, 0, 0);
+
+    const thursday = new Date(monday);
+    thursday.setDate(monday.getDate() + 3);
+
+    const thursdayKey = dateKey(thursday);
+
+    await prisma.lessonTermCalendar.create({
+      data: {
+        centerId: fixture.center.id,
+        term: "Term 1",
+        startDate: monday,
+        endDate: new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 4),
+      },
+    });
+
+    const autoLesson = await prisma.lesson.create({
+      data: {
+        centerId: fixture.center.id,
+        categoryId: fixture.category.id,
+        title: `QA Auto Large Group Lesson ${Date.now()}`,
+        description: "Automatically matched lesson",
+        term: "Term 1",
+        termDays: [4],
+        lessonSlot: "Large Group 1",
+        media: [],
+      },
+    });
+
+    const createRes = await apiPost(
+      request,
+      "/api/v1/daily-checklists",
+      {
+        centerId: fixture.center.id,
+        title: `QA Auto Checklist ${Date.now()}`,
+        description: "Auto lesson slot checklist",
+        category: "CLASSROOM",
+        classRoomIds: [fixture.classRoom.id],
+        items: [
+          {
+            title: "Large group",
+            frequency: "DAILY",
+            lessonSource: "AUTO_SLOT",
+            lessonSlot: "Large Group 1",
+          },
+        ],
+      },
+      adminCookies,
+    );
+
+    expect(createRes.status()).toBe(201);
+    const created = await createRes.json();
+    expect(created.items[0].lessonSource).toBe("AUTO_SLOT");
+
+    const listRes = await apiGet(
+      request,
+      `/api/v1/daily-checklists?centerId=${fixture.center.id}&classRoomId=${fixture.classRoom.id}&date=${thursdayKey}`,
+      adminCookies,
+    );
+
+    expect(listRes.status()).toBe(200);
+    const lists = await listRes.json();
+    const checklist = lists.find((list) => list.id === created.id);
+    expect(checklist).toBeTruthy();
+    expect(checklist.lessonTermCalendar).toMatchObject({
+      term: "Term 1",
+      termDay: 4,
+    });
+    expect(checklist.items[0]).toMatchObject({
+      lessonSource: "AUTO_SLOT",
+      lessonSlot: "Large Group 1",
+    });
+    expect(checklist.items[0].lesson?.id).toBe(autoLesson.id);
   });
 });

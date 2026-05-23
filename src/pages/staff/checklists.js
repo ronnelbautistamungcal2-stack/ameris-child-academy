@@ -418,6 +418,11 @@ export default function StaffChecklistsPage() {
                                     <p className="mt-1 text-xs text-gray-500">{item.description}</p>
                                   ) : null}
                                   <div className="mt-2 flex flex-wrap gap-2">
+                                    {item.lessonSource === "AUTO_SLOT" && item.lessonSlot ? (
+                                      <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
+                                        Auto slot: {item.lessonSlot}
+                                      </span>
+                                    ) : null}
                                     {item.lesson ? (
                                       <details className="rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
                                         <summary className="cursor-pointer list-none">Lesson</summary>

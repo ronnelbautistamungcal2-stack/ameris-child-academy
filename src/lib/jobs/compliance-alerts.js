@@ -1,5 +1,6 @@
 const prisma = require("../prisma");
 const { emitComplianceAlert, emitNotification } = require("../socket");
+const { getClockedInTeacherIds } = require("../compliance");
 
 async function runComplianceAlerts({ centerId = null, initiatedBy = "scheduler" } = {}) {
   const now = new Date();
@@ -39,18 +40,29 @@ async function runComplianceAlerts({ centerId = null, initiatedBy = "scheduler" 
   });
 
   const teacherIds = teachers.map((teacher) => teacher.id);
-  const recentLogs = teacherIds.length
+  const clockedInTeacherIds = await getClockedInTeacherIds({
+    teacherIds,
+    centerId,
+    date: now,
+  });
+  const eligibleTeachers = teachers.filter((teacher) =>
+    clockedInTeacherIds.has(teacher.id),
+  );
+  const eligibleTeacherIds = eligibleTeachers.map((teacher) => teacher.id);
+  const recentLogs = eligibleTeacherIds.length
     ? await prisma.activityLog.groupBy({
         by: ["recordedById"],
         where: {
-          recordedById: { in: teacherIds },
+          recordedById: { in: eligibleTeacherIds },
           createdAt: { gte: last24h },
         },
         _count: true,
       })
     : [];
   const loggedTeachers = new Set(recentLogs.map((row) => row.recordedById));
-  const missedCount = teachers.filter((teacher) => !loggedTeachers.has(teacher.id)).length;
+  const missedCount = eligibleTeachers.filter(
+    (teacher) => !loggedTeachers.has(teacher.id),
+  ).length;
 
   const isWeekday = now.getDay() >= 1 && now.getDay() <= 5;
   let missingAttCount = 0;

@@ -2,10 +2,7 @@ import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { isEmployeeRole, isNonAdminEmployeeRole } from "@/lib/roles";
 import {
-  calculateTimeOffHours,
   decorateTimeOffRequest,
-  getTimeOffBalanceSummary,
-  resolveTimeOffBalanceType,
 } from "@/lib/time-off";
 
 export default async function handler(req, res) {
@@ -42,29 +39,6 @@ export default async function handler(req, res) {
     const normalizedCoverageName = String(coverageName || "").trim();
     const data = {};
     if (status) data.status = status;
-    if (status === "APPROVED") {
-      const balanceType = resolveTimeOffBalanceType(request.type);
-      if (balanceType) {
-        const summary = await getTimeOffBalanceSummary(prisma, {
-          userId: request.userId,
-          centerId: request.centerId,
-          excludeApprovedRequestId: request.status === "APPROVED" ? request.id : "",
-        });
-        const requestHours = calculateTimeOffHours(
-          request.startDate,
-          request.endDate,
-        );
-        const availableHours =
-          balanceType === "PAID"
-            ? summary.paidAvailable
-            : summary.unpaidAvailable;
-        if (requestHours > availableHours) {
-          return res.status(400).json({
-            error: `Not enough ${balanceType.toLowerCase()} hours available for this request`,
-          });
-        }
-      }
-    }
     if (["APPROVED", "DENIED"].includes(status)) {
       data.reviewedById = session.user.id;
       data.reviewedAt = new Date();

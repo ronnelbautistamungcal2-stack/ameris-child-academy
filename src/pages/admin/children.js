@@ -18,6 +18,7 @@ import {
   getParentContacts,
 } from "@/lib/child-contacts";
 import { useToast } from "@/contexts/ToastContext";
+import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 function createParentContacts(value = []) {
@@ -180,6 +181,7 @@ function extractAssessmentRows(activities) {
 
 export default function AdminChildren() {
   const toast = useToast();
+  const router = useRouter();
   const [children, setChildren] = useState([]);
   const [centers, setCenters] = useState([]);
   const [classes, setClasses] = useState([]);
@@ -190,6 +192,7 @@ export default function AdminChildren() {
   const [modalOpen, setModalOpen] = useState(false);
   const [q, setQ] = useState("");
   const [classroomFilter, setClassroomFilter] = useState("");
+  const [profileFlagFilter, setProfileFlagFilter] = useState("");
   const [copyContactsFromChildId, setCopyContactsFromChildId] = useState("");
 
   const [editing, setEditing] = useState(null);
@@ -282,6 +285,13 @@ export default function AdminChildren() {
     refresh();
   }, []);
 
+  useEffect(() => {
+    if (!router.isReady) return;
+    const nextProfileFlagFilter =
+      router.query.profileFlag === "missing-profile" ? "missing-profile" : "";
+    setProfileFlagFilter(nextProfileFlagFilter);
+  }, [router.isReady, router.query.profileFlag]);
+
   const parents = useMemo(() => {
     return users.filter((u) => userRoles(u).includes("PARENT")).sort((a, b) => (a.email || "").localeCompare(b.email || ""));
   }, [users]);
@@ -298,6 +308,24 @@ export default function AdminChildren() {
     });
   }, [classes, centerById]);
 
+  const profileFlagIssuesByChildId = useMemo(() => {
+    const issuesByChildId = {};
+    for (const child of children) {
+      const issues = [];
+      if (!child.birthDate) issues.push("Missing DOB");
+      if (!child.classRoomId) issues.push("Missing classroom");
+      if (issues.length) {
+        issuesByChildId[child.id] = issues;
+      }
+    }
+    return issuesByChildId;
+  }, [children]);
+
+  const flaggedChildCount = useMemo(
+    () => Object.keys(profileFlagIssuesByChildId).length,
+    [profileFlagIssuesByChildId],
+  );
+
   const filteredSorted = useMemo(() => {
     const query = (q || "").trim().toLowerCase();
     return [...children]
@@ -312,8 +340,27 @@ export default function AdminChildren() {
         if (classroomFilter === "__unassigned__") return !currentClassRoomId;
         return currentClassRoomId === classroomFilter;
       })
+      .filter((ch) => {
+        if (profileFlagFilter !== "missing-profile") return true;
+        return !!profileFlagIssuesByChildId[ch.id];
+      })
       .sort((a, b) => (a.firstName || "").localeCompare(b.firstName || ""));
-  }, [children, classroomFilter, q]);
+  }, [children, classroomFilter, profileFlagFilter, profileFlagIssuesByChildId, q]);
+
+  useEffect(() => {
+    if (!router.isReady) return;
+    const childId =
+      typeof router.query.childId === "string" ? router.query.childId : "";
+    if (!childId || !children.some((child) => child.id === childId)) return;
+    if (profileChild?.id === childId || profileLoading) return;
+    openProfile(childId);
+  }, [
+    children,
+    profileChild?.id,
+    profileLoading,
+    router.isReady,
+    router.query.childId,
+  ]);
 
   const contactTemplateChildren = useMemo(() => {
     return [...children]
@@ -1228,12 +1275,24 @@ export default function AdminChildren() {
               </option>
             </select>
           </div>
-          {(q || classroomFilter) && (
+          <div style={{ flex: "0 0 220px" }}>
+            <div style={filterLabelStyle}>Profile Status</div>
+            <select
+              value={profileFlagFilter}
+              onChange={(e) => setProfileFlagFilter(e.target.value)}
+              style={inputStyle}
+            >
+              <option value="">All profiles</option>
+              <option value="missing-profile">Missing DOB or classroom</option>
+            </select>
+          </div>
+          {(q || classroomFilter || profileFlagFilter) && (
             <button
               type="button"
               onClick={() => {
                 setQ("");
                 setClassroomFilter("");
+                setProfileFlagFilter("");
               }}
               style={{ ...secondaryButtonStyle, alignSelf: "flex-end", fontSize: 12, padding: "10px 14px" }}
             >
@@ -1249,6 +1308,23 @@ export default function AdminChildren() {
             {q && <> matching &quot;{q}&quot;</>}
           </div>
         )}
+
+        {profileFlagFilter === "missing-profile" && !loading ? (
+          <div
+            style={{
+              marginTop: 12,
+              padding: "12px 14px",
+              borderRadius: 12,
+              border: "1px solid #FDE68A",
+              background: "#FFFBEB",
+              color: "#92400E",
+              fontSize: 13,
+              fontWeight: 700,
+            }}
+          >
+            Showing {flaggedChildCount} child{flaggedChildCount === 1 ? "" : "ren"} missing a date of birth, a classroom assignment, or both.
+          </div>
+        ) : null}
 
         <div style={{ marginTop: 16, padding: 14, borderRadius: 12, border: "1px solid var(--admin-border)", background: "var(--admin-bg-secondary)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "flex-start" }}>
@@ -1330,9 +1406,9 @@ export default function AdminChildren() {
           ) : filteredSorted.length === 0 ? (
             <EmptyState
               title="No children found"
-              description={q || classroomFilter ? "Try adjusting your search or filters." : "Get started by adding your first child record."}
-              actionLabel={!q && !classroomFilter ? "+ Add Child" : undefined}
-              onAction={!q && !classroomFilter ? openCreate : undefined}
+              description={q || classroomFilter || profileFlagFilter ? "Try adjusting your search or filters." : "Get started by adding your first child record."}
+              actionLabel={!q && !classroomFilter && !profileFlagFilter ? "+ Add Child" : undefined}
+              onAction={!q && !classroomFilter && !profileFlagFilter ? openCreate : undefined}
               className="py-8"
             />
           ) : (
@@ -1351,6 +1427,7 @@ export default function AdminChildren() {
                 const rowAttendanceSaving = rowAttendanceSavingId === ch.id;
                 const rowTransferSaving = rowTransferSavingId === ch.id;
                 const selectedTransferClassRoomId = quickTransferValue(ch);
+                const profileIssues = profileFlagIssuesByChildId[ch.id] || [];
                 const linkedParents = getLinkedParentUsers(ch).map(formatLinkedParentAccount).filter(Boolean);
                 const parentSummaries = getParentContacts(ch)
                   .map((contact) => formatContactLine(contact))
@@ -1393,6 +1470,16 @@ export default function AdminChildren() {
                         {!effectiveClassRoomId && (
                           <span style={{ ...tagStyle, background: "#FEF3C7", color: "#92400E", borderColor: "#FDE68A" }}>
                             No class
+                          </span>
+                        )}
+                        {profileIssues.includes("Missing DOB") && (
+                          <span style={{ ...tagStyle, background: "#FEF2F2", color: "#991B1B", borderColor: "#FECACA" }}>
+                            Missing DOB
+                          </span>
+                        )}
+                        {profileIssues.includes("Missing classroom") && !profileIssues.includes("Missing DOB") && (
+                          <span style={{ ...tagStyle, background: "#FFF7ED", color: "#9A3412", borderColor: "#FED7AA" }}>
+                            Missing classroom
                           </span>
                         )}
                       </div>

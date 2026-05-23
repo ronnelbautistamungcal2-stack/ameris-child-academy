@@ -200,6 +200,43 @@ test.describe("Staff Management API @api", () => {
       expect(res.status()).toBe(400);
     });
 
+    test("POST /api/v1/time-off warns when request exceeds available hours and allows override", async ({ request }) => {
+      if (!centerId) test.skip();
+      const cookies = await loginAsTeacher(request);
+
+      const warnRes = await apiPost(
+        request,
+        "/api/v1/time-off",
+        {
+          centerId,
+          type: "UNPAID",
+          startDate: "2026-03-20T08:00:00.000Z",
+          endDate: "2026-03-20T12:00:00.000Z",
+          reason: "Overage warning test",
+        },
+        cookies,
+      );
+      expect(warnRes.status()).toBe(409);
+      const warnBody = await warnRes.json();
+      expect(warnBody.code).toBe("TIME_OFF_BALANCE_WARNING");
+      expect(warnBody.canProceed).toBe(true);
+
+      const proceedRes = await apiPost(
+        request,
+        "/api/v1/time-off",
+        {
+          centerId,
+          type: "UNPAID",
+          startDate: "2026-03-20T08:00:00.000Z",
+          endDate: "2026-03-20T12:00:00.000Z",
+          reason: "Overage warning override test",
+          overrideBalanceWarning: true,
+        },
+        cookies,
+      );
+      expect([200, 201]).toContain(proceedRes.status());
+    });
+
     test("GET /api/v1/time-off/calendar returns calendar data", async ({ request }) => {
       if (!centerId) test.skip();
       const cookies = await loginAsAdmin(request);
@@ -373,6 +410,56 @@ test.describe("Staff Management API @api", () => {
       expect(res.status()).toBe(200);
       const data = await res.json();
       expect(data).toHaveProperty("totalHours");
+    });
+  });
+
+  test.describe("Teacher Training Pathways", () => {
+    test("GET /api/v1/teacher-training-pathways returns pathways for admin", async ({ request }) => {
+      if (!centerId) test.skip();
+      const cookies = await loginAsAdmin(request);
+      const res = await apiGet(
+        request,
+        `/api/v1/teacher-training-pathways?centerId=${centerId}&includeInactive=1`,
+        cookies,
+      );
+      expect(res.status()).toBe(200);
+      const data = await res.json();
+      expect(Array.isArray(data)).toBe(true);
+    });
+
+    test("POST /api/v1/teacher-training-pathways creates a pathway", async ({ request }) => {
+      if (!centerId) test.skip();
+      const cookies = await loginAsAdmin(request);
+      const res = await apiPost(
+        request,
+        "/api/v1/teacher-training-pathways",
+        {
+          centerId,
+          title: "API Test Teacher Pathway",
+          description: "Created by API coverage",
+          effectiveDate: "2026-05-01",
+          active: true,
+          topics: [
+            {
+              title: "Orientation basics",
+              description: "Review onboarding expectations",
+              durationHours: 1,
+              required: true,
+            },
+            {
+              title: "Safety walkthrough",
+              durationHours: 1.5,
+              required: false,
+            },
+          ],
+        },
+        cookies,
+      );
+      expect([200, 201]).toContain(res.status());
+      const data = await res.json();
+      expect(data.title).toBe("API Test Teacher Pathway");
+      expect(Array.isArray(data.topics)).toBe(true);
+      expect(data.topics.length).toBe(2);
     });
   });
 

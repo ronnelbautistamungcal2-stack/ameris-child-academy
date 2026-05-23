@@ -1,4 +1,5 @@
 import { getSession } from "@/lib/auth";
+import { parseEventDateInput } from "@/lib/calendar";
 import prisma from "@/lib/prisma";
 
 export default async function handler(req, res) {
@@ -39,13 +40,32 @@ async function handlePut(req, res, session) {
   const { title, description, startDate, endDate, allDay, type, color } = req.body;
 
   const data = {};
+  const nextAllDay = allDay !== undefined ? !!allDay : existing.allDay;
   if (title !== undefined) data.title = title;
   if (description !== undefined) data.description = description;
-  if (startDate !== undefined) data.startDate = new Date(startDate);
-  if (endDate !== undefined) data.endDate = new Date(endDate);
-  if (allDay !== undefined) data.allDay = allDay;
+  if (startDate !== undefined) {
+    const parsedStart = parseEventDateInput(startDate, nextAllDay);
+    if (!parsedStart || Number.isNaN(parsedStart.getTime())) {
+      return res.status(400).json({ error: "Invalid startDate" });
+    }
+    data.startDate = parsedStart;
+  }
+  if (endDate !== undefined) {
+    const parsedEnd = parseEventDateInput(endDate, nextAllDay);
+    if (!parsedEnd || Number.isNaN(parsedEnd.getTime())) {
+      return res.status(400).json({ error: "Invalid endDate" });
+    }
+    data.endDate = parsedEnd;
+  }
+  if (allDay !== undefined) data.allDay = nextAllDay;
   if (type !== undefined) data.type = type;
   if (color !== undefined) data.color = color;
+
+  const finalStart = data.startDate || existing.startDate;
+  const finalEnd = data.endDate || existing.endDate;
+  if (finalEnd < finalStart) {
+    return res.status(400).json({ error: "endDate cannot be before startDate" });
+  }
 
   const updated = await prisma.event.update({
     where: { id },

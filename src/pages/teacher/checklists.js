@@ -485,6 +485,11 @@ function TeacherDailyChecklist({ centerId, selectedDate }) {
                                 View linked details
                               </span>
                             ) : null}
+                            {item.lessonSource === "AUTO_SLOT" && item.lessonSlot ? (
+                              <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                                Auto slot: {item.lessonSlot}
+                              </span>
+                            ) : null}
                             {item.lesson ? (
                               <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
                                 Lesson
@@ -738,6 +743,18 @@ function ChecklistItemDetailModal({ detail, onClose }) {
                   </div>
                 </div>
               ) : null}
+            </div>
+          ) : item.lessonSource === "AUTO_SLOT" && item.lessonSlot ? (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+              <div className="text-xs font-bold uppercase tracking-wide text-indigo-600">
+                Auto Lesson Slot
+              </div>
+              <div className="mt-2 text-sm font-semibold text-indigo-900">
+                {item.lessonSlot}
+              </div>
+              <p className="mt-1 text-xs text-indigo-800">
+                No lesson matched this slot for the current term day yet.
+              </p>
             </div>
           ) : null}
 

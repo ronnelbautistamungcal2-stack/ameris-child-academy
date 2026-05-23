@@ -1,4 +1,5 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { getClockedInTeacherIds } from "@/lib/compliance";
 import prisma from "@/lib/prisma";
 
 export default async function handler(req, res) {
@@ -41,11 +42,20 @@ export default async function handler(req, res) {
   });
 
   const teacherIds = teachers.map((t) => t.id);
-  const recentLogs = teacherIds.length
+  const clockedInTeacherIds = await getClockedInTeacherIds({
+    teacherIds,
+    centerId: centerId || null,
+    date: now,
+  });
+  const eligibleTeachers = teachers.filter((teacher) =>
+    clockedInTeacherIds.has(teacher.id),
+  );
+  const eligibleTeacherIds = eligibleTeachers.map((teacher) => teacher.id);
+  const recentLogs = eligibleTeacherIds.length
     ? await prisma.activityLog.groupBy({
         by: ["recordedById"],
         where: {
-          recordedById: { in: teacherIds },
+          recordedById: { in: eligibleTeacherIds },
           createdAt: { gte: last24h },
         },
         _count: true,
@@ -53,7 +63,7 @@ export default async function handler(req, res) {
     : [];
 
   const loggedTeachers = new Set(recentLogs.map((l) => l.recordedById));
-  const missedLogging = teachers.filter((t) => !loggedTeachers.has(t.id));
+  const missedLogging = eligibleTeachers.filter((t) => !loggedTeachers.has(t.id));
 
   // 2. Missing attendance: children with no attendance record for today
   const isWeekday = now.getDay() >= 1 && now.getDay() <= 5;

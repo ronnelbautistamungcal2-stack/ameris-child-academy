@@ -214,59 +214,6 @@ export default function Login() {
               </Link>
             </div>
 
-            {/* Portal quick links */}
-            <div className="mt-6 border-t border-gray-200 pt-5 dark:border-gray-700">
-              <p className="text-center text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                Portal Access
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-                {[
-                  { label: "Parents", color: "bg-sky-50 text-sky-700" },
-                  { label: "Teachers", color: "bg-emerald-50 text-emerald-700" },
-                  { label: "Other Staff", color: "bg-cyan-50 text-cyan-700" },
-                  { label: "Coaches", color: "bg-indigo-50 text-indigo-700" },
-                  { label: "Admin", color: "bg-blue-50 text-blue-800" },
-                ].map((portal) => (
-                  <div
-                    key={portal.label}
-                    className={`rounded-2xl ${portal.color} px-3 py-2 text-center text-xs font-semibold`}
-                  >
-                    {portal.label}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Dev-only demo credentials */}
-            {process.env.NODE_ENV !== "production" && (
-              <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                  Demo Credentials
-                </p>
-                <div className="mt-2 space-y-1.5 text-xs text-amber-800">
-                  {[
-                    { role: "Admin", email: "admin@demo.com", pw: "adminpass" },
-                    { role: "Teacher", email: "teacher@demo.com", pw: "teacherpass" },
-                    { role: "Other Staff", email: "otherstaff@demo.com", pw: "otherstaffpass" },
-                    { role: "Parent", email: "parent@demo.com", pw: "parentpass" },
-                    { role: "Coach", email: "coach@demo.com", pw: "coachpass" },
-                  ].map((cred) => (
-                    <button
-                      key={cred.role}
-                      type="button"
-                      className="flex w-full items-center justify-between rounded-xl px-2 py-1.5 text-left transition hover:bg-amber-100"
-                      onClick={() => {
-                        setEmail(cred.email);
-                        setPassword(cred.pw);
-                      }}
-                    >
-                      <span className="font-semibold">{cred.role}</span>
-                      <span className="text-amber-600">{cred.email}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Right illustration */}

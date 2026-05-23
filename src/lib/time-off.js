@@ -56,6 +56,42 @@ export function decorateTimeOffRequest(request) {
   };
 }
 
+export async function getTimeOffAvailabilityWarning(prisma, options = {}) {
+  const { userId, centerId, type, startDate, endDate, excludeApprovedRequestId } = options;
+  const balanceType = resolveTimeOffBalanceType(type);
+  const requestedHours = roundHours(calculateTimeOffHours(startDate, endDate));
+
+  if (!balanceType || !userId || !centerId) {
+    return {
+      balanceType,
+      requestedHours,
+      availableHours: 0,
+      remainingHours: 0,
+      overLimit: false,
+    };
+  }
+
+  const summary = await getTimeOffBalanceSummary(prisma, {
+    userId,
+    centerId,
+    excludeApprovedRequestId,
+  });
+  const availableHours =
+    balanceType === "PAID"
+      ? roundHours(summary.paidAvailable)
+      : roundHours(summary.unpaidAvailable);
+  const remainingHours = roundHours(availableHours - requestedHours);
+
+  return {
+    balanceType,
+    requestedHours,
+    availableHours,
+    remainingHours,
+    overLimit: requestedHours > availableHours,
+    summary,
+  };
+}
+
 export async function getTimeOffBalanceSummary(prisma, options = {}) {
   const { userId, centerId, excludeApprovedRequestId } = options;
   if (!userId || !centerId) {

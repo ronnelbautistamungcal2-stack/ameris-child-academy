@@ -1,4 +1,5 @@
 import { getSession } from "@/lib/auth";
+import { parseEventDateInput } from "@/lib/calendar";
 import prisma from "@/lib/prisma";
 
 export default async function handler(req, res) {
@@ -52,9 +53,10 @@ async function handlePost(req, res, session) {
     return res.status(400).json({ error: "centerId, title, startDate, and endDate are required" });
   }
 
-  const parsedStart = new Date(startDate);
-  const parsedEnd = new Date(endDate);
-  if (isNaN(parsedStart.getTime()) || isNaN(parsedEnd.getTime())) {
+  const isAllDay = allDay !== undefined ? !!allDay : true;
+  const parsedStart = parseEventDateInput(startDate, isAllDay);
+  const parsedEnd = parseEventDateInput(endDate, isAllDay);
+  if (!parsedStart || !parsedEnd || isNaN(parsedStart.getTime()) || isNaN(parsedEnd.getTime())) {
     return res.status(400).json({ error: "Invalid date format for startDate or endDate" });
   }
   if (parsedEnd < parsedStart) {
@@ -68,7 +70,7 @@ async function handlePost(req, res, session) {
       description: description || null,
       startDate: parsedStart,
       endDate: parsedEnd,
-      allDay: allDay !== undefined ? allDay : true,
+      allDay: isAllDay,
       type: type || "OTHER",
       color: color || null,
       createdById: session.user.id,

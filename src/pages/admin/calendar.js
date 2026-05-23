@@ -2,6 +2,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import MonthlyCalendar from "@/components/calendar/MonthlyCalendar";
 import { apiJson } from "@/lib/api";
+import { formatDateInputValue, toCalendarDay } from "@/lib/calendar";
 import { getTimeOffTypeLabel } from "@/lib/time-off";
 import { useEffect, useState, useCallback } from "react";
 
@@ -42,7 +43,9 @@ const FILTER_ITEMS = [
   { key: "timeOff", label: "Time Off", color: "#10b981", lightBg: "#ecfdf5", icon: "\ud83c\udfd6\ufe0f" },
 ];
 
-function toDateInput(d) { return d ? new Date(d).toISOString().split("T")[0] : ""; }
+function toDateInput(value, options = {}) {
+  return formatDateInputValue(value, options);
+}
 
 function formatDateTimeRange(start, end) {
   if (!start || !end) return "";
@@ -73,6 +76,10 @@ function formatDateTimeRange(start, end) {
   };
 
   return `${startDate.toLocaleString(undefined, dateTimeOptions)} - ${endDate.toLocaleString(undefined, dateTimeOptions)}`;
+}
+
+function toItemCalendarDay(item, fieldName) {
+  return toCalendarDay(item?.[fieldName], { allDay: !!item?._raw?.allDay });
 }
 
 function hoursBetween(start, end) {
@@ -201,6 +208,7 @@ export default function CalendarPage() {
         items.push({
           id: evt.id, _source: "event", type: evt.type, status: "ACTIVE",
           startDate: evt.startDate, endDate: evt.endDate,
+          allDay: evt.allDay,
           user: evt.createdBy, label: evt.title, _raw: evt,
         });
       }
@@ -233,8 +241,9 @@ export default function CalendarPage() {
     if (!day) return [];
     const d = new Date(calYear, calMonth, day);
     return normalizedEvents.filter(evt => {
-      const s = new Date(new Date(evt.startDate).toDateString());
-      const e = new Date(new Date(evt.endDate).toDateString());
+      const s = toItemCalendarDay(evt, "startDate");
+      const e = toItemCalendarDay(evt, "endDate");
+      if (!s || !e) return false;
       return d >= s && d <= e;
     });
   }
@@ -248,7 +257,8 @@ export default function CalendarPage() {
     setEditingEvent(evt);
     setForm({
       title: evt.title, description: evt.description || "",
-      startDate: toDateInput(evt.startDate), endDate: toDateInput(evt.endDate),
+      startDate: toDateInput(evt.startDate, { allDay: evt.allDay }),
+      endDate: toDateInput(evt.endDate, { allDay: evt.allDay }),
       allDay: evt.allDay, type: evt.type, color: evt.color || "",
     });
     setShowForm(true);
@@ -257,7 +267,7 @@ export default function CalendarPage() {
   function openNewEvent() {
     resetForm();
     if (selectedDay) {
-      const dateStr = new Date(calYear, calMonth, selectedDay).toISOString().split("T")[0];
+      const dateStr = formatDateInputValue(new Date(calYear, calMonth, selectedDay));
       setForm(f => ({ ...f, startDate: dateStr, endDate: dateStr }));
     }
     setShowForm(true);

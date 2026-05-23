@@ -292,6 +292,11 @@ export default function AdminChildren() {
     setProfileFlagFilter(nextProfileFlagFilter);
   }, [router.isReady, router.query.profileFlag]);
 
+  const dashboardCenterId = useMemo(() => {
+    if (!router.isReady) return "";
+    return typeof router.query.centerId === "string" ? router.query.centerId : "";
+  }, [router.isReady, router.query.centerId]);
+
   const parents = useMemo(() => {
     return users.filter((u) => userRoles(u).includes("PARENT")).sort((a, b) => (a.email || "").localeCompare(b.email || ""));
   }, [users]);
@@ -321,14 +326,24 @@ export default function AdminChildren() {
     return issuesByChildId;
   }, [children]);
 
-  const flaggedChildCount = useMemo(
-    () => Object.keys(profileFlagIssuesByChildId).length,
-    [profileFlagIssuesByChildId],
-  );
+  const scopedChildren = useMemo(() => {
+    return dashboardCenterId
+      ? children.filter((child) => child.centerId === dashboardCenterId)
+      : children;
+  }, [children, dashboardCenterId]);
+
+  const scopedFlaggedChildren = useMemo(() => {
+    return scopedChildren
+      .filter((child) => profileFlagIssuesByChildId[child.id])
+      .map((child) => ({
+        child,
+        issues: profileFlagIssuesByChildId[child.id],
+      }));
+  }, [profileFlagIssuesByChildId, scopedChildren]);
 
   const filteredSorted = useMemo(() => {
     const query = (q || "").trim().toLowerCase();
-    return [...children]
+    return [...scopedChildren]
       .filter((ch) => {
         if (!query) return true;
         const name = `${ch.firstName || ""} ${ch.lastName || ""}`.trim().toLowerCase();
@@ -345,7 +360,7 @@ export default function AdminChildren() {
         return !!profileFlagIssuesByChildId[ch.id];
       })
       .sort((a, b) => (a.firstName || "").localeCompare(b.firstName || ""));
-  }, [children, classroomFilter, profileFlagFilter, profileFlagIssuesByChildId, q]);
+  }, [classroomFilter, profileFlagFilter, profileFlagIssuesByChildId, q, scopedChildren]);
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -1304,8 +1319,11 @@ export default function AdminChildren() {
         {/* Result count */}
         {!loading && (
           <div style={{ marginTop: 12, fontSize: 12, color: "var(--admin-text-muted)", fontWeight: 600 }}>
-            Showing {filteredSorted.length} of {children.length} children
+            Showing {filteredSorted.length} of {scopedChildren.length} children
             {q && <> matching &quot;{q}&quot;</>}
+            {dashboardCenterId && centerById[dashboardCenterId]?.name ? (
+              <> in {centerById[dashboardCenterId].name}</>
+            ) : null}
           </div>
         )}
 
@@ -1322,7 +1340,55 @@ export default function AdminChildren() {
               fontWeight: 700,
             }}
           >
-            Showing {flaggedChildCount} child{flaggedChildCount === 1 ? "" : "ren"} missing a date of birth, a classroom assignment, or both.
+            <div>
+              Showing {scopedFlaggedChildren.length} child{scopedFlaggedChildren.length === 1 ? "" : "ren"} missing a date of birth, a classroom assignment, or both.
+            </div>
+            {scopedFlaggedChildren.length > 0 ? (
+              <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+                {scopedFlaggedChildren.slice(0, 5).map(({ child, issues }) => (
+                  <div
+                    key={child.id}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      padding: "10px 12px",
+                      borderRadius: 10,
+                      background: "rgba(255,255,255,0.7)",
+                      border: "1px solid #FCD34D",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "#78350F" }}>
+                        {childFullName(child)}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#92400E" }}>
+                        {issues.join(" • ")}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openProfile(child.id)}
+                      style={{
+                        ...secondaryButtonStyle,
+                        background: "#fff",
+                        borderColor: "#F59E0B",
+                        color: "#92400E",
+                      }}
+                    >
+                      View Profile
+                    </button>
+                  </div>
+                ))}
+                {scopedFlaggedChildren.length > 5 ? (
+                  <div style={{ fontSize: 12, color: "#92400E" }}>
+                    {scopedFlaggedChildren.length - 5} more flagged child{scopedFlaggedChildren.length - 5 === 1 ? "" : "ren"} in this list.
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         ) : null}
 

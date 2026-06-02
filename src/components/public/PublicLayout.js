@@ -33,13 +33,12 @@ export default function PublicLayout({ title, description, children }) {
         <link rel="canonical" href={canonicalUrl} />
         <link rel="manifest" href="/manifest.json" />
       </Head>
-      <div className="min-h-screen">
+      <div className="min-h-screen bg-white">
         <a href="#main-content" className="skip-link">
           Skip to content
         </a>
         <PublicNavbar />
-        <main id="main-content" className="relative overflow-hidden">
-          <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[38rem] bg-[radial-gradient(circle_at_top,_rgba(125,211,252,0.28),_transparent_44%),radial-gradient(circle_at_85%_8%,_rgba(253,230,138,0.22),_transparent_22%)]" />
+        <main id="main-content" className="relative">
           {children}
         </main>
         <PublicFooter />

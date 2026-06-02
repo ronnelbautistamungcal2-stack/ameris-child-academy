@@ -1,15 +1,13 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
-import { useTheme } from "@/contexts/ThemeContext";
-import { MoonIcon, SunIcon, MenuIcon, XIcon } from "./icons";
+import { LoginUserIcon, MenuIcon, XIcon } from "./icons";
 import AmerisLogo from "@/components/ui/AmerisLogo";
 import { PUBLIC_NAV_LINKS } from "./siteData";
 
 export default function PublicNavbar() {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { theme, toggleTheme } = useTheme();
   const activePath = (router.asPath || "/").split("?")[0];
   const activeMatcher = useMemo(
     () => (href) => activePath === href || activePath.startsWith(`${href}/`),
@@ -40,22 +38,22 @@ export default function PublicNavbar() {
   }, [router.asPath]);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-white/60 bg-white/75 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-        <Link href="/" className="block w-[clamp(124px,32vw,168px)] sm:w-[clamp(140px,24vw,184px)]">
-          <AmerisLogo size="lg" showText={false} className="drop-shadow-sm" />
+    <header className="absolute inset-x-0 top-0 z-50">
+      <div className="mx-auto flex w-full items-center justify-between gap-5 px-5 pb-8 pt-5 lg:px-8">
+        <Link href="/" className="block w-[clamp(170px,22vw,270px)] shrink-0">
+          <AmerisLogo size="xl" showText={false} className="drop-shadow-sm" />
         </Link>
 
-        <nav className="hidden items-center gap-1 rounded-full border border-white/70 bg-white/70 p-1 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)] lg:flex">
+        <nav className="hidden items-center gap-5 text-[12px] font-semibold text-slate-700 md:flex lg:gap-6">
           {PUBLIC_NAV_LINKS.map((link) => (
             <Link
               key={link.href}
               href={link.href}
               className={[
-                "rounded-full px-4 py-2 text-sm font-semibold transition",
+                "rounded-full px-1 py-1 transition",
                 activeMatcher(link.href)
-                  ? "bg-sky-100 text-sky-900 shadow-sm"
-                  : "text-gray-700 hover:bg-white hover:text-gray-900",
+                  ? "text-[#19388f]"
+                  : "hover:text-[#19388f]",
               ].join(" ")}
             >
               {link.label}
@@ -64,23 +62,16 @@ export default function PublicNavbar() {
         </nav>
 
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/70 bg-white/80 text-gray-700 transition hover:bg-white"
-            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          >
-            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-          </button>
           <Link
             href="/login"
-            className="hidden items-center rounded-2xl bg-gradient-to-r from-sky-700 via-cyan-600 to-blue-600 px-5 py-2.5 text-sm font-extrabold text-white shadow-[0_18px_36px_-24px_rgba(2,132,199,0.9)] transition hover:-translate-y-0.5 hover:from-sky-800 hover:to-blue-700 sm:inline-flex"
+            className="hidden items-center gap-2 rounded-[10px] bg-[#19388f] px-3.5 py-2 text-[12px] font-extrabold text-white shadow-[0_12px_24px_-18px_rgba(25,56,143,0.9)] transition hover:bg-[#163179] md:inline-flex"
           >
-            Family Portal
+            <LoginUserIcon className="h-[13px] w-[13px]" />
+            Login
           </Link>
           <button
             type="button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/70 bg-white/80 text-gray-700 lg:hidden"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/80 bg-white/90 text-gray-700 md:hidden"
             aria-label="Open navigation"
             aria-expanded={mobileOpen}
             aria-controls="public-mobile-nav"
@@ -92,7 +83,7 @@ export default function PublicNavbar() {
       </div>
 
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true">
           <div className="absolute inset-0 bg-gray-900/40" onClick={() => setMobileOpen(false)} />
           <div
             id="public-mobile-nav"
@@ -128,9 +119,9 @@ export default function PublicNavbar() {
               <Link
                 href="/login"
                 onClick={() => setMobileOpen(false)}
-                className="mt-4 block rounded-2xl bg-gradient-to-r from-blue-800 to-sky-600 px-4 py-3 text-center text-sm font-extrabold text-white hover:from-blue-900 hover:to-sky-700"
+                className="mt-4 block rounded-2xl bg-[#19388f] px-4 py-3 text-center text-sm font-extrabold text-white hover:bg-[#163179]"
               >
-                Open Family Portal
+                Login
               </Link>
             </nav>
           </div>

@@ -273,3 +273,12 @@ export function BuildingIcon({ className = "h-6 w-6" }) {
     </svg>
   );
 }
+
+export function LoginUserIcon({ className = "h-4 w-4" }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5.5 18.5c0-3.314 2.91-6 6.5-6s6.5 2.686 6.5 6v.5h-13z" />
+    </svg>
+  );
+}

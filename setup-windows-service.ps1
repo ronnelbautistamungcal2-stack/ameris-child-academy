@@ -11,9 +11,26 @@ $port = 3000  # Adjust to your app's port
 # Step 1: Download & extract NSSM if not present
 $nssmPath = "$env:ProgramFiles\nssm\nssm.exe"
 if (-not (Test-Path $nssmPath)) {
-    Write-Host "Downloading NSSM..."
+    Write-Host "Downloading NSSM from GitHub..."
     $nssmZip = "$env:Temp\nssm.zip"
-    Invoke-WebRequest -Uri "https://nssm.cc/download/nssm-2.24-101-g897c7f7.zip" -OutFile $nssmZip
+
+    # Try GitHub releases first (more reliable)
+    try {
+        Invoke-WebRequest -Uri "https://github.com/nssm/nssm/releases/download/2.24/nssm-2.24-101-g897c7f7.zip" -OutFile $nssmZip -ErrorAction Stop
+        Write-Host "Downloaded from GitHub" -ForegroundColor Green
+    } catch {
+        Write-Host "GitHub download failed, trying backup URL..." -ForegroundColor Yellow
+        try {
+            Invoke-WebRequest -Uri "https://files.nssm.cc/nssm/2.24/nssm-2.24-101-g897c7f7.zip" -OutFile $nssmZip -ErrorAction Stop
+        } catch {
+            Write-Host "ERROR: Cannot download NSSM. Please download manually from:" -ForegroundColor Red
+            Write-Host "https://github.com/nssm/nssm/releases/download/2.24/nssm-2.24-101-g897c7f7.zip" -ForegroundColor Yellow
+            Write-Host "Then extract to: $env:ProgramFiles\nssm" -ForegroundColor Yellow
+            Exit 1
+        }
+    }
+
+    Write-Host "Extracting NSSM..."
     Expand-Archive -Path $nssmZip -DestinationPath "$env:ProgramFiles" -Force
     Remove-Item $nssmZip
 }

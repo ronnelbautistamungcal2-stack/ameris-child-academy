@@ -29,7 +29,7 @@ const TYPE_META = {
   ACTIVITY: { label: "Activity", color: "#be185d", tint: "#fce7f3" },
   TASK_CHECKLIST: { label: "Task / Checklist", color: "#0f766e", tint: "#ccfbf1" },
   BEHAVIOR: { label: "Behavior", color: "#c2410c", tint: "#ffedd5" },
-  OTHER: { label: "Other", color: "#475569", tint: "#e2e8f0" },
+  OTHER: { label: "Grade", color: "#475569", tint: "#e2e8f0" },
 };
 
 const MEAL_OCCASIONS = [
@@ -153,6 +153,10 @@ function arr(value) {
 
 function supportsBehaviorDetails(type) {
   return type === "BEHAVIOR";
+}
+
+function supportsDirectGrade(type) {
+  return type === "OTHER";
 }
 
 function asObject(value) {
@@ -375,6 +379,16 @@ function getFormValidationMessage(form) {
     }
   }
 
+  if (supportsDirectGrade(form?.type) && !Object.keys(asObject(form?.domainScores)).length) {
+    const gradeNum = form?.dailyGrade === "" ? null : Number(form?.dailyGrade);
+    if (!Number.isFinite(gradeNum)) {
+      return "Enter a grade from 0 to 10.";
+    }
+    if (gradeNum < 0 || gradeNum > 10) {
+      return "Grade must be between 0 and 10.";
+    }
+  }
+
   return "";
 }
 
@@ -388,8 +402,11 @@ function buildPayloadFromForm(form) {
   const fields = asObject(form?.fields);
   const hasDomainScores = Object.keys(asObject(form?.domainScores)).length > 0;
   const gradeNum = form?.dailyGrade === "" ? null : Number(form?.dailyGrade);
-  const hasLegacyGrade = form?.dailyGrade !== "" && Number.isFinite(gradeNum);
-  const payloadType = hasDomainScores || hasLegacyGrade ? "OTHER" : form?.type || "OTHER";
+  const hasDirectGrade =
+    supportsDirectGrade(form?.type) &&
+    form?.dailyGrade !== "" &&
+    Number.isFinite(gradeNum);
+  const payloadType = hasDomainScores || supportsDirectGrade(form?.type) ? "OTHER" : form?.type || "OTHER";
   const entryTime = formatClock(baseDate);
   const mediaUrls = [...new Set(arr(form?.mediaUrls).filter(Boolean))];
 
@@ -405,7 +422,7 @@ function buildPayloadFromForm(form) {
     details.grade = grade;
     details.domains = { ...form.domainScores };
     details.domainAvg = avg;
-  } else if (hasLegacyGrade) {
+  } else if (hasDirectGrade) {
     details.kind = "DAILY_GRADE";
     details.grade = gradeNum;
   }
@@ -435,7 +452,7 @@ function buildPayloadFromForm(form) {
     details.time = entryTime;
     details.behaviorType = fields.behaviorType || "OTHER";
     details.behaviorLevel = fields.behaviorLevel || "1";
-  } else {
+  } else if (!supportsDirectGrade(form?.type)) {
     details.time = entryTime;
   }
 
@@ -474,7 +491,7 @@ function formatActivitySummary(activity) {
     return `${domainSummary || "Assessment logged"}${mediaCount ? ` | ${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : ""}`;
   }
   if (details.kind === "DAILY_GRADE" && details.grade != null) {
-    return `Daily grade ${details.grade}/5${mediaCount ? ` | ${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : ""}`;
+    return `Grade ${details.grade}/10${mediaCount ? ` | ${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : ""}`;
   }
   if (activity?.type === "NAP") {
     if (details.startTime || details.endTime) {
@@ -522,13 +539,9 @@ function buildActivityMetaPills(activity) {
     });
   }
 
-  if (activity?.isBackdated) {
-    pills.push({ label: "Backdated", tone: "amber" });
-  }
-
   if (hasAssessment(activity)) {
     pills.push({
-      label: details.domains ? "Domain Assessment" : "Daily Grade",
+      label: details.domains ? "Domain Assessment" : "Grade",
       tone: "sky",
     });
   }
@@ -562,7 +575,10 @@ function composerHelperText(type) {
   if (type === "INCIDENT") {
     return "Incident entries capture the time and description.";
   }
-  return "Other entries capture the time and description.";
+  if (supportsDirectGrade(type)) {
+    return "Grade entries capture a 0-10 score and description.";
+  }
+  return "Activity entries capture the time and description.";
 }
 
 function composerDescriptionPlaceholder(type) {
@@ -653,6 +669,7 @@ export default function AdminActivityOverrides() {
   const router = useRouter();
   const [centers, setCenters] = useState([]);
   const [children, setChildren] = useState([]);
+  const [classrooms, setClassrooms] = useState([]);
   const initialCenterId = typeof router.query.centerId === "string" ? router.query.centerId : "";
   const initialChildId = typeof router.query.childId === "string" ? router.query.childId : "";
   const [centerId, setCenterId] = useState(initialCenterId);
@@ -671,6 +688,10 @@ export default function AdminActivityOverrides() {
   const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("");
+  const [filterClassroomId, setFilterClassroomId] = useState("");
+  const [filterChildId, setFilterChildId] = useState("");
+  const [filterFromDate, setFilterFromDate] = useState("");
+  const [filterToDate, setFilterToDate] = useState("");
   const createPhotoInputRef = useRef(null);
   const editPhotoInputRef = useRef(null);
 
@@ -693,6 +714,7 @@ export default function AdminActivityOverrides() {
   async function loadChildren(id) {
     if (!id) {
       setChildren([]);
+      setClassrooms([]);
       setChildId("");
       setActivities([]);
       return;
@@ -700,8 +722,12 @@ export default function AdminActivityOverrides() {
     setLoading(true);
     setError("");
     try {
-      const data = await apiJson(`/api/v1/children?centerId=${encodeURIComponent(id)}`);
-      setChildren(Array.isArray(data) ? data : []);
+      const [childrenData, classroomsData] = await Promise.all([
+        apiJson(`/api/v1/children?centerId=${encodeURIComponent(id)}`),
+        apiJson(`/api/v1/classes?centerId=${encodeURIComponent(id)}`),
+      ]);
+      setChildren(Array.isArray(childrenData) ? childrenData : []);
+      setClassrooms(Array.isArray(classroomsData) ? classroomsData : []);
     } catch (loadError) {
       setError(loadError.message || "Failed to load children");
     } finally {
@@ -759,6 +785,41 @@ export default function AdminActivityOverrides() {
     return centers.find((center) => center.id === centerId)?.name || "";
   }, [centers, centerId]);
 
+  const classroomNameById = useMemo(() => {
+    return new Map(
+      classrooms
+        .filter((classroom) => classroom?.id)
+        .map((classroom) => [classroom.id, classroom.name || "Unnamed classroom"]),
+    );
+  }, [classrooms]);
+
+  const classroomFilterOptions = useMemo(() => {
+    const idsInScope = new Set(
+      activities
+        .map((activity) => activity?.child?.classRoomId)
+        .filter(Boolean),
+    );
+    return classrooms
+      .filter((classroom) => idsInScope.has(classroom.id))
+      .slice()
+      .sort((left, right) => (left.name || "").localeCompare(right.name || ""));
+  }, [activities, classrooms]);
+
+  const childFilterOptions = useMemo(() => {
+    const childrenInScope = new Map();
+    for (const activity of activities) {
+      const child = activity?.child;
+      if (!child?.id) continue;
+      if (filterClassroomId && child.classRoomId !== filterClassroomId) continue;
+      if (!childrenInScope.has(child.id)) {
+        childrenInScope.set(child.id, child);
+      }
+    }
+    return [...childrenInScope.values()].sort((left, right) =>
+      fullChildName(left).localeCompare(fullChildName(right)),
+    );
+  }, [activities, filterClassroomId]);
+
   useEffect(() => {
     if (!childId) return;
     if (!children.some((child) => child.id === childId)) {
@@ -766,45 +827,103 @@ export default function AdminActivityOverrides() {
     }
   }, [children, childId]);
 
+  useEffect(() => {
+    if (!filterClassroomId) return;
+    if (!classroomFilterOptions.some((classroom) => classroom.id === filterClassroomId)) {
+      setFilterClassroomId("");
+    }
+  }, [classroomFilterOptions, filterClassroomId]);
+
+  useEffect(() => {
+    if (!filterChildId) return;
+    if (!childFilterOptions.some((child) => child.id === filterChildId)) {
+      setFilterChildId("");
+    }
+  }, [childFilterOptions, filterChildId]);
+
   const filteredActivities = useMemo(() => {
     let list = activities;
     if (filterType) list = list.filter((activity) => activity.type === filterType);
+    if (filterClassroomId) {
+      list = list.filter((activity) => activity?.child?.classRoomId === filterClassroomId);
+    }
+    if (filterChildId) {
+      list = list.filter((activity) => activity?.child?.id === filterChildId);
+    }
+    if (filterFromDate) {
+      const fromDate = new Date(`${filterFromDate}T00:00:00`);
+      if (!Number.isNaN(fromDate.getTime())) {
+        list = list.filter((activity) => new Date(activity.createdAt) >= fromDate);
+      }
+    }
+    if (filterToDate) {
+      const toDate = new Date(`${filterToDate}T23:59:59.999`);
+      if (!Number.isNaN(toDate.getTime())) {
+        list = list.filter((activity) => new Date(activity.createdAt) <= toDate);
+      }
+    }
     if (search.trim()) {
       const query = search.trim().toLowerCase();
       list = list.filter((activity) => {
         const childName = fullChildName(activity?.child).toLowerCase();
+        const classroomName = String(classroomNameById.get(activity?.child?.classRoomId) || "").toLowerCase();
         const recordedBy = String(activity?.recordedBy?.name || activity?.recordedBy?.email || "").toLowerCase();
         const summary = formatActivitySummary(activity).toLowerCase();
         return (
           String(activity?.notes || "").toLowerCase().includes(query) ||
           String(TYPE_META[activity?.type]?.label || activity?.type || "").toLowerCase().includes(query) ||
           childName.includes(query) ||
+          classroomName.includes(query) ||
           recordedBy.includes(query) ||
           summary.includes(query)
         );
       });
     }
     return list;
-  }, [activities, filterType, search]);
+  }, [
+    activities,
+    classroomNameById,
+    filterChildId,
+    filterClassroomId,
+    filterFromDate,
+    filterToDate,
+    filterType,
+    search,
+  ]);
 
   const activityStats = useMemo(() => {
     const total = activities.length;
-    const backdated = activities.filter((activity) => activity.isBackdated).length;
     const withPhotos = activities.filter((activity) => extractActivityMediaUrls(activity).length > 0).length;
     const assessments = activities.filter((activity) => hasAssessment(activity)).length;
-    return { total, backdated, withPhotos, assessments };
+    return { total, withPhotos, assessments };
   }, [activities]);
 
   const dismissError = useCallback(() => setError(""), []);
   const dismissSuccess = useCallback(() => setSuccess(""), []);
+  const clearListFilters = useCallback(() => {
+    setFilterType("");
+    setFilterClassroomId("");
+    setFilterChildId("");
+    setFilterFromDate("");
+    setFilterToDate("");
+    setSearch("");
+  }, []);
+
+  const hasActiveListFilters = Boolean(
+    filterType ||
+      filterClassroomId ||
+      filterChildId ||
+      filterFromDate ||
+      filterToDate ||
+      search.trim(),
+  );
 
   function handleCenterChange(nextCenterId) {
     if (nextCenterId === centerId) return;
     setCenterId(nextCenterId);
     setChildId("");
     setActivities([]);
-    setSearch("");
-    setFilterType("");
+    clearListFilters();
     setError("");
     setSuccess("");
     cancelEditActivity();
@@ -813,8 +932,7 @@ export default function AdminActivityOverrides() {
   function handleChildChange(nextChildId) {
     if (nextChildId === childId) return;
     setChildId(nextChildId);
-    setSearch("");
-    setFilterType("");
+    clearListFilters();
     setError("");
     setSuccess("");
     cancelEditActivity();
@@ -1029,9 +1147,9 @@ export default function AdminActivityOverrides() {
               <div style={heroMetricHintStyle}>Current scope</div>
             </div>
             <div style={heroMetricCardStyle}>
-              <div style={heroMetricLabelStyle}>Backdated</div>
-              <div style={heroMetricValueStyle}>{activityStats.backdated}</div>
-              <div style={heroMetricHintStyle}>Adjusted timestamps</div>
+              <div style={heroMetricLabelStyle}>With Photos</div>
+              <div style={heroMetricValueStyle}>{activityStats.withPhotos}</div>
+              <div style={heroMetricHintStyle}>Media attached</div>
             </div>
             <div style={heroMetricCardStyle}>
               <div style={heroMetricLabelStyle}>Assessments</div>
@@ -1099,7 +1217,7 @@ export default function AdminActivityOverrides() {
             </div>
             <div style={{ ...simpleHeaderMetaStyle, marginTop: 12 }}>
               <HeroPill tone="sky">{activityStats.total} logs</HeroPill>
-              <HeroPill tone="amber">{activityStats.backdated} backdated</HeroPill>
+              <HeroPill tone="emerald">{activityStats.withPhotos} with photos</HeroPill>
               <HeroPill tone="slate">{childLabel ? "Entry enabled" : "Review mode"}</HeroPill>
             </div>
           </div>
@@ -1140,27 +1258,93 @@ export default function AdminActivityOverrides() {
               </span>
             ) : null}
             {filterType ? <HeroPill tone="sky">{TYPE_META[filterType]?.label || filterType}</HeroPill> : null}
+            {filterClassroomId ? (
+              <HeroPill tone="indigo">{classroomNameById.get(filterClassroomId) || "Classroom"}</HeroPill>
+            ) : null}
+            {filterChildId ? (
+              <HeroPill tone="emerald">
+                {fullChildName(childFilterOptions.find((child) => child.id === filterChildId)) || "Child"}
+              </HeroPill>
+            ) : null}
+            {filterFromDate || filterToDate ? (
+              <HeroPill tone="rose">
+                {filterFromDate || "Start"} to {filterToDate || "Now"}
+              </HeroPill>
+            ) : null}
           </div>
-          {activities.length ? (
+          {centerId ? (
             <div style={toolbarCardStyle}>
-              <select
-                value={filterType}
-                onChange={(event) => setFilterType(event.target.value)}
-                style={{ ...inputStyle, width: "auto", padding: "6px 10px", fontSize: 13 }}
-              >
-                <option value="">All types</option>
-                {TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {TYPE_META[type]?.label || type}
-                  </option>
-                ))}
-              </select>
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search notes, child, teacher, or summary"
-                style={{ ...inputStyle, fontSize: 13, minWidth: 260 }}
-              />
+              <Field label="Log Type" style={toolbarFieldStyle}>
+                <select
+                  value={filterType}
+                  onChange={(event) => setFilterType(event.target.value)}
+                  style={toolbarInputStyle}
+                >
+                  <option value="">All types</option>
+                  {TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {TYPE_META[type]?.label || type}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Filter Classroom" style={toolbarFieldStyle}>
+                <select
+                  value={filterClassroomId}
+                  onChange={(event) => setFilterClassroomId(event.target.value)}
+                  style={toolbarInputStyle}
+                >
+                  <option value="">All classrooms</option>
+                  {classroomFilterOptions.map((classroom) => (
+                    <option key={classroom.id} value={classroom.id}>
+                      {classroom.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Filter Child" style={toolbarFieldStyle}>
+                <select
+                  value={filterChildId}
+                  onChange={(event) => setFilterChildId(event.target.value)}
+                  style={toolbarInputStyle}
+                >
+                  <option value="">All children</option>
+                  {childFilterOptions.map((child) => (
+                    <option key={child.id} value={child.id}>
+                      {fullChildName(child)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="From Date" style={toolbarDateFieldStyle}>
+                <input
+                  type="date"
+                  value={filterFromDate}
+                  onChange={(event) => setFilterFromDate(event.target.value)}
+                  style={toolbarInputStyle}
+                />
+              </Field>
+              <Field label="To Date" style={toolbarDateFieldStyle}>
+                <input
+                  type="date"
+                  value={filterToDate}
+                  onChange={(event) => setFilterToDate(event.target.value)}
+                  style={toolbarInputStyle}
+                />
+              </Field>
+              <Field label="Search Logs" style={toolbarSearchFieldStyle}>
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search notes, child, teacher, classroom, or summary"
+                  style={toolbarInputStyle}
+                />
+              </Field>
+              {hasActiveListFilters ? (
+                <button type="button" onClick={clearListFilters} style={smallActionButton}>
+                  Clear filters
+                </button>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -1213,6 +1397,9 @@ export default function AdminActivityOverrides() {
                             {fullChildName(activity.child) || childLabel || "-"}
                           </div>
                           <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>
+                            {classroomNameById.get(activity?.child?.classRoomId)
+                              ? `${classroomNameById.get(activity?.child?.classRoomId)} | `
+                              : ""}
                             {buildActivityMetaPills(activity)
                               .slice(0, 2)
                               .map((pill) => pill.label)
@@ -1337,7 +1524,7 @@ function ActivityComposer({
     [domainScores],
   );
   const overallAssessment = useMemo(() => getAssessmentOverall(domainScores), [domainScores]);
-  const hasAssessmentValue = domainScoreCount > 0 || form.dailyGrade !== "";
+  const hasAssessmentValue = domainScoreCount > 0;
   const validationMessage = useMemo(() => getFormValidationMessage(form), [form]);
   const interactionDisabled = busy || uploadingPhotos;
   const [assessmentOpen, setAssessmentOpen] = useState(hasAssessmentValue);
@@ -1436,7 +1623,7 @@ function ActivityComposer({
                 })}
               </div>
               <div style={inlineNoteStyle}>
-                Daily grade uses type <strong>OTHER</strong> automatically.
+                Use <strong>Grade</strong> for a 0-10 score entry.
               </div>
             </div>
 
@@ -1464,6 +1651,22 @@ function ActivityComposer({
                       />
                     </Field>
                   </>
+                ) : null}
+
+                {supportsDirectGrade(form.type) ? (
+                  <Field label="Grade" style={{ minWidth: 0 }}>
+                    <input
+                      type="number"
+                      min="0"
+                      max="10"
+                      step="1"
+                      value={form.dailyGrade}
+                      onChange={(event) => onFormFieldChange("dailyGrade", event.target.value)}
+                      style={inputStyle}
+                      disabled={interactionDisabled}
+                      placeholder="0-10"
+                    />
+                  </Field>
                 ) : null}
 
                 {["MEAL", "SNACK"].includes(form.type) ? (
@@ -1599,9 +1802,7 @@ function ActivityComposer({
               <div style={sectionSummaryStyle}>
                 {domainScoreCount > 0
                   ? `${domainScoreCount} domain(s) rated`
-                  : form.dailyGrade !== ""
-                    ? `Quick daily grade ${form.dailyGrade}/5 selected`
-                    : "Rate child across developmental domains"}
+                  : "Rate child across developmental domains"}
               </div>
             </div>
             <span style={assessmentToggleTextStyle}>{assessmentOpen ? "Collapse" : "Expand"}</span>
@@ -1609,31 +1810,6 @@ function ActivityComposer({
 
           {assessmentOpen ? (
             <div style={assessmentPanelBodyStyle}>
-              <div style={assessmentQuickGradeCardStyle}>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--admin-text)" }}>Quick daily grade</div>
-                  <div style={assessmentQuickGradeTextStyle}>
-                    Use this for single-score entries. Domain ratings override the quick grade on save.
-                  </div>
-                </div>
-                <div style={{ minWidth: 160 }}>
-                  <select
-                    aria-label="Quick daily grade"
-                    value={form.dailyGrade}
-                    onChange={(event) => onFormFieldChange("dailyGrade", event.target.value)}
-                    style={inputStyle}
-                    disabled={interactionDisabled || domainScoreCount > 0}
-                  >
-                    <option value="">None</option>
-                    {[1, 2, 3, 4, 5].map((grade) => (
-                      <option key={grade} value={String(grade)}>
-                        {grade}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
               <div style={domainGridStyle}>
                 {ASSESSMENT_DOMAINS.map((domain) => {
                   const current = Number(domainScores[domain.key] || 0);
@@ -2046,11 +2222,35 @@ const toolbarCardStyle = {
   display: "flex",
   gap: 8,
   flexWrap: "wrap",
-  alignItems: "center",
+  alignItems: "flex-end",
   padding: 8,
   borderRadius: 14,
   border: "1px solid #e5e7eb",
   background: "#f9fafb",
+};
+
+const toolbarFieldStyle = {
+  minWidth: 160,
+  flex: "0 1 180px",
+};
+
+const toolbarDateFieldStyle = {
+  minWidth: 140,
+  flex: "0 1 150px",
+};
+
+const toolbarSearchFieldStyle = {
+  minWidth: 240,
+  flex: "1 1 280px",
+};
+
+const toolbarInputStyle = {
+  width: "100%",
+  padding: "8px 10px",
+  border: "1px solid #e5e7eb",
+  borderRadius: 12,
+  boxSizing: "border-box",
+  fontSize: 13,
 };
 
 const domainGridStyle = {
@@ -2309,17 +2509,6 @@ const badgeStyle = {
   borderRadius: 999,
   fontSize: 12,
   fontWeight: 700,
-};
-
-const backdatedChipStyle = {
-  display: "inline-flex",
-  alignItems: "center",
-  padding: "2px 8px",
-  borderRadius: 999,
-  fontSize: 11,
-  fontWeight: 700,
-  color: "#b45309",
-  background: "#fef3c7",
 };
 
 const tableStyle = {

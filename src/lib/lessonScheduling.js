@@ -127,6 +127,7 @@ export function resolveAutoLessonMatch({
   lessons,
   checklistClassRooms,
   lessonSlot,
+  lessonCategoryId,
   term,
   termDay,
 }) {
@@ -139,6 +140,7 @@ export function resolveAutoLessonMatch({
 
   for (const lesson of Array.isArray(lessons) ? lessons : []) {
     if (normalizeTextKey(lesson?.lessonSlot) !== normalizedSlot) continue;
+    if (lessonCategoryId && lesson?.category?.id !== lessonCategoryId) continue;
 
     const lessonTerm = normalizeTextKey(lesson?.term);
     if (normalizedTerm && lessonTerm && lessonTerm !== normalizedTerm) continue;

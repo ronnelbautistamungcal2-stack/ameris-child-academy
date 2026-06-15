@@ -62,6 +62,7 @@ function blankItemRow() {
     oneTimeDate: "",
     lessonSource: "NONE",
     lessonSlot: "",
+    lessonCategoryId: "",
     lessonId: "",
     policyDocumentId: "",
     directLinkLabel: "",
@@ -97,6 +98,13 @@ function roleLabel(role) {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
+function lessonCategoryLabel(category) {
+  if (!category) return "";
+  const parts = [category.name || ""];
+  if (category.ageRange) parts.push(category.ageRange);
+  return parts.filter(Boolean).join(" | ");
+}
+
 function summaryForItem(item) {
   const labels = [];
   labels.push(`Repeat: ${describeChecklistSchedule(item)}`);
@@ -107,6 +115,9 @@ function summaryForItem(item) {
   );
   if (lessonSource === "AUTO_SLOT" && item.lessonSlot) {
     labels.push(`Auto lesson slot: ${item.lessonSlot}`);
+    if (item.lessonCategory?.name) {
+      labels.push(`Lesson bank: ${lessonCategoryLabel(item.lessonCategory)}`);
+    }
   } else if (item.lesson?.title) {
     labels.push(`Lesson: ${item.lesson.title}`);
   }
@@ -167,6 +178,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
   const [checklists, setChecklists] = useState([]);
   const [classrooms, setClassrooms] = useState([]);
   const [lessons, setLessons] = useState([]);
+  const [lessonCategories, setLessonCategories] = useState([]);
   const [termCalendars, setTermCalendars] = useState([blankTermCalendarRow()]);
   const [policies, setPolicies] = useState([]);
   const [staffMembers, setStaffMembers] = useState([]);
@@ -197,10 +209,11 @@ export default function AdminTaskChecklistManager({ centerId }) {
     setLoading(true);
     setError("");
     try {
-      const [lists, rooms, lessonRows, calendarRows, policyRows, userRows] = await Promise.all([
+      const [lists, rooms, lessonRows, categoryRows, calendarRows, policyRows, userRows] = await Promise.all([
         apiJson(`/api/v1/daily-checklists?centerId=${encodeURIComponent(centerId)}`),
         apiJson(`/api/v1/classes?centerId=${encodeURIComponent(centerId)}`),
         apiJson(`/api/v1/lessons?centerId=${encodeURIComponent(centerId)}`),
+        apiJson(`/api/v1/lesson-categories?centerId=${encodeURIComponent(centerId)}`).catch(() => []),
         apiJson(`/api/v1/lesson-term-calendars?centerId=${encodeURIComponent(centerId)}`).catch(() => []),
         apiJson(`/api/v1/policies?centerId=${encodeURIComponent(centerId)}`).catch(() => []),
         apiJson(`/api/v1/users?centerId=${encodeURIComponent(centerId)}&roles=TEACHER,OTHER_STAFF,COACH`),
@@ -208,6 +221,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
       setChecklists(Array.isArray(lists) ? lists : []);
       setClassrooms(Array.isArray(rooms) ? rooms : []);
       setLessons(Array.isArray(lessonRows) ? lessonRows : []);
+      setLessonCategories(Array.isArray(categoryRows) ? categoryRows : []);
       setTermCalendars(
         Array.isArray(calendarRows) && calendarRows.length
           ? calendarRows.map((row) => ({
@@ -296,6 +310,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
           : "",
         lessonSource,
         lessonSlot: item.lessonSlot || "",
+        lessonCategoryId: lessonSource === "AUTO_SLOT" ? item.lessonCategoryId || "" : "",
         lessonId: lessonSource === "FIXED" ? item.lessonId || "" : "",
         policyDocumentId: item.policyDocumentId || "",
         directLinkLabel: item.directLinkLabel || "",
@@ -402,6 +417,11 @@ export default function AdminTaskChecklistManager({ centerId }) {
                 normalizeLessonSource(item.lessonSource, item.lessonId, item.lessonSlot) ===
                 "AUTO_SLOT"
                   ? String(item.lessonSlot || "").trim() || null
+                  : null,
+              lessonCategoryId:
+                normalizeLessonSource(item.lessonSource, item.lessonId, item.lessonSlot) ===
+                "AUTO_SLOT"
+                  ? item.lessonCategoryId || null
                   : null,
               lessonId:
                 normalizeLessonSource(item.lessonSource, item.lessonId, item.lessonSlot) ===
@@ -545,6 +565,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
           item.title,
           item.description,
           item.lesson?.title,
+          item.lessonCategory?.name,
           item.lessonSlot,
           item.policyDocument?.title,
           item.directLinkLabel,
@@ -600,6 +621,14 @@ export default function AdminTaskChecklistManager({ centerId }) {
 
     return [...values].sort((left, right) => left.localeCompare(right));
   }, [checklists, lessons]);
+
+  const autoLessonCategoryOptions = useMemo(
+    () =>
+      lessonCategories
+        .slice()
+        .sort((left, right) => lessonCategoryLabel(left).localeCompare(lessonCategoryLabel(right))),
+    [lessonCategories],
+  );
 
   return (
     <div className="space-y-4">
@@ -972,6 +1001,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
                             updateItemRow(index, "lessonSource", nextSource);
                             if (nextSource !== "FIXED") updateItemRow(index, "lessonId", "");
                             if (nextSource !== "AUTO_SLOT") updateItemRow(index, "lessonSlot", "");
+                            if (nextSource !== "AUTO_SLOT") updateItemRow(index, "lessonCategoryId", "");
                           }}
                           className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-200"
                         >
@@ -1000,16 +1030,33 @@ export default function AdminTaskChecklistManager({ centerId }) {
                         </label>
                       ) : null}
                       {normalizeLessonSource(item.lessonSource, item.lessonId, item.lessonSlot) === "AUTO_SLOT" ? (
-                        <label className="block">
-                          <div className="mb-1 text-xs font-semibold text-gray-500">Lesson Slot</div>
-                          <input
-                            list="lesson-slot-options"
-                            value={item.lessonSlot}
-                            onChange={(event) => updateItemRow(index, "lessonSlot", event.target.value)}
-                            placeholder="e.g. Large Group 1"
-                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-200"
-                          />
-                        </label>
+                        <>
+                          <label className="block">
+                            <div className="mb-1 text-xs font-semibold text-gray-500">Lesson Slot</div>
+                            <input
+                              list="lesson-slot-options"
+                              value={item.lessonSlot}
+                              onChange={(event) => updateItemRow(index, "lessonSlot", event.target.value)}
+                              placeholder="e.g. Large Group 1"
+                              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-200"
+                            />
+                          </label>
+                          <label className="block">
+                            <div className="mb-1 text-xs font-semibold text-gray-500">Lesson Bank</div>
+                            <select
+                              value={item.lessonCategoryId || ""}
+                              onChange={(event) => updateItemRow(index, "lessonCategoryId", event.target.value)}
+                              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-200"
+                            >
+                              <option value="">Any lesson category</option>
+                              {autoLessonCategoryOptions.map((category) => (
+                                <option key={category.id} value={category.id}>
+                                  {lessonCategoryLabel(category)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </>
                       ) : null}
                       <label className="block xl:col-span-2">
                         <div className="mb-1 text-xs font-semibold text-gray-500">Details</div>

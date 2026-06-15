@@ -3,6 +3,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 
 const ACTIVITY_TYPES = [
@@ -31,6 +32,7 @@ function formatDateTime(value) {
 }
 
 export default function TeacherChildren() {
+  const router = useRouter();
   const [centers, setCenters] = useState([]);
   const [classes, setClasses] = useState([]);
   const [children, setChildren] = useState([]);
@@ -53,6 +55,9 @@ export default function TeacherChildren() {
   const [savingLogId, setSavingLogId] = useState("");
   const [deletingLogId, setDeletingLogId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [flagItems, setFlagItems] = useState([]);
+  const [flagsLoading, setFlagsLoading] = useState(false);
+  const [flagsError, setFlagsError] = useState("");
 
   async function load() {
     setError("");
@@ -94,18 +99,35 @@ export default function TeacherChildren() {
   }, []);
 
   useEffect(() => {
+    if (!router.isReady) return;
+    if (typeof router.query.centerId === "string") {
+      setCenterId(router.query.centerId);
+    }
+  }, [router.isReady, router.query.centerId]);
+
+  useEffect(() => {
     setClassId("");
     loadForCenter(centerId);
   }, [centerId]);
 
+  const flaggedOnly = useMemo(() => {
+    if (!router.isReady) return false;
+    return router.query.flagged === "1";
+  }, [router.isReady, router.query.flagged]);
+
+  const clearFlaggedHref = useMemo(() => {
+    if (!centerId) return "/teacher/children";
+    return `/teacher/children?centerId=${encodeURIComponent(centerId)}`;
+  }, [centerId]);
+
   const filtered = useMemo(() => {
-    const base = children || [];
+    const base = (children || []).map((child) => ({ child, tags: [] }));
     const byClass = classId
-      ? base.filter((c) => c.classRoomId === classId)
+      ? base.filter((entry) => entry.child.classRoomId === classId)
       : base;
     const q = (search || "").trim().toLowerCase();
     const searched = q
-      ? byClass.filter((c) => {
+      ? byClass.filter(({ child: c }) => {
           const childName = `${c.firstName || ""} ${c.lastName || ""}`.trim().toLowerCase();
           const parentName = (c.parent?.name || "").toLowerCase();
           const parentEmail = (c.parent?.email || "").toLowerCase();
@@ -113,9 +135,24 @@ export default function TeacherChildren() {
         })
       : byClass;
     return [...searched].sort((a, b) =>
-      (a.firstName || "").localeCompare(b.firstName || ""),
+      (a.child.firstName || "").localeCompare(b.child.firstName || ""),
     );
   }, [children, classId, search]);
+
+  // Load API-based flags when in flagged mode
+  useEffect(() => {
+    if (!flaggedOnly || !centerId) {
+      setFlagItems([]);
+      setFlagsError("");
+      return;
+    }
+    setFlagsLoading(true);
+    setFlagsError("");
+    apiJson(`/api/v1/child-flags?centerId=${encodeURIComponent(centerId)}&status=open`)
+      .then((data) => setFlagItems(Array.isArray(data?.items) ? data.items : []))
+      .catch((e) => setFlagsError(e.message || "Failed to load flags"))
+      .finally(() => setFlagsLoading(false));
+  }, [flaggedOnly, centerId]);
 
   async function loadLogs(child) {
     if (!child?.id) {
@@ -244,15 +281,35 @@ export default function TeacherChildren() {
     <TeacherLayout title="Children">
       <div className="rounded-xl border border-gray-200 bg-white p-5">
         <div className="flex flex-col gap-1">
-          <h2 className="text-lg font-extrabold">Children</h2>
+          <h2 className="text-lg font-extrabold">
+            {flaggedOnly ? "Child Flags" : "Children"}
+          </h2>
           <p className="text-sm text-gray-600">
-            Limited to centers you’re assigned to (admins see all).
+            {flaggedOnly
+              ? "Open flags for children in this center."
+              : "Limited to centers you’re assigned to (admins see all)."}
           </p>
         </div>
 
         {error ? (
           <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
             {error}
+          </div>
+        ) : null}
+
+        {flaggedOnly ? (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <div>
+              {flagsLoading
+                ? "Loading flags…"
+                : `${flagItems.length} open flag${flagItems.length === 1 ? "" : "s"} in this center.`}
+            </div>
+            <Link
+              href={clearFlaggedHref}
+              className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+            >
+              Show all children
+            </Link>
           </div>
         ) : null}
 
@@ -307,9 +364,56 @@ export default function TeacherChildren() {
         </div>
 
         <div className="mt-4">
-          {loading ? (
+          {loading || (flaggedOnly && flagsLoading) ? (
             <div><Skeleton count={5} /></div>
+          ) : flaggedOnly ? (
+            // Flag queue view
+            <div className="space-y-2">
+              {flagsError ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                  {flagsError}
+                </div>
+              ) : !centerId ? (
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                  Select a center to view flags.
+                </div>
+              ) : flagItems.length === 0 ? (
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                  No open flags found for children in this center.
+                </div>
+              ) : (
+                flagItems.map((item) => (
+                  <div key={item.flagKey} className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold text-amber-900">
+                          {item.child?.name || "Child"}
+                        </div>
+                        <span className="mt-1 inline-block rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+                          {item.title}
+                        </span>
+                        {item.summary ? (
+                          <div className="mt-1 text-xs text-amber-700">{item.summary}</div>
+                        ) : null}
+                        {item.classRoom?.name ? (
+                          <div className="mt-1.5 text-[11px] text-amber-600">{item.classRoom.name}</div>
+                        ) : null}
+                      </div>
+                      {item.child?.id ? (
+                        <Link
+                          href={`/teacher/children/${encodeURIComponent(item.child.id)}`}
+                          className="shrink-0 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                        >
+                          View Profile
+                        </Link>
+                      ) : null}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           ) : (
+            // Regular children table
             <div className="overflow-hidden rounded-xl border border-gray-200">
               <table className="w-full text-left text-sm">
                 <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -320,7 +424,7 @@ export default function TeacherChildren() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filtered.map((ch) => (
+                  {filtered.map(({ child: ch }) => (
                     <tr key={ch.id}>
                       <td className="px-4 py-3">
                         <div className="font-semibold text-gray-900">

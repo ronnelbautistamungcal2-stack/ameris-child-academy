@@ -281,6 +281,28 @@ test.describe("Daily Checklists API @api", () => {
       },
     });
 
+    const alternateCategory = await prisma.lessonCategory.create({
+      data: {
+        centerId: fixture.center.id,
+        name: `QA Alternate Lessons ${Date.now()}`,
+        kind: "PACKAGE",
+        ageRange: "3 years",
+      },
+    });
+
+    const distractorLesson = await prisma.lesson.create({
+      data: {
+        centerId: fixture.center.id,
+        categoryId: alternateCategory.id,
+        title: `AAA Distractor Large Group Lesson ${Date.now()}`,
+        description: "Competing slot match from another category",
+        term: "Term 1",
+        termDays: [4],
+        lessonSlot: "Large Group 1",
+        media: [],
+      },
+    });
+
     const autoLesson = await prisma.lesson.create({
       data: {
         centerId: fixture.center.id,
@@ -309,6 +331,7 @@ test.describe("Daily Checklists API @api", () => {
             frequency: "DAILY",
             lessonSource: "AUTO_SLOT",
             lessonSlot: "Large Group 1",
+            lessonCategoryId: fixture.category.id,
           },
         ],
       },
@@ -336,7 +359,9 @@ test.describe("Daily Checklists API @api", () => {
     expect(checklist.items[0]).toMatchObject({
       lessonSource: "AUTO_SLOT",
       lessonSlot: "Large Group 1",
+      lessonCategoryId: fixture.category.id,
     });
     expect(checklist.items[0].lesson?.id).toBe(autoLesson.id);
+    expect(checklist.items[0].lesson?.id).not.toBe(distractorLesson.id);
   });
 });

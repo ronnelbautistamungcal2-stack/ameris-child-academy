@@ -650,7 +650,7 @@ function computeChildGWA(activities, progressRows) {
     if (details.domainAvg != null && Number.isFinite(Number(details.domainAvg))) {
       overallGrades.push((Number(details.domainAvg) / 4) * 100);
     } else if (Number.isFinite(Number(details.grade))) {
-      overallGrades.push((Number(details.grade) / 5) * 100);
+      overallGrades.push((Number(details.grade) / 10) * 100);
     }
   }
 

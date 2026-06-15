@@ -35,7 +35,7 @@ const TYPE_LABELS = {
   ACTIVITY: "Activity",
   TASK_CHECKLIST: "Task Checklist",
   BEHAVIOR: "Behavior",
-  OTHER: "Other",
+  OTHER: "Grade",
 };
 
 function typeLabel(type) {
@@ -347,7 +347,7 @@ export default function TeacherReports() {
                               </div>
                             ) : (
                               <div className="text-sm font-extrabold text-gray-900">
-                                Grade: {g.grade}/5
+                                Grade: {g.grade}/10
                               </div>
                             )}
                             <div className="text-xs text-gray-500">{formatTime(g.createdAt)}</div>

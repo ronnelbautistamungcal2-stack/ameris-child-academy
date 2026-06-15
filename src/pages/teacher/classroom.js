@@ -147,6 +147,7 @@ function flagsForChild(ch) {
 }
 
 export default function TeacherClassroom() {
+  const [attendanceFilter, setAttendanceFilter] = useState("all");
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
 
@@ -254,6 +255,10 @@ export default function TeacherClassroom() {
   }, [classId]);
 
   useEffect(() => {
+    setAttendanceFilter("all");
+  }, [centerId, classId]);
+
+  useEffect(() => {
     (async () => {
       if (!centerId) { setAttendanceHistory([]); return; }
       setHistoryLoading(true);
@@ -291,7 +296,7 @@ export default function TeacherClassroom() {
     return map;
   }, [attendance]);
 
-  const filteredChildren = useMemo(() => {
+  const visibleChildren = useMemo(() => {
     const base = children || [];
     const byClass = classId ? base.filter((c) => c.classRoomId === classId) : base;
     const q = search.trim().toLowerCase();
@@ -300,6 +305,16 @@ export default function TeacherClassroom() {
       : byClass;
     return searched.slice().sort((a, b) => byString(a.firstName, b.firstName));
   }, [children, classId, search]);
+
+  const filteredChildren = useMemo(() => {
+    if (attendanceFilter === "checked-in") {
+      return visibleChildren.filter((child) => attendanceByChildId.get(child.id)?.checkedIn);
+    }
+    if (attendanceFilter === "not-checked-in") {
+      return visibleChildren.filter((child) => !attendanceByChildId.get(child.id)?.checkedIn);
+    }
+    return visibleChildren;
+  }, [attendanceByChildId, attendanceFilter, visibleChildren]);
 
   useEffect(() => {
     const visible = new Set(filteredChildren.map((c) => c.id));
@@ -341,14 +356,26 @@ export default function TeacherClassroom() {
   }, [filteredChildren]);
 
   const stats = useMemo(() => {
-    const total = filteredChildren.length;
+    const total = visibleChildren.length;
     let checkedIn = 0;
-    for (const ch of filteredChildren) {
+    for (const ch of visibleChildren) {
       const att = attendanceByChildId.get(ch.id);
       if (att?.checkedIn) checkedIn += 1;
     }
-    return { total, checkedIn, checkedOut: total - checkedIn, flagged: redFlagged.length };
-  }, [filteredChildren, attendanceByChildId, redFlagged.length]);
+    const checkedOut = total - checkedIn;
+    return { total, checkedIn, checkedOut, flagged: redFlagged.length };
+  }, [visibleChildren, attendanceByChildId, redFlagged.length]);
+
+  const attendanceFilterLabel =
+    attendanceFilter === "checked-in"
+      ? "Checked In"
+      : attendanceFilter === "not-checked-in"
+        ? "Not Checked In"
+        : "All Children";
+
+  function toggleAttendanceFilter(nextFilter) {
+    setAttendanceFilter((current) => (current === nextFilter ? "all" : nextFilter));
+  }
 
   async function checkIn(childId) {
     if (!childId) return;
@@ -615,8 +642,22 @@ export default function TeacherClassroom() {
             {/* Stats */}
             <div className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-4 sm:gap-4">
               <StatCard label="Total Children" value={stats.total} color="sky" icon={<IconUsers className="h-4 w-4" />} />
-              <StatCard label="Checked In" value={stats.checkedIn} color="emerald" icon={<IconCheck className="h-4 w-4" />} />
-              <StatCard label="Not Checked In" value={stats.checkedOut} color="gray" icon={<IconClock className="h-4 w-4" />} />
+              <StatCard
+                label="Checked In"
+                value={stats.checkedIn}
+                color="emerald"
+                icon={<IconCheck className="h-4 w-4" />}
+                active={attendanceFilter === "checked-in"}
+                onClick={() => toggleAttendanceFilter("checked-in")}
+              />
+              <StatCard
+                label="Not Checked In"
+                value={stats.checkedOut}
+                color="gray"
+                icon={<IconClock className="h-4 w-4" />}
+                active={attendanceFilter === "not-checked-in"}
+                onClick={() => toggleAttendanceFilter("not-checked-in")}
+              />
               <StatCard label="Red Flagged" value={stats.flagged} color="rose" icon={<IconAlert className="h-4 w-4" />} />
             </div>
 
@@ -636,6 +677,11 @@ export default function TeacherClassroom() {
                       <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
                         {filteredChildren.length}
                       </span>
+                      {attendanceFilter !== "all" ? (
+                        <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700">
+                          {attendanceFilterLabel}
+                        </span>
+                      ) : null}
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
@@ -646,6 +692,16 @@ export default function TeacherClassroom() {
                         <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
                         {stats.checkedOut} out
                       </span>
+                      {attendanceFilter !== "all" ? (
+                        <button
+                          type="button"
+                          onClick={() => setAttendanceFilter("all")}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2 py-0.5 font-semibold text-gray-600 hover:bg-gray-50"
+                        >
+                          <IconX className="h-3 w-3" />
+                          Clear
+                        </button>
+                      ) : null}
                     </div>
                   </div>
 
@@ -709,7 +765,9 @@ export default function TeacherClassroom() {
 
                     {filteredChildren.length === 0 ? (
                       <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-center text-sm text-gray-600">
-                        No children found for the current filters.
+                        {attendanceFilter === "all"
+                          ? "No children found for the current filters."
+                          : `No ${attendanceFilterLabel.toLowerCase()} children found for the current filters.`}
                       </div>
                     ) : (
                       <RosterGroups
@@ -1308,7 +1366,7 @@ function RosterRow({
   );
 }
 
-function StatCard({ label, value, color, icon }) {
+function StatCard({ label, value, color, icon, onClick, active = false }) {
   const colors = {
     sky: "border-sky-200 bg-sky-50 text-sky-700",
     emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -1321,8 +1379,18 @@ function StatCard({ label, value, color, icon }) {
     gray: "text-gray-900",
     rose: "text-rose-900",
   };
+  const Component = onClick ? "button" : "div";
   return (
-    <div className={["flex h-full flex-col justify-between rounded-xl border p-3 shadow-sm", colors[color] || colors.gray].join(" ")}>
+    <Component
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      className={[
+        "flex h-full flex-col justify-between rounded-xl border p-3 shadow-sm",
+        colors[color] || colors.gray,
+        onClick ? "text-left transition hover:-translate-y-0.5 hover:shadow-md" : "",
+        active ? "ring-2 ring-offset-1 ring-sky-200" : "",
+      ].join(" ")}
+    >
       <div className="flex items-center justify-between">
         <div className="text-[11px] font-semibold uppercase tracking-wide">{label}</div>
         <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/70 text-gray-600">
@@ -1330,6 +1398,6 @@ function StatCard({ label, value, color, icon }) {
         </div>
       </div>
       <div className={["mt-1 text-2xl font-extrabold", valueColors[color] || "text-gray-900"].join(" ")}>{value}</div>
-    </div>
+    </Component>
   );
 }

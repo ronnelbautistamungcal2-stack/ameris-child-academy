@@ -2,26 +2,19 @@ import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { emitNewMessage } from "@/lib/socket";
 import { notifyMessageRecipients } from "@/lib/messaging";
-import { buildParentLinkedChildWhere } from "@/lib/child-parent-links";
-
-async function getAllowedCenterIdsForUser(user) {
-  if (user.role === "ADMIN") {
-    const centers = await prisma.center.findMany({ select: { id: true } });
-    return centers.map((c) => c.id);
-  }
-  if (user.role === "PARENT") {
-    const children = await prisma.child.findMany({
-      where: buildParentLinkedChildWhere(user.id),
-      select: { centerId: true },
-    });
-    return [...new Set(children.map((c) => c.centerId))];
-  }
-  const memberships = await prisma.centerUser.findMany({
-    where: { userId: user.id },
-    select: { centerId: true },
-  });
-  return memberships.map((m) => m.centerId);
-}
+import {
+  getAllowedMessagingCenterIds,
+  resolveMessageAudienceUsers,
+} from "@/lib/messageAudiences";
+import {
+  canReceiveAccommodation,
+  getAvailableThreadTypesForRole,
+  isAccommodationThread,
+  normalizePriorityLevel,
+  normalizeThreadType,
+  supportsDueDate,
+  supportsPriority,
+} from "@/lib/messageWorkflows";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -30,16 +23,29 @@ export default async function handler(req, res) {
   const user = session.user;
 
   if (req.method === "GET") {
-    const { centerId, all } = req.query;
+    const { centerId, all, type, status } = req.query;
     const adminAll = user.role === "ADMIN" && (all === "1" || all === "true");
+    const normalizedType = String(type || "").trim().toUpperCase();
+    const normalizedStatus = String(status || "").trim().toUpperCase();
 
     const threads = await prisma.messageThread.findMany({
       where: {
         ...(adminAll
           ? { ...(centerId ? { centerId } : {}) }
           : { participants: { some: { userId: user.id } } }),
+        ...(normalizedType ? { type: normalizedType } : {}),
+        ...(normalizedStatus ? { status: normalizedStatus } : {}),
       },
       include: {
+        createdBy: {
+          select: { id: true, name: true, email: true, role: true, pictureUrl: true },
+        },
+        completedBy: {
+          select: { id: true, name: true, email: true, role: true, pictureUrl: true },
+        },
+        reviewRequestedBy: {
+          select: { id: true, name: true, email: true, role: true, pictureUrl: true },
+        },
         participants: {
           include: {
             user: { select: { id: true, name: true, email: true, role: true, pictureUrl: true } },
@@ -56,7 +62,7 @@ export default async function handler(req, res) {
         _count: { select: { messages: true } },
       },
       orderBy: { updatedAt: "desc" },
-      take: 50,
+      take: adminAll ? 200 : 75,
     });
 
     const enriched = await Promise.all(
@@ -84,12 +90,63 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    const { participantIds, centerId, title, firstMessage } = req.body || {};
+    const {
+      participantIds,
+      centerId,
+      title,
+      firstMessage,
+      audienceKeys,
+      threadType,
+      priority,
+      dueDate,
+    } = req.body || {};
     const ids = Array.isArray(participantIds)
       ? participantIds.filter(Boolean)
       : [];
+    const normalizedAudienceKeys = Array.isArray(audienceKeys)
+      ? [...new Set(audienceKeys.map((key) => String(key || "").trim()).filter(Boolean))]
+      : [];
+    const normalizedThreadType = normalizeThreadType(threadType);
 
-    const unique = [...new Set([user.id, ...ids])];
+    let audienceUsers = [];
+    try {
+      audienceUsers = (
+        await Promise.all(
+          normalizedAudienceKeys.map((audienceKey) =>
+            resolveMessageAudienceUsers({
+              prismaClient: prisma,
+              user,
+              audienceKey,
+              centerId,
+              threadType: normalizedThreadType,
+            }),
+          ),
+        )
+      ).flat();
+    } catch (error) {
+      return res.status(error.status || 400).json({
+        error: error.message || "Failed to resolve selected audience",
+      });
+    }
+
+    const allowedTypes = getAvailableThreadTypesForRole(user.role).map((item) => item.value);
+    if (!allowedTypes.includes(normalizedThreadType)) {
+      return res.status(403).json({ error: "This account cannot send that message type" });
+    }
+
+    const normalizedPriority = supportsPriority(normalizedThreadType)
+      ? normalizePriorityLevel(priority)
+      : null;
+    const normalizedDueDate =
+      supportsDueDate(normalizedThreadType) && dueDate
+        ? new Date(dueDate)
+        : null;
+
+    if (supportsDueDate(normalizedThreadType) && dueDate && Number.isNaN(normalizedDueDate?.getTime?.())) {
+      return res.status(400).json({ error: "Invalid dueDate" });
+    }
+
+    const unique = [...new Set([user.id, ...ids, ...audienceUsers.map((recipient) => recipient.id)])];
     if (unique.length < 2) {
       return res.status(400).json({ error: "At least one participant is required" });
     }
@@ -101,7 +158,7 @@ export default async function handler(req, res) {
       }
     } else if (user.role !== "ADMIN") {
       // Non-admins must be able to infer a shared center; require that sender has at least one center.
-      const allowedCenterIds = await getAllowedCenterIdsForUser(user);
+      const allowedCenterIds = await getAllowedMessagingCenterIds(prisma, user);
       if (!allowedCenterIds.length) {
         return res.status(403).json({ error: "No center access for messaging" });
       }
@@ -115,11 +172,28 @@ export default async function handler(req, res) {
     if (users.length !== unique.length) {
       return res.status(400).json({ error: "Invalid participantIds" });
     }
+    if (
+      isAccommodationThread(normalizedThreadType) &&
+      users.some(
+        (participant) =>
+          participant.id !== user.id &&
+          !canReceiveAccommodation(participant.role),
+      )
+    ) {
+      return res.status(400).json({
+        error: "Accommodations can only be sent to teachers or staff.",
+      });
+    }
 
     const thread = await prisma.messageThread.create({
       data: {
         centerId: centerId || null,
         title: title || null,
+        type: normalizedThreadType,
+        status: "OPEN",
+        priority: normalizedPriority,
+        dueDate: normalizedDueDate,
+        createdById: user.id,
         participants: {
           create: unique.map((uid) => ({
             userId: uid,
@@ -136,6 +210,15 @@ export default async function handler(req, res) {
           : undefined,
       },
       include: {
+        createdBy: {
+          select: { id: true, name: true, email: true, role: true, pictureUrl: true },
+        },
+        completedBy: {
+          select: { id: true, name: true, email: true, role: true, pictureUrl: true },
+        },
+        reviewRequestedBy: {
+          select: { id: true, name: true, email: true, role: true, pictureUrl: true },
+        },
         participants: {
           include: {
             user: { select: { id: true, name: true, email: true, role: true, pictureUrl: true } },

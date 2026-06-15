@@ -15,6 +15,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 const PROGRESS_STATUS_OPTIONS = ["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "PASSED", "FAILED"];
 const ACTIVITY_TYPES = ["DIAPER_CHANGE", "NAP", "BOTTLE", "MEAL", "SNACK", "ACTIVITY", "TASK_CHECKLIST", "BEHAVIOR", "OTHER"];
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+const ACTIVITY_TYPE_LABELS = {
+  DIAPER_CHANGE: "Diaper Change",
+  NAP: "Nap",
+  BOTTLE: "Bottle",
+  MEAL: "Meal",
+  SNACK: "Snack",
+  ACTIVITY: "Activity",
+  TASK_CHECKLIST: "Task Checklist",
+  BEHAVIOR: "Behavior",
+  OTHER: "Grade",
+};
 
 function arr(v) {
   return Array.isArray(v) ? v : [];
@@ -397,6 +408,15 @@ export default function TeacherChildDetailPage() {
     try {
       const existing = arr(activities).find((row) => row.id === activityId);
       const hasGrade = editActivityGrade !== "" && Number.isFinite(Number(editActivityGrade));
+      if (editActivityGrade !== "") {
+        const numericGrade = Number(editActivityGrade);
+        if (!Number.isFinite(numericGrade) || numericGrade < 0 || numericGrade > 10) {
+          throw new Error("Grade must be between 0 and 10.");
+        }
+      }
+      if (editActivityType === "OTHER" && !hasGrade) {
+        throw new Error("Enter a grade from 0 to 10.");
+      }
       const nextType = hasGrade ? "OTHER" : editActivityType;
       const nextDetails = buildEditedActivityDetails(existing?.details);
       const updated = await apiJson(`/api/v1/activities/${encodeURIComponent(activityId)}`, {
@@ -1160,7 +1180,7 @@ export default function TeacherChildDetailPage() {
                               </div>
                             ) : extractDailyGrade(a) ? (
                               <div className="text-xs font-semibold text-emerald-700">
-                                Grade: {extractDailyGrade(a)}/5
+                                Grade: {extractDailyGrade(a)}/10
                               </div>
                             ) : null}
                             {extractActivityMediaUrls(a).length ? (
@@ -1252,28 +1272,26 @@ export default function TeacherChildDetailPage() {
                     >
                       {ACTIVITY_TYPES.map((t) => (
                         <option key={t} value={t}>
-                          {t}
+                          {ACTIVITY_TYPE_LABELS[t] || t}
                         </option>
                       ))}
                     </select>
                   </label>
                   <label className="block">
                     <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                      Daily grade
+                      Grade
                     </div>
-                    <select
+                    <input
+                      type="number"
+                      min="0"
+                      max="10"
+                      step="1"
                       value={editActivityGrade}
                       onChange={(e) => setEditActivityGrade(e.target.value)}
                       className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs"
                       disabled={savingActivityId === editingActivity.id}
-                    >
-                      <option value="">(none)</option>
-                      {[1, 2, 3, 4, 5].map((g) => (
-                        <option key={g} value={String(g)}>
-                          {g}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="0-10"
+                    />
                   </label>
                 </div>
 
@@ -2074,7 +2092,7 @@ function TeacherGradesPanel({ activities, loading }) {
             <div key={a.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-extrabold text-gray-900">
-                  {a.domains ? "Developmental Assessment" : "Daily Grade"}
+                  {a.domains ? "Developmental Assessment" : "Grade"}
                 </div>
                 <div className="text-xs text-gray-500">{formatDateTime(a.createdAt)}</div>
               </div>
@@ -2097,7 +2115,7 @@ function TeacherGradesPanel({ activities, loading }) {
                   )}
                 </div>
               ) : a.grade !== null ? (
-                <div className="mt-2 text-xs font-semibold text-emerald-700">Grade: {a.grade}/5</div>
+                <div className="mt-2 text-xs font-semibold text-emerald-700">Grade: {a.grade}/10</div>
               ) : null}
               {a.notes ? (
                 <div className="mt-2 line-clamp-2 text-xs text-gray-600">{a.notes}</div>
@@ -2113,7 +2131,7 @@ function TeacherGradesPanel({ activities, loading }) {
 function teacherActivityTitle(activity, index) {
   if (activity?.type === "ACTIVITY") return "Teacher's Summary";
   if (activity?.type === "OTHER" && activity?.details?.kind === "DAILY_GRADE") {
-    return activity?.details?.domains ? "Developmental Assessment" : "Daily Grade";
+    return activity?.details?.domains ? "Developmental Assessment" : "Grade";
   }
   if (activity?.type === "MEAL" || activity?.type === "SNACK" || activity?.type === "BOTTLE") return "Meals & Nutrition";
   if (activity?.type === "DIAPER_CHANGE") return "Diaper / Potty";
@@ -2155,7 +2173,7 @@ function teacherRenderActivityDetails(activity) {
           )}
         </div>
       ) : grade !== null ? (
-        <div className="mt-2 text-xs font-semibold text-emerald-700">Daily grade: {grade}/5</div>
+        <div className="mt-2 text-xs font-semibold text-emerald-700">Grade: {grade}/10</div>
       ) : null}
       {media.length ? (
         <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">

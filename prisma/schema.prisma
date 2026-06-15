@@ -86,6 +86,25 @@ enum NotificationType {
   FORM_RENEWAL
 }
 
+enum MessageThreadType {
+  MESSAGE
+  OPEN_POINT
+  REQUEST
+  ACCOMMODATION
+}
+
+enum MessageThreadStatus {
+  OPEN
+  READY_FOR_REVIEW
+  COMPLETED
+}
+
+enum MessagePriorityLevel {
+  A
+  B
+  C
+}
+
 enum ArchiveType {
   PROGRESS
   FULL_RECORD
@@ -190,6 +209,9 @@ model User {
   recordedActivities ActivityLog[]
   threadParticipants ThreadParticipant[]
   sentMessages       Message[]
+  createdMessageThreads MessageThread[]      @relation("MessageThreadsCreated")
+  completedMessageThreads MessageThread[]    @relation("MessageThreadsCompleted")
+  reviewRequestedMessageThreads MessageThread[] @relation("MessageThreadsReviewRequested")
   formSubmissions    FormSubmission[]
   createdInvites     CenterInvite[]      @relation("InvitesCreated")
   createdAt          DateTime            @default(now())
@@ -228,6 +250,7 @@ model User {
   dailyChecklistCompletions    DailyChecklistCompletion[] @relation("DailyChecklistCompletedBy")
   assignedDailyChecklists      DailyChecklist[]           @relation("DailyChecklistAssignedUser")
   dailyChecklistNotes          DailyChecklistNote[]       @relation("DailyChecklistNotesCreatedBy")
+  closedChildFlagReviews       ChildFlagReview[]          @relation("ChildFlagReviewClosedBy")
 }
 
 model Center {
@@ -265,6 +288,7 @@ model Center {
   coachFollowUps   CoachFollowUp[]
   dailyChecklists  DailyChecklist[]
   lessonTermCalendars LessonTermCalendar[]
+  childFlagReviews ChildFlagReview[]
   createdAt        DateTime         @default(now())
 }
 
@@ -340,6 +364,7 @@ model Child {
   OutboundEmail   OutboundEmail[]
   milestoneChecklistCompletions MilestoneChecklistItemCompletion[]
   behaviorPlans   BehaviorPlan[]
+  childFlagReviews ChildFlagReview[]
 }
 
 model ChildGuardian {
@@ -373,6 +398,7 @@ model LessonCategory {
   updatedAt   DateTime @updatedAt
 
   lessons Lesson[]
+  dailyChecklistItems DailyChecklistItem[]
 
   @@index([centerId, name, ageRange])
   @@index([centerId, sortOrder])
@@ -624,6 +650,24 @@ model MilestoneChecklistStaffCompletion {
   @@index([completedById, date])
 }
 
+model ChildFlagReview {
+  id         String   @id @default(uuid())
+  center     Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId   String
+  child      Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  childId    String
+  flagKey    String   @unique
+  snapshot   Json?
+  closedAt   DateTime?
+  closedBy   User?    @relation("ChildFlagReviewClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  closedById String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([centerId, closedAt])
+  @@index([childId, closedAt])
+}
+
 model Task {
   id          String        @id @default(uuid())
   title       String
@@ -673,15 +717,32 @@ model CenterInvite {
 }
 
 model MessageThread {
-  id        String   @id @default(uuid())
-  center    Center?  @relation(fields: [centerId], references: [id])
-  centerId  String?
-  title     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                  String               @id @default(uuid())
+  center               Center?              @relation(fields: [centerId], references: [id])
+  centerId             String?
+  title                String?
+  type                 MessageThreadType    @default(MESSAGE)
+  status               MessageThreadStatus  @default(OPEN)
+  priority             MessagePriorityLevel?
+  dueDate              DateTime?
+  createdBy            User                 @relation("MessageThreadsCreated", fields: [createdById], references: [id], onDelete: Cascade)
+  createdById          String
+  completedBy          User?                @relation("MessageThreadsCompleted", fields: [completedById], references: [id], onDelete: SetNull)
+  completedById        String?
+  reviewRequestedBy    User?                @relation("MessageThreadsReviewRequested", fields: [reviewRequestedById], references: [id], onDelete: SetNull)
+  reviewRequestedById  String?
+  completedAt          DateTime?
+  reviewRequestedAt    DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
 
   participants ThreadParticipant[]
   messages     Message[]
+
+  @@index([centerId, type, status])
+  @@index([createdById, createdAt])
+  @@index([completedAt])
+  @@index([dueDate])
 }
 
 model ThreadParticipant {
@@ -1358,6 +1419,8 @@ model DailyChecklistItem {
   oneTimeDate DateTime?           @db.Date
   lessonSource String             @default("NONE")
   lessonSlot   String?
+  lessonCategory   LessonCategory? @relation(fields: [lessonCategoryId], references: [id], onDelete: SetNull)
+  lessonCategoryId String?
   lesson      Lesson?             @relation(fields: [lessonId], references: [id], onDelete: SetNull)
   lessonId    String?
   policyDocument   PolicyDocument? @relation(fields: [policyDocumentId], references: [id], onDelete: SetNull)
@@ -1374,6 +1437,7 @@ model DailyChecklistItem {
   @@index([checklistId, taskTime])
   @@index([checklistId, frequency])
   @@index([lessonId])
+  @@index([lessonCategoryId])
   @@index([lessonSource, lessonSlot])
   @@index([oneTimeDate])
   @@index([policyDocumentId])

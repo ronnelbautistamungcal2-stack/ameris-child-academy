@@ -59,6 +59,16 @@ test.describe("Admin activity overrides", () => {
     await expect(row).toContainText("Backdated");
     await expect(row).toContainText("1 photo");
 
+    await expect(page.getByRole("combobox", { name: "Filter Classroom" })).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Filter Child" })).toBeVisible();
+    await expect(page.getByLabel("From Date")).toBeVisible();
+    await expect(page.getByLabel("To Date")).toBeVisible();
+
+    await page.getByLabel("Search Logs").fill(note);
+    await expect(row).toBeVisible();
+    await expect(page.getByRole("button", { name: "Clear filters" })).toBeVisible();
+    await page.getByRole("button", { name: "Clear filters" }).click();
+
     await row.getByRole("button", { name: "Edit" }).click();
 
     const editForm = page.locator("form").filter({ hasText: "Edit Activity Log" }).first();

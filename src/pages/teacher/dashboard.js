@@ -6,7 +6,6 @@ import {
   WorkspacePill,
   WorkspaceState,
   workspaceInputClass,
-  workspacePrimaryButtonClass,
   workspaceSecondaryButtonClass,
 } from "@/components/ui/Workspace";
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
@@ -14,34 +13,9 @@ import { apiJson } from "@/lib/api";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-function toDateKey(date = new Date()) {
-  const d = new Date(date);
-  if (Number.isNaN(d.getTime())) return "";
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function byString(a, b) {
-  return String(a || "").localeCompare(String(b || ""));
-}
-
 function fullName(child) {
   if (!child) return "";
   return `${child.firstName || ""}${child.lastName ? ` ${child.lastName}` : ""}`.trim();
-}
-
-function nextBirthdayDate(birthDate, now = new Date()) {
-  const d = new Date(birthDate);
-  if (Number.isNaN(d.getTime())) return null;
-  const out = new Date(now);
-  out.setHours(0, 0, 0, 0);
-  out.setMonth(d.getMonth(), d.getDate());
-  if (out < new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
-    out.setFullYear(out.getFullYear() + 1);
-  }
-  return out;
 }
 
 export default function TeacherDashboard() {
@@ -50,29 +24,26 @@ export default function TeacherDashboard() {
 
   const [children, setChildren] = useState([]);
   const [attendance, setAttendance] = useState(null);
-
-  const [scheduleDraft, setScheduleDraft] = useState("");
-  const [scheduleItems, setScheduleItems] = useState([]);
+  const [threads, setThreads] = useState([]);
+  const [flags, setFlags] = useState({ items: [], summary: { openCount: 0, closedCount: 0 } });
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useSyncedCenterId(centerId, setCenterId, centers);
 
-  const dayKey = useMemo(() => toDateKey(new Date()), []);
-  const scheduleStorageKey = useMemo(() => {
-    if (!centerId) return "";
-    return `aca:teacherSchedule:${centerId}:${dayKey}`;
-  }, [centerId, dayKey]);
-
   useEffect(() => {
     (async () => {
       setLoading(true);
       setError("");
       try {
-        const c = await apiJson("/api/v1/centers");
+        const [c, messageThreads] = await Promise.all([
+          apiJson("/api/v1/centers"),
+          apiJson("/api/v1/messages/threads").catch(() => []),
+        ]);
         const arr = Array.isArray(c) ? c : [];
         setCenters(arr);
+        setThreads(Array.isArray(messageThreads) ? messageThreads : []);
       } catch (e) {
         setError(e.message || "Failed to load centers");
       } finally {
@@ -85,6 +56,7 @@ export default function TeacherDashboard() {
     if (!centerId) {
       setChildren([]);
       setAttendance(null);
+      setFlags({ items: [], summary: { openCount: 0, closedCount: 0 } });
       return;
     }
 
@@ -92,14 +64,22 @@ export default function TeacherDashboard() {
       setLoading(true);
       setError("");
       try {
-        const [kids, att] = await Promise.all([
+        const [kids, att, flagData] = await Promise.all([
           apiJson(`/api/v1/children?centerId=${encodeURIComponent(centerId)}`),
           apiJson(`/api/v1/attendance/today?centerId=${encodeURIComponent(centerId)}`).catch(
+            () => null,
+          ),
+          apiJson(`/api/v1/child-flags?centerId=${encodeURIComponent(centerId)}&status=open`).catch(
             () => null,
           ),
         ]);
         setChildren(Array.isArray(kids) ? kids : []);
         setAttendance(att);
+        setFlags(
+          flagData && typeof flagData === "object"
+            ? flagData
+            : { items: [], summary: { openCount: 0, closedCount: 0 } },
+        );
       } catch (e) {
         setError(e.message || "Failed to load dashboard data");
       } finally {
@@ -108,46 +88,6 @@ export default function TeacherDashboard() {
     })();
   }, [centerId]);
 
-  useEffect(() => {
-    if (!scheduleStorageKey) {
-      setScheduleItems([]);
-      return;
-    }
-
-    try {
-      const raw = localStorage.getItem(scheduleStorageKey);
-      const parsed = raw ? JSON.parse(raw) : [];
-      setScheduleItems(Array.isArray(parsed) ? parsed.filter(Boolean) : []);
-    } catch {
-      setScheduleItems([]);
-    }
-  }, [scheduleStorageKey]);
-
-  function persistSchedule(next) {
-    setScheduleItems(next);
-    if (!scheduleStorageKey) return;
-    try {
-      localStorage.setItem(scheduleStorageKey, JSON.stringify(next));
-    } catch {
-      // ignore storage errors
-    }
-  }
-
-  function addScheduleItem() {
-    const text = String(scheduleDraft || "").trim();
-    if (!text) return;
-    const id =
-      typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : String(Date.now());
-    persistSchedule([...scheduleItems, { id, text }]);
-    setScheduleDraft("");
-  }
-
-  function removeScheduleItem(id) {
-    persistSchedule(scheduleItems.filter((i) => i?.id !== id));
-  }
-
   const attendanceSummary = useMemo(() => {
     if (!attendance) return null;
     const total = Number(attendance.totalChildren || 0);
@@ -155,35 +95,42 @@ export default function TeacherDashboard() {
     return { total, checkedIn };
   }, [attendance]);
 
-  const upcomingBirthdays = useMemo(() => {
-    const now = new Date();
-    return (children || [])
-      .filter((c) => c?.birthDate)
-      .map((c) => ({
-        child: c,
-        next: nextBirthdayDate(c.birthDate, now),
-      }))
-      .filter((row) => row.next)
-      .sort((a, b) => a.next - b.next)
-      .slice(0, 6);
-  }, [children]);
+  const visibleThreads = useMemo(() => {
+    if (!centerId) return [];
+    return (threads || [])
+      .filter(
+        (thread) =>
+          !thread?.centerId ||
+          thread.centerId === centerId ||
+          thread.center?.id === centerId,
+      )
+      .sort((left, right) => {
+        const leftTime = left?.updatedAt ? new Date(left.updatedAt).getTime() : 0;
+        const rightTime = right?.updatedAt ? new Date(right.updatedAt).getTime() : 0;
+        return rightTime - leftTime;
+      });
+  }, [centerId, threads]);
 
-  const redFlagChildren = useMemo(() => {
-    const flags = [];
-    for (const child of children || []) {
-      const list = [];
-      if (child?.allergies) list.push("Allergies");
-      if (!child?.birthDate) list.push("Missing DOB");
-      if (!child?.classRoomId) list.push("Missing classroom");
-      if (!child?.emergencyContact) list.push("Missing emergency contact");
-      if (list.length) flags.push({ child, tags: list });
-    }
-    return flags.sort((a, b) => byString(fullName(a.child), fullName(b.child)));
-  }, [children]);
+  const unreadMessages = useMemo(
+    () => visibleThreads.reduce((sum, thread) => sum + Number(thread?.unreadCount || 0), 0),
+    [visibleThreads],
+  );
 
   const selectedCenterName =
     centers.find((center) => center.id === centerId)?.name || "";
   const headerDate = useMemo(() => formatHeaderDate(new Date()), []);
+  const redFlagChildrenHref = useMemo(() => {
+    if (!centerId) return "/teacher/children";
+    const params = new URLSearchParams({
+      centerId,
+      flagged: "1",
+    });
+    return `/teacher/children?${params.toString()}`;
+  }, [centerId]);
+  const messagesHref = useMemo(() => {
+    if (!centerId) return "/teacher/messages";
+    return `/teacher/messages?centerId=${encodeURIComponent(centerId)}`;
+  }, [centerId]);
 
   return (
     <TeacherLayout
@@ -199,7 +146,7 @@ export default function TeacherDashboard() {
               ? `${selectedCenterName} classroom snapshot`
               : "Daily classroom snapshot"
           }
-          description="Keep attendance, birthdays, saved schedule items, and child profile gaps visible in one center-aware teacher workspace."
+          description="Keep attendance, messages, and child profile gaps visible in one center-aware teacher workspace."
           meta={
             <>
               <WorkspacePill tone="amber">{headerDate}</WorkspacePill>
@@ -240,8 +187,8 @@ export default function TeacherDashboard() {
         ) : null}
 
         {loading ? (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {Array.from({ length: 4 }, (_, i) => (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 3 }, (_, i) => (
               <SkeletonCard key={i} />
             ))}
           </div>
@@ -251,7 +198,7 @@ export default function TeacherDashboard() {
             description="The selected center stays in the URL so checklists, messages, and classroom tools keep the same context when you move between pages."
           />
         ) : (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
             <Tile
               title="Attendance"
               value={
@@ -276,39 +223,26 @@ export default function TeacherDashboard() {
               }
             />
             <Tile
-              title="Birthdays"
-              value={String(upcomingBirthdays.length)}
-              subtitle="Next 6 on file"
-              href="/teacher/classroom"
-              color="pink"
-              icon={
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75v10.5m6.364-8.114a9 9 0 11-12.728 0m12.728 0A9.002 9.002 0 1012 3a9.002 9.002 0 016.364 3.636z" />
-                </svg>
-              }
-            />
-            <Tile
-              title="Schedule"
-              value={String(scheduleItems.length)}
-              subtitle="Items saved on this device today"
-              href="/teacher/checklists"
-              color="violet"
-              icon={
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              }
-            />
-            <Tile
-              title="Profile Flags"
-              value={String(redFlagChildren.length)}
-              subtitle={redFlagChildren.length ? "Needs attention" : "All clear"}
-              href="/teacher/classroom"
-              color={redFlagChildren.length ? "amber" : "emerald"}
+              title="Child Flags"
+              value={String(flags.summary.openCount)}
+              subtitle={flags.summary.openCount ? "Open flags requiring review" : "All clear"}
+              href={redFlagChildrenHref}
+              color={flags.summary.openCount ? "amber" : "emerald"}
               icon={
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+              }
+            />
+            <Tile
+              title="Messages"
+              value={String(unreadMessages)}
+              subtitle={unreadMessages ? "Unread replies in this center" : "You are caught up"}
+              href={messagesHref}
+              color="violet"
+              icon={
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
                 </svg>
               }
             />
@@ -319,63 +253,54 @@ export default function TeacherDashboard() {
           <div className="grid auto-rows-fr grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
             <div className="lg:col-span-2 xl:col-span-2">
               <Card
-                title="Today's schedule"
-                subtitle={`${dayKey} - saved on this device`}
-                href="/teacher/checklists"
-                hrefLabel="Open Checklists"
+                title="Messages"
+                subtitle={
+                  visibleThreads.length
+                    ? `${visibleThreads.length} conversation${visibleThreads.length === 1 ? "" : "s"} in this center`
+                    : "No messages in this center yet"
+                }
+                href={messagesHref}
+                hrefLabel="Open Messages"
                 accent="violet"
                 className="h-full"
               >
-                <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50/60 p-3">
-                  <div className="flex flex-wrap gap-2">
-                    <input
-                      value={scheduleDraft}
-                      onChange={(e) => setScheduleDraft(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          addScheduleItem();
-                        }
-                      }}
-                      className={workspaceInputClass}
-                      placeholder="Add item and press Enter (e.g., Circle time 9:30)"
-                    />
-                    <button
-                      type="button"
-                      onClick={addScheduleItem}
-                      disabled={!String(scheduleDraft || "").trim()}
-                      className={[workspacePrimaryButtonClass, "shrink-0"].join(" ")}
-                    >
-                      Add item
-                    </button>
-                  </div>
-                  <div className="mt-2 text-xs text-gray-500">
-                    Tip: add time first for clarity, like "9:30 Circle time".
-                  </div>
-                </div>
-                {scheduleItems.length ? (
+                {visibleThreads.length ? (
                   <ul className="mt-3 space-y-2">
-                    {scheduleItems.map((it) => (
-                      <li
-                        key={it.id}
-                        className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm"
-                      >
-                        <span className="min-w-0 break-words font-semibold text-gray-900">
-                          {it.text}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => removeScheduleItem(it.id)}
-                          className={[workspaceSecondaryButtonClass, "shrink-0 px-3 py-1.5 text-xs"].join(" ")}
+                    {visibleThreads.slice(0, 5).map((thread) => {
+                      const latestMessage = thread.messages?.[0] || null;
+                      const participants = (thread.participants || [])
+                        .map((participant) => participant?.user?.name || participant?.user?.email)
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .join(", ");
+
+                      return (
+                        <li
+                          key={thread.id}
+                          className="rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm"
                         >
-                          Remove
-                        </button>
-                      </li>
-                    ))}
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold text-gray-900">
+                                {thread.title || participants || "Conversation"}
+                              </div>
+                              <div className="mt-1 line-clamp-2 text-sm text-gray-600">
+                                {latestMessage?.body || "No messages yet"}
+                              </div>
+                            </div>
+                            {(thread.unreadCount || 0) > 0 ? (
+                              <span className="shrink-0 rounded-full bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700">
+                                {thread.unreadCount} unread
+                              </span>
+                            ) : null}
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 ) : (
                   <div className="mt-3 rounded-xl border border-dashed border-gray-300 bg-white/70 p-4 text-sm text-gray-600">
-                    Add a few anchor points for today's classroom flow.
+                    Parent and staff conversations for this center will appear here.
                   </div>
                 )}
               </Card>
@@ -473,63 +398,35 @@ export default function TeacherDashboard() {
             </Card>
 
             <Card
-              title="Upcoming birthdays"
-              subtitle={upcomingBirthdays.length ? "Next 6 birthdays" : "No birthdays on file"}
-              href="/teacher/classroom"
-              hrefLabel="View Roster"
-              accent="pink"
+              title="Child flags"
+              subtitle={flags.summary.openCount ? `${flags.summary.openCount} open flag${flags.summary.openCount === 1 ? "" : "s"} need attention` : "All clear"}
+              href={redFlagChildrenHref}
+              hrefLabel="Review Child Flags"
+              accent={flags.summary.openCount > 0 ? "amber" : "emerald"}
               className="h-full"
             >
-              {upcomingBirthdays.length ? (
-                <ul className="mt-3 space-y-1 text-sm text-gray-700">
-                  {upcomingBirthdays.map((row) => (
-                    <li key={row.child?.id} className="flex items-center justify-between gap-3">
-                      <span className="min-w-0 break-words font-semibold text-gray-900">
-                        {fullName(row.child)}
-                      </span>
-                      <span className="shrink-0 text-xs text-gray-500">
-                        {row.next.toLocaleDateString()}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                  Add dates of birth on child profiles to surface birthdays here.
-                </div>
-              )}
-            </Card>
-
-            <Card
-              title="Red flag children"
-              subtitle={redFlagChildren.length ? `${redFlagChildren.length} need attention` : "All clear"}
-              href="/teacher/classroom"
-              hrefLabel="Review in Classroom"
-              accent={redFlagChildren.length > 0 ? "amber" : "emerald"}
-              className="h-full"
-            >
-              {redFlagChildren.length ? (
+              {flags.items.length ? (
                 <ul className="mt-3 space-y-2">
-                  {redFlagChildren.slice(0, 6).map((row) => (
+                  {flags.items.slice(0, 6).map((item) => (
                     <li
-                      key={row.child?.id}
+                      key={item.flagKey}
                       className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2"
                     >
                       <div className="break-words text-sm font-semibold text-amber-900">
-                        {fullName(row.child)}
+                        {item.child?.name || "Unknown"}
                       </div>
                       <div className="mt-1 flex flex-wrap gap-2 text-xs">
-                        {row.tags.map((t) => (
-                          <StatusBadge key={t} status="high" label={t} />
-                        ))}
+                        <StatusBadge status="high" label={item.title} />
                       </div>
+                      {item.summary ? (
+                        <div className="mt-1 line-clamp-1 text-xs text-amber-700">{item.summary}</div>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
               ) : (
                 <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                  Flags appear when allergies or key child profile fields are
-                  missing.
+                  No open flags for children in this center.
                 </div>
               )}
             </Card>

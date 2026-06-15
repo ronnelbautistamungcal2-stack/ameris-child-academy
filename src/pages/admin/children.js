@@ -160,6 +160,23 @@ function formatDateTime(value) {
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
 }
 
+function formatFlagDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
+}
+
+const FLAG_STYLE_BY_TYPE = {
+  ALLERGY: { bg: "#FEE2E2", text: "#991B1B", border: "#FECACA" },
+  INCIDENT: { bg: "#FEF3C7", text: "#92400E", border: "#FCD34D" },
+  BEHAVIOR_LEVEL_HIGH: { bg: "#FCE7F3", text: "#9D174D", border: "#FBCFE8" },
+  BEHAVIOR_REPEAT: { bg: "#EDE9FE", text: "#5B21B6", border: "#DDD6FE" },
+  BEHIND_STEPS: { bg: "#DBEAFE", text: "#1D4ED8", border: "#BFDBFE" },
+  OUTDATED_DOCUMENT: { bg: "#FFF7ED", text: "#9A3412", border: "#FED7AA" },
+  MISSING_DOB: { bg: "#FEF2F2", text: "#991B1B", border: "#FECACA" },
+  MISSING_CLASSROOM: { bg: "#FFFBEB", text: "#92400E", border: "#FDE68A" },
+};
+
 function extractAssessmentRows(activities) {
   return (Array.isArray(activities) ? activities : [])
     .filter((activity) => {
@@ -193,6 +210,16 @@ export default function AdminChildren() {
   const [q, setQ] = useState("");
   const [classroomFilter, setClassroomFilter] = useState("");
   const [profileFlagFilter, setProfileFlagFilter] = useState("");
+  const [flagStatusFilter, setFlagStatusFilter] = useState("open");
+  const [flagChildFilter, setFlagChildFilter] = useState("");
+  const [flagClassroomFilter, setFlagClassroomFilter] = useState("");
+  const [flagDateFrom, setFlagDateFrom] = useState("");
+  const [flagDateTo, setFlagDateTo] = useState("");
+  const [flagItems, setFlagItems] = useState([]);
+  const [flagSummary, setFlagSummary] = useState({ openCount: 0, closedCount: 0 });
+  const [flagsLoading, setFlagsLoading] = useState(false);
+  const [selectedFlagKey, setSelectedFlagKey] = useState("");
+  const [flagSavingKey, setFlagSavingKey] = useState("");
   const [copyContactsFromChildId, setCopyContactsFromChildId] = useState("");
 
   const [editing, setEditing] = useState(null);
@@ -297,6 +324,11 @@ export default function AdminChildren() {
     return typeof router.query.centerId === "string" ? router.query.centerId : "";
   }, [router.isReady, router.query.centerId]);
 
+  const flagsView = useMemo(() => {
+    if (!router.isReady) return false;
+    return router.query.view === "flags";
+  }, [router.isReady, router.query.view]);
+
   const parents = useMemo(() => {
     return users.filter((u) => userRoles(u).includes("PARENT")).sort((a, b) => (a.email || "").localeCompare(b.email || ""));
   }, [users]);
@@ -312,6 +344,64 @@ export default function AdminChildren() {
       return (left.name || "").localeCompare(right.name || "");
     });
   }, [classes, centerById]);
+
+  const refreshFlags = useCallback(
+    async (preferredFlagKey = "") => {
+      if (!flagsView) return;
+
+      setFlagsLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (dashboardCenterId) params.set("centerId", dashboardCenterId);
+        if (flagStatusFilter) params.set("status", flagStatusFilter);
+        if (flagChildFilter) params.set("childId", flagChildFilter);
+        if (flagClassroomFilter) params.set("classRoomId", flagClassroomFilter);
+        if (flagDateFrom) params.set("from", flagDateFrom);
+        if (flagDateTo) params.set("to", flagDateTo);
+
+        const data = await apiJson(`/api/v1/child-flags?${params.toString()}`);
+        const nextItems = Array.isArray(data?.items) ? data.items : [];
+        const routeFlagKey =
+          router.isReady && typeof router.query.flagKey === "string"
+            ? router.query.flagKey
+            : "";
+
+        setFlagItems(nextItems);
+        setFlagSummary({
+          openCount: Number(data?.summary?.openCount || 0),
+          closedCount: Number(data?.summary?.closedCount || 0),
+        });
+        setSelectedFlagKey((current) => {
+          const candidate =
+            preferredFlagKey ||
+            current ||
+            routeFlagKey;
+          if (candidate && nextItems.some((item) => item.flagKey === candidate)) {
+            return candidate;
+          }
+          return nextItems[0]?.flagKey || "";
+        });
+      } catch (e) {
+        setError(e.message || "Failed to load child flags");
+        setFlagItems([]);
+        setFlagSummary({ openCount: 0, closedCount: 0 });
+        setSelectedFlagKey("");
+      } finally {
+        setFlagsLoading(false);
+      }
+    },
+    [
+      dashboardCenterId,
+      flagChildFilter,
+      flagClassroomFilter,
+      flagDateFrom,
+      flagDateTo,
+      flagStatusFilter,
+      flagsView,
+      router.isReady,
+      router.query.flagKey,
+    ],
+  );
 
   const profileFlagIssuesByChildId = useMemo(() => {
     const issuesByChildId = {};
@@ -361,6 +451,11 @@ export default function AdminChildren() {
       })
       .sort((a, b) => (a.firstName || "").localeCompare(b.firstName || ""));
   }, [classroomFilter, profileFlagFilter, profileFlagIssuesByChildId, q, scopedChildren]);
+
+  useEffect(() => {
+    if (!flagsView) return;
+    refreshFlags();
+  }, [flagsView, refreshFlags]);
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -1203,6 +1298,29 @@ export default function AdminChildren() {
     }
   }
 
+  async function updateFlagReview(item, action) {
+    if (!item?.flagKey) return;
+    setFlagSavingKey(item.flagKey);
+    setError("");
+    try {
+      await apiJson("/api/v1/child-flags", {
+        method: "POST",
+        body: JSON.stringify({
+          action,
+          flagKey: item.flagKey,
+          centerId: item.center?.id || dashboardCenterId || "",
+          childId: item.child?.id || "",
+        }),
+      });
+      await refreshFlags(action === "open" ? item.flagKey : "");
+      toast.success(action === "close" ? "Flag moved to closed." : "Flag reopened.");
+    } catch (e) {
+      setError(e.message || "Failed to update child flag");
+    } finally {
+      setFlagSavingKey("");
+    }
+  }
+
   /* ── Stats ── */
   const stats = useMemo(() => {
     const total = children.length;
@@ -1211,6 +1329,10 @@ export default function AdminChildren() {
     const unassigned = children.filter((c) => !c.classRoomId).length;
     return { total, infants, withAllergies, unassigned };
   }, [children]);
+
+  const selectedFlagItem = useMemo(() => {
+    return flagItems.find((item) => item.flagKey === selectedFlagKey) || null;
+  }, [flagItems, selectedFlagKey]);
 
   function getInitials(ch) {
     const f = (ch.firstName || "")[0] || "";
@@ -1245,16 +1367,357 @@ export default function AdminChildren() {
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--admin-text)" }}>Children</h2>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--admin-text)" }}>
+              {flagsView ? "Children Flags" : "Children"}
+            </h2>
             <p style={{ color: "var(--admin-text-muted)", marginTop: 4, fontSize: 13 }}>
-              Manage child records, assignments, and enrollment details.
+              {flagsView
+                ? "Review open and closed child flags without scanning the full child list."
+                : "Manage child records, assignments, and enrollment details."}
             </p>
           </div>
-          <button type="button" style={primaryButtonStyle} onClick={openCreate}>
-            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Add Child
-          </button>
+          {!flagsView ? (
+            <button type="button" style={primaryButtonStyle} onClick={openCreate}>
+              <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Add Child
+            </button>
+          ) : null}
         </div>
 
+        {flagsView ? (
+          <>
+            <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
+              <div style={{ flex: "0 0 220px" }}>
+                <div style={filterLabelStyle}>Status</div>
+                <select value={flagStatusFilter} onChange={(e) => setFlagStatusFilter(e.target.value)} style={inputStyle}>
+                  <option value="open">Open flags</option>
+                  <option value="closed">Closed flags</option>
+                  <option value="all">Open and closed</option>
+                </select>
+              </div>
+              <div style={{ flex: "1 1 260px", minWidth: 220 }}>
+                <div style={filterLabelStyle}>Child</div>
+                <select value={flagChildFilter} onChange={(e) => setFlagChildFilter(e.target.value)} style={inputStyle}>
+                  <option value="">All children</option>
+                  {[...scopedChildren]
+                    .sort((left, right) => childFullName(left).localeCompare(childFullName(right)))
+                    .map((child) => (
+                      <option key={child.id} value={child.id}>
+                        {childFullName(child)}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div style={{ flex: "1 1 220px", minWidth: 200 }}>
+                <div style={filterLabelStyle}>Classroom</div>
+                <select value={flagClassroomFilter} onChange={(e) => setFlagClassroomFilter(e.target.value)} style={inputStyle}>
+                  <option value="">All classrooms</option>
+                  {classroomOptions.map((classroom) => {
+                    const centerName = centerById[classroom.centerId]?.name || "";
+                    return (
+                      <option key={classroom.id} value={classroom.id}>
+                        {centerName ? `${classroom.name} - ${centerName}` : classroom.name}
+                      </option>
+                    );
+                  })}
+                  <option value="__unassigned__">Unassigned</option>
+                </select>
+              </div>
+              <div style={{ flex: "0 0 170px" }}>
+                <div style={filterLabelStyle}>From Date</div>
+                <input type="date" value={flagDateFrom} onChange={(e) => setFlagDateFrom(e.target.value)} style={inputStyle} />
+              </div>
+              <div style={{ flex: "0 0 170px" }}>
+                <div style={filterLabelStyle}>To Date</div>
+                <input type="date" value={flagDateTo} onChange={(e) => setFlagDateTo(e.target.value)} style={inputStyle} />
+              </div>
+              {(flagStatusFilter !== "open" || flagChildFilter || flagClassroomFilter || flagDateFrom || flagDateTo) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFlagStatusFilter("open");
+                    setFlagChildFilter("");
+                    setFlagClassroomFilter("");
+                    setFlagDateFrom("");
+                    setFlagDateTo("");
+                  }}
+                  style={{ ...secondaryButtonStyle, alignSelf: "flex-end", fontSize: 12, padding: "10px 14px" }}
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+
+            <div style={{ marginTop: 12, fontSize: 12, color: "var(--admin-text-muted)", fontWeight: 600 }}>
+              {flagSummary.openCount} open flag{flagSummary.openCount === 1 ? "" : "s"} and {flagSummary.closedCount} closed flag{flagSummary.closedCount === 1 ? "" : "s"}
+              {dashboardCenterId && centerById[dashboardCenterId]?.name ? (
+                <> in {centerById[dashboardCenterId].name}</>
+              ) : null}
+            </div>
+
+            {error && !modalOpen ? <ErrorBanner message={error} /> : null}
+
+            <div style={{ marginTop: 16, display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
+              <div style={{ padding: 14, borderRadius: 12, border: "1px solid var(--admin-border)", background: "var(--admin-bg-secondary)" }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: "var(--admin-text)" }}>Flag Queue</div>
+                <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginTop: 2 }}>
+                  Only flagged items are shown here.
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  {flagsLoading ? (
+                    <SkeletonTable rows={6} cols={4} />
+                  ) : flagItems.length === 0 ? (
+                    <EmptyState
+                      title="No flags found"
+                      description="Try changing the child, classroom, status, or date filters."
+                      className="py-8"
+                    />
+                  ) : (
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {flagItems.map((item) => {
+                        const tone = FLAG_STYLE_BY_TYPE[item.flagType] || {
+                          bg: "#F3F4F6",
+                          text: "#374151",
+                          border: "#E5E7EB",
+                        };
+                        const isSelected = selectedFlagKey === item.flagKey;
+                        const isSaving = flagSavingKey === item.flagKey;
+                        return (
+                          <div
+                            key={item.flagKey}
+                            onClick={() => setSelectedFlagKey(item.flagKey)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                setSelectedFlagKey(item.flagKey);
+                              }
+                            }}
+                            role="button"
+                            tabIndex={0}
+                            style={{
+                              width: "100%",
+                              textAlign: "left",
+                              padding: "12px 14px",
+                              borderRadius: 12,
+                              border: isSelected ? "1px solid #60A5FA" : "1px solid var(--admin-border)",
+                              background: isSelected ? "#EFF6FF" : "#fff",
+                              display: "grid",
+                              gap: 8,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                  <span
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      borderRadius: 999,
+                                      border: `1px solid ${tone.border}`,
+                                      background: tone.bg,
+                                      color: tone.text,
+                                      padding: "4px 8px",
+                                      fontSize: 11,
+                                      fontWeight: 800,
+                                    }}
+                                  >
+                                    {item.title}
+                                  </span>
+                                  {item.status === "CLOSED" ? (
+                                    <span style={{ fontSize: 11, fontWeight: 700, color: "#6B7280" }}>Closed</span>
+                                  ) : null}
+                                </div>
+                                <div style={{ marginTop: 6, fontSize: 14, fontWeight: 800, color: "var(--admin-text)" }}>
+                                  {item.child?.name || "Child"}
+                                </div>
+                                <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>
+                                  {item.summary || "No summary provided."}
+                                </div>
+                              </div>
+                              {item.status === "OPEN" ? (
+                                <span
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateFlagReview(item, "close");
+                                  }}
+                                  style={{
+                                    flexShrink: 0,
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: 999,
+                                    border: "1px solid #10B981",
+                                    color: "#10B981",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontSize: 14,
+                                    fontWeight: 900,
+                                    background: isSaving ? "#ECFDF5" : "#fff",
+                                    cursor: isSaving ? "wait" : "pointer",
+                                  }}
+                                  role="button"
+                                  aria-label="Close flag"
+                                >
+                                  {isSaving ? "…" : "✓"}
+                                </span>
+                              ) : null}
+                            </div>
+                            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 11, color: "var(--admin-text-muted)" }}>
+                              <span>{item.classRoom?.name || "Unassigned"}</span>
+                              <span>{formatFlagDate(item.triggeredAt)}</span>
+                              {item.closedAt ? <span>Closed {formatFlagDate(item.closedAt)}</span> : null}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ padding: 14, borderRadius: 12, border: "1px solid var(--admin-border)", background: "var(--admin-bg-secondary)" }}>
+                {selectedFlagItem ? (
+                  <div style={{ display: "grid", gap: 14 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: "var(--admin-text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                          Flag Detail
+                        </div>
+                        <h3 style={{ margin: "6px 0 0", fontSize: 20, fontWeight: 800, color: "var(--admin-text)" }}>
+                          {selectedFlagItem.child?.name}
+                        </h3>
+                        <div style={{ marginTop: 6, fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>
+                          {selectedFlagItem.title}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {selectedFlagItem.status === "OPEN" ? (
+                          <button
+                            type="button"
+                            style={secondaryButtonStyle}
+                            onClick={() => updateFlagReview(selectedFlagItem, "close")}
+                            disabled={flagSavingKey === selectedFlagItem.flagKey}
+                          >
+                            {flagSavingKey === selectedFlagItem.flagKey ? "Saving..." : "Mark Closed"}
+                          </button>
+                        ) : selectedFlagItem.active ? (
+                          <button
+                            type="button"
+                            style={secondaryButtonStyle}
+                            onClick={() => updateFlagReview(selectedFlagItem, "open")}
+                            disabled={flagSavingKey === selectedFlagItem.flagKey}
+                          >
+                            {flagSavingKey === selectedFlagItem.flagKey ? "Saving..." : "Reopen"}
+                          </button>
+                        ) : null}
+                        <button type="button" style={secondaryButtonStyle} onClick={() => openProfile(selectedFlagItem.child?.id)}>
+                          View Child Profile
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: 13, color: "var(--admin-text-muted)", lineHeight: 1.5 }}>
+                      {selectedFlagItem.summary || "No summary provided."}
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
+                      <div style={infoBoxStyle}>
+                        <div style={fieldLabelStyle}>Status</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>
+                          {selectedFlagItem.status === "OPEN" ? "Open" : "Closed"}
+                        </div>
+                      </div>
+                      <div style={infoBoxStyle}>
+                        <div style={fieldLabelStyle}>Classroom</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>
+                          {selectedFlagItem.classRoom?.name || "Unassigned"}
+                        </div>
+                      </div>
+                      <div style={infoBoxStyle}>
+                        <div style={fieldLabelStyle}>Triggered</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>
+                          {formatFlagDate(selectedFlagItem.triggeredAt)}
+                        </div>
+                      </div>
+                      {selectedFlagItem.closedAt ? (
+                        <div style={infoBoxStyle}>
+                          <div style={fieldLabelStyle}>Closed</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>
+                            {formatFlagDate(selectedFlagItem.closedAt)}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {Array.isArray(selectedFlagItem.details?.fields) && selectedFlagItem.details.fields.length > 0 ? (
+                      <div style={infoBoxStyle}>
+                        <SectionHeader icon="⚑" title="Details" />
+                        <div style={{ display: "grid", gap: 10 }}>
+                          {selectedFlagItem.details.fields.map((field, index) => (
+                            <div key={`${field.label}-${index}`} style={{ display: "grid", gap: 4 }}>
+                              <div style={fieldLabelStyle}>{field.label}</div>
+                              <div style={{ fontSize: 13, color: "var(--admin-text)" }}>{field.value || "—"}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {selectedFlagItem.details?.notes ? (
+                      <div style={infoBoxStyle}>
+                        <SectionHeader icon="📝" title="Notes" />
+                        <div style={{ fontSize: 13, color: "var(--admin-text)", whiteSpace: "pre-wrap" }}>
+                          {selectedFlagItem.details.notes}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {Array.isArray(selectedFlagItem.details?.items) && selectedFlagItem.details.items.length > 0 ? (
+                      <div style={infoBoxStyle}>
+                        <SectionHeader icon="📌" title="Related Entries" />
+                        <div style={{ display: "grid", gap: 8 }}>
+                          {selectedFlagItem.details.items.map((entry, index) => (
+                            <div
+                              key={entry.id || `${entry.title}-${index}`}
+                              style={{
+                                padding: "10px 12px",
+                                borderRadius: 10,
+                                border: "1px solid var(--admin-border)",
+                                background: "#fff",
+                              }}
+                            >
+                              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>
+                                {entry.title || "Entry"}
+                              </div>
+                              {entry.subtitle ? (
+                                <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>
+                                  {formatFlagDate(entry.subtitle)}
+                                </div>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {selectedFlagItem.status === "CLOSED" && !selectedFlagItem.active ? (
+                      <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>
+                        This item is closed history only. The source issue is no longer active.
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <EmptyState
+                    title="Select a flag"
+                    description="Choose a flagged item from the list to review the details."
+                    className="py-8"
+                  />
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
         {/* Search & Filter Bar */}
         <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
           <div style={{ flex: "1 1 280px", minWidth: 200 }}>
@@ -1710,6 +2173,8 @@ export default function AdminChildren() {
             </div>
           )}
         </div>
+          </>
+        )}
       </div>
 
       {(profileLoading || profileChild) ? (
@@ -1854,7 +2319,9 @@ export default function AdminChildren() {
                         <div key={activity.id} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--admin-border)", background: "var(--admin-bg)" }}>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                             <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>
-                              {String(activity.type || "OTHER").replace(/_/g, " ")}
+                              {activity.type === "OTHER" && activity?.details?.kind === "DAILY_GRADE"
+                                ? "Grade"
+                                : String(activity.type || "OTHER").replace(/_/g, " ")}
                             </div>
                             <div style={{ fontSize: 11, color: "var(--admin-text-muted)" }}>{formatDateTime(activity.createdAt)}</div>
                           </div>
@@ -1877,12 +2344,12 @@ export default function AdminChildren() {
                         <div key={assessment.id} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--admin-border)", background: "var(--admin-bg)" }}>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                             <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>
-                              {assessment.domains ? "Developmental Assessment" : "Daily Grade"}
+                              {assessment.domains ? "Developmental Assessment" : "Grade"}
                             </div>
                             <div style={{ fontSize: 11, color: "var(--admin-text-muted)" }}>{formatDateTime(assessment.createdAt)}</div>
                           </div>
                           <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>
-                            {assessment.domains ? Object.entries(assessment.domains).map(([domain, value]) => `${domain}: ${value}`).join(" • ") : assessment.grade !== null ? `Grade: ${assessment.grade}/5` : "Assessment logged"}
+                            {assessment.domains ? Object.entries(assessment.domains).map(([domain, value]) => `${domain}: ${value}`).join(" • ") : assessment.grade !== null ? `Grade: ${assessment.grade}/10` : "Assessment logged"}
                           </div>
                           {assessment.notes ? (
                             <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>{assessment.notes}</div>

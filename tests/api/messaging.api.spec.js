@@ -60,6 +60,16 @@ test.describe("Messaging API @api", () => {
     expect([400, 404]).toContain(res.status());
   });
 
+  test("GET /api/v1/messages/audiences returns role-based audience options for admin", async ({ request }) => {
+    const cookies = await loginAsAdmin(request);
+    const res = await apiGet(request, "/api/v1/messages/audiences", cookies);
+    expect(res.status()).toBe(200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
+    expect(data.some((item) => item.key === "ALL_TEACHERS")).toBe(true);
+    expect(data.some((item) => item.key === "ALL_PARENTS")).toBe(true);
+  });
+
   test("GET /api/v1/messages/threads/:id returns 401 without auth", async ({ request }) => {
     const res = await apiGet(request, "/api/v1/messages/threads/fake-id");
     expect(res.status()).toBe(401);
@@ -174,5 +184,54 @@ test.describe("Messaging API @api", () => {
 
     expect(createdNotification).toBeTruthy();
     expect(createdNotification.link).toContain(thread.id);
+  });
+
+  test("creating a thread with an audience selection expands recipients", async ({ request }) => {
+    const adminCookies = await loginAsAdmin(request);
+    const teacherUser = await prisma.user.findUnique({
+      where: { email: "teacher@demo.com" },
+      select: { id: true },
+    });
+    if (!teacherUser) {
+      test.skip();
+      return;
+    }
+
+    const createRes = await apiPost(
+      request,
+      "/api/v1/messages/threads",
+      {
+        audienceKeys: ["ALL_TEACHERS"],
+        title: "QA role audience thread",
+        firstMessage: "Sending to all teachers during API QA",
+      },
+      adminCookies,
+    );
+    expect(createRes.status()).toBe(201);
+
+    const thread = await createRes.json();
+    const participantIds = (thread.participants || []).map((participant) => participant.userId);
+
+    expect(thread.id).toBeTruthy();
+    expect(participantIds).toContain(teacherUser.id);
+  });
+
+  test("creating an accommodation rejects non-staff audience groups", async ({ request }) => {
+    const adminCookies = await loginAsAdmin(request);
+    const createRes = await apiPost(
+      request,
+      "/api/v1/messages/threads",
+      {
+        audienceKeys: ["ALL_PARENTS"],
+        threadType: "ACCOMMODATION",
+        title: "QA accommodation restriction",
+        firstMessage: "This should not allow parent recipients.",
+      },
+      adminCookies,
+    );
+
+    expect(createRes.status()).toBe(400);
+    const body = await createRes.json();
+    expect(body.error).toContain("Accommodations can only be sent");
   });
 });

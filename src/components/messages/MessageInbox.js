@@ -4,6 +4,21 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useUserSocket, useNewMessages } from "@/hooks/useSocket";
 import { useToast } from "@/contexts/ToastContext";
+import {
+  canReceiveAccommodation,
+  canCompleteWorkflow,
+  canMarkReadyForReview,
+  canReopenWorkflow,
+  getAvailableThreadTypesForRole,
+  isAccommodationThread,
+  isWorkflowThread,
+  MESSAGE_PRIORITY_LEVELS,
+  MESSAGE_WORKFLOW_STATUSES,
+  supportsDueDate,
+  supportsPriority,
+  threadTypeLabel,
+  workflowStatusLabel,
+} from "@/lib/messageWorkflows";
 
 const ADMIN_FILTERS = [
   { id: "all", label: "All" },
@@ -119,8 +134,39 @@ function formatMessageTimestamp(value) {
   return date.toLocaleString();
 }
 
-function threadTypeLabel(isGroup) {
+function conversationKindLabel(isGroup) {
   return isGroup ? "Group conversation" : "Direct conversation";
+}
+
+function formatDateInputValue(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function workflowStatusTone(status) {
+  switch (String(status || "").toUpperCase()) {
+    case "READY_FOR_REVIEW":
+      return "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200";
+    case "COMPLETED":
+      return "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-200";
+    default:
+      return "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-700 dark:bg-sky-900/20 dark:text-sky-200";
+  }
+}
+
+function messageTypeTone(type) {
+  switch (String(type || "").toUpperCase()) {
+    case "OPEN_POINT":
+      return "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200";
+    case "REQUEST":
+      return "border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-700 dark:bg-violet-900/20 dark:text-violet-200";
+    case "ACCOMMODATION":
+      return "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-200";
+    default:
+      return "border-gray-200 bg-gray-100 text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200";
+  }
 }
 
 export default function MessageInbox({ centerId, isAdmin, embedded = false, toolbar = null }) {
@@ -130,6 +176,8 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
   const userId = session?.user?.id;
   const viewerRole = String(session?.user?.role || "").toUpperCase();
   const isParentView = viewerRole === "PARENT";
+  const canUseAudienceShortcuts =
+    viewerRole !== "PARENT" && viewerRole !== "SUBSCRIBER";
   const queryThreadId =
     typeof router.query.threadId === "string" ? router.query.threadId : "";
 
@@ -145,13 +193,23 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
+  const [audienceOptions, setAudienceOptions] = useState([]);
+  const [selectedAudiences, setSelectedAudiences] = useState([]);
+  const [newThreadType, setNewThreadType] = useState("MESSAGE");
+  const [newPriority, setNewPriority] = useState("A");
+  const [newDueDate, setNewDueDate] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [newMessage, setNewMessage] = useState("");
   const [searching, setSearching] = useState(false);
+  const [audiencesLoading, setAudiencesLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [threadQuery, setThreadQuery] = useState("");
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [adminFilter, setAdminFilter] = useState("all");
+  const [messageTypeFilter, setMessageTypeFilter] = useState("ALL");
+  const [workflowStatusFilter, setWorkflowStatusFilter] = useState("ALL");
+  const [workflowActionNote, setWorkflowActionNote] = useState("");
+  const [workflowSaving, setWorkflowSaving] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(queryThreadId ? "thread" : "list");
 
   const messagesViewportRef = useRef(null);
@@ -164,6 +222,10 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
 
   function resetComposeForm() {
     setSelectedUsers([]);
+    setSelectedAudiences([]);
+    setNewThreadType("MESSAGE");
+    setNewPriority("A");
+    setNewDueDate("");
     setNewTitle("");
     setNewMessage("");
     setSearchQuery("");
@@ -292,6 +354,51 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
   ]);
 
   useEffect(() => {
+    if (!showCompose || !canUseAudienceShortcuts) {
+      setAudienceOptions([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      setAudiencesLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (centerId) params.set("centerId", centerId);
+        if (newThreadType) params.set("threadType", newThreadType);
+        const data = await apiJson(
+          `/api/v1/messages/audiences${params.toString() ? `?${params.toString()}` : ""}`,
+        );
+        if (cancelled) return;
+        const nextOptions = Array.isArray(data) ? data : [];
+        setAudienceOptions(nextOptions);
+        setSelectedAudiences((prev) =>
+          prev
+            .map((selected) =>
+              nextOptions.find((option) => option.key === selected.key) || null,
+            )
+            .filter(Boolean),
+        );
+      } catch {
+        if (!cancelled) setAudienceOptions([]);
+      } finally {
+        if (!cancelled) setAudiencesLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canUseAudienceShortcuts, centerId, newThreadType, showCompose]);
+
+  useEffect(() => {
+    if (!isAccommodationThread(newThreadType)) return;
+    setSelectedUsers((prev) => prev.filter((user) => canReceiveAccommodation(user.role)));
+    setSearchResults((prev) => prev.filter((user) => canReceiveAccommodation(user.role)));
+  }, [newThreadType]);
+
+  useEffect(() => {
     if (!activeThreadId) {
       setActiveThread(null);
       setMobilePanel("list");
@@ -403,6 +510,39 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
     }
   }
 
+  async function runWorkflowAction(action, { requireNote = false } = {}) {
+    if (!activeThreadId) return;
+    const note = workflowActionNote.trim();
+    if (requireNote && !note) {
+      const messageText = "Add a note before sending this item back.";
+      setError(messageText);
+      toast.error(messageText);
+      return;
+    }
+
+    setWorkflowSaving(true);
+    setError("");
+    try {
+      const thread = await apiJson(`/api/v1/messages/threads/${activeThreadId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          action,
+          note: note || undefined,
+        }),
+      });
+      setActiveThread(thread);
+      setWorkflowActionNote("");
+      await refreshThreads();
+      toast.success("Workflow updated.");
+    } catch (e2) {
+      const messageText = e2.message || "Failed to update workflow";
+      setError(messageText);
+      toast.error(messageText);
+    } finally {
+      setWorkflowSaving(false);
+    }
+  }
+
   useEffect(() => {
     if (!searchQuery.trim() || searchQuery.length < 2) {
       setSearchResults([]);
@@ -414,7 +554,12 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
         const data = await apiJson(
           `/api/v1/users/search?q=${encodeURIComponent(searchQuery)}&limit=10`,
         );
-        setSearchResults(Array.isArray(data) ? data.filter((u) => u.id !== userId) : []);
+        const nextResults = Array.isArray(data) ? data.filter((u) => u.id !== userId) : [];
+        setSearchResults(
+          isAccommodationThread(newThreadType)
+            ? nextResults.filter((user) => canReceiveAccommodation(user.role))
+            : nextResults,
+        );
       } catch {
         setSearchResults([]);
       } finally {
@@ -422,11 +567,16 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery, userId]);
+  }, [newThreadType, searchQuery, userId]);
 
   async function createThread(e) {
     e.preventDefault();
-    if (selectedUsers.length === 0 || !newMessage.trim()) return;
+    if (
+      (selectedUsers.length === 0 && selectedAudiences.length === 0) ||
+      !newMessage.trim()
+    ) {
+      return;
+    }
     setCreating(true);
     setError("");
     try {
@@ -434,7 +584,11 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
         method: "POST",
         body: JSON.stringify({
           participantIds: selectedUsers.map((u) => u.id),
+          audienceKeys: selectedAudiences.map((audience) => audience.key),
           centerId: centerId || undefined,
+          threadType: newThreadType,
+          priority: supportsPriority(newThreadType) ? newPriority : undefined,
+          dueDate: supportsDueDate(newThreadType) && newDueDate ? newDueDate : undefined,
           title: newTitle.trim() || undefined,
           firstMessage: newMessage,
         }),
@@ -445,7 +599,7 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
       replaceThreadQuery(thread.id);
       setMobilePanel("thread");
       toast.success(
-        selectedUsers.length > 1
+        selectedUsers.length + selectedAudiences.length > 1
           ? "Conversation created."
           : "Conversation started.",
       );
@@ -490,6 +644,15 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
           unreadCount: thread.unreadCount || 0,
           lastSenderRole: lastMsg?.sender?.role || null,
           centerName: thread.center?.name || "",
+          type: thread.type || "MESSAGE",
+          status: thread.status || "OPEN",
+          priority: thread.priority || null,
+          dueDate: thread.dueDate || null,
+          createdAt: thread.createdAt || null,
+          completedAt: thread.completedAt || null,
+          createdById: thread.createdById || null,
+          createdByName:
+            thread.createdBy?.name || thread.createdBy?.email || "Sender",
           participantRoles,
           participantCount: (thread.participants || []).length,
           isGroup: (thread.participants || []).length > 2,
@@ -498,6 +661,9 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
             thread.center?.name || "",
             participantNames.join(" "),
             participantRoles.join(" "),
+            thread.type || "",
+            thread.status || "",
+            thread.priority || "",
             lastSenderName,
             lastMsg?.body || "",
           ]
@@ -561,10 +727,15 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
       if (isAdmin && adminFilter !== "all" && !matchesAdminFilter(thread, adminFilter)) {
         return false;
       }
+      if (messageTypeFilter !== "ALL" && thread.type !== messageTypeFilter) return false;
+      if (workflowStatusFilter !== "ALL") {
+        if (!isWorkflowThread(thread.type)) return false;
+        if (thread.status !== workflowStatusFilter) return false;
+      }
       if (!q) return true;
       return thread.searchText.includes(q);
     });
-  }, [preview, threadQuery, showUnreadOnly, isAdmin, adminFilter]);
+  }, [preview, threadQuery, showUnreadOnly, isAdmin, adminFilter, messageTypeFilter, workflowStatusFilter]);
 
   const activeMeta = useMemo(() => {
     if (!activeThread) return null;
@@ -575,10 +746,31 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
       centerName: activeThread.center?.name || "",
       participantCount: (activeThread.participants || []).length,
       isGroup: (activeThread.participants || []).length > 2,
+      type: activeThread.type || "MESSAGE",
+      status: activeThread.status || "OPEN",
+      priority: activeThread.priority || null,
+      dueDate: activeThread.dueDate || null,
+      createdAt: activeThread.createdAt || null,
+      completedAt: activeThread.completedAt || null,
+      createdById: activeThread.createdById || null,
+      createdByName:
+        activeThread.createdBy?.name || activeThread.createdBy?.email || "Sender",
     };
   }, [activeThread, userId]);
 
   const activeMessages = activeThread?.messages || [];
+  const canReadyCurrentThread = useMemo(
+    () => (activeThread ? canMarkReadyForReview(activeThread, userId, isAdmin) : false),
+    [activeThread, isAdmin, userId],
+  );
+  const canCompleteCurrentThread = useMemo(
+    () => (activeThread ? canCompleteWorkflow(activeThread, userId, isAdmin) : false),
+    [activeThread, isAdmin, userId],
+  );
+  const canReopenCurrentThread = useMemo(
+    () => (activeThread ? canReopenWorkflow(activeThread, userId, isAdmin) : false),
+    [activeThread, isAdmin, userId],
+  );
 
   const activeLastMessage = useMemo(() => {
     if (activeMessages.length === 0) return null;
@@ -595,7 +787,11 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
   );
 
   const hasActiveFilters =
-    showUnreadOnly || Boolean(threadQuery.trim()) || (isAdmin && adminFilter !== "all");
+    showUnreadOnly ||
+    Boolean(threadQuery.trim()) ||
+    (isAdmin && adminFilter !== "all") ||
+    messageTypeFilter !== "ALL" ||
+    workflowStatusFilter !== "ALL";
 
   const inboxSummary = useMemo(() => {
     if (isAdmin) return adminSummary;
@@ -649,11 +845,33 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
   const panelHeightClass = embedded
     ? "min-h-[34rem] md:h-[74dvh] xl:h-[78dvh] md:max-h-[56rem]"
     : "min-h-[32rem] md:h-[70dvh] md:max-h-[52rem]";
+  const availableThreadTypes = useMemo(
+    () => getAvailableThreadTypesForRole(viewerRole),
+    [viewerRole],
+  );
+  const workflowPreview = useMemo(
+    () => preview.filter((thread) => isWorkflowThread(thread.type)),
+    [preview],
+  );
+  const workflowReportRows = useMemo(
+    () => filteredPreview.filter((thread) => isWorkflowThread(thread.type)),
+    [filteredPreview],
+  );
+  const workflowSummary = useMemo(
+    () => ({
+      open: workflowPreview.filter((thread) => thread.status === "OPEN").length,
+      review: workflowPreview.filter((thread) => thread.status === "READY_FOR_REVIEW").length,
+      completed: workflowPreview.filter((thread) => thread.status === "COMPLETED").length,
+    }),
+    [workflowPreview],
+  );
 
   function resetThreadFilters() {
     setThreadQuery("");
     setShowUnreadOnly(false);
     setAdminFilter("all");
+    setMessageTypeFilter("ALL");
+    setWorkflowStatusFilter("ALL");
   }
 
   const listEmptyMessage =
@@ -679,7 +897,7 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
       ? "Start a new message to the center or follow up on a family question."
       : "Start a new message thread.";
   const tipCopy = activeMeta
-    ? `Reply inside this ${threadTypeLabel(activeMeta.isGroup).toLowerCase()} so earlier context stays attached for everyone involved.`
+    ? `Reply inside this ${conversationKindLabel(activeMeta.isGroup).toLowerCase()} so earlier context stays attached for everyone involved.`
     : isParentView
       ? "Use a short subject like billing, pickup, schedule change, or progress question so staff can triage your message quickly."
       : "Use direct threads for family-specific updates and keep subjects short so parents can scan them quickly.";
@@ -769,7 +987,7 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
                 </span>
                 {activeMeta ? (
                   <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
-                    {threadTypeLabel(activeMeta.isGroup)}
+                    {conversationKindLabel(activeMeta.isGroup)}
                   </span>
                 ) : null}
               </div>
@@ -839,6 +1057,152 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
         </div>
       ) : null}
 
+      {embedded && (isAdmin || viewerRole === "COACH") ? (
+        <div className="mb-4 rounded-[1.6rem] border border-sky-100 bg-gradient-to-br from-sky-50 via-white to-cyan-50 p-4 shadow-sm dark:border-sky-900/40 dark:from-sky-950/20 dark:via-gray-800 dark:to-cyan-950/20">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-sky-700 dark:border-sky-700 dark:bg-sky-900/20 dark:text-sky-200">
+                {isAdmin ? "Admin workflows" : "Coach workflows"}
+              </div>
+              <h2 className="mt-2 text-xl font-extrabold text-gray-900 dark:text-gray-100">
+                {isAdmin ? "Messages, requests, and follow-through" : "Messages and follow-through"}
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm text-gray-600 dark:text-gray-400">
+                Create direct messages, open points, requests, and accommodations with timestamps and workflow tracking inside each thread.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {toolbar}
+              <button
+                type="button"
+                onClick={startBlankCompose}
+                className="rounded-2xl bg-gradient-to-r from-sky-600 to-cyan-500 px-4 py-2.5 text-sm font-extrabold text-white shadow-sm transition hover:from-sky-700 hover:to-cyan-600"
+              >
+                New Conversation
+              </button>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <div className={["rounded-2xl border px-4 py-3", summaryCardTone("sky")].join(" ")}>
+              <div className="text-[11px] font-bold uppercase tracking-[0.16em] opacity-75">Workflow Items</div>
+              <div className="mt-2 text-2xl font-extrabold">{workflowPreview.length}</div>
+              <div className="mt-1 text-xs opacity-80">Open points, requests, accommodations</div>
+            </div>
+            <div className={["rounded-2xl border px-4 py-3", summaryCardTone("amber")].join(" ")}>
+              <div className="text-[11px] font-bold uppercase tracking-[0.16em] opacity-75">Open</div>
+              <div className="mt-2 text-2xl font-extrabold">{workflowSummary.open}</div>
+              <div className="mt-1 text-xs opacity-80">Still in progress</div>
+            </div>
+            <div className={["rounded-2xl border px-4 py-3", summaryCardTone("violet")].join(" ")}>
+              <div className="text-[11px] font-bold uppercase tracking-[0.16em] opacity-75">Ready For Review</div>
+              <div className="mt-2 text-2xl font-extrabold">{workflowSummary.review}</div>
+              <div className="mt-1 text-xs opacity-80">Waiting on sender review</div>
+            </div>
+            <div className={["rounded-2xl border px-4 py-3", summaryCardTone("emerald")].join(" ")}>
+              <div className="text-[11px] font-bold uppercase tracking-[0.16em] opacity-75">Completed</div>
+              <div className="mt-2 text-2xl font-extrabold">{workflowSummary.completed}</div>
+              <div className="mt-1 text-xs opacity-80">Closed workflow items</div>
+            </div>
+          </div>
+          {isAdmin ? (
+            <div className="mt-4 rounded-2xl border border-gray-200 bg-white/90 p-4 dark:border-gray-700 dark:bg-gray-800/80">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="text-[11px] font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                    Workflow report
+                  </div>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                    Filter current and past open points, requests, and accommodations by type and status.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <select
+                    value={messageTypeFilter}
+                    onChange={(event) => setMessageTypeFilter(event.target.value)}
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                  >
+                    <option value="ALL">All types</option>
+                    {availableThreadTypes
+                      .filter((item) => item.value !== "MESSAGE")
+                      .map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                  </select>
+                  <select
+                    value={workflowStatusFilter}
+                    onChange={(event) => setWorkflowStatusFilter(event.target.value)}
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                  >
+                    <option value="ALL">All statuses</option>
+                    {MESSAGE_WORKFLOW_STATUSES.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="mt-3 max-h-72 overflow-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="text-[11px] font-black uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                    <tr>
+                      <th className="px-2 py-2">Type</th>
+                      <th className="px-2 py-2">Title</th>
+                      <th className="px-2 py-2">Status</th>
+                      <th className="px-2 py-2">Priority</th>
+                      <th className="px-2 py-2">Due</th>
+                      <th className="px-2 py-2">Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {workflowReportRows.map((thread) => (
+                      <tr key={`workflow-${thread.id}`}>
+                        <td className="px-2 py-2">
+                          <span className={["rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase", messageTypeTone(thread.type)].join(" ")}>
+                            {threadTypeLabel(thread.type)}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 font-semibold text-gray-900 dark:text-gray-100">
+                          {thread.title}
+                        </td>
+                        <td className="px-2 py-2">
+                          <span className={["rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase", workflowStatusTone(thread.status)].join(" ")}>
+                            {workflowStatusLabel(thread.status)}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-gray-600 dark:text-gray-300">{thread.priority || "—"}</td>
+                        <td className="px-2 py-2 text-gray-600 dark:text-gray-300">{thread.dueDate ? formatMessageTimestamp(thread.dueDate) : "—"}</td>
+                        <td className="px-2 py-2 text-gray-600 dark:text-gray-300">{thread.time || "—"}</td>
+                      </tr>
+                    ))}
+                    {workflowReportRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-2 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                          No workflow items match the current report filters.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : toolbar ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div>{toolbar}</div>
+          <button
+            type="button"
+            onClick={startBlankCompose}
+            className="rounded-2xl bg-gradient-to-r from-sky-600 to-cyan-500 px-4 py-2.5 text-sm font-extrabold text-white shadow-sm transition hover:from-sky-700 hover:to-cyan-600"
+          >
+            New Conversation
+          </button>
+        </div>
+      ) : null}
+
       {showCompose ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm dark:bg-black/60"
@@ -873,6 +1237,56 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
             ) : null}
 
             <form onSubmit={createThread} className="mt-4 space-y-3">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <label className="block md:col-span-1">
+                  <span className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    Type
+                  </span>
+                  <select
+                    value={newThreadType}
+                    onChange={(event) => setNewThreadType(event.target.value)}
+                    className="mt-1 w-full rounded-2xl border border-gray-200 px-3 py-2 text-sm shadow-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                  >
+                    {availableThreadTypes.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {supportsPriority(newThreadType) ? (
+                  <label className="block md:col-span-1">
+                    <span className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      Priority
+                    </span>
+                    <select
+                      value={newPriority}
+                      onChange={(event) => setNewPriority(event.target.value)}
+                      className="mt-1 w-full rounded-2xl border border-gray-200 px-3 py-2 text-sm shadow-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                    >
+                      {MESSAGE_PRIORITY_LEVELS.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                {supportsDueDate(newThreadType) ? (
+                  <label className="block md:col-span-1">
+                    <span className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      Due Date
+                    </span>
+                    <input
+                      type="date"
+                      value={newDueDate}
+                      onChange={(event) => setNewDueDate(event.target.value)}
+                      className="mt-1 w-full rounded-2xl border border-gray-200 px-3 py-2 text-sm shadow-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                    />
+                  </label>
+                ) : null}
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Subject (optional)
@@ -883,6 +1297,71 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
                   className="mt-1 w-full rounded-2xl border border-gray-200 px-3 py-2 text-sm shadow-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                   placeholder="e.g. Regarding attendance..."
                 />
+                <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {newThreadType === "MESSAGE"
+                    ? "Standard thread with normal back-and-forth replies."
+                    : newThreadType === "OPEN_POINT"
+                      ? "Recipient marks it ready for review, then the sender can complete it or send it back with notes."
+                      : newThreadType === "REQUEST"
+                        ? "Recipient can reply if needed or mark it completed."
+                        : "Accommodations can be sent by admins or coaches and stay reportable with timestamps."}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Quick audience
+                </label>
+                {canUseAudienceShortcuts ? (
+                  <>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {audienceOptions.map((option) => {
+                        const selected = selectedAudiences.some(
+                          (audience) => audience.key === option.key,
+                        );
+                        return (
+                          <button
+                            key={option.key}
+                            type="button"
+                            onClick={() =>
+                              setSelectedAudiences((prev) =>
+                                selected
+                                  ? prev.filter((audience) => audience.key !== option.key)
+                                  : [...prev, option],
+                              )
+                            }
+                            disabled={option.count === 0}
+                            className={[
+                              "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50",
+                              selected
+                                ? "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-200"
+                                : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700",
+                            ].join(" ")}
+                          >
+                            <span>{option.label}</span>
+                            <span className="rounded-full bg-black/5 px-1.5 py-0.5 text-[10px] dark:bg-white/10">
+                              {option.count}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {audiencesLoading ? (
+                      <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Loading audience options...
+                      </div>
+                    ) : null}
+                    <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                      {isAccommodationThread(newThreadType)
+                        ? "Accommodation threads can only go to teachers or staff."
+                        : "Use a role-based audience to start one conversation with everyone in that group."}
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Role-based audience shortcuts are not available for this account.
+                  </div>
+                )}
               </div>
 
               <div>
@@ -890,6 +1369,27 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
                   Recipients
                 </label>
                 <div className="mt-1 flex flex-wrap gap-1">
+                  {selectedAudiences.map((audience) => (
+                    <span
+                      key={audience.key}
+                      className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-800 dark:bg-violet-900/40 dark:text-violet-300"
+                    >
+                      <span className="max-w-[16rem] break-words">
+                        {audience.label} ({audience.count})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedAudiences((prev) =>
+                            prev.filter((item) => item.key !== audience.key),
+                          )
+                        }
+                        className="text-violet-500 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-200"
+                      >
+                        &times;
+                      </button>
+                    </span>
+                  ))}
                   {selectedUsers.map((u) => (
                     <span
                       key={u.id}
@@ -912,7 +1412,11 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="mt-1 w-full rounded-2xl border border-gray-200 px-3 py-2 text-sm shadow-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                  placeholder="Search by name or email..."
+                  placeholder={
+                    isAccommodationThread(newThreadType)
+                      ? "Search teachers or staff by name or email..."
+                      : "Search by name or email to add individuals..."
+                  }
                 />
                 {searching ? (
                   <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -974,7 +1478,11 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
                 </button>
                 <button
                   type="submit"
-                  disabled={creating || selectedUsers.length === 0 || !newMessage.trim()}
+                  disabled={
+                    creating ||
+                    (selectedUsers.length === 0 && selectedAudiences.length === 0) ||
+                    !newMessage.trim()
+                  }
                   className="rounded-2xl bg-gradient-to-r from-sky-600 to-cyan-500 px-4 py-2 text-sm font-extrabold text-white shadow-sm hover:from-sky-700 hover:to-cyan-600 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {creating ? "Sending..." : "Send"}
@@ -1184,9 +1692,22 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
                                 {thread.centerName}
                               </span>
                             ) : null}
+                            <span className={["rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase", messageTypeTone(thread.type)].join(" ")}>
+                              {threadTypeLabel(thread.type)}
+                            </span>
+                            {isWorkflowThread(thread.type) ? (
+                              <span className={["rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase", workflowStatusTone(thread.status)].join(" ")}>
+                                {workflowStatusLabel(thread.status)}
+                              </span>
+                            ) : null}
                             <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-[10px] font-extrabold text-gray-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
                               {thread.isGroup ? "Group" : "Direct"}
                             </span>
+                            {thread.priority ? (
+                              <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-extrabold text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">
+                                Priority {thread.priority}
+                              </span>
+                            ) : null}
                             <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
                               {thread.participantCount}
                             </span>
@@ -1341,8 +1862,26 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
                             </span>
                           ) : null}
                           <span className="rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-gray-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                            {threadTypeLabel(activeMeta.isGroup)}
+                            {conversationKindLabel(activeMeta.isGroup)}
                           </span>
+                          <span className={["rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide", messageTypeTone(activeMeta.type)].join(" ")}>
+                            {threadTypeLabel(activeMeta.type)}
+                          </span>
+                          {isWorkflowThread(activeMeta.type) ? (
+                            <span className={["rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide", workflowStatusTone(activeMeta.status)].join(" ")}>
+                              {workflowStatusLabel(activeMeta.status)}
+                            </span>
+                          ) : null}
+                          {activeMeta.priority ? (
+                            <span className="rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-gray-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                              Priority {activeMeta.priority}
+                            </span>
+                          ) : null}
+                          {activeMeta.dueDate ? (
+                            <span className="rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-gray-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                              Due {formatMessageTimestamp(activeMeta.dueDate)}
+                            </span>
+                          ) : null}
                           <span className="rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-gray-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
                             {activeMeta.participantCount} participants
                           </span>
@@ -1393,6 +1932,82 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
                   </div>
                 </div>
               </div>
+
+              {isWorkflowThread(activeMeta.type) ? (
+                <div className="mt-4 rounded-[1.4rem] border border-sky-100 bg-sky-50/70 p-4 dark:border-sky-900/40 dark:bg-sky-950/20">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-black uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">
+                        Workflow actions
+                      </div>
+                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                        {activeMeta.type === "OPEN_POINT"
+                          ? activeMeta.status === "READY_FOR_REVIEW"
+                            ? "This open point is waiting for the sender to complete it or send it back with notes."
+                            : "Recipients can mark this open point ready for review when their work is complete."
+                          : activeMeta.type === "REQUEST"
+                            ? "Recipients can reply for clarification or mark this request completed."
+                            : "Accommodations stay timestamped here so admins and coaches can track what is still open."}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {activeMeta.createdAt ? (
+                          <span className="rounded-full border border-white/80 bg-white/90 px-2.5 py-1 text-[10px] font-bold text-gray-600 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                            Created {formatMessageTimestamp(activeMeta.createdAt)}
+                          </span>
+                        ) : null}
+                        {activeMeta.completedAt ? (
+                          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700 shadow-sm dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
+                            Completed {formatMessageTimestamp(activeMeta.completedAt)}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {canReadyCurrentThread ? (
+                        <button
+                          type="button"
+                          onClick={() => runWorkflowAction("READY_FOR_REVIEW")}
+                          disabled={workflowSaving}
+                          className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-extrabold text-white hover:bg-amber-600 disabled:opacity-60"
+                        >
+                          {workflowSaving ? "Saving..." : "Ready To Review"}
+                        </button>
+                      ) : null}
+                      {canCompleteCurrentThread ? (
+                        <button
+                          type="button"
+                          onClick={() => runWorkflowAction("COMPLETE")}
+                          disabled={workflowSaving}
+                          className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-extrabold text-white hover:bg-emerald-700 disabled:opacity-60"
+                        >
+                          {workflowSaving ? "Saving..." : "Completed"}
+                        </button>
+                      ) : null}
+                      {canReopenCurrentThread ? (
+                        <button
+                          type="button"
+                          onClick={() => runWorkflowAction("REOPEN", { requireNote: true })}
+                          disabled={workflowSaving}
+                          className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-extrabold text-rose-700 hover:bg-rose-50 disabled:opacity-60 dark:border-rose-700 dark:bg-gray-800 dark:text-rose-300"
+                        >
+                          {workflowSaving ? "Saving..." : "Send Back With Note"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                  {canReopenCurrentThread ? (
+                    <div className="mt-3">
+                      <textarea
+                        value={workflowActionNote}
+                        onChange={(event) => setWorkflowActionNote(event.target.value)}
+                        className="w-full resize-none rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm transition focus:border-sky-300 focus:outline-none focus:ring-4 focus:ring-sky-100 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:focus:border-sky-700 dark:focus:ring-sky-900/40"
+                        rows={2}
+                        placeholder="Add the note that should go back to the recipient..."
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
               <div className="mt-4 flex flex-1 flex-col overflow-hidden rounded-[1.6rem] border border-gray-200 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.10),transparent_34%),linear-gradient(to_bottom,rgba(248,250,252,0.98),rgba(255,255,255,0.98))] dark:border-gray-700 dark:bg-[linear-gradient(to_bottom,rgba(17,24,39,0.96),rgba(31,41,55,0.96))]">
                 <div className={`border-b border-white/70 ${embedded ? "px-3 py-2" : "px-4 py-3"} dark:border-gray-700`}>

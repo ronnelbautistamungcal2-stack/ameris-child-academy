@@ -27,7 +27,7 @@ const TYPE_LABELS = {
   TASK_CHECKLIST: "Task Checklist",
   BEHAVIOR: "Behavior",
   INCIDENT: "Incident",
-  OTHER: "Other",
+  OTHER: "Grade",
 };
 
 const MEAL_OCCASIONS = [
@@ -72,6 +72,10 @@ const DIAPER_TYPE_OPTIONS = [
 
 function supportsBehaviorDetails(type) {
   return type === "BEHAVIOR";
+}
+
+function supportsDirectGrade(type) {
+  return type === "OTHER";
 }
 
 function toTimeInputValue(date) {
@@ -714,9 +718,21 @@ export default function TeacherLogs() {
   function buildPayload(photoUrls = []) {
     const hasDomainScores = Object.keys(domainScores).length > 0;
     const gradeNum = dailyGrade === "" ? null : Number(dailyGrade);
-    const hasLegacyGrade = dailyGrade !== "" && Number.isFinite(gradeNum);
-    const hasGrade = hasDomainScores || hasLegacyGrade;
-    const payloadType = hasGrade ? "OTHER" : type;
+    const hasDirectGrade =
+      supportsDirectGrade(type) &&
+      dailyGrade !== "" &&
+      Number.isFinite(gradeNum);
+
+    if (supportsDirectGrade(type) && !hasDomainScores) {
+      if (!hasDirectGrade) {
+        throw new Error("Enter a grade from 0 to 10.");
+      }
+      if (gradeNum < 0 || gradeNum > 10) {
+        throw new Error("Grade must be between 0 and 10.");
+      }
+    }
+
+    const payloadType = hasDomainScores || supportsDirectGrade(type) ? "OTHER" : type;
 
     let details = null;
     if (hasDomainScores) {
@@ -731,7 +747,7 @@ export default function TeacherLogs() {
         domains: { ...domainScores },
         domainAvg: avg,
       };
-    } else if (hasLegacyGrade) {
+    } else if (hasDirectGrade) {
       details = { kind: "DAILY_GRADE", grade: gradeNum };
     }
 
@@ -774,7 +790,7 @@ export default function TeacherLogs() {
         behaviorType: activityFields.behaviorType || "OTHER",
         behaviorLevel: activityFields.behaviorLevel || "1",
       };
-    } else {
+    } else if (!supportsDirectGrade(type)) {
       details = {
         ...(details || {}),
         time: timeValue,
@@ -785,11 +801,16 @@ export default function TeacherLogs() {
       details = { ...(details || {}), media: photoUrls };
     }
 
-    const createdAtSource =
+    const createdAt =
       payloadType === "NAP"
-        ? activityFields.napStartTime || activityFields.napEndTime || activityFields.activityTime
-        : activityFields.activityTime;
-    const createdAt = buildCreatedAtForToday(createdAtSource);
+        ? buildCreatedAtForToday(
+            activityFields.napStartTime ||
+              activityFields.napEndTime ||
+              activityFields.activityTime,
+          )
+        : supportsDirectGrade(type)
+          ? new Date()
+          : buildCreatedAtForToday(activityFields.activityTime);
 
     return {
       payloadType,
@@ -892,7 +913,7 @@ export default function TeacherLogs() {
           <div>
             <h2 className="text-lg font-extrabold text-gray-900">Daily Activity Logging</h2>
             <p className="mt-1 text-sm text-gray-600">
-              Teachers can set the time for today's entry, but the date stays locked to today. Bulk logging is supported.
+              Teachers can set the time for today's entry, but the date stays locked to today. Grade entries use a 0-10 score instead of a time. Bulk logging is supported.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1252,7 +1273,7 @@ export default function TeacherLogs() {
                   ))}
                 </div>
                 <div className="mt-2 text-xs text-gray-600">
-                  Daily grade uses type <span className="font-semibold">OTHER</span> automatically.
+                  Use <span className="font-semibold">Grade</span> for a 0-10 score entry.
                 </div>
               </div>
 
@@ -1287,6 +1308,22 @@ export default function TeacherLogs() {
                         />
                       </label>
                     </>
+                  ) : supportsDirectGrade(type) ? (
+                    <label className="block">
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Grade
+                      </div>
+                      <input
+                        type="number"
+                        min="0"
+                        max="10"
+                        step="1"
+                        value={dailyGrade}
+                        onChange={(e) => setDailyGrade(e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        placeholder="0-10"
+                      />
+                    </label>
                   ) : (
                     <label className="block">
                       <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -1424,9 +1461,11 @@ export default function TeacherLogs() {
                           ? "Diaper entries capture the time, diaper type, and description."
                           : type === "BEHAVIOR"
                             ? "Behavior entries capture type, level, time, and description."
+                            : supportsDirectGrade(type)
+                              ? "Grade entries capture a 0-10 score and description."
                             : type === "INCIDENT"
                               ? "Incident entries capture the time and description."
-                        : "Other entries capture the time and description."}
+                        : "Activity entries capture the time and description."}
                 </div>
               </div>
 

@@ -96,6 +96,13 @@ function buildDailyChecklistInclude(date) {
         lesson: {
           select: LESSON_SELECT,
         },
+        lessonCategory: {
+          select: {
+            id: true,
+            name: true,
+            ageRange: true,
+          },
+        },
         policyDocument: {
           select: {
             id: true,
@@ -152,6 +159,30 @@ async function validateChecklistClassRoomIds(centerId, classRoomIds) {
   }
 
   return classRoomIds;
+}
+
+async function validateChecklistItemLessonCategoryIds(centerId, items) {
+  const categoryIds = [...new Set(
+    (Array.isArray(items) ? items : [])
+      .map((item) => String(item?.lessonCategoryId || "").trim())
+      .filter(Boolean),
+  )];
+
+  if (!categoryIds.length) return [];
+
+  const categories = await prisma.lessonCategory.findMany({
+    where: {
+      centerId,
+      id: { in: categoryIds },
+    },
+    select: { id: true },
+  });
+
+  if (categories.length !== categoryIds.length) {
+    throw new Error("One or more selected lesson categories are invalid for this center");
+  }
+
+  return categoryIds;
 }
 
 function buildChecklistClassroomScopeData(classRoomIds) {
@@ -362,6 +393,7 @@ function serializeItem(it, sortOrder) {
     oneTimeDate: frequency === "ONE_TIME" ? normalizeOneTimeDate(it.oneTimeDate) : null,
     lessonSource,
     lessonSlot: lessonSource === "AUTO_SLOT" ? normalizeLessonSlot(it.lessonSlot) : null,
+    lessonCategoryId: lessonSource === "AUTO_SLOT" ? it.lessonCategoryId || null : null,
     lessonId: lessonSource === "FIXED" ? it.lessonId || null : null,
     policyDocumentId: it.policyDocumentId || null,
     policyLink: it.policyLink || null,
@@ -415,6 +447,7 @@ function resolveChecklistItemsForDate(checklist, lessons, termCalendars, date) {
         ...item,
         lessonSource,
         lessonSlot: normalizeLessonSlot(item.lessonSlot),
+        lessonCategoryId: item.lessonCategoryId || null,
         lessonTermDay: termEntry?.termDay || null,
         lessonTermLabel: termEntry?.term || null,
       };
@@ -424,6 +457,7 @@ function resolveChecklistItemsForDate(checklist, lessons, termCalendars, date) {
       lessons,
       checklistClassRooms,
       lessonSlot: item.lessonSlot,
+      lessonCategoryId: item.lessonCategoryId || null,
       term: termEntry?.term || "",
       termDay: termEntry?.termDay || null,
     });
@@ -432,6 +466,7 @@ function resolveChecklistItemsForDate(checklist, lessons, termCalendars, date) {
       ...item,
       lessonSource,
       lessonSlot: normalizeLessonSlot(item.lessonSlot),
+      lessonCategoryId: item.lessonCategoryId || null,
       lesson: resolvedLesson || null,
       lessonId: resolvedLesson?.id || null,
       lessonTermDay: termEntry?.termDay || null,
@@ -602,6 +637,7 @@ export default async function handler(req, res) {
         normalized.centerId,
         normalized.classRoomIds,
       );
+      await validateChecklistItemLessonCategoryIds(normalized.centerId, items);
     } catch (error) {
       return res.status(400).json({ error: error.message });
     }
@@ -665,12 +701,24 @@ export default async function handler(req, res) {
           nextCenterId,
           normalizeChecklistClassRoomIds(req.body?.classRoomIds, req.body?.classRoomId),
         );
+        await validateChecklistItemLessonCategoryIds(nextCenterId, items);
       } catch (error) {
         return res.status(400).json({ error: error.message });
       }
       Object.assign(data, buildChecklistClassroomScopeData(classRoomIds));
     } else if (Object.prototype.hasOwnProperty.call(req.body || {}, "centerId")) {
+      try {
+        await validateChecklistItemLessonCategoryIds(nextCenterId, items);
+      } catch (error) {
+        return res.status(400).json({ error: error.message });
+      }
       Object.assign(data, buildChecklistClassroomScopeData([]));
+    } else if (Array.isArray(items)) {
+      try {
+        await validateChecklistItemLessonCategoryIds(nextCenterId, items);
+      } catch (error) {
+        return res.status(400).json({ error: error.message });
+      }
     }
 
     const updated = await prisma.dailyChecklist.update({

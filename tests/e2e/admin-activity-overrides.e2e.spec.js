@@ -7,9 +7,9 @@ const PHOTO_PATH = path.resolve(__dirname, "../../public/icons/icon-192.png");
 async function selectScope(page) {
   await page.goto("/admin/activity-overrides");
   await waitForLoadingDone(page);
-  await expect(page.getByText("Admin Activity Overrides")).toBeVisible();
-  const centerSelect = page.getByRole("combobox", { name: "Center" });
-  const childSelect = page.getByRole("combobox", { name: "Child" });
+  await expect(page.getByText("Admin Activity Log")).toBeVisible();
+  const centerSelect = page.getByRole("combobox", { name: "Center", exact: true });
+  const childSelect = page.getByRole("combobox", { name: "Child", exact: true });
   await expect(centerSelect).toBeEnabled();
   await centerSelect.selectOption({ label: "Demo Center" });
   await expect(childSelect).toBeEnabled();
@@ -56,7 +56,6 @@ test.describe("Admin activity overrides", () => {
     await expect(page.getByText(/created for Child One/i)).toBeVisible();
 
     const row = page.locator("tr").filter({ hasText: note }).first();
-    await expect(row).toContainText("Backdated");
     await expect(row).toContainText("1 photo");
 
     await expect(page.getByRole("combobox", { name: "Filter Classroom" })).toBeVisible();

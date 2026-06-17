@@ -152,9 +152,9 @@ export default function Home() {
       title="Home"
       description="Turning Today's Blessings into Tomorrow's Pillars at Ameris Academy."
     >
-      <div className="pb-16">
+      <div className="pb-20">
         <HeroSection />
-        <div className="relative -mt-10 rounded-t-[56px] bg-white pt-8">
+        <div className="relative bg-white pt-8">
           <FeatureSection />
           <ProgramsSection />
           <AboutSection />
@@ -184,7 +184,7 @@ function HeroSection() {
   };
 
   return (
-    <section className="relative pb-24 pt-36 sm:pb-28 sm:pt-40">
+    <section className="relative pb-24 pt-32 sm:pb-28 sm:pt-36">
       <div className="pointer-events-none absolute inset-0">
         <Image
           src="/homepage-assets/Image_Top.webp"
@@ -197,8 +197,8 @@ function HeroSection() {
       </div>
 
       <div className="relative mx-auto w-full px-5 lg:px-8">
-        <div className="grid items-center gap-8 md:grid-cols-[0.28fr_0.72fr] lg:gap-10">
-          <div className="mx-auto max-w-[280px] text-center md:mx-0 md:pl-8">
+        <div className="grid items-center gap-8 md:grid-cols-[0.42fr_0.58fr] lg:gap-10">
+          <div className="mx-auto max-w-[360px] text-center md:mx-0 md:pl-8">
             <h1 className="text-[clamp(2rem,3.5vw,3.3rem)] font-extrabold leading-[1.08] tracking-tight text-[#1d2352]">
               Turning Today&apos;s Blessings into Tomorrow&apos;s Pillars
             </h1>
@@ -253,40 +253,54 @@ function HeroSection() {
           </div>
         </div>
       </div>
+
+      {/* Asymmetric wave — peaks on the left, slopes down to the right */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 overflow-hidden leading-none">
+        <svg
+          viewBox="0 0 1440 90"
+          preserveAspectRatio="none"
+          className="block w-full"
+          style={{ height: "90px" }}
+          aria-hidden="true"
+        >
+          <path
+            d="M0,90 L0,42 C120,6 280,58 520,38 C720,22 980,60 1250,48 C1340,44 1400,52 1440,58 L1440,90 Z"
+            fill="white"
+          />
+        </svg>
+      </div>
     </section>
   );
 }
 
 function FeatureSection() {
   return (
-    <section className="relative pt-1">
+    <section className="py-8">
       <div className="mx-auto w-full px-6 lg:px-10">
-        <div className="overflow-hidden rounded-[34px] bg-[linear-gradient(180deg,#fffef9_0%,#fff8ec_100%)] px-5 py-6 shadow-[0_20px_50px_-42px_rgba(27,58,109,0.55)] ring-1 ring-[#f4e8d2]">
-          <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-5">
-            {FEATURE_PILLARS.map((item) => (
-              <article key={item.title} className="text-center">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center">
-                  {item.imageSrc ? (
-                    <Image
-                      src={item.imageSrc}
-                      alt={item.imageAlt}
-                      width={56}
-                      height={56}
-                      className="h-14 w-14 object-contain"
-                    />
-                  ) : (
-                    <LeafIcon className="h-10 w-10 text-[#3c9f48]" />
-                  )}
-                </div>
-                <h2 className="mt-2.5 text-[1rem] font-extrabold leading-tight text-[#1d2352]">
-                  {item.title}
-                </h2>
-                <p className="mt-2 text-[12px] leading-6 text-slate-600">
-                  {item.description}
-                </p>
-              </article>
-            ))}
-          </div>
+        <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-5">
+          {FEATURE_PILLARS.map((item) => (
+            <article key={item.title} className="text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center">
+                {item.imageSrc ? (
+                  <Image
+                    src={item.imageSrc}
+                    alt={item.imageAlt}
+                    width={56}
+                    height={56}
+                    className="h-14 w-14 object-contain"
+                  />
+                ) : (
+                  <LeafIcon className="h-10 w-10 text-[#3c9f48]" />
+                )}
+              </div>
+              <h2 className="mt-2.5 text-[1rem] font-extrabold leading-tight text-[#1d2352]">
+                {item.title}
+              </h2>
+              <p className="mt-2 text-[12px] leading-6 text-slate-600">
+                {item.description}
+              </p>
+            </article>
+          ))}
         </div>
       </div>
     </section>
@@ -295,7 +309,7 @@ function FeatureSection() {
 
 function ProgramsSection() {
   return (
-    <section className="pt-10">
+    <section className="bg-white pt-10">
       <div className="mx-auto w-full px-6 lg:px-10">
         <h2 className="text-center text-[1.85rem] font-extrabold tracking-tight text-[#1d2352]">
           Programs for Every Age &amp; Stage

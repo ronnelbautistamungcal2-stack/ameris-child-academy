@@ -39,7 +39,7 @@ export default function PublicNavbar() {
 
   return (
     <header className="absolute inset-x-0 top-0 z-50">
-      <div className="mx-auto flex w-full items-center justify-between gap-5 px-5 pb-8 pt-5 lg:px-8">
+      <div className="mx-auto flex w-full items-center justify-between gap-5 px-5 py-4 lg:px-8">
         <Link href="/" className="block w-[clamp(170px,22vw,270px)] shrink-0">
           <AmerisLogo size="xl" showText={false} className="drop-shadow-sm" />
         </Link>

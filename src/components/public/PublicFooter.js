@@ -6,7 +6,7 @@ import { PUBLIC_CONTACT, SITE_TAGLINE } from "./siteData";
 
 export default function PublicFooter() {
   return (
-    <footer className="relative overflow-hidden border-t border-[#d9e7fb]">
+    <footer className="relative overflow-hidden -mt-16">
       <div className="pointer-events-none absolute inset-0">
         <Image
           src="/homepage-assets/Image_Bottom.webp"
@@ -17,7 +17,20 @@ export default function PublicFooter() {
         />
       </div>
 
-      <div className="relative w-full pt-8">
+      {/* White wave — blends seamlessly with the white content section above */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 overflow-hidden" style={{ height: "80px" }}>
+        <svg
+          viewBox="0 0 1440 80"
+          preserveAspectRatio="none"
+          className="w-full h-full"
+          aria-hidden="true"
+          fill="white"
+        >
+          <path d="M0,0 L1440,0 L1440,35 C1100,65 700,25 350,50 C180,60 60,45 0,55 Z" />
+        </svg>
+      </div>
+
+      <div className="relative w-full pt-20">
         <div className="px-6 py-6 lg:px-10">
           <div className="grid gap-8 md:grid-cols-[1.15fr_1fr_1.2fr]">
             <div className="min-w-0">

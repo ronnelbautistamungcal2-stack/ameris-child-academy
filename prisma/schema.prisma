@@ -279,6 +279,7 @@ model Center {
   timeOffBalanceEntries TimeOffBalanceEntry[]
   trainingLogs     TrainingLog[]
   teacherTrainingPathways TeacherTrainingPathway[]
+  staffAdvancements StaffAdvancement[]
   classroomBudgets ClassroomBudget[]
   teacherEvaluations TeacherEvaluation[]
   events           Event[]
@@ -1472,4 +1473,35 @@ model DailyChecklistNote {
   @@unique([checklistId, createdById, date])
   @@index([checklistId, date])
   @@index([createdById, date])
+}
+
+model StaffAdvancement {
+  id          String                 @id @default(uuid())
+  center      Center                 @relation(fields: [centerId], references: [id])
+  centerId    String
+  title       String
+  description String?
+  category    String?
+  media       String[]               @default([])
+  sortOrder   Int                    @default(0)
+  steps       StaffAdvancementStep[]
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  @@index([centerId, category])
+  @@index([centerId, sortOrder])
+}
+
+model StaffAdvancementStep {
+  id            String           @id @default(uuid())
+  advancement   StaffAdvancement @relation(fields: [advancementId], references: [id], onDelete: Cascade)
+  advancementId String
+  stepIndex     Int
+  title         String
+  description   String?
+  resource      String?
+  notes         String?
+  createdAt     DateTime         @default(now())
+
+  @@index([advancementId, stepIndex])
 }

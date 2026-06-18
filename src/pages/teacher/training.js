@@ -274,10 +274,10 @@ export default function TeacherTraining() {
 
                     <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-1">
                       <Link
-                        href="/teacher/lessons"
+                        href="/teacher/staff-advancement"
                         className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
                       >
-                        Lesson Plans & Media
+                        Staff Advancement Steps
                       </Link>
                     </div>
 

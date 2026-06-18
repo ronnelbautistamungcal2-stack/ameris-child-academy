@@ -21,6 +21,7 @@ export const ADMIN_NAV_ITEMS = [
       { href: "/admin/children", label: "Children" },
       { href: "/admin/staff-management", label: "Staff Management" },
       { href: "/admin/teacher-training-pathways", label: "Teacher Training Pathways" },
+      { href: "/admin/staff-advancement", label: "Staff Advancement" },
       { href: "/admin/data-import", label: "Data Import" },
     ],
   },

@@ -13,11 +13,12 @@ const TYPES = [
   "ACTIVITY",
   "TASK_CHECKLIST",
   "BEHAVIOR",
+  "ACCOMPLISHMENT",
   "INCIDENT",
   "OTHER",
 ];
 
-const QUICK_TYPE_OPTIONS = ["MEAL", "NAP", "DIAPER_CHANGE", "ACTIVITY", "BEHAVIOR", "INCIDENT", "OTHER"];
+const QUICK_TYPE_OPTIONS = ["MEAL", "NAP", "DIAPER_CHANGE", "ACTIVITY", "BEHAVIOR", "ACCOMPLISHMENT", "INCIDENT", "OTHER"];
 
 const TYPE_META = {
   INCIDENT: { label: "Incident", color: "#b91c1c", tint: "#fee2e2" },
@@ -28,7 +29,8 @@ const TYPE_META = {
   SNACK: { label: "Snack", color: "#047857", tint: "#d1fae5" },
   ACTIVITY: { label: "Activity", color: "#be185d", tint: "#fce7f3" },
   TASK_CHECKLIST: { label: "Task / Checklist", color: "#0f766e", tint: "#ccfbf1" },
-  BEHAVIOR: { label: "Behavior", color: "#c2410c", tint: "#ffedd5" },
+  BEHAVIOR: { label: "Citizenship", color: "#c2410c", tint: "#ffedd5" },
+  ACCOMPLISHMENT: { label: "Accomplishment", color: "#15803d", tint: "#dcfce7" },
   OTHER: { label: "Grade", color: "#475569", tint: "#e2e8f0" },
 };
 
@@ -515,7 +517,7 @@ function formatActivitySummary(activity) {
   if (activity?.type === "BEHAVIOR") {
     const parts = [details.behaviorType || "", details.behaviorLevel ? `Level ${details.behaviorLevel}` : ""].filter(Boolean);
     if (mediaCount) parts.push(`${mediaCount} photo${mediaCount === 1 ? "" : "s"}`);
-    return parts.join(" | ") || "Behavior entry";
+    return parts.join(" | ") || "Citizenship entry";
   }
   if (activity?.type === "INCIDENT") {
     return mediaCount ? `${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : "Incident entry";
@@ -570,7 +572,10 @@ function composerHelperText(type) {
     return "Diaper entries capture the time, diaper type, and description.";
   }
   if (type === "BEHAVIOR") {
-    return "Behavior entries capture type, level, time, and description.";
+    return "Citizenship entries capture type, level, time, and description.";
+  }
+  if (type === "ACCOMPLISHMENT") {
+    return "Accomplishment entries capture the time and a description of what was achieved.";
   }
   if (type === "INCIDENT") {
     return "Incident entries capture the time and description.";

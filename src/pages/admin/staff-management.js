@@ -47,9 +47,18 @@ const EVALUATION_STATUS_OPTIONS = [
   { value: "ACKNOWLEDGED", label: "Acknowledged" },
 ];
 
-function createDefaultEvaluationForm() {
+const EVAL_TYPES = [
+  "Annual Review",
+  "Mid-Year Review",
+  "Probationary Review",
+  "Performance Improvement",
+  "Other",
+];
+
+function createDefaultEvaluationForm(teacherId = "") {
   return {
-    teacherId: "",
+    teacherId,
+    evaluationType: "",
     periodStart: today(),
     periodEnd: addDays(today(), 13),
     categories: Object.fromEntries(EVAL_CATEGORIES.map((category) => [category, 3])),
@@ -3098,6 +3107,13 @@ function EvaluationsTab({ centerId, teachers }) {
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const startEvaluationForTeacher = useCallback((teacherId) => {
+    setForm(createDefaultEvaluationForm(teacherId));
+    setFormError("");
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
   const loadEvaluations = useCallback(async () => {
     if (!centerId) {
       setEvaluations([]);
@@ -3135,7 +3151,7 @@ function EvaluationsTab({ centerId, teachers }) {
   }, [centerId, loadEvaluations]);
 
   const overallScore = (cats) => {
-    const vals = Object.values(cats || {}).filter((v) => typeof v === "number");
+    const vals = Object.values(cats || {}).filter((v) => typeof v === "number" && v !== null);
     if (vals.length === 0) return null;
     return Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 20);
   };
@@ -3162,6 +3178,7 @@ function EvaluationsTab({ centerId, teachers }) {
         body: JSON.stringify({
           centerId,
           teacherId: form.teacherId,
+          period: form.evaluationType || undefined,
           periodStart: form.periodStart || null,
           periodEnd: form.periodEnd || null,
           overallScore: overallScore(form.categories),
@@ -3310,6 +3327,32 @@ function EvaluationsTab({ centerId, teachers }) {
           .
         </div>
 
+        {teachers.length > 0 && !showForm && (
+          <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
+            <div className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-400">
+              Quick Evaluate — Click an employee to start
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+              {teachers.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => startEvaluationForTeacher(t.id)}
+                  className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-left text-sm hover:border-blue-300 hover:bg-blue-50 transition"
+                >
+                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-800 to-sky-600 text-xs font-bold text-white">
+                    {getInitials(t.name)}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate text-xs font-semibold text-gray-800">{t.name}</div>
+                    <div className="text-xs text-blue-600">Evaluate →</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -3425,6 +3468,16 @@ function EvaluationsTab({ centerId, teachers }) {
                   </option>
                 ))}
               </FilterSelect>
+              <FilterSelect
+                label="Evaluation Type"
+                value={form.evaluationType}
+                onChange={(v) => setForm({ ...form, evaluationType: v })}
+              >
+                <option value="">Select type…</option>
+                {EVAL_TYPES.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </FilterSelect>
               <FilterInput
                 label="Start Date"
                 type="date"
@@ -3449,39 +3502,65 @@ function EvaluationsTab({ centerId, teachers }) {
 
             <div>
               <div className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-400">
-                Category Scores (1-5)
+                Category Scores (1-5) — check &ldquo;Not Evaluated&rdquo; to skip a category without affecting the score
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                {EVAL_CATEGORIES.map((cat) => (
-                  <label
-                    key={cat}
-                    className="block rounded-xl border border-gray-200 bg-white p-3"
-                  >
-                    <div className="mb-2 text-xs font-semibold text-gray-600">
-                      {cat}
+                {EVAL_CATEGORIES.map((cat) => {
+                  const notEval = form.categories[cat] === null;
+                  return (
+                    <div
+                      key={cat}
+                      className={`rounded-xl border p-3 ${notEval ? "border-gray-200 bg-gray-50 opacity-60" : "border-gray-200 bg-white"}`}
+                    >
+                      <div className="mb-1 flex items-center justify-between">
+                        <div className="text-xs font-semibold text-gray-600">{cat}</div>
+                        <label className="flex cursor-pointer items-center gap-1.5 text-xs text-gray-500">
+                          <input
+                            type="checkbox"
+                            checked={notEval}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                categories: {
+                                  ...form.categories,
+                                  [cat]: e.target.checked ? null : 3,
+                                },
+                              })
+                            }
+                            className="h-3.5 w-3.5 rounded"
+                          />
+                          Not Evaluated
+                        </label>
+                      </div>
+                      {notEval ? (
+                        <div className="mt-2 text-center text-xs text-gray-400 italic">Not scored</div>
+                      ) : (
+                        <>
+                          <input
+                            type="range"
+                            min="1"
+                            max="5"
+                            step="1"
+                            value={form.categories[cat] ?? 3}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                categories: {
+                                  ...form.categories,
+                                  [cat]: parseInt(e.target.value),
+                                },
+                              })
+                            }
+                            className="mt-1 w-full accent-blue-600"
+                          />
+                          <div className="mt-1 text-center text-lg font-extrabold text-blue-800">
+                            {form.categories[cat]}/5
+                          </div>
+                        </>
+                      )}
                     </div>
-                    <input
-                      type="range"
-                      min="1"
-                      max="5"
-                      step="1"
-                      value={form.categories[cat] || 3}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          categories: {
-                            ...form.categories,
-                            [cat]: parseInt(e.target.value),
-                          },
-                        })
-                      }
-                      className="w-full accent-blue-600"
-                    />
-                    <div className="mt-1 text-center text-lg font-extrabold text-blue-800">
-                      {form.categories[cat]}/5
-                    </div>
-                  </label>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -3512,8 +3591,13 @@ function EvaluationsTab({ centerId, teachers }) {
               <div className="text-sm text-gray-600">
                 Overall Score:{" "}
                 <span className="text-lg font-extrabold text-blue-800">
-                  {overallScore(form.categories)}%
+                  {overallScore(form.categories) !== null ? `${overallScore(form.categories)}%` : "—"}
                 </span>
+                {Object.values(form.categories).some((v) => v === null) && (
+                  <span className="ml-2 text-xs text-gray-400">
+                    ({Object.values(form.categories).filter((v) => v === null).length} category not evaluated)
+                  </span>
+                )}
               </div>
               <SaveButton saving={saving} label="Save as Draft" />
             </div>

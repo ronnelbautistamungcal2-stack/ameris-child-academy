@@ -462,6 +462,7 @@ function MonthGrid({
 
 export default function WeeklyLessonPlanner({
   centerId,
+  classId = "",
   mode = "teacher",
   childId = "",
   bulkChildIds = [],
@@ -672,12 +673,14 @@ export default function WeeklyLessonPlanner({
       setLoading(true);
       setError("");
       try {
-        const qs = new URLSearchParams({
+        const qsParams = {
           centerId,
           period: "DAY",
           from: toIsoDate(range.start),
           to: toIsoDate(range.endExclusive),
-        });
+        };
+        if (classId) qsParams.classRoomId = classId;
+        const qs = new URLSearchParams(qsParams);
         const data = await apiJson(`/api/v1/milestone-checklists?${qs.toString()}`);
         if (abortRef.current.aborted) return;
         setPlans(Array.isArray(data) ? data : []);
@@ -689,7 +692,7 @@ export default function WeeklyLessonPlanner({
         if (!abortRef.current.aborted) setLoading(false);
       }
     })();
-  }, [centerId, range.start.toISOString(), range.endExclusive.toISOString()]);
+  }, [centerId, classId, range.start.toISOString(), range.endExclusive.toISOString()]);
 
   useEffect(() => {
     (async () => {
@@ -785,6 +788,7 @@ export default function WeeklyLessonPlanner({
         method: "POST",
         body: JSON.stringify({
           centerId,
+          classRoomId: classId || null,
           title: DEFAULT_PLAN_TITLE,
           description: null,
           period: "DAY",

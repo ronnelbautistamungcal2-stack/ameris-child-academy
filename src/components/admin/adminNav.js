@@ -52,6 +52,7 @@ export const ADMIN_NAV_ITEMS = [
       { href: "/admin/checklists", label: "Checklists" },
       { href: "/admin/activity-overrides", label: "Log Activity" },
       { href: "/admin/supply-lists", label: "Supply Lists" },
+      { href: "/admin/parent-involvement", label: "Parent Involvement Activities" },
       { href: "/admin/progress-archive", label: "Progress Archive" },
       { href: "/admin/data-archive", label: "Data Archive" },
     ],

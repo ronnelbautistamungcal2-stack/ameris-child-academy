@@ -1285,6 +1285,8 @@ function activityTitle(activity) {
 }
 
 function formatActivityType(type) {
+  if (type === "BEHAVIOR") return "Citizenship";
+  if (type === "ACCOMPLISHMENT") return "Accomplishment";
   return String(type || "OTHER").toLowerCase().split("_").map((part) => part.slice(0, 1).toUpperCase() + part.slice(1)).join(" ");
 }
 

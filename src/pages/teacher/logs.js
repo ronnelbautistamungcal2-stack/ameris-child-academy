@@ -13,6 +13,7 @@ const TYPES = [
   "ACTIVITY",
   "TASK_CHECKLIST",
   "BEHAVIOR",
+  "ACCOMPLISHMENT",
   "INCIDENT",
   "OTHER",
 ];
@@ -25,7 +26,8 @@ const TYPE_LABELS = {
   SNACK: "Snack",
   ACTIVITY: "Activity",
   TASK_CHECKLIST: "Task Checklist",
-  BEHAVIOR: "Behavior",
+  BEHAVIOR: "Citizenship",
+  ACCOMPLISHMENT: "Accomplishment",
   INCIDENT: "Incident",
   OTHER: "Grade",
 };
@@ -1256,7 +1258,7 @@ export default function TeacherLogs() {
                   ))}
                 </select>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {["MEAL", "NAP", "DIAPER_CHANGE", "ACTIVITY", "BEHAVIOR", "INCIDENT", "OTHER"].map((t) => (
+                  {["MEAL", "NAP", "DIAPER_CHANGE", "ACTIVITY", "BEHAVIOR", "ACCOMPLISHMENT", "INCIDENT", "OTHER"].map((t) => (
                     <button
                       key={t}
                       type="button"
@@ -1460,12 +1462,14 @@ export default function TeacherLogs() {
                         : type === "DIAPER_CHANGE"
                           ? "Diaper entries capture the time, diaper type, and description."
                           : type === "BEHAVIOR"
-                            ? "Behavior entries capture type, level, time, and description."
-                            : supportsDirectGrade(type)
-                              ? "Grade entries capture a 0-10 score and description."
-                            : type === "INCIDENT"
-                              ? "Incident entries capture the time and description."
-                        : "Activity entries capture the time and description."}
+                            ? "Citizenship entries capture type, level, time, and description."
+                            : type === "ACCOMPLISHMENT"
+                              ? "Accomplishment entries capture the time and a description of what was achieved."
+                              : supportsDirectGrade(type)
+                                ? "Grade entries capture a 0-10 score and description."
+                                : type === "INCIDENT"
+                                  ? "Incident entries capture the time and description."
+                                  : "Activity entries capture the time and description."}
                 </div>
               </div>
 

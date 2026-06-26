@@ -25,6 +25,8 @@ enum ActivityType {
   ACTIVITY
   TASK_CHECKLIST
   BEHAVIOR
+  CITIZENSHIP
+  ACCOMPLISHMENT
   INCIDENT
   OTHER
 }
@@ -251,6 +253,7 @@ model User {
   assignedDailyChecklists      DailyChecklist[]           @relation("DailyChecklistAssignedUser")
   dailyChecklistNotes          DailyChecklistNote[]       @relation("DailyChecklistNotesCreatedBy")
   closedChildFlagReviews       ChildFlagReview[]          @relation("ChildFlagReviewClosedBy")
+  parentInvolvements           ParentInvolvement[]
 }
 
 model Center {
@@ -285,6 +288,7 @@ model Center {
   events           Event[]
   shiftSchedules   ShiftSchedule[]
   affiliates       Affiliate[]
+  parentInvolvementActivities ParentInvolvementActivity[]
   coachObservations CoachObservation[]
   coachFollowUps   CoachFollowUp[]
   dailyChecklists  DailyChecklist[]
@@ -318,6 +322,7 @@ model ClassRoom {
   coachObservations CoachObservation[]
   dailyChecklists   DailyChecklist[]
   dailyChecklistAssignments DailyChecklistClassroom[]
+  milestoneChecklistPlans MilestoneChecklistPlan[]
 }
 
 model TeacherClass {
@@ -366,6 +371,7 @@ model Child {
   milestoneChecklistCompletions MilestoneChecklistItemCompletion[]
   behaviorPlans   BehaviorPlan[]
   childFlagReviews ChildFlagReview[]
+  parentInvolvements ParentInvolvement[]
 }
 
 model ChildGuardian {
@@ -572,6 +578,8 @@ model MilestoneChecklistPlan {
   id          String          @id @default(uuid())
   center      Center          @relation(fields: [centerId], references: [id], onDelete: Cascade)
   centerId    String
+  classRoom   ClassRoom?      @relation(fields: [classRoomId], references: [id], onDelete: SetNull)
+  classRoomId String?
   title       String
   description String?
   period      ChecklistPeriod
@@ -581,8 +589,9 @@ model MilestoneChecklistPlan {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
-  @@unique([centerId, period, periodStart, title])
+  @@unique([centerId, period, periodStart, title, classRoomId])
   @@index([centerId, period, periodStart])
+  @@index([centerId, classRoomId, period, periodStart])
 }
 
 model MilestoneChecklistItem {
@@ -1473,6 +1482,36 @@ model DailyChecklistNote {
   @@unique([checklistId, createdById, date])
   @@index([checklistId, date])
   @@index([createdById, date])
+}
+
+model ParentInvolvementActivity {
+  id          String              @id @default(uuid())
+  center      Center              @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  title       String
+  description String?
+  active      Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  involvements ParentInvolvement[]
+
+  @@index([centerId, active])
+}
+
+model ParentInvolvement {
+  id          String                     @id @default(uuid())
+  activity    ParentInvolvementActivity  @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  activityId  String
+  parent      User                       @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  parentId    String
+  child       Child?                     @relation(fields: [childId], references: [id], onDelete: SetNull)
+  childId     String?
+  notes       String?
+  occurredAt  DateTime                   @default(now())
+  createdAt   DateTime                   @default(now())
+
+  @@index([parentId, occurredAt])
+  @@index([activityId, occurredAt])
 }
 
 model StaffAdvancement {

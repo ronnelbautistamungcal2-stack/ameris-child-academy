@@ -1,4 +1,5 @@
 import TeacherLayout from "@/components/teacher/TeacherLayout";
+import WeeklyLessonPlanner from "@/components/planning/WeeklyLessonPlanner";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { collectChecklistLessonAttachments } from "@/lib/checklistLessonResources";
@@ -9,7 +10,7 @@ import {
   summarizeChecklistFrequency,
   summarizeChecklistSchedule,
 } from "@/lib/checklistSchedule";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const CATEGORY_LABELS = {
   OPENING: "Opening",
@@ -114,6 +115,8 @@ function buildNoteDrafts(checklists, previousDrafts = {}, replaceDraftId = "") {
 export default function TeacherChecklists() {
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
+  const [classrooms, setClassrooms] = useState([]);
+  const [classId, setClassId] = useState("");
   const [selectedDate, setSelectedDate] = useState(todayStr());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -135,6 +138,21 @@ export default function TeacherChecklists() {
     })();
   }, []);
 
+  useEffect(() => {
+    if (!centerId) {
+      setClassrooms([]);
+      setClassId("");
+      return;
+    }
+    apiJson(`/api/v1/classes?centerId=${encodeURIComponent(centerId)}`)
+      .then((data) => {
+        const arr = Array.isArray(data) ? data : [];
+        setClassrooms(arr);
+        if (arr.length === 1) setClassId(arr[0].id);
+      })
+      .catch(() => setClassrooms([]));
+  }, [centerId]);
+
   return (
     <TeacherLayout title="Checklists">
       <div className="rounded-xl border border-gray-200 bg-white p-4">
@@ -142,16 +160,12 @@ export default function TeacherChecklists() {
           <div>
             <h2 className="text-base font-extrabold text-gray-900">Checklists</h2>
             <p className="mt-0.5 text-xs text-gray-600">
-              Work from one checklist view for the selected day. Routine tasks
-              and scheduled lessons appear together, while reusable templates
-              stay managed separately by admins.
+              Complete daily tasks on the left. The weekly lesson plan assigned by admin appears on the right.
             </p>
           </div>
-          <div className="grid w-full grid-cols-1 gap-3 md:max-w-xl md:grid-cols-2">
+          <div className="grid w-full grid-cols-1 gap-3 md:max-w-xl md:grid-cols-3">
             <label className="block">
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Center
-              </div>
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Center</div>
               <select
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
                 value={centerId}
@@ -160,17 +174,26 @@ export default function TeacherChecklists() {
               >
                 <option value="">Select a center...</option>
                 {centers.map((center) => (
-                  <option key={center.id} value={center.id}>
-                    {center.name}
-                  </option>
+                  <option key={center.id} value={center.id}>{center.name}</option>
                 ))}
               </select>
             </label>
-
             <label className="block">
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Current day
-              </div>
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Class</div>
+              <select
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                value={classId}
+                onChange={(event) => setClassId(event.target.value)}
+                disabled={!centerId}
+              >
+                <option value="">Select a class...</option>
+                {classrooms.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Current day</div>
               <input
                 type="date"
                 value={selectedDate}
@@ -195,10 +218,29 @@ export default function TeacherChecklists() {
             Select a center to view the assigned checklist for that day.
           </div>
         ) : (
-          <TeacherDailyChecklist
-            centerId={centerId}
-            selectedDate={selectedDate}
-          />
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {/* Left: Daily task checklist */}
+            <TeacherDailyChecklist centerId={centerId} selectedDate={selectedDate} />
+            {/* Right: Weekly lesson plan (read-only, admin-assigned) */}
+            <div className="space-y-3">
+              <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+                <h3 className="text-sm font-extrabold text-gray-900">Weekly Lesson Plan</h3>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Lessons assigned by admin for this week. Click any lesson to view its attachment.
+                </p>
+              </div>
+              {!classId ? (
+                <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-500">
+                  Select a class above to see the weekly lesson plan.
+                </div>
+              ) : (
+                <>
+                  <WeeklyLessonPlanner centerId={centerId} classId={classId} mode="teacher" />
+                  <NextWeekSupplies centerId={centerId} classRoomId={classId} />
+                </>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </TeacherLayout>
@@ -410,7 +452,11 @@ function TeacherDailyChecklist({ centerId, selectedDate }) {
 
               <div className="border-t border-gray-100 px-4 pb-4">
                 <div className="divide-y divide-gray-50">
-                  {items.map((item) => {
+                  {[...items].sort((a, b) => {
+                    const aDone = (a.completions || []).length > 0 ? 1 : 0;
+                    const bDone = (b.completions || []).length > 0 ? 1 : 0;
+                    return aDone - bDone;
+                  }).map((item) => {
                     const completion = (item.completions || [])[0];
                     const isDone = !!completion;
                     const busy = completing === completionKey(item);
@@ -824,6 +870,132 @@ function ChecklistItemDetailModal({ detail, onClose }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function NextWeekSupplies({ centerId, classRoomId }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [checked, setChecked] = useState({});
+  const [open, setOpen] = useState(true);
+
+  const load = useCallback(async () => {
+    if (!centerId || !classRoomId) return;
+    setLoading(true);
+    setError("");
+    try {
+      const qs = new URLSearchParams({ centerId, classRoomId });
+      const result = await apiJson(`/api/v1/lessons/next-week-supplies?${qs}`);
+      setData(result);
+      setChecked({});
+    } catch (e) {
+      setError(e.message || "Failed to load next week's supplies");
+    } finally {
+      setLoading(false);
+    }
+  }, [centerId, classRoomId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const weekLabel = useMemo(() => {
+    if (!data?.weekStart || !data?.weekEnd) return "Next Week";
+    const start = new Date(data.weekStart + "T00:00:00");
+    const end = new Date(data.weekEnd + "T00:00:00");
+    const fmt = (d) => d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    return `${fmt(start)} – ${fmt(end)}`;
+  }, [data]);
+
+  const supplies = data?.supplies || [];
+  const checkedCount = Object.values(checked).filter(Boolean).length;
+
+  return (
+    <div className="rounded-xl border border-emerald-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-4 py-3 text-left"
+      >
+        <div>
+          <h3 className="text-sm font-extrabold text-gray-900">
+            Supplies Needed for {weekLabel}
+          </h3>
+          {supplies.length > 0 && (
+            <p className="mt-0.5 text-xs text-gray-500">
+              {checkedCount}/{supplies.length} items marked as have
+            </p>
+          )}
+        </div>
+        <span className="text-xs text-gray-400">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div className="border-t border-emerald-100 px-4 pb-4 pt-2">
+          {error ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{error}</div>
+          ) : loading ? (
+            <div className="text-xs text-gray-500 py-2">Loading supplies…</div>
+          ) : supplies.length === 0 ? (
+            <div className="text-xs text-gray-500 py-2">
+              No supplies are attached to lessons planned for next week. Supplies are added by admins inside each lesson.
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="py-2 pr-3 text-left text-xs font-semibold text-gray-500 w-10">Have?</th>
+                  <th className="py-2 pr-3 text-left text-xs font-semibold text-gray-500">Supply</th>
+                  <th className="py-2 text-left text-xs font-semibold text-gray-500">Needed For</th>
+                </tr>
+              </thead>
+              <tbody>
+                {supplies.map((s, idx) => {
+                  const key = `${s.name}|${s.unit || ""}`;
+                  const isChecked = checked[key] || false;
+                  return (
+                    <tr
+                      key={key}
+                      className={`border-b border-gray-50 ${isChecked ? "opacity-50" : ""}`}
+                    >
+                      <td className="py-2 pr-3">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => setChecked((prev) => ({ ...prev, [key]: e.target.checked }))}
+                          className="h-4 w-4 rounded accent-emerald-600"
+                        />
+                      </td>
+                      <td className="py-2 pr-3">
+                        <span className={`font-semibold ${isChecked ? "line-through text-gray-400" : "text-amber-700"}`}>
+                          {s.name}
+                          {s.unit ? ` (${s.unit})` : ""}
+                          {s.totalQuantity > 1 ? ` ×${s.totalQuantity}` : ""}
+                        </span>
+                      </td>
+                      <td className="py-2 text-xs text-gray-600">
+                        {s.lessons.map((l, i) => (
+                          <span key={l.id}>
+                            {l.title}
+                            {i < s.lessons.length - 1 ? ", " : ""}
+                          </span>
+                        ))}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+          <button
+            type="button"
+            onClick={load}
+            className="mt-3 text-xs font-semibold text-emerald-700 hover:text-emerald-800"
+          >
+            Refresh
+          </button>
+        </div>
+      )}
     </div>
   );
 }

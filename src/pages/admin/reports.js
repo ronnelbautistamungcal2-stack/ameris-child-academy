@@ -20,6 +20,8 @@ const TABS = [
   { key: "students", label: "Student Reports" },
   { key: "behavior", label: "Behavior Tracking" },
   { key: "teachers", label: "Teacher Performance" },
+  { key: "child-performance", label: "Child Performance" },
+  { key: "coach-performance", label: "Coach Performance" },
   { key: "query", label: "Custom Query" },
 ];
 
@@ -212,6 +214,12 @@ export default function AdminReports() {
             )}
             {activeTab === "teachers" && (
               <TeachersTab centerId={centerId} />
+            )}
+            {activeTab === "child-performance" && (
+              <ChildPerformanceTab centerId={centerId} classes={classes} children={children} dateFrom={dateFrom} dateTo={dateTo} />
+            )}
+            {activeTab === "coach-performance" && (
+              <CoachPerformanceTab centerId={centerId} dateFrom={dateFrom} dateTo={dateTo} />
             )}
             {activeTab === "query" && (
               <QueryTab centerId={centerId} children={children} classes={classes} />
@@ -1087,4 +1095,309 @@ function Loading() {
 
 function Empty({ msg }) {
   return <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">{msg}</div>;
+}
+
+// ─── Child Performance Tab ─────────────────────────────────────
+
+function ChildPerformanceTab({ centerId, classes, children, dateFrom, dateTo }) {
+  const [childId, setChildId] = useState("");
+  const [classFilter, setClassFilter] = useState("");
+  const [progress, setProgress] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const filteredChildren = useMemo(() => {
+    if (!classFilter) return children;
+    return children.filter((ch) => ch.classRoomId === classFilter);
+  }, [children, classFilter]);
+
+  const selectedChild = useMemo(() => children.find((c) => c.id === childId), [children, childId]);
+
+  useEffect(() => {
+    if (!childId || !centerId) { setProgress([]); setActivities([]); return; }
+    setLoading(true);
+    Promise.all([
+      apiJson(`/api/v1/progress?childId=${encodeURIComponent(childId)}`).catch(() => []),
+      apiJson(`/api/v1/activities?childId=${encodeURIComponent(childId)}&from=${dateFrom}&to=${dateTo}`).catch(() => []),
+    ]).then(([prog, acts]) => {
+      setProgress(Array.isArray(prog) ? prog : []);
+      setActivities(Array.isArray(acts) ? acts : []);
+    }).finally(() => setLoading(false));
+  }, [childId, centerId, dateFrom, dateTo]);
+
+  const progressSummary = useMemo(() => {
+    const total = progress.length;
+    const passed = progress.filter((p) => p.status === "PASSED").length;
+    const inProgress = progress.filter((p) => p.status === "IN_PROGRESS").length;
+    const failed = progress.filter((p) => p.status === "FAILED").length;
+    return { total, passed, inProgress, failed };
+  }, [progress]);
+
+  const activityTypeCounts = useMemo(() => {
+    const counts = {};
+    activities.forEach((a) => {
+      const label = a.type === "BEHAVIOR" ? "Citizenship" : a.type === "ACCOMPLISHMENT" ? "Accomplishment" : a.type;
+      counts[label] = (counts[label] || 0) + 1;
+    });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [activities]);
+
+  const accomplishments = useMemo(() => activities.filter((a) => a.type === "ACCOMPLISHMENT"), [activities]);
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <h3 className="text-base font-extrabold text-gray-900">Child Performance Report</h3>
+        <p className="mt-1 text-sm text-gray-500">Select a child to view their development progress, activity summary, and accomplishments.</p>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <FilterSelect label="Filter by Class" value={classFilter} onChange={setClassFilter}>
+            <option value="">All classes</option>
+            {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </FilterSelect>
+          <FilterSelect label="Child" value={childId} onChange={setChildId}>
+            <option value="">Select a child…</option>
+            {filteredChildren.map((c) => (
+              <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
+            ))}
+          </FilterSelect>
+        </div>
+      </div>
+
+      {!childId ? (
+        <Empty msg="Select a child above to view their performance report." />
+      ) : loading ? (
+        <Loading />
+      ) : (
+        <>
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-600 text-base font-bold text-white">
+                {(selectedChild?.firstName || "?")[0]}
+              </div>
+              <div>
+                <div className="font-extrabold text-gray-900">{selectedChild?.firstName} {selectedChild?.lastName}</div>
+                <div className="text-xs text-gray-500">
+                  {classes.find((c) => c.id === selectedChild?.classRoomId)?.name || "No class assigned"}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              {[
+                { label: "Total Lessons", value: progressSummary.total, color: "bg-gray-50 text-gray-700" },
+                { label: "Passed", value: progressSummary.passed, color: "bg-emerald-50 text-emerald-700" },
+                { label: "In Progress", value: progressSummary.inProgress, color: "bg-amber-50 text-amber-700" },
+                { label: "Failed", value: progressSummary.failed, color: "bg-red-50 text-red-700" },
+              ].map((kpi) => (
+                <div key={kpi.label} className={`rounded-xl ${kpi.color} p-4`}>
+                  <div className="text-xs font-semibold uppercase tracking-wide opacity-70">{kpi.label}</div>
+                  <div className="mt-1 text-2xl font-extrabold">{kpi.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {activityTypeCounts.length > 0 && (
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <h4 className="text-sm font-extrabold text-gray-900 mb-3">Activity Log Summary ({dateFrom} – {dateTo})</h4>
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                {activityTypeCounts.map(([type, count]) => (
+                  <div key={type} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                    <div className="text-xs text-gray-500">{type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</div>
+                    <div className="text-lg font-extrabold text-gray-800">{count}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {accomplishments.length > 0 && (
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <h4 className="text-sm font-extrabold text-gray-900 mb-3">Accomplishments</h4>
+              <div className="space-y-2">
+                {accomplishments.map((a) => (
+                  <div key={a.id} className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="text-sm text-emerald-900">{a.notes || "Accomplishment logged"}</div>
+                      <div className="text-xs text-emerald-600 whitespace-nowrap">{fmtDate(a.createdAt)}</div>
+                    </div>
+                    {a.recordedBy?.name && (
+                      <div className="mt-1 text-xs text-emerald-600">By {a.recordedBy.name}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {progress.length > 0 && (
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <h4 className="text-sm font-extrabold text-gray-900 mb-3">Lesson Progress</h4>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-left">
+                      <th className="py-2 pr-4 text-xs font-semibold text-gray-500">Lesson</th>
+                      <th className="py-2 pr-4 text-xs font-semibold text-gray-500">Status</th>
+                      <th className="py-2 text-xs font-semibold text-gray-500">Last Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {progress.slice(0, 50).map((p) => (
+                      <tr key={p.id} className="border-b border-gray-50">
+                        <td className="py-2 pr-4 font-medium text-gray-800">{p.lesson?.title || "—"}</td>
+                        <td className="py-2 pr-4">
+                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[p.status] || "bg-gray-100 text-gray-700"}`}>
+                            {p.status?.replace(/_/g, " ") || "—"}
+                          </span>
+                        </td>
+                        <td className="py-2 text-xs text-gray-500">{fmtDate(p.updatedAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {progress.length > 50 && <div className="mt-2 text-xs text-gray-500">Showing 50 of {progress.length} records.</div>}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Coach Performance Tab ────────────────────────────────────
+
+function CoachPerformanceTab({ centerId, dateFrom, dateTo }) {
+  const [observations, setObservations] = useState([]);
+  const [followUps, setFollowUps] = useState([]);
+  const [coaches, setCoaches] = useState([]);
+  const [coachId, setCoachId] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!centerId) { setObservations([]); setFollowUps([]); setCoaches([]); return; }
+    setLoading(true);
+    Promise.all([
+      apiJson(`/api/v1/coach/observations?centerId=${encodeURIComponent(centerId)}&from=${dateFrom}&to=${dateTo}`).catch(() => []),
+      apiJson(`/api/v1/coach/follow-ups?centerId=${encodeURIComponent(centerId)}`).catch(() => []),
+      apiJson(`/api/v1/users?centerId=${encodeURIComponent(centerId)}&roles=COACH`).catch(() => []),
+    ]).then(([obs, fups, coachList]) => {
+      setObservations(Array.isArray(obs) ? obs : []);
+      setFollowUps(Array.isArray(fups) ? fups : []);
+      setCoaches(Array.isArray(coachList) ? coachList : []);
+    }).finally(() => setLoading(false));
+  }, [centerId, dateFrom, dateTo]);
+
+  const filteredObs = useMemo(() => {
+    if (!coachId) return observations;
+    return observations.filter((o) => o.coachId === coachId);
+  }, [observations, coachId]);
+
+  const filteredFups = useMemo(() => {
+    if (!coachId) return followUps;
+    return followUps.filter((f) => f.createdById === coachId || f.assignedToId === coachId);
+  }, [followUps, coachId]);
+
+  const obsSummary = useMemo(() => {
+    const total = filteredObs.length;
+    const withScore = filteredObs.filter((o) => o.score !== null && o.score !== undefined);
+    const avgScore = withScore.length > 0
+      ? (withScore.reduce((s, o) => s + (o.score || 0), 0) / withScore.length).toFixed(1)
+      : null;
+    const inClass = filteredObs.filter((o) => o.type === "IN_CLASS").length;
+    const camera = filteredObs.filter((o) => o.type === "CAMERA").length;
+    return { total, avgScore, inClass, camera };
+  }, [filteredObs]);
+
+  const fupsByStatus = useMemo(() => {
+    const open = filteredFups.filter((f) => f.status === "OPEN").length;
+    const inProgress = filteredFups.filter((f) => f.status === "IN_PROGRESS").length;
+    const completed = filteredFups.filter((f) => f.status === "COMPLETED").length;
+    return { open, inProgress, completed, total: filteredFups.length };
+  }, [filteredFups]);
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <h3 className="text-base font-extrabold text-gray-900">Coach Performance Report</h3>
+        <p className="mt-1 text-sm text-gray-500">View coach observation scores, in-class vs. camera split, and follow-up completion rates.</p>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <FilterSelect label="Coach" value={coachId} onChange={setCoachId}>
+            <option value="">All coaches</option>
+            {coaches.map((c) => <option key={c.id} value={c.id}>{c.name || c.email}</option>)}
+          </FilterSelect>
+        </div>
+      </div>
+
+      {loading ? (
+        <Loading />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {[
+              { label: "Observations", value: obsSummary.total, color: "bg-sky-50 text-sky-700" },
+              { label: "Avg Score", value: obsSummary.avgScore !== null ? `${obsSummary.avgScore}/10` : "—", color: "bg-blue-50 text-blue-700" },
+              { label: "In-Class", value: obsSummary.inClass, color: "bg-emerald-50 text-emerald-700" },
+              { label: "Camera", value: obsSummary.camera, color: "bg-amber-50 text-amber-700" },
+            ].map((kpi) => (
+              <div key={kpi.label} className={`rounded-2xl border border-gray-200 ${kpi.color} p-4`}>
+                <div className="text-xs font-semibold uppercase tracking-wide opacity-70">{kpi.label}</div>
+                <div className="mt-1 text-2xl font-extrabold">{kpi.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            {[
+              { label: "Open Follow-Ups", value: fupsByStatus.open, color: "bg-amber-50 text-amber-700" },
+              { label: "In Progress", value: fupsByStatus.inProgress, color: "bg-sky-50 text-sky-700" },
+              { label: "Completed", value: fupsByStatus.completed, color: "bg-emerald-50 text-emerald-700" },
+            ].map((kpi) => (
+              <div key={kpi.label} className={`rounded-2xl border border-gray-200 ${kpi.color} p-4`}>
+                <div className="text-xs font-semibold uppercase tracking-wide opacity-70">{kpi.label}</div>
+                <div className="mt-1 text-2xl font-extrabold">{kpi.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {filteredObs.length > 0 && (
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <h4 className="text-sm font-extrabold text-gray-900 mb-3">Recent Observations</h4>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-left">
+                      <th className="py-2 pr-4 text-xs font-semibold text-gray-500">Coach</th>
+                      <th className="py-2 pr-4 text-xs font-semibold text-gray-500">Teacher Observed</th>
+                      <th className="py-2 pr-4 text-xs font-semibold text-gray-500">Type</th>
+                      <th className="py-2 pr-4 text-xs font-semibold text-gray-500">Score</th>
+                      <th className="py-2 text-xs font-semibold text-gray-500">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredObs.slice(0, 50).map((o) => (
+                      <tr key={o.id} className="border-b border-gray-50">
+                        <td className="py-2 pr-4 text-gray-800">{o.coach?.name || "—"}</td>
+                        <td className="py-2 pr-4 text-gray-800">{o.teacher?.name || "—"}</td>
+                        <td className="py-2 pr-4">
+                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${o.type === "IN_CLASS" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                            {o.type === "IN_CLASS" ? "In Class" : "Camera"}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-4 font-semibold text-gray-800">{o.score !== null && o.score !== undefined ? `${o.score}/10` : "—"}</td>
+                        <td className="py-2 text-xs text-gray-500">{fmtDate(o.date)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
 }

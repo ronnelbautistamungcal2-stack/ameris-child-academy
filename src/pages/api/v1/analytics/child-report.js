@@ -15,7 +15,6 @@ export default async function handler(req, res) {
     const { childId, from, to } = req.query;
     if (!childId) return res.status(400).json({ error: "childId is required" });
 
-    // Access check
     const child = await prisma.child.findUnique({
       where: { id: childId },
       include: {
@@ -44,23 +43,75 @@ export default async function handler(req, res) {
     if (dateTo) dateFilter.lte = dateTo;
     const hasDateFilter = dateFrom || dateTo;
 
-    const [progress, behaviorLogs, attendanceData, behaviorPlans] = await Promise.all([
+    const [
+      progress,
+      citizenshipGradeLogs,
+      accomplishmentLogs,
+      citizenshipLogs,
+      allActivityLogs,
+      attendanceData,
+      behaviorPlans,
+      redFlags,
+    ] = await Promise.all([
       prisma.progress.findMany({
         where: { childId },
         include: {
-          lesson: { include: { category: { select: { name: true } } } },
+          lesson: {
+            include: {
+              category: { select: { name: true } },
+            },
+          },
           entries: { orderBy: { occurredAt: "desc" }, take: 5 },
         },
       }),
+
+      // Citizenship Grade: BEHAVIOR/OTHER logs with DAILY_GRADE details
       prisma.activityLog.findMany({
         where: {
           childId,
           details: { path: ["kind"], equals: "DAILY_GRADE" },
           ...(hasDateFilter ? { createdAt: dateFilter } : {}),
         },
-        select: { details: true, createdAt: true, notes: true },
+        select: { id: true, type: true, details: true, createdAt: true, notes: true },
         orderBy: { createdAt: "asc" },
       }),
+
+      // Accomplishments
+      prisma.activityLog.findMany({
+        where: {
+          childId,
+          type: "ACCOMPLISHMENT",
+          ...(hasDateFilter ? { createdAt: dateFilter } : {}),
+        },
+        select: { id: true, type: true, details: true, notes: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+      }),
+
+      // Citizenship Log
+      prisma.activityLog.findMany({
+        where: {
+          childId,
+          type: "CITIZENSHIP",
+          ...(hasDateFilter ? { createdAt: dateFilter } : {}),
+        },
+        select: { id: true, type: true, details: true, notes: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+      }),
+
+      // Student Activity Log (all types) — capped at 100 recent
+      prisma.activityLog.findMany({
+        where: {
+          childId,
+          ...(hasDateFilter ? { createdAt: dateFilter } : {}),
+        },
+        select: {
+          id: true, type: true, details: true, notes: true, createdAt: true,
+          recordedBy: { select: { name: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      }),
+
       prisma.attendance.findMany({
         where: {
           childId,
@@ -68,12 +119,22 @@ export default async function handler(req, res) {
         },
         select: { day: true },
       }),
+
+      // Individual Progress Plans
       prisma.behaviorPlan.findMany({
-        where: { childId, status: "ACTIVE" },
+        where: { childId, status: { in: ["ACTIVE", "CLOSED"] } },
         include: {
           goals: { orderBy: { sortOrder: "asc" } },
           createdBy: { select: { name: true } },
+          closedBy: { select: { name: true } },
         },
+        orderBy: { createdAt: "desc" },
+      }),
+
+      // Red flags (open ChildFlagReviews for this child)
+      prisma.childFlagReview.findMany({
+        where: { childId, closedAt: null },
+        orderBy: { createdAt: "desc" },
       }),
     ]);
 
@@ -87,12 +148,15 @@ export default async function handler(req, res) {
     for (const p of progress) {
       totalGoals++;
       const cat = p.lesson?.category?.name || "Uncategorized";
-      if (!categoryMap[cat]) categoryMap[cat] = { category: cat, completed: 0, inProgress: 0, failed: 0, notStarted: 0, total: 0 };
+      if (!categoryMap[cat]) {
+        categoryMap[cat] = { category: cat, completed: 0, inProgress: 0, failed: 0, notStarted: 0, total: 0, passed: 0 };
+      }
       categoryMap[cat].total++;
 
       if (p.status === "COMPLETED" || p.status === "PASSED") {
         completedGoals++;
         categoryMap[cat].completed++;
+        categoryMap[cat].passed++;
       } else if (p.status === "FAILED") {
         failedGoals++;
         categoryMap[cat].failed++;
@@ -104,41 +168,27 @@ export default async function handler(req, res) {
       }
     }
 
-    // Behavior domain history and trend
-    const behaviorHistory = [];
-    const domainTrend = { cognitive: [], social: [], physical: [], language: [], creative: [] };
+    // Compute % passed per category for milestones bar chart
+    const milestonesByCategory = Object.values(categoryMap).map((c) => ({
+      ...c,
+      passRate: c.total > 0 ? Math.round((c.passed / c.total) * 100) : 0,
+    }));
 
-    for (const log of behaviorLogs) {
-      const d = log.details;
-      if (!d || !d.domains) continue;
-      const entry = {
-        date: new Date(log.createdAt).toISOString().split("T")[0],
-        domains: d.domains,
-        avg: d.domainAvg ?? null,
-        notes: log.notes || null,
-      };
-      behaviorHistory.push(entry);
-      for (const key of Object.keys(domainTrend)) {
-        if (typeof d.domains[key] === "number") {
-          domainTrend[key].push(d.domains[key]);
-        }
-      }
-    }
+    // Active goals
+    const activeGoals = progress.filter((p) =>
+      ["NOT_STARTED", "IN_PROGRESS"].includes(p.status)
+    );
 
-    // Latest scores
-    const latestScores = {};
-    if (behaviorHistory.length) {
-      const last = behaviorHistory[behaviorHistory.length - 1];
-      Object.assign(latestScores, last.domains);
-    }
-
-    // Domain averages
-    const domainAverages = {};
-    for (const [key, vals] of Object.entries(domainTrend)) {
-      domainAverages[key] = vals.length > 0
-        ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100
-        : 0;
-    }
+    // Citizenship grade history for line chart
+    const citizenshipGradeHistory = citizenshipGradeLogs.map((log) => ({
+      id: log.id,
+      date: new Date(log.createdAt).toISOString().split("T")[0],
+      label: new Date(log.createdAt).toLocaleDateString(),
+      score: log.details?.grade ?? log.details?.domainAvg ?? null,
+      domainAvg: log.details?.domainAvg ?? null,
+      domains: log.details?.domains ?? null,
+      notes: log.notes || null,
+    })).filter((e) => e.score !== null);
 
     return res.status(200).json({
       child: {
@@ -155,20 +205,25 @@ export default async function handler(req, res) {
         inProgress: inProgressGoals,
         completionRate: totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 1000) / 10 : 0,
         byCategory: Object.values(categoryMap),
+        milestonesByCategory,
+        activeGoals: activeGoals.map((p) => ({
+          id: p.id,
+          status: p.status,
+          goalIndex: p.goalIndex,
+          lessonTitle: p.lesson?.title || null,
+          categoryName: p.lesson?.category?.name || null,
+        })),
       },
-      behavior: {
-        latestScores,
-        domainAverages,
-        history: behaviorHistory,
-        domainTrend: Object.fromEntries(
-          Object.entries(domainTrend).map(([k, v]) => [k, v.slice(-20)])
-        ),
-      },
+      citizenshipGrades: citizenshipGradeHistory,
+      accomplishments: accomplishmentLogs,
+      citizenshipLogs,
+      activityLogs: allActivityLogs,
       attendance: {
         present: attendanceData.length,
-        rate: null, // needs expected days context
+        rate: null,
       },
       behaviorPlans,
+      redFlags,
     });
   } catch (e) {
     console.error("analytics/child-report error:", e);

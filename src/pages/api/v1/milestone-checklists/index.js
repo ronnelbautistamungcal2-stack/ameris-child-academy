@@ -18,7 +18,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "GET") {
-    const { centerId, period, start, from, to } = req.query || {};
+    const { centerId, period, start, from, to, classRoomId } = req.query || {};
     if (!centerId) return res.status(400).json({ error: "centerId is required" });
     if (role !== "ADMIN") {
       const ok = await hasAccessToCenter(session.user.id, centerId);
@@ -27,6 +27,11 @@ export default async function handler(req, res) {
 
     const where = { centerId };
     if (period) where.period = period;
+    if (classRoomId === "none") {
+      where.classRoomId = null;
+    } else if (classRoomId) {
+      where.classRoomId = classRoomId;
+    }
     if (from || to) {
       const fromDate = from ? parseDateOnly(from) : null;
       const toDate = to ? parseDateOnly(to) : null;
@@ -71,7 +76,7 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Only admins can plan checklists" });
     }
 
-    const { centerId, title, description, period, periodStart, active, items } = req.body || {};
+    const { centerId, title, description, period, periodStart, active, items, classRoomId } = req.body || {};
     if (!centerId || !title || !period || !periodStart) {
       return res.status(400).json({ error: "centerId, title, period, and periodStart are required" });
     }
@@ -178,6 +183,7 @@ export default async function handler(req, res) {
     const created = await prisma.milestoneChecklistPlan.create({
       data: {
         centerId,
+        classRoomId: classRoomId || null,
         title,
         description: description || null,
         period,

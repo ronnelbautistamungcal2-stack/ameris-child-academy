@@ -42,6 +42,33 @@ export default function ParentForms() {
   const formSectionRef = useRef(null);
   const pendingDraftRef = useRef(null);
 
+  // Individual Progress Plans pending parent approval
+  const [pendingPlans, setPendingPlans] = useState([]);
+  const [approvingPlanId, setApprovingPlanId] = useState("");
+
+  async function loadPendingPlans() {
+    try {
+      const plans = await apiJson("/api/v1/behavior-plans?status=ACTIVE");
+      const pending = Array.isArray(plans) ? plans.filter((p) => !p.parentApproved) : [];
+      setPendingPlans(pending);
+    } catch {}
+  }
+
+  async function approvePlan(planId) {
+    setApprovingPlanId(planId);
+    try {
+      await apiJson(`/api/v1/behavior-plans/${planId}/approve`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      await loadPendingPlans();
+    } catch (e) {
+      setError(e.message || "Failed to approve plan");
+    } finally {
+      setApprovingPlanId("");
+    }
+  }
+
   async function refresh() {
     setLoading(true);
     setError("");
@@ -67,6 +94,7 @@ export default function ParentForms() {
 
   useEffect(() => {
     refresh();
+    loadPendingPlans();
   }, []);
 
   const sortedTemplates = useMemo(
@@ -230,6 +258,73 @@ export default function ParentForms() {
             {success}
           </ParentSurface>
         ) : null}
+
+        {/* Individual Progress Plans pending approval */}
+        {pendingPlans.length > 0 && (
+          <ParentSection
+            title="Individual Progress Plans — Approval Required"
+            description="The center has created intervention plans for your child. Please review and approve them."
+          >
+            <div className="space-y-3">
+              {pendingPlans.map((plan) => {
+                const childName = plan.child
+                  ? `${plan.child.firstName || ""} ${plan.child.lastName || ""}`.trim()
+                  : "";
+                return (
+                  <div
+                    key={plan.id}
+                    className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/10"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">{plan.title}</div>
+                        {childName && (
+                          <div className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">For: {childName}</div>
+                        )}
+                        <div className="mt-0.5 text-xs text-gray-500">
+                          Plan Start: {plan.startDate ? new Date(plan.startDate).toLocaleDateString() : "—"}
+                          {plan.createdBy?.name && ` • Created by: ${plan.createdBy.name}`}
+                        </div>
+                        {plan.description && (
+                          <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">{plan.description}</p>
+                        )}
+                        {plan.parentTactics && (
+                          <div className="mt-2">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Your Role (Parent Tactics)</div>
+                            <p className="mt-0.5 text-sm text-gray-700 dark:text-gray-300">{plan.parentTactics}</p>
+                          </div>
+                        )}
+                        {plan.teacherTactics && (
+                          <div className="mt-2">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Teacher Tactics</div>
+                            <p className="mt-0.5 text-sm text-gray-700 dark:text-gray-300">{plan.teacherTactics}</p>
+                          </div>
+                        )}
+                        {plan.disciplinaryAction && (
+                          <div className="mt-2">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Disciplinary Action</div>
+                            <p className="mt-0.5 text-sm text-gray-700 dark:text-gray-300">{plan.disciplinaryAction}</p>
+                          </div>
+                        )}
+                      </div>
+                      <ParentButton
+                        type="button"
+                        variant="primary"
+                        disabled={approvingPlanId === plan.id}
+                        onClick={() => approvePlan(plan.id)}
+                      >
+                        {approvingPlanId === plan.id ? "Approving…" : "Approve Plan"}
+                      </ParentButton>
+                    </div>
+                    <div className="mt-3 rounded-xl border border-amber-200 bg-white/60 px-3 py-2 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                      By clicking "Approve Plan" you acknowledge and consent to this Individual Progress Plan for your child.
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </ParentSection>
+        )}
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
           <ParentSection

@@ -41,12 +41,12 @@ async function handleGet(req, res, session, id) {
         },
       },
       createdBy: { select: { name: true } },
+      closedBy: { select: { name: true } },
     },
   });
 
   if (!plan) return res.status(404).json({ error: "Plan not found" });
 
-  // Parents can only see their children's plans
   if (
     session.user.role === "PARENT" &&
     !isChildLinkedToParent(plan.child, session.user.id)
@@ -65,16 +65,36 @@ async function handlePut(req, res, session, id) {
   const plan = await prisma.behaviorPlan.findUnique({ where: { id } });
   if (!plan) return res.status(404).json({ error: "Plan not found" });
 
-  const { title, description, status, targetDomains, endDate, reviewDate, notes } = req.body || {};
+  const {
+    title, description, status,
+    teacherTactics, parentTactics, coachTactics, disciplinaryAction,
+    startDate, endDate, reviewDate, notes, close,
+  } = req.body || {};
 
   const data = {};
   if (title !== undefined) data.title = title;
   if (description !== undefined) data.description = description;
   if (status !== undefined) data.status = status;
-  if (targetDomains !== undefined) data.targetDomains = targetDomains;
+  if (teacherTactics !== undefined) data.teacherTactics = teacherTactics;
+  if (parentTactics !== undefined) data.parentTactics = parentTactics;
+  if (coachTactics !== undefined) data.coachTactics = coachTactics;
+  if (disciplinaryAction !== undefined) data.disciplinaryAction = disciplinaryAction;
+  if (startDate !== undefined) data.startDate = startDate ? new Date(startDate) : null;
   if (endDate !== undefined) data.endDate = endDate ? new Date(endDate) : null;
   if (reviewDate !== undefined) data.reviewDate = reviewDate ? new Date(reviewDate) : null;
   if (notes !== undefined) data.notes = notes;
+
+  // Close the plan
+  if (close === true) {
+    data.status = "CLOSED";
+    data.closedAt = new Date();
+    data.closedById = session.user.id;
+  } else if (close === false && plan.status === "CLOSED") {
+    // Reopen
+    data.status = "ACTIVE";
+    data.closedAt = null;
+    data.closedById = null;
+  }
 
   const updated = await prisma.behaviorPlan.update({
     where: { id },
@@ -83,6 +103,7 @@ async function handlePut(req, res, session, id) {
       goals: { orderBy: { sortOrder: "asc" } },
       child: { select: { firstName: true, lastName: true } },
       createdBy: { select: { name: true } },
+      closedBy: { select: { name: true } },
     },
   });
 
@@ -97,7 +118,6 @@ async function handleDelete(req, res, session, id) {
   const plan = await prisma.behaviorPlan.findUnique({ where: { id } });
   if (!plan) return res.status(404).json({ error: "Plan not found" });
 
-  // Soft delete: archive instead of delete
   const updated = await prisma.behaviorPlan.update({
     where: { id },
     data: { status: "ARCHIVED" },

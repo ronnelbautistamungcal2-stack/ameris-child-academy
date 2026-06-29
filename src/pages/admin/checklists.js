@@ -97,6 +97,9 @@ function sortByTaskTime(items) {
 export default function AdminChecklists() {
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
+  const [classrooms, setClassrooms] = useState([]);
+  const [classId, setClassId] = useState("");
+  const [activeTab, setActiveTab] = useState("planner");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -117,6 +120,21 @@ export default function AdminChecklists() {
     })();
   }, []);
 
+  useEffect(() => {
+    if (!centerId) {
+      setClassrooms([]);
+      setClassId("");
+      return;
+    }
+    apiJson(`/api/v1/classes?centerId=${encodeURIComponent(centerId)}`)
+      .then((data) => {
+        const arr = Array.isArray(data) ? data : [];
+        setClassrooms(arr);
+        setClassId("");
+      })
+      .catch(() => setClassrooms([]));
+  }, [centerId]);
+
   return (
     <AdminLayout title="Checklists">
       {/* ── Page Header ── */}
@@ -127,7 +145,7 @@ export default function AdminChecklists() {
               Checklists
             </h1>
             <p className="mt-1 max-w-lg text-sm text-gray-500">
-              Build recurring checklists, assign them to classrooms or staff, and link each item to lessons, policies, or direct actions.
+              Manage the weekly lesson planner per class, task checklists, and daily operations routines.
             </p>
           </div>
 
@@ -164,6 +182,30 @@ export default function AdminChecklists() {
         )}
       </div>
 
+      {/* ── Tabs ── */}
+      <div className="mt-4 flex gap-1 rounded-xl border border-gray-200 bg-white p-1">
+        {TAB_CONFIG.map((tab) => {
+          const Icon = tab.icon;
+          const active = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={[
+                "flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all",
+                active
+                  ? "bg-sky-600 text-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+              ].join(" ")}
+            >
+              <Icon />
+              <span className="hidden sm:inline">{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* ── Content ── */}
       <div className="mt-4">
         {!centerId ? (
@@ -176,6 +218,47 @@ export default function AdminChecklists() {
               Choose a center from the dropdown above to view and manage checklists.
             </p>
           </div>
+        ) : activeTab === "planner" ? (
+          <div className="space-y-4">
+            {/* Class selector for weekly planner */}
+            <div className="rounded-2xl border border-gray-200 bg-white p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900">Weekly Lesson Planner</h2>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    Select a class to plan lessons for the week. Teachers will see the plan on their checklist screen.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 sm:min-w-[220px]">
+                  <svg className="h-4 w-4 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.906 59.906 0 0112 3.493a59.903 59.903 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
+                  </svg>
+                  <select
+                    className="flex-1 border-0 bg-transparent text-sm font-semibold text-gray-900 outline-none focus:ring-0"
+                    value={classId}
+                    onChange={(e) => setClassId(e.target.value)}
+                  >
+                    <option value="">Select a class...</option>
+                    {classrooms.map((r) => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+            {!classId ? (
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white py-14 text-center">
+                <svg className="h-10 w-10 text-gray-300" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.906 59.906 0 0112 3.493a59.903 59.903 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
+                </svg>
+                <p className="mt-3 text-sm font-semibold text-gray-500">Select a class above to manage its weekly lesson plan.</p>
+              </div>
+            ) : (
+              <WeeklyLessonPlanner centerId={centerId} classId={classId} mode="admin" />
+            )}
+          </div>
+        ) : activeTab === "tasks" ? (
+          <TaskChecklistManager centerId={centerId} />
         ) : (
           <AdminTaskChecklistManager centerId={centerId} />
         )}

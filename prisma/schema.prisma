@@ -114,6 +114,7 @@ enum ArchiveType {
 
 enum BehaviorPlanStatus {
   ACTIVE
+  CLOSED
   COMPLETED
   ARCHIVED
 }
@@ -227,6 +228,7 @@ model User {
   notifications                Notification[]            @relation("NotificationsReceived")
   notificationPreferences      NotificationPreference[]  @relation("NotificationPreferences")
   behaviorPlansCreated         BehaviorPlan[]            @relation("BehaviorPlansCreated")
+  behaviorPlansClosed          BehaviorPlan[]            @relation("BehaviorPlansClosedBy")
   performanceSnapshots         TeacherPerformanceSnapshot[] @relation("TeacherPerformanceSnapshots")
   staffAttendances             StaffAttendance[]         @relation("StaffAttendances")
   staffAttendancesRecorded     StaffAttendance[]         @relation("StaffAttendancesRecorded")
@@ -254,6 +256,10 @@ model User {
   dailyChecklistNotes          DailyChecklistNote[]       @relation("DailyChecklistNotesCreatedBy")
   closedChildFlagReviews       ChildFlagReview[]          @relation("ChildFlagReviewClosedBy")
   parentInvolvements           ParentInvolvement[]
+  teacherCommendations         TeacherCommendation[]      @relation("TeacherCommendations")
+  teacherCommendationsCreated  TeacherCommendation[]      @relation("TeacherCommendationsCreated")
+  teacherCitations             TeacherCitation[]          @relation("TeacherCitations")
+  teacherCitationsCreated      TeacherCitation[]          @relation("TeacherCitationsCreated")
 }
 
 model Center {
@@ -294,6 +300,9 @@ model Center {
   dailyChecklists  DailyChecklist[]
   lessonTermCalendars LessonTermCalendar[]
   childFlagReviews ChildFlagReview[]
+  teacherCommendations TeacherCommendation[]
+  teacherCitations     TeacherCitation[]
+  performanceGradeConfig PerformanceGradeConfig?
   createdAt        DateTime         @default(now())
 }
 
@@ -951,24 +960,33 @@ model NotificationPreference {
 }
 
 model BehaviorPlan {
-  id          String             @id @default(uuid())
-  child       Child              @relation(fields: [childId], references: [id], onDelete: Cascade)
-  childId     String
-  center      Center             @relation(fields: [centerId], references: [id], onDelete: Cascade)
-  centerId    String
-  title       String
-  description String?
-  status      BehaviorPlanStatus @default(ACTIVE)
-  targetDomains String[]         @default([])
-  goals       BehaviorPlanGoal[]
-  createdBy   User?              @relation("BehaviorPlansCreated", fields: [createdById], references: [id], onDelete: SetNull)
-  createdById String?
-  startDate   DateTime           @default(now())
-  endDate     DateTime?
-  reviewDate  DateTime?
-  notes       String?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  id                  String             @id @default(uuid())
+  child               Child              @relation(fields: [childId], references: [id], onDelete: Cascade)
+  childId             String
+  center              Center             @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId            String
+  title               String
+  description         String?
+  status              BehaviorPlanStatus @default(ACTIVE)
+  teacherTactics      String?
+  parentTactics       String?
+  coachTactics        String?
+  disciplinaryAction  String?
+  goals               BehaviorPlanGoal[]
+  createdBy           User?              @relation("BehaviorPlansCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById         String?
+  startDate           DateTime           @default(now())
+  endDate             DateTime?
+  reviewDate          DateTime?
+  notes               String?
+  closedAt            DateTime?
+  closedBy            User?              @relation("BehaviorPlansClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  closedById          String?
+  parentApproved      Boolean            @default(false)
+  parentApprovedAt    DateTime?
+  parentSignatureName String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
   @@index([childId, status])
   @@index([centerId, status])
@@ -1543,4 +1561,49 @@ model StaffAdvancementStep {
   createdAt     DateTime         @default(now())
 
   @@index([advancementId, stepIndex])
+}
+
+model TeacherCommendation {
+  id          String   @id @default(uuid())
+  teacher     User     @relation("TeacherCommendations", fields: [teacherId], references: [id], onDelete: Cascade)
+  teacherId   String
+  center      Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  text        String
+  date        DateTime @default(now())
+  createdBy   User?    @relation("TeacherCommendationsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([teacherId, date])
+  @@index([centerId, date])
+}
+
+model TeacherCitation {
+  id          String   @id @default(uuid())
+  teacher     User     @relation("TeacherCitations", fields: [teacherId], references: [id], onDelete: Cascade)
+  teacherId   String
+  center      Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  text        String
+  date        DateTime @default(now())
+  createdBy   User?    @relation("TeacherCitationsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([teacherId, date])
+  @@index([centerId, date])
+}
+
+model PerformanceGradeConfig {
+  id                    String   @id @default(uuid())
+  center                Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId              String   @unique
+  citizenshipWeight     Float    @default(50)
+  evaluationWeight      Float    @default(25)
+  checklistWeight       Float    @default(25)
+  lateDeductionPct      Float    @default(1)
+  absenceDeductionPct   Float    @default(2)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }

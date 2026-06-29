@@ -9,12 +9,15 @@ export default async function handler(req, res) {
   try {
     const session = await getSession(req, res);
     if (!session) return res.status(401).json({ error: "Unauthorized" });
-    if (!["ADMIN", "TEACHER"].includes(session.user.role)) {
+    if (!["ADMIN", "TEACHER", "PARENT"].includes(session.user.role)) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
     if (req.method === "GET") return handleGet(req, res, session);
-    if (req.method === "POST") return handlePost(req, res, session);
+    if (req.method === "POST") {
+      if (session.user.role === "PARENT") return res.status(403).json({ error: "Forbidden" });
+      return handlePost(req, res, session);
+    }
     res.setHeader("Allow", ["GET", "POST"]);
     return res.status(405).end();
   } catch (e) {
@@ -35,12 +38,29 @@ async function handleGet(req, res, session) {
     where.child = await buildTeacherChildWhere(session.user.id, centerId);
   }
 
+  // Parents can only see plans for their linked children
+  if (session.user.role === "PARENT") {
+    const linkedChildren = await prisma.child.findMany({
+      where: {
+        OR: [
+          { parentId: session.user.id },
+          { guardians: { some: { guardianId: session.user.id } } },
+        ],
+      },
+      select: { id: true },
+    });
+    const linkedIds = linkedChildren.map((c) => c.id);
+    if (linkedIds.length === 0) return res.status(200).json([]);
+    where.childId = childId && linkedIds.includes(childId) ? childId : { in: linkedIds };
+  }
+
   const plans = await prisma.behaviorPlan.findMany({
     where,
     include: {
       goals: { orderBy: { sortOrder: "asc" } },
       child: { select: { firstName: true, lastName: true } },
       createdBy: { select: { name: true } },
+      closedBy: { select: { name: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -49,17 +69,31 @@ async function handleGet(req, res, session) {
 }
 
 async function handlePost(req, res, session) {
-  const { childId, centerId, title, description, targetDomains, startDate, endDate, reviewDate, notes, goals } = req.body || {};
+  const {
+    childId, centerId, title, description,
+    teacherTactics, parentTactics, coachTactics, disciplinaryAction,
+    startDate, endDate, reviewDate, notes, goals,
+  } = req.body || {};
 
   if (!childId || !centerId || !title) {
     return res.status(400).json({ error: "childId, centerId, and title are required" });
   }
 
-  // Verify access to child
   if (session.user.role === "TEACHER") {
     const count = await teacherCanAccessChild(session.user.id, childId);
     if (!count) return res.status(403).json({ error: "You don't have access to this child" });
   }
+
+  // Find parent linked to child to notify them
+  const child = await prisma.child.findUnique({
+    where: { id: childId },
+    select: {
+      parentId: true,
+      guardians: { select: { guardianId: true } },
+      firstName: true,
+      lastName: true,
+    },
+  });
 
   const plan = await prisma.behaviorPlan.create({
     data: {
@@ -67,7 +101,10 @@ async function handlePost(req, res, session) {
       centerId,
       title,
       description: description || null,
-      targetDomains: Array.isArray(targetDomains) ? targetDomains : [],
+      teacherTactics: teacherTactics || null,
+      parentTactics: parentTactics || null,
+      coachTactics: coachTactics || null,
+      disciplinaryAction: disciplinaryAction || null,
       createdById: session.user.id,
       startDate: startDate ? new Date(startDate) : new Date(),
       endDate: endDate ? new Date(endDate) : null,
@@ -91,8 +128,29 @@ async function handlePost(req, res, session) {
       goals: { orderBy: { sortOrder: "asc" } },
       child: { select: { firstName: true, lastName: true } },
       createdBy: { select: { name: true } },
+      closedBy: { select: { name: true } },
     },
   });
+
+  // Create pending-approval notification for parent(s)
+  const parentIds = [
+    ...(child?.parentId ? [child.parentId] : []),
+    ...(child?.guardians?.map((g) => g.guardianId) || []),
+  ].filter(Boolean);
+
+  if (parentIds.length > 0) {
+    const childName = `${child?.firstName || ""} ${child?.lastName || ""}`.trim();
+    await prisma.notification.createMany({
+      data: parentIds.map((userId) => ({
+        userId,
+        type: "BEHAVIOR_PLAN_APPROVAL",
+        title: "Individual Progress Plan — Approval Required",
+        body: `An Individual Progress Plan titled "${title}" has been created for ${childName}. Please review and approve it.`,
+        data: { planId: plan.id, childId },
+      })),
+      skipDuplicates: true,
+    }).catch(() => {});
+  }
 
   return res.status(201).json(plan);
 }

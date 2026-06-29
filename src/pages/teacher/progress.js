@@ -5,20 +5,19 @@ import { AGE_GROUPS, ageGroupKeyFromBirthDate, mapAgeRangeToGroup } from "@/lib/
 import { apiJson } from "@/lib/api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-const STATUSES = ["NOT_STARTED", "IN_PROGRESS", "PASSED", "FAILED", "COMPLETED"];
+const STATUSES = ["NOT_STARTED", "IN_PROGRESS", "PASSED", "FAILED"];
 
 const STATUS_LABEL = {
   NOT_STARTED: "Not Started",
   IN_PROGRESS: "In Progress",
-  COMPLETED: "Completed",
   PASSED: "Passed",
   FAILED: "Failed",
 };
 
 const STAGE_FILTERS = [
-  { value: "active", label: "Active Goals", icon: IconActive },
-  { value: "all", label: "All Goals", icon: IconAll },
-  { value: "completed", label: "Completed", icon: IconCompleted },
+  { value: "all", label: "All Steps", icon: IconAll },
+  { value: "active", label: "In Progress", icon: IconActive },
+  { value: "completed", label: "Passed", icon: IconCompleted },
   { value: "failed", label: "Failed", icon: IconFailed },
 ];
 
@@ -272,62 +271,45 @@ export default function TeacherProgress() {
     return map;
   }, [lessons]);
 
-  const currentProgressByLessonId = useMemo(() => {
+  const progressByStepKey = useMemo(() => {
     const map = new Map();
     for (const pr of progressRows) {
-      const existing = map.get(pr.lessonId);
-      if (!existing) {
-        map.set(pr.lessonId, pr);
-        continue;
+      const key = `${pr.lessonId}:${pr.goalIndex}`;
+      map.set(key, pr);
+    }
+    return map;
+  }, [progressRows]);
+
+  const stepRows = useMemo(() => {
+    const rows = [];
+    for (const lesson of lessons) {
+      const goals = Array.isArray(lesson.goals) ? lesson.goals : [];
+      if (!goals.length) continue;
+      const recommended = remediationMap.get(lesson.id) || [];
+      for (const goal of goals) {
+        const draftKey = `${lesson.id}:${goal.goalIndex}`;
+        const progress = progressByStepKey.get(draftKey) || null;
+        const draft = drafts[draftKey] || { status: "IN_PROGRESS", notes: "", percentComplete: 0 };
+        rows.push({ lesson, goal, progress, draft, draftKey, recommended });
       }
-
-      const a = Number(existing.goalIndex || 0);
-      const b = Number(pr.goalIndex || 0);
-      if (b > a) map.set(pr.lessonId, pr);
     }
-    return map;
-  }, [progressRows]);
 
-  // Track all statuses per lesson (not just latest goal) for completed/failed filters
-  const lessonStatusFlags = useMemo(() => {
-    const map = new Map();
-    for (const pr of progressRows) {
-      if (!map.has(pr.lessonId)) map.set(pr.lessonId, { hasCompleted: false, hasFailed: false });
-      const flags = map.get(pr.lessonId);
-      if (pr.status === "COMPLETED" || pr.status === "PASSED") flags.hasCompleted = true;
-      if (pr.status === "FAILED") flags.hasFailed = true;
-    }
-    return map;
-  }, [progressRows]);
-
-  const lessonRows = useMemo(() => {
-    const rows = lessons.map((l) => {
-      const pr = currentProgressByLessonId.get(l.id) || null;
-      const draft = drafts[l.id] || { status: "IN_PROGRESS", notes: "", nextGoal: "" };
-      const recommended = remediationMap.get(l.id) || [];
-
-      return {
-        lesson: l,
-        progress: pr,
-        draft,
-        recommended,
-      };
-    });
-
-    const sorted = rows.sort((a, b) => {
+    rows.sort((a, b) => {
       const catA = a.lesson?.category?.name || "";
       const catB = b.lesson?.category?.name || "";
       const cmpCat = catA.localeCompare(catB);
       if (cmpCat !== 0) return cmpCat;
-      return byString(a.lesson?.title, b.lesson?.title);
+      const cmpLesson = byString(a.lesson?.title, b.lesson?.title);
+      if (cmpLesson !== 0) return cmpLesson;
+      return Number(a.goal?.goalIndex || 0) - Number(b.goal?.goalIndex || 0);
     });
 
     const q = String(query || "").trim().toLowerCase();
-    const filtered = sorted.filter(({ lesson }) => {
-      // Use lessonStatusFlags to check across ALL goals, not just the latest
-      const flags = lessonStatusFlags.get(lesson.id);
-      if (stage === "completed" && !flags?.hasCompleted) return false;
-      if (stage === "failed" && !flags?.hasFailed) return false;
+    return rows.filter(({ lesson, goal, progress }) => {
+      const currentStatus = progress?.status || "NOT_STARTED";
+      if (stage === "completed" && currentStatus !== "PASSED") return false;
+      if (stage === "failed" && currentStatus !== "FAILED") return false;
+      if (stage === "active" && currentStatus !== "IN_PROGRESS") return false;
       if (category && (lesson?.category?.name || "") !== category) return false;
       if (lessonAgeGroup) {
         const lessonGroups = getLessonAgeGroups(lesson);
@@ -336,22 +318,19 @@ export default function TeacherProgress() {
       if (!q) return true;
       const haystack = [
         lesson?.title,
-        lesson?.description,
         lesson?.category?.name,
+        goal?.title,
       ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
       return haystack.includes(q);
     });
-
-    return filtered;
   }, [
     lessons,
-    currentProgressByLessonId,
+    progressByStepKey,
     drafts,
     remediationMap,
-    lessonStatusFlags,
     query,
     category,
     lessonAgeGroup,
@@ -367,22 +346,22 @@ export default function TeacherProgress() {
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [lessons]);
 
-  function setDraft(lessonId, next) {
-    setDrafts((prev) => ({ ...prev, [lessonId]: { ...(prev[lessonId] || {}), ...next } }));
+  function setDraft(draftKey, next) {
+    setDrafts((prev) => ({ ...prev, [draftKey]: { ...(prev[draftKey] || {}), ...next } }));
   }
 
-  async function recordEntry(lessonId) {
+  async function recordEntry(lessonId, goalIndex, draftKey) {
     if (!childId) {
       setError("Select a child first.");
       return;
     }
 
-    const draft = drafts[lessonId] || { status: "IN_PROGRESS", notes: "" };
-    setSavingLessonId(lessonId);
+    const draft = drafts[draftKey] || { status: "IN_PROGRESS", notes: "", percentComplete: 0 };
+    setSavingLessonId(draftKey);
     setError("");
 
     try {
-      let progress = currentProgressByLessonId.get(lessonId) || null;
+      let progress = progressByStepKey.get(draftKey) || null;
       if (!progress) {
         progress = await apiJson("/api/v1/progress", {
           method: "POST",
@@ -390,9 +369,14 @@ export default function TeacherProgress() {
             childId,
             lessonId,
             status: "NOT_STARTED",
-            goalIndex: 1,
+            goalIndex: Number(goalIndex),
           }),
         });
+      }
+
+      const details = {};
+      if (draft.status === "IN_PROGRESS" && draft.percentComplete != null) {
+        details.percentComplete = Number(draft.percentComplete);
       }
 
       await apiJson(`/api/v1/progress/${encodeURIComponent(progress.id)}/entries`, {
@@ -400,13 +384,13 @@ export default function TeacherProgress() {
         body: JSON.stringify({
           status: draft.status,
           notes: draft.notes || null,
-          details: draft.nextGoal ? { nextGoal: draft.nextGoal } : null,
+          details: Object.keys(details).length ? details : null,
         }),
       });
 
       const refreshed = await apiJson(`/api/v1/progress?childId=${encodeURIComponent(childId)}`);
       setProgressRows(Array.isArray(refreshed) ? refreshed : []);
-      setDraft(lessonId, { notes: "", nextGoal: "" });
+      setDraft(draftKey, { notes: "", percentComplete: 0 });
     } catch (e) {
       setError(e.message || "Failed to record progress");
     } finally {
@@ -478,9 +462,9 @@ export default function TeacherProgress() {
     }
 
     // Count ALL progress records (every goal step counts)
-    const statusCounts = { NOT_STARTED: 0, IN_PROGRESS: 0, COMPLETED: 0, PASSED: 0, FAILED: 0 };
+    const statusCounts = { NOT_STARTED: 0, IN_PROGRESS: 0, PASSED: 0, FAILED: 0 };
     for (const p of filtered) {
-      const s = p.status || "NOT_STARTED";
+      const s = p.status === "COMPLETED" ? "PASSED" : (p.status || "NOT_STARTED");
       if (s in statusCounts) statusCounts[s] += 1;
     }
 
@@ -634,22 +618,11 @@ export default function TeacherProgress() {
           />
         )}
 
-        {/* Active Goals View */}
-        {stage === "active" && childId && (
-          <ActiveGoalsPanel
-            childId={childId}
-            childName={childName}
-            progressRows={progressRows}
-            lessons={lessons}
-            remediationMap={remediationMap}
-            onRefresh={refreshProgress}
-          />
-        )}
-        {stage === "active" && !childId && centerId && (
+        {!childId && centerId && (
           <EmptyState
             icon={<svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h8m-8 4h8m-8 4h6M5 5a2 2 0 012-2h10a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5z" /></svg>}
             title="Select a child"
-            description="Choose a child to view active goals and record progress updates."
+            description="Choose a child to view progression steps and record progress updates."
           />
         )}
 
@@ -661,23 +634,23 @@ export default function TeacherProgress() {
           />
         )}
 
-        {/* All Goals / Completed / Failed Table View (child selected) */}
-        {stage !== "active" && childId && (
+        {/* Progression Steps Table View (child selected) */}
+        {childId && (
           <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-extrabold text-gray-900">
-                  {stage === "all" ? "All Lessons" : stage === "completed" ? "Completed Goals" : "Failed Goals"}
+                  {stage === "all" ? "All Progression Steps" : stage === "completed" ? "Passed Steps" : "Failed Steps"}
                 </h3>
-                <p className="text-xs text-gray-500">Filter lessons, update status, and add notes in one place.</p>
+                <p className="text-xs text-gray-500">Each row is a progression step. Update status and track weekly progress.</p>
               </div>
               {loading ? <div className="text-xs text-gray-600">Loading...</div> : null}
             </div>
 
             {!centerId ? (
               <div className="mt-3 text-sm text-gray-600">Select a center.</div>
-            ) : lessonRows.length === 0 ? (
-              <div className="mt-3 text-sm text-gray-600">No lessons found.</div>
+            ) : stepRows.length === 0 ? (
+              <div className="mt-3 text-sm text-gray-600">No progression steps found.</div>
             ) : (
               <div className="mt-3 space-y-3">
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -687,7 +660,7 @@ export default function TeacherProgress() {
                       <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" /></svg>
                       <input
                         className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm font-medium text-gray-800 shadow-sm transition hover:border-sky-300 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"
-                        placeholder="Lesson title, category..."
+                        placeholder="Step title, lesson, category..."
                         value={query}
                         onChange={(e) => {
                           setQuery(e.target.value);
@@ -708,13 +681,11 @@ export default function TeacherProgress() {
                     icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h8m-8 6h16" /></svg>}
                   >
                     {categories.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
+                      <option key={c} value={c}>{c}</option>
                     ))}
                   </FilterSelect>
                   <FilterSelect
-                    label="Lesson Age Group"
+                    label="Age Group"
                     value={lessonAgeGroup}
                     onChange={(v) => {
                       setLessonAgeGroup(v);
@@ -725,144 +696,136 @@ export default function TeacherProgress() {
                     icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
                   >
                     {(lessonAgeOptions.length ? lessonAgeOptions : AGE_GROUPS).map((g) => (
-                      <option key={g.key} value={g.key}>
-                        {g.label}
-                      </option>
+                      <option key={g.key} value={g.key}>{g.label}</option>
                     ))}
                   </FilterSelect>
                 </div>
 
                 <div className="text-xs text-gray-600">
-                  Showing {Math.min(visibleCount, lessonRows.length)} of {lessonRows.length} lessons.
+                  Showing {Math.min(visibleCount, stepRows.length)} of {stepRows.length} steps.
                 </div>
 
-                <div className="overflow-auto rounded-2xl border border-gray-200">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-gray-50/80 text-xs font-bold uppercase tracking-wider text-gray-400">
-                    <tr>
-                      <th className="px-4 py-3">Lesson</th>
-                      <th className="px-4 py-3">Current Step</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3">Next Goal</th>
-                      <th className="px-4 py-3">Notes</th>
-                      <th className="px-4 py-3">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {lessonRows.slice(0, visibleCount).map(({ lesson, progress, draft, recommended }) => {
-                      const isFailed = (progress?.status || "") === "FAILED";
-                      const lastUpdate = progress?.updatedAt || progress?.createdAt || null;
+                <div className="space-y-2">
+                  {stepRows.slice(0, visibleCount).map(({ lesson, goal, progress, draft, draftKey, recommended }) => {
+                    const currentStatus = progress?.status || "NOT_STARTED";
+                    const isFailed = currentStatus === "FAILED";
+                    const isPassed = currentStatus === "PASSED";
+                    const isInProgress = currentStatus === "IN_PROGRESS";
+                    const pct = isInProgress
+                      ? (progress?.entries?.slice(-1)[0]?.details?.percentComplete ?? 0)
+                      : isPassed ? 100 : 0;
 
-                      return (
-                        <tr key={lesson.id} className={`transition hover:bg-gray-50/60 ${isFailed ? "bg-red-50/40" : ""}`}>
-                          <td className="px-4 py-3 align-top">
-                            <div className="font-semibold text-gray-900">{lesson.title}</div>
-                            <div className="text-xs text-gray-500">
-                              {(lesson?.category?.name || "Uncategorized") + " - Last: " + formatDate(lastUpdate)}
+                    return (
+                      <div
+                        key={draftKey}
+                        className={[
+                          "rounded-2xl border p-4 transition",
+                          isFailed ? "border-red-200 bg-red-50/30" :
+                          isPassed ? "border-emerald-200 bg-emerald-50/30" :
+                          isInProgress ? "border-sky-200 bg-sky-50/20" :
+                          "border-gray-200 bg-white",
+                        ].join(" ")}
+                      >
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start">
+                          {/* Step info */}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600">
+                                Step {goal.goalIndex}
+                              </span>
+                              <span className="text-xs text-gray-500">{lesson.category?.name || "Uncategorized"}</span>
+                              <span className={[
+                                "rounded-full px-2 py-0.5 text-[10px] font-bold",
+                                isFailed ? "bg-red-100 text-red-700" :
+                                isPassed ? "bg-emerald-100 text-emerald-700" :
+                                isInProgress ? "bg-sky-100 text-sky-700" :
+                                "bg-gray-100 text-gray-600",
+                              ].join(" ")}>
+                                {STATUS_LABEL[currentStatus] || currentStatus}
+                              </span>
                             </div>
-                            {isFailed && recommended.length ? (
+                            <div className="mt-1 text-sm font-semibold text-gray-900">{goal.title || "—"}</div>
+                            <div className="text-xs text-gray-500">{lesson.title}</div>
+
+                            {/* Progress bar for IN_PROGRESS */}
+                            {isInProgress && (
+                              <div className="mt-2">
+                                <div className="flex items-center justify-between text-[11px] font-semibold text-gray-500">
+                                  <span>Weekly Progress</span>
+                                  <span>{Number(draft.percentComplete ?? pct)}%</span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="100"
+                                  step="5"
+                                  value={draft.percentComplete ?? pct}
+                                  onChange={(e) => setDraft(draftKey, { percentComplete: Number(e.target.value) })}
+                                  className="mt-1 w-full accent-sky-500"
+                                  disabled={savingLessonId === draftKey}
+                                />
+                                <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                                  <div
+                                    className="h-full rounded-full bg-sky-500 transition-all"
+                                    style={{ width: `${draft.percentComplete ?? pct}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {isFailed && recommended.length > 0 && (
                               <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
-                                <div className="font-semibold">Recommended lessons</div>
+                                <div className="font-semibold">Recommended</div>
                                 <ul className="mt-1 list-disc pl-5">
-                                  {recommended.slice(0, 5).map((r) => (
+                                  {recommended.slice(0, 3).map((r) => (
                                     <li key={r.id}>{r.title}</li>
                                   ))}
                                 </ul>
                               </div>
-                            ) : null}
-                          </td>
-
-                          <td className="px-4 py-3 align-top text-gray-700">
-                            {progress ? (
-                              <div>
-                                <div className="font-semibold text-gray-900">
-                                  Goal {progress.goalIndex}
-                                </div>
-                                <div className="mt-1 text-xs text-gray-600">
-                                  {(() => {
-                                    const goals = Array.isArray(lesson?.goals)
-                                      ? lesson.goals
-                                      : [];
-                                    const goal = goals.find(
-                                      (g) =>
-                                        Number(g.goalIndex || 0) ===
-                                        Number(progress.goalIndex || 0),
-                                    );
-                                    return goal?.title || "—";
-                                  })()}
-                                </div>
-                              </div>
-                            ) : (
-                              "—"
                             )}
-                          </td>
+                          </div>
 
-                          <td className="px-4 py-3 align-top">
-                            <div className="text-xs text-gray-500">
-                              Current: {STATUS_LABEL[progress?.status] || progress?.status || "—"}
+                          {/* Controls */}
+                          <div className="flex flex-col gap-2 md:min-w-[260px]">
+                            <div>
+                              <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">New Status</div>
+                              <select
+                                className="w-full rounded-xl border border-gray-200 px-2 py-2 text-sm shadow-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"
+                                value={draft.status || "IN_PROGRESS"}
+                                onChange={(e) => setDraft(draftKey, { status: e.target.value })}
+                                disabled={savingLessonId === draftKey}
+                              >
+                                {STATUSES.map((s) => (
+                                  <option key={s} value={s}>{STATUS_LABEL[s] || s}</option>
+                                ))}
+                              </select>
                             </div>
-                            <select
-                              className="mt-1 w-full rounded-xl border border-gray-200 px-2 py-2 text-sm shadow-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"
-                              value={draft.status || "IN_PROGRESS"}
-                              onChange={(e) => setDraft(lesson.id, { status: e.target.value })}
-                              disabled={savingLessonId === lesson.id}
-                            >
-                              {STATUSES.map((s) => (
-                                <option key={s} value={s}>
-                                  {STATUS_LABEL[s] || s}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-
-                          <td className="px-4 py-3 align-top">
-                            <div className="flex min-w-[14rem] flex-col gap-1.5">
+                            <div>
+                              <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">Notes</div>
                               <input
                                 className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm shadow-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"
-                                placeholder="Type next goal..."
-                                value={draft.nextGoal || ""}
-                                onChange={(e) => setDraft(lesson.id, { nextGoal: e.target.value })}
-                                disabled={savingLessonId === lesson.id}
+                                placeholder="Optional notes..."
+                                value={draft.notes || ""}
+                                onChange={(e) => setDraft(draftKey, { notes: e.target.value })}
+                                disabled={savingLessonId === draftKey}
                               />
-                              <button
-                                type="button"
-                                className="self-start rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700 hover:bg-sky-100 disabled:opacity-60"
-                                onClick={() => setDraft(lesson.id, { nextGoal: getNextGoalSuggestion(lesson, progress, recommended) })}
-                                disabled={savingLessonId === lesson.id}
-                              >
-                                Use next step
-                              </button>
                             </div>
-                          </td>
-
-                          <td className="px-4 py-3 align-top">
-                            <input
-                              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm shadow-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"
-                              placeholder="Optional notes..."
-                              value={draft.notes || ""}
-                              onChange={(e) => setDraft(lesson.id, { notes: e.target.value })}
-                              disabled={savingLessonId === lesson.id}
-                            />
-                          </td>
-
-                          <td className="px-4 py-3 align-top">
                             <button
                               type="button"
-                              className="rounded-xl bg-sky-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 active:scale-[0.98] disabled:opacity-60"
-                              onClick={() => recordEntry(lesson.id)}
-                              disabled={savingLessonId === lesson.id}
+                              className="self-end rounded-xl bg-sky-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 active:scale-[0.98] disabled:opacity-60"
+                              onClick={() => recordEntry(lesson.id, goal.goalIndex, draftKey)}
+                              disabled={savingLessonId === draftKey}
                             >
-                              {savingLessonId === lesson.id ? "Saving..." : "Record"}
+                              {savingLessonId === draftKey ? "Saving..." : "Record"}
                             </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
-                {lessonRows.length > visibleCount ? (
+                {stepRows.length > visibleCount ? (
                   <button
                     type="button"
                     className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
@@ -906,7 +869,7 @@ function ProgressOverview({ stats, loading, classById }) {
   }
 
   const { statusCounts, byClass, byAge, totalGoals, totalChildren } = stats;
-  const completedCount = statusCounts.COMPLETED + statusCounts.PASSED;
+  const completedCount = statusCounts.PASSED || 0;
   const completionRate = totalGoals > 0 ? Math.round((completedCount / totalGoals) * 100) : 0;
 
   return (
@@ -918,7 +881,7 @@ function ProgressOverview({ stats, loading, classById }) {
         <OverviewCard label="In Progress" count={statusCounts.IN_PROGRESS} color="amber" icon={
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
         } />
-        <OverviewCard label="Completed" count={completedCount} color="emerald" icon={
+        <OverviewCard label="Passed" count={completedCount} color="emerald" icon={
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
         } />
         <OverviewCard label="Failed" count={statusCounts.FAILED} color="red" icon={
@@ -947,7 +910,7 @@ function ProgressOverview({ stats, loading, classById }) {
             )}
           </div>
           <div className="mt-2 flex flex-wrap gap-4 text-xs">
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-400" /> Completed ({completedCount})</span>
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-400" /> Passed ({completedCount})</span>
             <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-400" /> In Progress ({statusCounts.IN_PROGRESS})</span>
             <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-400" /> Failed ({statusCounts.FAILED})</span>
             <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-gray-200" /> Not Started ({statusCounts.NOT_STARTED})</span>
@@ -998,7 +961,7 @@ function OverviewTable({ title, icon, rows }) {
             <tr>
               <th className="px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-gray-400">Name</th>
               <th className="px-4 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-gray-400">In Progress</th>
-              <th className="px-4 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-gray-400">Completed</th>
+              <th className="px-4 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-gray-400">Passed</th>
               <th className="px-4 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-gray-400">Failed</th>
               <th className="px-4 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-gray-400">Not Started</th>
               <th className="px-4 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-gray-400">Total</th>

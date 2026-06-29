@@ -260,6 +260,10 @@ model User {
   teacherCommendationsCreated  TeacherCommendation[]      @relation("TeacherCommendationsCreated")
   teacherCitations             TeacherCitation[]          @relation("TeacherCitations")
   teacherCitationsCreated      TeacherCitation[]          @relation("TeacherCitationsCreated")
+  staffCommendations           StaffCommendation[]        @relation("StaffCommendations")
+  staffCommendationsCreated    StaffCommendation[]        @relation("StaffCommendationsCreated")
+  staffCitations               StaffCitation[]            @relation("StaffCitations")
+  staffCitationsCreated        StaffCitation[]            @relation("StaffCitationsCreated")
 }
 
 model Center {
@@ -302,7 +306,11 @@ model Center {
   childFlagReviews ChildFlagReview[]
   teacherCommendations TeacherCommendation[]
   teacherCitations     TeacherCitation[]
+  staffCommendations   StaffCommendation[]
+  staffCitations       StaffCitation[]
   performanceGradeConfig PerformanceGradeConfig?
+  coachPerformanceGradeConfig CoachPerformanceGradeConfig?
+  otherStaffGradeConfig OtherStaffGradeConfig?
   createdAt        DateTime         @default(now())
 }
 
@@ -1606,4 +1614,60 @@ model PerformanceGradeConfig {
   absenceDeductionPct   Float    @default(2)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+}
+
+model CoachPerformanceGradeConfig {
+  id                    String   @id @default(uuid())
+  center                Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId              String   @unique
+  teamPerformanceWeight Float    @default(50)
+  evaluationWeight      Float    @default(50)
+  lateDeductionPct      Float    @default(1)
+  absenceDeductionPct   Float    @default(2)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model StaffCommendation {
+  id          String   @id @default(uuid())
+  staff       User     @relation("StaffCommendations", fields: [staffId], references: [id], onDelete: Cascade)
+  staffId     String
+  center      Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  text        String
+  date        DateTime @default(now())
+  createdBy   User?    @relation("StaffCommendationsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([staffId, date])
+  @@index([centerId, date])
+}
+
+model StaffCitation {
+  id          String   @id @default(uuid())
+  staff       User     @relation("StaffCitations", fields: [staffId], references: [id], onDelete: Cascade)
+  staffId     String
+  center      Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  text        String
+  date        DateTime @default(now())
+  createdBy   User?    @relation("StaffCitationsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([staffId, date])
+  @@index([centerId, date])
+}
+
+model OtherStaffGradeConfig {
+  id                  String   @id @default(uuid())
+  center              Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId            String   @unique
+  evaluationWeight    Float    @default(50)
+  checklistWeight     Float    @default(50)
+  lateDeductionPct    Float    @default(1)
+  absenceDeductionPct Float    @default(2)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }

@@ -11,6 +11,9 @@ import {
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
+
+const TrendLineChart = dynamic(() => import("@/components/analytics/charts/TrendLineChart"), { ssr: false });
 
 const TRAINING_CATEGORIES = [
   "Orientation",
@@ -200,6 +203,7 @@ export default function StaffTrainingPage() {
             { key: "overview", label: "Overview" },
             { key: "evaluations", label: "Evaluations" },
             { key: "training-hours", label: "Training Hours" },
+            { key: "performance-report", label: "Performance Report" },
           ].map((item) => (
             <button
               key={item.key}
@@ -238,6 +242,8 @@ export default function StaffTrainingPage() {
             acknowledgingId={acknowledgingId}
             onAcknowledge={handleAcknowledgeEvaluation}
           />
+        ) : tab === "performance-report" ? (
+          <StaffPerformanceReport centerId={centerId} />
         ) : (
           <TrainingHoursPanel centerId={centerId} />
         )}
@@ -748,6 +754,251 @@ function DetailCard({ label, value }) {
         {label}
       </div>
       <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">{value}</p>
+    </div>
+  );
+}
+
+// ─── Staff Performance Report ──────────────────────────────────
+
+function defaultDateFrom() {
+  const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().split("T")[0];
+}
+function defaultDateTo() { return new Date().toISOString().split("T")[0]; }
+
+function perfGradeColor(g) {
+  if (g == null) return "text-gray-400";
+  if (g >= 80) return "text-emerald-700";
+  if (g >= 60) return "text-amber-700";
+  return "text-red-700";
+}
+function perfGradeBg(g) {
+  if (g == null) return "bg-gray-50 border-gray-200";
+  if (g >= 80) return "bg-emerald-50 border-emerald-200";
+  if (g >= 60) return "bg-amber-50 border-amber-200";
+  return "bg-red-50 border-red-200";
+}
+function perfGradeLetter(g) {
+  if (g == null) return "N/A";
+  if (g >= 90) return "A";
+  if (g >= 80) return "B";
+  if (g >= 70) return "C";
+  if (g >= 60) return "D";
+  return "F";
+}
+
+function StaffPerformanceReport({ centerId }) {
+  const [dateFrom, setDateFrom] = useState(defaultDateFrom());
+  const [dateTo, setDateTo] = useState(defaultDateTo());
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const loadReport = useCallback(async () => {
+    if (!centerId) return;
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ centerId, staffId: "me", from: dateFrom, to: dateTo });
+      const r = await apiJson(`/api/v1/analytics/staff-perf-report?${params}`);
+      setReport(r);
+    } catch {}
+    setLoading(false);
+  }, [centerId, dateFrom, dateTo]);
+
+  useEffect(() => { loadReport(); }, [loadReport]);
+
+  if (!centerId) {
+    return (
+      <WorkspaceState
+        title="Select a center"
+        description="Choose a center above to view your performance report."
+      />
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }, (_, i) => <SkeletonCard key={i} />)}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Date filters */}
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="block">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Start Date</div>
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+            className={workspaceInputClass} />
+        </label>
+        <label className="block">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">End Date</div>
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+            className={workspaceInputClass} />
+        </label>
+      </div>
+
+      {report && (
+        <>
+          {/* Overall Grade */}
+          <div className={`rounded-2xl border p-6 ${perfGradeBg(report.overallGrade)}`}>
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="text-center">
+                <div className={`text-6xl font-extrabold ${perfGradeColor(report.overallGrade)}`}>
+                  {perfGradeLetter(report.overallGrade)}
+                </div>
+                <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Overall Grade</div>
+              </div>
+              <div className="flex-1">
+                <div className={`text-3xl font-extrabold ${perfGradeColor(report.overallGrade)}`}>
+                  {report.overallGrade != null ? `${report.overallGrade}%` : "Insufficient Data"}
+                </div>
+                <div className="mt-1 text-sm font-semibold text-gray-700">{report.staff?.name || "—"}</div>
+                <div className="mt-1 text-xs text-gray-500">
+                  {new Date(report.dateRange.from).toLocaleDateString()} – {new Date(report.dateRange.to).toLocaleDateString()}
+                </div>
+                <div className="mt-1 text-xs text-gray-400">
+                  Formula: {report.gradeConfig?.evaluationWeight}% evaluation · {report.gradeConfig?.checklistWeight}% checklist
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-center text-xs">
+                {[
+                  { label: "Evaluation", val: report.evaluation?.normalized != null ? `${report.evaluation.normalized}%` : "—" },
+                  { label: "Checklist", val: report.checklist?.pct != null ? `${report.checklist.pct}%` : "—" },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-xl border border-white/60 bg-white/60 px-3 py-2">
+                    <div className="text-lg font-extrabold text-gray-800">{s.val}</div>
+                    <div className="text-xs font-semibold text-gray-500">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Evaluation Grade + Checklist Grade */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <WorkspaceSection
+              title="Evaluation Grade"
+              description="Your evaluation scores from admin — over time."
+            >
+              {report.evaluation?.mostRecentScore != null && (
+                <div className="mb-3 text-xs text-gray-600">
+                  Most recent: <span className="font-bold text-gray-900">{report.evaluation.mostRecentScore}/10</span>
+                </div>
+              )}
+              <TrendLineChart
+                data={report.evaluation?.trend || []}
+                lines={[{ key: "score", label: "Evaluation Score", color: "#7c3aed" }]}
+                yDomain={[0, 10]}
+                yLabel="Score"
+              />
+            </WorkspaceSection>
+
+            <WorkspaceSection
+              title="Checklist Grade"
+              description="Percentage of your assigned daily checklist items completed."
+            >
+              <div className="flex items-center gap-4 mt-2">
+                <div className={`flex h-24 w-24 items-center justify-center rounded-full border-4 font-extrabold text-2xl ${report.checklist?.pct != null ? perfGradeBg(report.checklist.pct) : "border-gray-200 text-gray-400"}`}>
+                  {report.checklist?.pct != null ? `${report.checklist.pct}%` : "—"}
+                </div>
+                <div className="text-sm text-gray-600">
+                  <div>{report.checklist?.completedCount ?? 0} items completed</div>
+                  <div className="text-xs text-gray-400">out of ~{report.checklist?.assignedCount ?? 0} assigned × days</div>
+                </div>
+              </div>
+            </WorkspaceSection>
+          </div>
+
+          {/* Commendations + Citations */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <WorkspaceSection title="Commendations" description="">
+              {(report.commendations?.length ?? 0) === 0
+                ? <p className="text-sm text-gray-400 italic">None</p>
+                : (
+                  <div className="space-y-2">
+                    {report.commendations.map((c) => (
+                      <div key={c.id} className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2">
+                        <div className="text-sm text-emerald-900">{c.text}</div>
+                        <div className="text-xs text-emerald-600">{new Date(c.date).toLocaleDateString()}{c.createdBy?.name && ` · ${c.createdBy.name}`}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+            </WorkspaceSection>
+
+            <WorkspaceSection title="Citations" description="">
+              {(report.citations?.length ?? 0) === 0
+                ? <p className="text-sm text-gray-400 italic">None</p>
+                : (
+                  <div className="space-y-2">
+                    {report.citations.map((c) => (
+                      <div key={c.id} className="rounded-lg border border-red-100 bg-red-50 px-3 py-2">
+                        <div className="text-sm text-red-900">{c.text}</div>
+                        <div className="text-xs text-red-500">{new Date(c.date).toLocaleDateString()}{c.createdBy?.name && ` · ${c.createdBy.name}`}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+            </WorkspaceSection>
+          </div>
+
+          {/* HR */}
+          <WorkspaceSection title="HR" description="">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              {[
+                { label: "Hours Worked", value: report.hr?.hoursWorked ?? "—" },
+                { label: "Lates", value: report.hr?.lates ?? "—" },
+                { label: "Absences", value: report.hr?.absences ?? "—" },
+                { label: "PTO Avail. (hrs)", value: report.hr?.ptoAvailable ?? "—" },
+                { label: "UTO Avail. (hrs)", value: report.hr?.utoAvailable ?? "—" },
+              ].map((s) => (
+                <WorkspaceStat key={s.label} label={s.label} value={String(s.value)} />
+              ))}
+            </div>
+          </WorkspaceSection>
+
+          {/* Training Hours */}
+          <WorkspaceSection
+            title="Training Hours"
+            description="From training hours recorded in this period."
+          >
+            <div className="mb-3 text-3xl font-extrabold text-sky-700">{report.training?.totalHours ?? 0} hrs</div>
+            {(report.training?.logs?.length ?? 0) > 0 && (
+              <div className="space-y-1.5">
+                {report.training.logs.map((l) => (
+                  <div key={l.id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs">
+                    <span className="font-semibold text-gray-800">{l.topic}</span>
+                    <span className="text-gray-500">{l.hours} hrs · {new Date(l.date).toLocaleDateString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </WorkspaceSection>
+
+          {/* Training Pathway */}
+          <WorkspaceSection
+            title="Training Pathway"
+            description="From the Staff Advancement page."
+          >
+            {(report.trainingPathways?.length ?? 0) === 0
+              ? <p className="text-sm text-gray-400 italic">No training pathways configured.</p>
+              : (
+                <div className="space-y-2">
+                  {report.trainingPathways.map((p) => (
+                    <div key={p.id} className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                      <span className="text-sm font-semibold text-gray-900">{p.title}</span>
+                      <div className="flex items-center gap-2">
+                        {p.category && <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-700">{p.category}</span>}
+                        <span className="text-xs text-gray-400">{p.steps?.length ?? 0} steps</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+          </WorkspaceSection>
+        </>
+      )}
     </div>
   );
 }

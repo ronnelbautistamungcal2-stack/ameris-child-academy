@@ -18,8 +18,10 @@ const TABS = [
   { key: "overview", label: "Overview" },
   { key: "students", label: "Student Reports" },
   { key: "teachers", label: "Teacher Performance" },
+  { key: "class-performance", label: "Class Performance" },
   { key: "child-performance", label: "Child Performance" },
   { key: "coach-performance", label: "Coach Performance" },
+  { key: "other-staff", label: "Other Staff Performance" },
   { key: "query", label: "Custom Query" },
 ];
 
@@ -210,11 +212,17 @@ export default function AdminReports() {
             {activeTab === "teachers" && (
               <TeachersTab centerId={centerId} />
             )}
+            {activeTab === "class-performance" && (
+              <ClassPerformanceTab centerId={centerId} classes={classes} dateFrom={dateFrom} dateTo={dateTo} />
+            )}
             {activeTab === "child-performance" && (
               <ChildPerformanceTab centerId={centerId} classes={classes} children={children} dateFrom={dateFrom} dateTo={dateTo} />
             )}
             {activeTab === "coach-performance" && (
               <CoachPerformanceTab centerId={centerId} dateFrom={dateFrom} dateTo={dateTo} />
+            )}
+            {activeTab === "other-staff" && (
+              <OtherStaffPerformanceTab centerId={centerId} dateFrom={dateFrom} dateTo={dateTo} />
             )}
             {activeTab === "query" && (
               <QueryTab centerId={centerId} children={children} classes={classes} />
@@ -1340,6 +1348,705 @@ function TeachersTab({ centerId }) {
   );
 }
 
+// ─── Class Performance Tab ────────────────────────────────────
+
+const BEHAVIOR_TYPE_LABELS = {
+  OTHER: "Other",
+  HITTING: "Hitting",
+  BITING: "Biting",
+  KICKING: "Kicking",
+  SCRATCHING: "Scratching",
+  PUSHING: "Pushing",
+  THROWING: "Throwing",
+  TANTRUM: "Tantrum",
+  NOT_FOLLOWING_DIRECTIONS: "Not Following Directions",
+  RESPECT: "Respect",
+  SHARING: "Sharing",
+  HELPING: "Helping",
+  EMPATHY: "Empathy",
+  COMMUNICATION: "Communication",
+};
+
+function behaviorTypeLabel(type) {
+  if (!type) return "—";
+  return BEHAVIOR_TYPE_LABELS[type] || type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+const CLASS_ACTIVITY_ICONS = {
+  NAP: "💤", BOTTLE: "🍼", MEAL: "🍽️", SNACK: "🥨",
+  DIAPER_CHANGE: "🧷", ACTIVITY: "🎨", CITIZENSHIP: "⭐",
+  ACCOMPLISHMENT: "🏆", INCIDENT: "⚠️", BEHAVIOR: "📋",
+  TASK_CHECKLIST: "✅", OTHER: "📝",
+};
+
+function ClassPerformanceTab({ centerId, classes, dateFrom, dateTo }) {
+  const [classId, setClassId] = useState("");
+  const [reportFrom, setReportFrom] = useState(dateFrom);
+  const [reportTo, setReportTo] = useState(dateTo);
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [expandedIPP, setExpandedIPP] = useState(null);
+  const [expandedLog, setExpandedLog] = useState(null);
+
+  useEffect(() => { setReportFrom(dateFrom); }, [dateFrom]);
+  useEffect(() => { setReportTo(dateTo); }, [dateTo]);
+
+  const loadReport = useCallback(async () => {
+    if (!classId || !centerId) return;
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ classId, centerId, from: reportFrom, to: reportTo });
+      const r = await apiJson(`/api/v1/analytics/class-report?${params}`);
+      setReport(r);
+    } catch {}
+    setLoading(false);
+  }, [classId, centerId, reportFrom, reportTo]);
+
+  useEffect(() => { loadReport(); }, [loadReport]);
+
+  const milestoneChartData = (report?.milestonesGrade || []).map((c) => ({
+    category: c.category,
+    "% Passed": c["% Passed"] || 0,
+  }));
+
+  return (
+    <div className="space-y-4">
+      {/* Selector */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <div className="text-sm font-extrabold text-gray-900">Class Performance Report</div>
+            <p className="mt-0.5 text-xs text-gray-600">Select a classroom — all metrics filter by the same date range.</p>
+          </div>
+          <button onClick={() => window.print()} className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-extrabold text-gray-800 hover:bg-gray-50">Print</button>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+          <FilterSelect label="Select Classroom" value={classId} onChange={setClassId} disabled={!centerId}>
+            <option value="">Choose a classroom…</option>
+            {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </FilterSelect>
+          <FilterInput label="Start Date" type="date" value={reportFrom} onChange={setReportFrom} />
+          <FilterInput label="End Date" type="date" value={reportTo} onChange={setReportTo} />
+        </div>
+      </div>
+
+      {!classId && <Empty msg="Select a classroom to view the class performance report." />}
+      {classId && loading && <Loading />}
+
+      {report && !loading && (
+        <div className="space-y-4">
+
+          {/* Class Citizenship Grade + Milestones Grade */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="text-sm font-extrabold text-gray-900">Class Citizenship Grade</div>
+              <p className="mt-0.5 text-xs text-gray-500">Average citizenship score of the class over time.</p>
+              {report.citizenshipAvg != null && (
+                <div className="mt-1 text-xs text-gray-600">Class avg: <span className="font-bold text-gray-900">{report.citizenshipAvg} / 4</span></div>
+              )}
+              <div className="mt-3">
+                <TrendLineChart
+                  data={report.citizenshipTrend || []}
+                  lines={[{ key: "score", label: "Class Avg Score", color: "#0284c7" }]}
+                  yLabel="Score"
+                />
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="text-sm font-extrabold text-gray-900">Milestones Grade</div>
+              <p className="mt-0.5 text-xs text-gray-500">Average class steps of progression completed — % passed by category.</p>
+              {report.milestonesAvgPct != null && (
+                <div className="mt-1 text-xs text-gray-600">Class avg: <span className="font-bold text-gray-900">{report.milestonesAvgPct}%</span></div>
+              )}
+              <div className="mt-3">
+                {milestoneChartData.length > 0
+                  ? <MilestonesBarChart data={milestoneChartData} />
+                  : <div className="flex h-48 items-center justify-center text-sm text-gray-500">No milestone data.</div>}
+              </div>
+            </div>
+          </div>
+
+          {/* Citizenship Logs (level 2 or 3) */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-extrabold text-gray-900">Citizenship Logs</div>
+                <p className="mt-0.5 text-xs text-gray-500">Citizenship activity entries at level 2 or level 3.</p>
+              </div>
+            </div>
+            {(report.citizenshipLogs?.length ?? 0) === 0 ? (
+              <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-500">No citizenship logs at level 2 or 3 in this period.</div>
+            ) : (
+              <div className="mt-3 overflow-auto rounded-xl border border-gray-200">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Student</th>
+                      <th className="px-4 py-2 text-left">Type</th>
+                      <th className="px-4 py-2 text-left">Level</th>
+                      <th className="px-4 py-2 text-left">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {report.citizenshipLogs.map((log) => (
+                      <>
+                        <tr
+                          key={log.id}
+                          className="cursor-pointer hover:bg-gray-50"
+                          onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
+                        >
+                          <td className="px-4 py-2 font-semibold text-sky-700 hover:underline">{log.childName}</td>
+                          <td className="px-4 py-2 text-gray-700">{behaviorTypeLabel(log.type)}</td>
+                          <td className="px-4 py-2">
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${log.level === "3" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                              Level {log.level}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-gray-500 text-xs">{new Date(log.createdAt).toLocaleDateString()}</td>
+                        </tr>
+                        {expandedLog === log.id && log.notes && (
+                          <tr key={`${log.id}-detail`}>
+                            <td colSpan={4} className="bg-amber-50 px-4 py-2 text-xs text-amber-900">
+                              <span className="font-semibold">Note: </span>{log.notes}
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Red Flags */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="text-sm font-extrabold text-gray-900">Red Flags</div>
+            <p className="mt-0.5 text-xs text-gray-500">Active flags for children in this class.</p>
+            {(report.redFlags?.length ?? 0) === 0 ? (
+              <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-500">None</div>
+            ) : (
+              <div className="mt-3 overflow-auto rounded-xl border border-gray-200">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Student</th>
+                      <th className="px-4 py-2 text-left">Alert</th>
+                      <th className="px-4 py-2 text-left">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {report.redFlags.map((f) => (
+                      <tr key={f.id}>
+                        <td className="px-4 py-2 font-semibold text-gray-900">{f.childName}</td>
+                        <td className="px-4 py-2 text-gray-700">
+                          {f.snapshot?.type === "INDIVIDUAL_PROGRESS_PLAN"
+                            ? `IPP: ${f.snapshot.planTitle || "Plan"}`
+                            : f.flagKey?.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || "Flag"}
+                        </td>
+                        <td className="px-4 py-2 text-xs text-gray-500">{new Date(f.createdAt).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Class IPP Plans */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="text-sm font-extrabold text-gray-900">Class IPP Plans</div>
+            <p className="mt-0.5 text-xs text-gray-500">Open Individual Progress Plans for children in this class.</p>
+            {(report.ippPlans?.length ?? 0) === 0 ? (
+              <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-500">None</div>
+            ) : (
+              <div className="mt-3 overflow-auto rounded-xl border border-gray-200">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Student</th>
+                      <th className="px-4 py-2 text-left">Title</th>
+                      <th className="px-4 py-2 text-left">Date</th>
+                      <th className="px-4 py-2 text-left"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {report.ippPlans.map((plan) => (
+                      <>
+                        <tr
+                          key={plan.id}
+                          className="cursor-pointer hover:bg-gray-50"
+                          onClick={() => setExpandedIPP(expandedIPP === plan.id ? null : plan.id)}
+                        >
+                          <td className="px-4 py-2 font-semibold text-sky-700 hover:underline">{plan.childName}</td>
+                          <td className="px-4 py-2 font-semibold text-gray-900">{plan.title}</td>
+                          <td className="px-4 py-2 text-xs text-gray-500">{new Date(plan.startDate || plan.createdAt).toLocaleDateString()}</td>
+                          <td className="px-4 py-2 text-xs text-sky-600">{expandedIPP === plan.id ? "Hide" : "Details"}</td>
+                        </tr>
+                        {expandedIPP === plan.id && (
+                          <tr key={`${plan.id}-detail`}>
+                            <td colSpan={4} className="bg-sky-50 px-4 py-3">
+                              <div className="space-y-1.5 text-xs">
+                                {plan.description && <div><span className="font-semibold text-gray-700">Description: </span><span className="text-gray-600">{plan.description}</span></div>}
+                                {plan.teacherTactics && <div><span className="font-semibold text-gray-700">Teacher Tactics: </span><span className="text-gray-600">{plan.teacherTactics}</span></div>}
+                                {(plan.goals || []).length > 0 && (
+                                  <div>
+                                    <div className="font-semibold text-gray-700 mb-1">Goals:</div>
+                                    <div className="space-y-1">
+                                      {plan.goals.map((g) => (
+                                        <div key={g.id} className="flex items-center gap-2">
+                                          <span className={`rounded-full px-2 py-0.5 font-semibold text-xs ${g.status === "MET" ? "bg-emerald-100 text-emerald-700" : g.status === "NOT_MET" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>{g.status?.replace(/_/g, " ")}</span>
+                                          <span className="text-gray-700">{g.title}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {plan.createdBy?.name && <div className="text-gray-400">Created by {plan.createdBy.name}</div>}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Class Daily Logs */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="text-sm font-extrabold text-gray-900">Class Daily Logs</div>
+            <p className="mt-0.5 text-xs text-gray-500">Activity logs for all children in this class — similar to Procare.</p>
+            {(report.activityLogs?.length ?? 0) === 0 ? (
+              <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-500">No activity logs in this period.</div>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {report.activityLogs.map((child) => (
+                  <div key={child.childId} className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-600 text-xs font-bold text-white flex-shrink-0">
+                        {(child.childName || "?")[0].toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm text-gray-900">{child.childName}</div>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {child.logs.slice(0, 12).map((log) => (
+                          <span key={log.id} title={`${log.type.replace(/_/g, " ")} — ${new Date(log.createdAt).toLocaleDateString()}`} className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-base cursor-default">
+                            {CLASS_ACTIVITY_ICONS[log.type] || "📄"}
+                          </span>
+                        ))}
+                        {child.logs.length > 12 && (
+                          <span className="flex h-8 items-center rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-500">+{child.logs.length - 12}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Other Staff Performance Tab ──────────────────────────────
+
+function staffGradeColor(g) {
+  if (g == null) return "text-gray-400";
+  if (g >= 80) return "text-emerald-700";
+  if (g >= 60) return "text-amber-700";
+  return "text-red-700";
+}
+function staffGradeBg(g) {
+  if (g == null) return "bg-gray-50 border-gray-200 text-gray-500";
+  if (g >= 80) return "bg-emerald-50 border-emerald-200 text-emerald-800";
+  if (g >= 60) return "bg-amber-50 border-amber-200 text-amber-800";
+  return "bg-red-50 border-red-200 text-red-800";
+}
+function staffGradeLetter(g) {
+  if (g == null) return "N/A";
+  if (g >= 90) return "A";
+  if (g >= 80) return "B";
+  if (g >= 70) return "C";
+  if (g >= 60) return "D";
+  return "F";
+}
+
+function OtherStaffPerformanceTab({ centerId, dateFrom, dateTo }) {
+  const [staffList, setStaffList] = useState([]);
+  const [staffId, setStaffId] = useState("");
+  const [reportFrom, setReportFrom] = useState(dateFrom);
+  const [reportTo, setReportTo] = useState(dateTo);
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingStaff, setLoadingStaff] = useState(true);
+
+  const [gradeConfig, setGradeConfig] = useState(null);
+  const [editingConfig, setEditingConfig] = useState(false);
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [configDraft, setConfigDraft] = useState({});
+
+  const [newCommendation, setNewCommendation] = useState("");
+  const [newCitation, setNewCitation] = useState("");
+  const [savingComm, setSavingComm] = useState(false);
+  const [savingCit, setSavingCit] = useState(false);
+
+  useEffect(() => { setReportFrom(dateFrom); }, [dateFrom]);
+  useEffect(() => { setReportTo(dateTo); }, [dateTo]);
+
+  useEffect(() => {
+    if (!centerId) return;
+    setLoadingStaff(true);
+    apiJson(`/api/v1/users?centerId=${encodeURIComponent(centerId)}&roles=OTHER_STAFF`)
+      .then((r) => {
+        const arr = Array.isArray(r) ? r : [];
+        setStaffList(arr);
+        if (arr.length === 1) setStaffId(arr[0].id);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingStaff(false));
+  }, [centerId]);
+
+  useEffect(() => {
+    if (!centerId) return;
+    apiJson(`/api/v1/other-staff-grade-config?centerId=${encodeURIComponent(centerId)}`)
+      .then((r) => { setGradeConfig(r); setConfigDraft(r); })
+      .catch(() => {});
+  }, [centerId]);
+
+  const loadReport = useCallback(async () => {
+    if (!centerId || !staffId) return;
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ centerId, staffId, from: reportFrom, to: reportTo });
+      const r = await apiJson(`/api/v1/analytics/staff-perf-report?${params}`);
+      setReport(r);
+    } catch {}
+    setLoading(false);
+  }, [centerId, staffId, reportFrom, reportTo]);
+
+  useEffect(() => { loadReport(); }, [loadReport]);
+
+  async function saveConfig() {
+    setSavingConfig(true);
+    try {
+      const r = await apiJson(`/api/v1/other-staff-grade-config?centerId=${encodeURIComponent(centerId)}`, {
+        method: "PUT",
+        body: JSON.stringify(configDraft),
+      });
+      setGradeConfig(r);
+      setEditingConfig(false);
+      await loadReport();
+    } catch {}
+    setSavingConfig(false);
+  }
+
+  async function addCommendation() {
+    if (!newCommendation.trim() || !staffId) return;
+    setSavingComm(true);
+    try {
+      await apiJson("/api/v1/staff-commendations", {
+        method: "POST",
+        body: JSON.stringify({ centerId, staffId, text: newCommendation.trim() }),
+      });
+      setNewCommendation("");
+      await loadReport();
+    } catch {}
+    setSavingComm(false);
+  }
+
+  async function deleteCommendation(id) {
+    try { await apiJson(`/api/v1/staff-commendations/${id}`, { method: "DELETE" }); await loadReport(); } catch {}
+  }
+
+  async function addCitation() {
+    if (!newCitation.trim() || !staffId) return;
+    setSavingCit(true);
+    try {
+      await apiJson("/api/v1/staff-citations", {
+        method: "POST",
+        body: JSON.stringify({ centerId, staffId, text: newCitation.trim() }),
+      });
+      setNewCitation("");
+      await loadReport();
+    } catch {}
+    setSavingCit(false);
+  }
+
+  async function deleteCitation(id) {
+    try { await apiJson(`/api/v1/staff-citations/${id}`, { method: "DELETE" }); await loadReport(); } catch {}
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Selectors */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <div className="text-sm font-extrabold text-gray-900">Other Staff Performance Report</div>
+            <p className="mt-0.5 text-xs text-gray-600">Select a staff member and date range — all metrics filter by the same period.</p>
+          </div>
+          <button onClick={() => window.print()} className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-extrabold text-gray-800 hover:bg-gray-50">Print</button>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+          <FilterSelect label="Select Staff" value={staffId} onChange={setStaffId} disabled={loadingStaff}>
+            <option value="">Choose a staff member…</option>
+            {staffList.map((s) => <option key={s.id} value={s.id}>{s.name || s.email}</option>)}
+          </FilterSelect>
+          <FilterInput label="Start Date" type="date" value={reportFrom} onChange={setReportFrom} />
+          <FilterInput label="End Date" type="date" value={reportTo} onChange={setReportTo} />
+        </div>
+      </div>
+
+      {/* Grade Formula Config */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-extrabold text-gray-900">Overall Grade Formula</div>
+            <p className="mt-0.5 text-xs text-gray-600">
+              {gradeConfig
+                ? `${gradeConfig.evaluationWeight}% evaluation · ${gradeConfig.checklistWeight}% checklist · −${gradeConfig.lateDeductionPct}pt/late · −${gradeConfig.absenceDeductionPct}pt/absence`
+                : "Loading…"}
+            </p>
+          </div>
+          <button
+            onClick={() => { setEditingConfig(!editingConfig); setConfigDraft(gradeConfig || {}); }}
+            className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            {editingConfig ? "Cancel" : "Edit Formula"}
+          </button>
+        </div>
+        {editingConfig && (
+          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4 border-t border-gray-100 pt-4">
+            {[
+              { key: "evaluationWeight", label: "Evaluation %" },
+              { key: "checklistWeight", label: "Checklist %" },
+              { key: "lateDeductionPct", label: "Late deduction (pts)" },
+              { key: "absenceDeductionPct", label: "Absence deduction (pts)" },
+            ].map(({ key, label }) => (
+              <label key={key} className="block">
+                <div className="mb-1 text-xs font-semibold text-gray-500">{label}</div>
+                <input
+                  type="number" min="0" max="100" step="0.5"
+                  value={configDraft[key] ?? ""}
+                  onChange={(e) => setConfigDraft((d) => ({ ...d, [key]: Number(e.target.value) }))}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                />
+              </label>
+            ))}
+            <div className="flex items-end col-span-2 md:col-span-4">
+              <button onClick={saveConfig} disabled={savingConfig} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60">
+                {savingConfig ? "Saving…" : "Save Formula"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {!staffId && <Empty msg="Select a staff member to view their performance report." />}
+      {staffId && loading && <Loading />}
+
+      {report && !loading && (
+        <div className="space-y-4">
+          {/* Overall Grade */}
+          <div className={`rounded-2xl border p-6 ${staffGradeBg(report.overallGrade)}`}>
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="text-center">
+                <div className={`text-6xl font-extrabold ${staffGradeColor(report.overallGrade)}`}>{staffGradeLetter(report.overallGrade)}</div>
+                <div className="mt-1 text-xs font-semibold uppercase tracking-wide opacity-70">Overall Grade</div>
+              </div>
+              <div className="flex-1">
+                <div className={`text-3xl font-extrabold ${staffGradeColor(report.overallGrade)}`}>
+                  {report.overallGrade != null ? `${report.overallGrade}%` : "Insufficient Data"}
+                </div>
+                <div className="mt-1 text-sm font-semibold text-gray-700">{report.staff?.name || "—"}</div>
+                <div className="mt-1 text-xs text-gray-500">
+                  Period: {new Date(report.dateRange.from).toLocaleDateString()} – {new Date(report.dateRange.to).toLocaleDateString()}
+                </div>
+                <div className="mt-1 text-xs text-gray-500">
+                  Formula: {report.gradeConfig.evaluationWeight}% evaluation · {report.gradeConfig.checklistWeight}% checklist
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-center text-xs">
+                {[
+                  { label: "Evaluation", val: report.evaluation?.normalized != null ? `${report.evaluation.normalized}%` : "—" },
+                  { label: "Checklist", val: report.checklist?.pct != null ? `${report.checklist.pct}%` : "—" },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-lg border border-white/60 bg-white/50 px-3 py-2">
+                    <div className="text-lg font-extrabold text-gray-800">{s.val}</div>
+                    <div className="font-semibold text-gray-600">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Evaluation Grade + Checklist Grade */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="text-sm font-extrabold text-gray-900">Evaluation Grade</div>
+              <p className="mt-0.5 text-xs text-gray-500">Evaluation scores filled out by admin — score over time.</p>
+              {report.evaluation?.mostRecentScore != null && (
+                <div className="mt-1 text-xs text-gray-600">Most recent: <span className="font-bold text-gray-900">{report.evaluation.mostRecentScore}/10</span></div>
+              )}
+              <div className="mt-3">
+                <TrendLineChart
+                  data={report.evaluation?.trend || []}
+                  lines={[{ key: "score", label: "Evaluation Score", color: "#7c3aed" }]}
+                  yDomain={[0, 10]}
+                  yLabel="Score"
+                />
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="text-sm font-extrabold text-gray-900">Checklist Grade</div>
+              <p className="mt-0.5 text-xs text-gray-500">Percentage of assigned daily checklist items completed.</p>
+              <div className="mt-4 flex items-center gap-4">
+                <div className={`flex h-24 w-24 items-center justify-center rounded-full border-4 font-extrabold text-2xl ${report.checklist?.pct != null ? staffGradeBg(report.checklist.pct) : "border-gray-200 text-gray-400"}`}>
+                  {report.checklist?.pct != null ? `${report.checklist.pct}%` : "—"}
+                </div>
+                <div className="text-sm text-gray-600">
+                  <div>{report.checklist?.completedCount ?? 0} items completed</div>
+                  <div className="text-xs text-gray-400">out of ~{report.checklist?.assignedCount ?? 0} assigned × days</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Commendations + Citations */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="text-sm font-extrabold text-gray-900">Commendations</div>
+              <div className="mt-3 flex gap-2">
+                <input
+                  type="text" value={newCommendation} onChange={(e) => setNewCommendation(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addCommendation()}
+                  placeholder="Add commendation…" className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                />
+                <button onClick={addCommendation} disabled={savingComm || !newCommendation.trim()}
+                  className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+                  {savingComm ? "…" : "Add"}
+                </button>
+              </div>
+              {(report.commendations?.length ?? 0) === 0
+                ? <div className="mt-3 text-sm text-gray-400 italic">None</div>
+                : (
+                  <div className="mt-3 space-y-2">
+                    {report.commendations.map((c) => (
+                      <div key={c.id} className="flex items-start gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2">
+                        <div className="flex-1">
+                          <div className="text-sm text-emerald-900">{c.text}</div>
+                          <div className="text-xs text-emerald-600">{new Date(c.date).toLocaleDateString()}{c.createdBy?.name && ` · ${c.createdBy.name}`}</div>
+                        </div>
+                        <button onClick={() => deleteCommendation(c.id)} className="text-xs text-emerald-400 hover:text-red-500">✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="text-sm font-extrabold text-gray-900">Citations</div>
+              <div className="mt-3 flex gap-2">
+                <input
+                  type="text" value={newCitation} onChange={(e) => setNewCitation(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addCitation()}
+                  placeholder="Add citation…" className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                />
+                <button onClick={addCitation} disabled={savingCit || !newCitation.trim()}
+                  className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50">
+                  {savingCit ? "…" : "Add"}
+                </button>
+              </div>
+              {(report.citations?.length ?? 0) === 0
+                ? <div className="mt-3 text-sm text-gray-400 italic">None</div>
+                : (
+                  <div className="mt-3 space-y-2">
+                    {report.citations.map((c) => (
+                      <div key={c.id} className="flex items-start gap-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2">
+                        <div className="flex-1">
+                          <div className="text-sm text-red-900">{c.text}</div>
+                          <div className="text-xs text-red-500">{new Date(c.date).toLocaleDateString()}{c.createdBy?.name && ` · ${c.createdBy.name}`}</div>
+                        </div>
+                        <button onClick={() => deleteCitation(c.id)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+            </div>
+          </div>
+
+          {/* HR */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="text-sm font-extrabold text-gray-900">HR</div>
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+              {[
+                { label: "Hours Worked", value: report.hr?.hoursWorked ?? "—", color: "bg-sky-50 text-sky-800 border-sky-200" },
+                { label: "Lates", value: report.hr?.lates ?? "—", color: "bg-amber-50 text-amber-800 border-amber-200" },
+                { label: "Absences", value: report.hr?.absences ?? "—", color: "bg-red-50 text-red-800 border-red-200" },
+                { label: "PTO Available (hrs)", value: report.hr?.ptoAvailable ?? "—", color: "bg-emerald-50 text-emerald-800 border-emerald-200" },
+                { label: "UTO Available (hrs)", value: report.hr?.utoAvailable ?? "—", color: "bg-gray-50 text-gray-800 border-gray-200" },
+              ].map((s) => (
+                <div key={s.label} className={`rounded-xl border p-4 ${s.color}`}>
+                  <div className="text-2xl font-extrabold">{String(s.value)}</div>
+                  <div className="mt-0.5 text-xs font-semibold uppercase tracking-wide opacity-70">{s.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Training Hours + Training Pathway */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="text-sm font-extrabold text-gray-900">Training Hours</div>
+              <p className="mt-0.5 text-xs text-gray-500">From training hours recorded in this period.</p>
+              <div className="mt-3 text-3xl font-extrabold text-sky-700">{report.training?.totalHours ?? 0} hrs</div>
+              {(report.training?.logs?.length ?? 0) > 0 && (
+                <div className="mt-3 space-y-1.5">
+                  {report.training.logs.map((l) => (
+                    <div key={l.id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs">
+                      <span className="font-semibold text-gray-800">{l.topic}</span>
+                      <span className="text-gray-500">{l.hours} hrs · {new Date(l.date).toLocaleDateString()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="text-sm font-extrabold text-gray-900">Training Pathway</div>
+              <p className="mt-0.5 text-xs text-gray-500">From the Staff Advancement page.</p>
+              {(report.trainingPathways?.length ?? 0) === 0
+                ? <div className="mt-3 text-sm text-gray-400 italic">No training pathways configured.</div>
+                : (
+                  <div className="mt-3 space-y-2">
+                    {report.trainingPathways.map((p) => (
+                      <div key={p.id} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-semibold text-gray-900">{p.title}</span>
+                          {p.category && <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-700">{p.category}</span>}
+                        </div>
+                        <div className="text-xs text-gray-500">{p.steps?.length ?? 0} steps</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Query Tab ────────────────────────────────────────────────
 
 function QueryTab({ centerId, children, classes }) {
@@ -2013,134 +2720,337 @@ function ChildPerformanceTab({ centerId, classes, children, dateFrom, dateTo }) 
 
 // ─── Coach Performance Tab ────────────────────────────────────
 
+function coachGradeColor(g) {
+  if (g == null) return "text-gray-400";
+  if (g >= 80) return "text-emerald-700";
+  if (g >= 60) return "text-amber-700";
+  return "text-red-700";
+}
+function coachGradeBg(g) {
+  if (g == null) return "bg-gray-50 border-gray-200 text-gray-500";
+  if (g >= 80) return "bg-emerald-50 border-emerald-200 text-emerald-800";
+  if (g >= 60) return "bg-amber-50 border-amber-200 text-amber-800";
+  return "bg-red-50 border-red-200 text-red-800";
+}
+function coachGradeLetter(g) {
+  if (g == null) return "N/A";
+  if (g >= 90) return "A";
+  if (g >= 80) return "B";
+  if (g >= 70) return "C";
+  if (g >= 60) return "D";
+  return "F";
+}
+
 function CoachPerformanceTab({ centerId, dateFrom, dateTo }) {
-  const [observations, setObservations] = useState([]);
-  const [followUps, setFollowUps] = useState([]);
   const [coaches, setCoaches] = useState([]);
   const [coachId, setCoachId] = useState("");
+  const [reportFrom, setReportFrom] = useState(dateFrom);
+  const [reportTo, setReportTo] = useState(dateTo);
+  const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [loadingCoaches, setLoadingCoaches] = useState(true);
+
+  // Grade config editor
+  const [gradeConfig, setGradeConfig] = useState(null);
+  const [editingConfig, setEditingConfig] = useState(false);
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [configDraft, setConfigDraft] = useState({});
+
+  useEffect(() => { setReportFrom(dateFrom); }, [dateFrom]);
+  useEffect(() => { setReportTo(dateTo); }, [dateTo]);
 
   useEffect(() => {
-    if (!centerId) { setObservations([]); setFollowUps([]); setCoaches([]); return; }
+    if (!centerId) return;
+    setLoadingCoaches(true);
+    apiJson(`/api/v1/users?centerId=${encodeURIComponent(centerId)}&roles=COACH`)
+      .then((r) => {
+        const arr = Array.isArray(r) ? r : [];
+        setCoaches(arr);
+        if (arr.length === 1) setCoachId(arr[0].id);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingCoaches(false));
+  }, [centerId]);
+
+  useEffect(() => {
+    if (!centerId) return;
+    apiJson(`/api/v1/coach-performance-grade-config?centerId=${encodeURIComponent(centerId)}`)
+      .then((r) => { setGradeConfig(r); setConfigDraft(r); })
+      .catch(() => {});
+  }, [centerId]);
+
+  const loadReport = useCallback(async () => {
+    if (!centerId || !coachId) return;
     setLoading(true);
-    Promise.all([
-      apiJson(`/api/v1/coach/observations?centerId=${encodeURIComponent(centerId)}&from=${dateFrom}&to=${dateTo}`).catch(() => []),
-      apiJson(`/api/v1/coach/follow-ups?centerId=${encodeURIComponent(centerId)}`).catch(() => []),
-      apiJson(`/api/v1/users?centerId=${encodeURIComponent(centerId)}&roles=COACH`).catch(() => []),
-    ]).then(([obs, fups, coachList]) => {
-      setObservations(Array.isArray(obs) ? obs : []);
-      setFollowUps(Array.isArray(fups) ? fups : []);
-      setCoaches(Array.isArray(coachList) ? coachList : []);
-    }).finally(() => setLoading(false));
-  }, [centerId, dateFrom, dateTo]);
+    try {
+      const params = new URLSearchParams({ centerId, coachId, from: reportFrom, to: reportTo });
+      const r = await apiJson(`/api/v1/analytics/coach-perf-report?${params}`);
+      setReport(r);
+    } catch {}
+    setLoading(false);
+  }, [centerId, coachId, reportFrom, reportTo]);
 
-  const filteredObs = useMemo(() => {
-    if (!coachId) return observations;
-    return observations.filter((o) => o.coachId === coachId);
-  }, [observations, coachId]);
+  useEffect(() => { loadReport(); }, [loadReport]);
 
-  const filteredFups = useMemo(() => {
-    if (!coachId) return followUps;
-    return followUps.filter((f) => f.createdById === coachId || f.assignedToId === coachId);
-  }, [followUps, coachId]);
-
-  const obsSummary = useMemo(() => {
-    const total = filteredObs.length;
-    const withScore = filteredObs.filter((o) => o.score !== null && o.score !== undefined);
-    const avgScore = withScore.length > 0
-      ? (withScore.reduce((s, o) => s + (o.score || 0), 0) / withScore.length).toFixed(1)
-      : null;
-    const inClass = filteredObs.filter((o) => o.type === "IN_CLASS").length;
-    const camera = filteredObs.filter((o) => o.type === "CAMERA").length;
-    return { total, avgScore, inClass, camera };
-  }, [filteredObs]);
-
-  const fupsByStatus = useMemo(() => {
-    const open = filteredFups.filter((f) => f.status === "OPEN").length;
-    const inProgress = filteredFups.filter((f) => f.status === "IN_PROGRESS").length;
-    const completed = filteredFups.filter((f) => f.status === "COMPLETED").length;
-    return { open, inProgress, completed, total: filteredFups.length };
-  }, [filteredFups]);
+  async function saveConfig() {
+    setSavingConfig(true);
+    try {
+      const r = await apiJson(`/api/v1/coach-performance-grade-config?centerId=${encodeURIComponent(centerId)}`, {
+        method: "PUT",
+        body: JSON.stringify(configDraft),
+      });
+      setGradeConfig(r);
+      setEditingConfig(false);
+      await loadReport();
+    } catch {}
+    setSavingConfig(false);
+  }
 
   return (
     <div className="space-y-4">
+      {/* Header + Selectors */}
       <div className="rounded-2xl border border-gray-200 bg-white p-5">
-        <h3 className="text-base font-extrabold text-gray-900">Coach Performance Report</h3>
-        <p className="mt-1 text-sm text-gray-500">View coach observation scores, in-class vs. camera split, and follow-up completion rates.</p>
-
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <FilterSelect label="Coach" value={coachId} onChange={setCoachId}>
-            <option value="">All coaches</option>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <div className="text-sm font-extrabold text-gray-900">Coach Performance Report</div>
+            <p className="mt-0.5 text-xs text-gray-600">Select a coach and date range — all metrics filter by the same period.</p>
+          </div>
+          <button onClick={() => window.print()} className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-extrabold text-gray-800 hover:bg-gray-50">Print</button>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+          <FilterSelect label="Select Coach" value={coachId} onChange={setCoachId} disabled={loadingCoaches}>
+            <option value="">Choose a coach…</option>
             {coaches.map((c) => <option key={c.id} value={c.id}>{c.name || c.email}</option>)}
           </FilterSelect>
+          <FilterInput label="Start Date" type="date" value={reportFrom} onChange={setReportFrom} />
+          <FilterInput label="End Date" type="date" value={reportTo} onChange={setReportTo} />
         </div>
       </div>
 
-      {loading ? (
-        <Loading />
-      ) : (
-        <>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            {[
-              { label: "Observations", value: obsSummary.total, color: "bg-sky-50 text-sky-700" },
-              { label: "Avg Score", value: obsSummary.avgScore !== null ? `${obsSummary.avgScore}/10` : "—", color: "bg-blue-50 text-blue-700" },
-              { label: "In-Class", value: obsSummary.inClass, color: "bg-emerald-50 text-emerald-700" },
-              { label: "Camera", value: obsSummary.camera, color: "bg-amber-50 text-amber-700" },
-            ].map((kpi) => (
-              <div key={kpi.label} className={`rounded-2xl border border-gray-200 ${kpi.color} p-4`}>
-                <div className="text-xs font-semibold uppercase tracking-wide opacity-70">{kpi.label}</div>
-                <div className="mt-1 text-2xl font-extrabold">{kpi.value}</div>
-              </div>
-            ))}
+      {/* Grade Formula Config */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-extrabold text-gray-900">Overall Grade Formula</div>
+            <p className="mt-0.5 text-xs text-gray-600">
+              {gradeConfig
+                ? `${gradeConfig.teamPerformanceWeight}% team performance · ${gradeConfig.evaluationWeight}% evaluation · −${gradeConfig.lateDeductionPct}pt/late · −${gradeConfig.absenceDeductionPct}pt/absence`
+                : "Loading…"}
+            </p>
           </div>
-
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+          <button
+            onClick={() => { setEditingConfig(!editingConfig); setConfigDraft(gradeConfig || {}); }}
+            className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            {editingConfig ? "Cancel" : "Edit Formula"}
+          </button>
+        </div>
+        {editingConfig && (
+          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4 border-t border-gray-100 pt-4">
             {[
-              { label: "Open Follow-Ups", value: fupsByStatus.open, color: "bg-amber-50 text-amber-700" },
-              { label: "In Progress", value: fupsByStatus.inProgress, color: "bg-sky-50 text-sky-700" },
-              { label: "Completed", value: fupsByStatus.completed, color: "bg-emerald-50 text-emerald-700" },
-            ].map((kpi) => (
-              <div key={kpi.label} className={`rounded-2xl border border-gray-200 ${kpi.color} p-4`}>
-                <div className="text-xs font-semibold uppercase tracking-wide opacity-70">{kpi.label}</div>
-                <div className="mt-1 text-2xl font-extrabold">{kpi.value}</div>
-              </div>
+              { key: "teamPerformanceWeight", label: "Team Performance %" },
+              { key: "evaluationWeight", label: "Evaluation %" },
+              { key: "lateDeductionPct", label: "Late deduction (pts)" },
+              { key: "absenceDeductionPct", label: "Absence deduction (pts)" },
+            ].map(({ key, label }) => (
+              <label key={key} className="block">
+                <div className="mb-1 text-xs font-semibold text-gray-500">{label}</div>
+                <input
+                  type="number" min="0" max="100" step="0.5"
+                  value={configDraft[key] ?? ""}
+                  onChange={(e) => setConfigDraft((d) => ({ ...d, [key]: Number(e.target.value) }))}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                />
+              </label>
             ))}
+            <div className="flex items-end col-span-2 md:col-span-4">
+              <button
+                onClick={saveConfig} disabled={savingConfig}
+                className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
+              >
+                {savingConfig ? "Saving…" : "Save Formula"}
+              </button>
+            </div>
           </div>
+        )}
+      </div>
 
-          {filteredObs.length > 0 && (
-            <div className="rounded-2xl border border-gray-200 bg-white p-5">
-              <h4 className="text-sm font-extrabold text-gray-900 mb-3">Recent Observations</h4>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-100 text-left">
-                      <th className="py-2 pr-4 text-xs font-semibold text-gray-500">Coach</th>
-                      <th className="py-2 pr-4 text-xs font-semibold text-gray-500">Teacher Observed</th>
-                      <th className="py-2 pr-4 text-xs font-semibold text-gray-500">Type</th>
-                      <th className="py-2 pr-4 text-xs font-semibold text-gray-500">Score</th>
-                      <th className="py-2 text-xs font-semibold text-gray-500">Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredObs.slice(0, 50).map((o) => (
-                      <tr key={o.id} className="border-b border-gray-50">
-                        <td className="py-2 pr-4 text-gray-800">{o.coach?.name || "—"}</td>
-                        <td className="py-2 pr-4 text-gray-800">{o.teacher?.name || "—"}</td>
-                        <td className="py-2 pr-4">
-                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${o.type === "IN_CLASS" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                            {o.type === "IN_CLASS" ? "In Class" : "Camera"}
-                          </span>
-                        </td>
-                        <td className="py-2 pr-4 font-semibold text-gray-800">{o.score !== null && o.score !== undefined ? `${o.score}/10` : "—"}</td>
-                        <td className="py-2 text-xs text-gray-500">{fmtDate(o.date)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+      {!coachId && <Empty msg="Select a coach to view their performance report." />}
+      {coachId && loading && <Loading />}
+
+      {report && !loading && (
+        <div className="space-y-4">
+          {/* Overall Grade */}
+          <div className={`rounded-2xl border p-6 ${coachGradeBg(report.overallGrade)}`}>
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="text-center">
+                <div className={`text-6xl font-extrabold ${coachGradeColor(report.overallGrade)}`}>
+                  {coachGradeLetter(report.overallGrade)}
+                </div>
+                <div className="mt-1 text-xs font-semibold uppercase tracking-wide opacity-70">Overall Grade</div>
+              </div>
+              <div className="flex-1">
+                <div className={`text-3xl font-extrabold ${coachGradeColor(report.overallGrade)}`}>
+                  {report.overallGrade != null ? `${report.overallGrade}%` : "Insufficient Data"}
+                </div>
+                <div className="mt-1 text-sm font-semibold text-gray-700">{report.coach?.name || "—"}</div>
+                <div className="mt-1 text-xs text-gray-500">
+                  Period: {new Date(report.dateRange.from).toLocaleDateString()} – {new Date(report.dateRange.to).toLocaleDateString()}
+                </div>
+                {report.team?.teachers?.length > 0 && (
+                  <div className="mt-1 text-xs text-gray-500">
+                    Team: {report.team.teachers.map((t) => t.name).join(", ")}
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-center text-xs">
+                {[
+                  { label: "Team Perf.", val: report.team?.normalized != null ? `${report.team.normalized}%` : "—" },
+                  { label: "Evaluation", val: report.evaluation?.normalized != null ? `${report.evaluation.normalized}%` : "—" },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-lg border border-white/60 bg-white/50 px-3 py-2">
+                    <div className="text-lg font-extrabold text-gray-800">{s.val}</div>
+                    <div className="font-semibold text-gray-600">{s.label}</div>
+                  </div>
+                ))}
               </div>
             </div>
-          )}
-        </>
+          </div>
+
+          {/* Team Performance Grade + Evaluation Grade */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="text-sm font-extrabold text-gray-900">Team Performance Grade</div>
+              <p className="mt-0.5 text-xs text-gray-500">
+                Average {report.team?.usingSnapshots ? "composite score" : "observation score"} of teachers assigned to this coach over time.
+              </p>
+              {report.team?.avgScore != null && (
+                <div className="mt-1 text-xs text-gray-600">
+                  Team avg: <span className="font-bold text-gray-900">{report.team.avgScore}{report.team.usingSnapshots ? "" : "/10"}</span>
+                </div>
+              )}
+              <div className="mt-3">
+                <TrendLineChart
+                  data={report.team?.trend || []}
+                  lines={[{ key: "score", label: "Team Avg Score", color: "#0284c7" }]}
+                  yLabel="Score"
+                />
+              </div>
+              {(report.team?.teachers?.length ?? 0) === 0 && (
+                <div className="mt-2 text-xs text-gray-400 italic">No teachers observed by this coach yet.</div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="text-sm font-extrabold text-gray-900">Evaluation Grade</div>
+              <p className="mt-0.5 text-xs text-gray-500">Evaluation scores filled out by admin — score over time.</p>
+              {report.evaluation?.mostRecentScore != null && (
+                <div className="mt-1 text-xs text-gray-600">
+                  Most recent: <span className="font-bold text-gray-900">{report.evaluation.mostRecentScore}/10</span>
+                </div>
+              )}
+              <div className="mt-3">
+                <TrendLineChart
+                  data={report.evaluation?.trend || []}
+                  lines={[{ key: "score", label: "Evaluation Score", color: "#7c3aed" }]}
+                  yDomain={[0, 10]}
+                  yLabel="Score"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Checklist Grade (full width) */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="flex flex-wrap items-center gap-6">
+              <div>
+                <div className="text-sm font-extrabold text-gray-900">Checklist Grade</div>
+                <p className="mt-0.5 text-xs text-gray-500">Percentage of assigned daily checklist items completed in this period.</p>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className={`flex h-20 w-20 items-center justify-center rounded-full border-4 font-extrabold text-xl ${report.checklist?.pct != null ? coachGradeBg(report.checklist.pct) : "border-gray-200 text-gray-400"}`}>
+                  {report.checklist?.pct != null ? `${report.checklist.pct}%` : "—"}
+                </div>
+                <div className="text-sm text-gray-600">
+                  <div>{report.checklist?.completedCount ?? 0} items completed</div>
+                  <div className="text-xs text-gray-400">out of ~{report.checklist?.assignedCount ?? 0} assigned items × days</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Commendations + Citations */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
+              <div className="text-sm font-extrabold text-emerald-900">Commendations Given to Team</div>
+              <p className="mt-0.5 text-xs text-emerald-700">Total commendations awarded to teachers under this coach in this period.</p>
+              <div className="mt-4 text-4xl font-extrabold text-emerald-700">{report.commendations?.teamTotal ?? 0}</div>
+            </div>
+            <div className="rounded-2xl border border-red-100 bg-red-50 p-5">
+              <div className="text-sm font-extrabold text-red-900">Citations Given to Team</div>
+              <p className="mt-0.5 text-xs text-red-700">Total citations issued to teachers under this coach in this period.</p>
+              <div className="mt-4 text-4xl font-extrabold text-red-700">{report.citations?.teamTotal ?? 0}</div>
+            </div>
+          </div>
+
+          {/* HR Section */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="text-sm font-extrabold text-gray-900">HR</div>
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+              {[
+                { label: "Hours Worked", value: report.hr?.hoursWorked ?? "—", color: "bg-sky-50 text-sky-800 border-sky-200" },
+                { label: "Lates", value: report.hr?.lates ?? "—", color: "bg-amber-50 text-amber-800 border-amber-200" },
+                { label: "Absences", value: report.hr?.absences ?? "—", color: "bg-red-50 text-red-800 border-red-200" },
+                { label: "PTO Available (hrs)", value: report.hr?.ptoAvailable ?? "—", color: "bg-emerald-50 text-emerald-800 border-emerald-200" },
+                { label: "UTO Available (hrs)", value: report.hr?.utoAvailable ?? "—", color: "bg-gray-50 text-gray-800 border-gray-200" },
+              ].map((s) => (
+                <div key={s.label} className={`rounded-xl border p-4 ${s.color}`}>
+                  <div className="text-2xl font-extrabold">{String(s.value)}</div>
+                  <div className="mt-0.5 text-xs font-semibold uppercase tracking-wide opacity-70">{s.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Training Hours + Training Pathway */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="text-sm font-extrabold text-gray-900">Training Hours</div>
+              <p className="mt-0.5 text-xs text-gray-500">From training hours recorded in this period.</p>
+              <div className="mt-3 text-3xl font-extrabold text-sky-700">{report.training?.totalHours ?? 0} hrs</div>
+              {(report.training?.logs?.length ?? 0) > 0 && (
+                <div className="mt-3 space-y-1.5">
+                  {report.training.logs.map((l) => (
+                    <div key={l.id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs">
+                      <span className="font-semibold text-gray-800">{l.topic}</span>
+                      <span className="text-gray-500">{l.hours} hrs · {new Date(l.date).toLocaleDateString()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="text-sm font-extrabold text-gray-900">Training Pathway</div>
+              <p className="mt-0.5 text-xs text-gray-500">From the Staff Advancement page.</p>
+              {(report.trainingPathways?.length ?? 0) === 0
+                ? <div className="mt-3 text-sm text-gray-400 italic">No training pathways configured.</div>
+                : (
+                  <div className="mt-3 space-y-2">
+                    {report.trainingPathways.map((p) => (
+                      <div key={p.id} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-semibold text-gray-900">{p.title}</span>
+                          {p.category && <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-700">{p.category}</span>}
+                        </div>
+                        <div className="text-xs text-gray-500">{p.steps?.length ?? 0} steps</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

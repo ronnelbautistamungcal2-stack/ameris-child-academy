@@ -85,6 +85,10 @@ async function loginAsCoach(request) {
   return getAuthCookie(request, "coach@demo.com", "coachpass");
 }
 
+async function loginAsOtherStaff(request) {
+  return getAuthCookie(request, "otherstaff@demo.com", "otherstaffpass");
+}
+
 module.exports = {
   getAuthCookie,
   getSessionCookieValue,
@@ -93,4 +97,5 @@ module.exports = {
   loginAsTeacher,
   loginAsParent,
   loginAsCoach,
+  loginAsOtherStaff,
 };

@@ -285,6 +285,7 @@ model Center {
   auditLogs        AuditLog[]
   outboundEmails   OutboundEmail[]
   milestoneChecklistPlans MilestoneChecklistPlan[]
+  lessonPlanRows   LessonPlanRow[]
   behaviorPlans    BehaviorPlan[]
   teacherPerformanceSnapshots TeacherPerformanceSnapshot[]
   staffAttendances StaffAttendance[]
@@ -340,6 +341,7 @@ model ClassRoom {
   dailyChecklists   DailyChecklist[]
   dailyChecklistAssignments DailyChecklistClassroom[]
   milestoneChecklistPlans MilestoneChecklistPlan[]
+  lessonPlanRows   LessonPlanRow[]
 }
 
 model TeacherClass {
@@ -675,6 +677,21 @@ model MilestoneChecklistStaffCompletion {
   @@unique([itemId, completedById, date])
   @@index([itemId, date])
   @@index([completedById, date])
+}
+
+model LessonPlanRow {
+  id          String    @id @default(uuid())
+  center      Center    @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  classRoom   ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+  classRoomId String
+  rowIndex    Int
+  label       String    @default("")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([classRoomId, rowIndex])
+  @@index([centerId, classRoomId])
 }
 
 model ChildFlagReview {

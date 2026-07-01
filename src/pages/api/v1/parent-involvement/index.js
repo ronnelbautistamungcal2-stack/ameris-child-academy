@@ -1,6 +1,6 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { isChildLinkedToParent } from "@/lib/child-parent-links";
+import { isChildLinkedToParent, buildParentLinkedChildWhere } from "@/lib/child-parent-links";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -46,8 +46,11 @@ export default async function handler(req, res) {
     const activity = await prisma.parentInvolvementActivity.findUnique({ where: { id: activityId } });
     if (!activity || !activity.active) return res.status(404).json({ error: "Activity not found" });
 
-    const ok = await hasAccessToCenter(session.user.id, activity.centerId);
-    if (!ok) return res.status(403).json({ error: "Forbidden" });
+    const linkedChild = await prisma.child.findFirst({
+      where: buildParentLinkedChildWhere(session.user.id, { centerId: activity.centerId }),
+      select: { id: true },
+    });
+    if (!linkedChild) return res.status(403).json({ error: "Forbidden" });
 
     if (childId) {
       const child = await prisma.child.findUnique({

@@ -1,5 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { buildParentLinkedChildWhere } from "@/lib/child-parent-links";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -8,7 +9,13 @@ export default async function handler(req, res) {
   const { centerId } = req.query;
   if (!centerId) return res.status(400).json({ error: "centerId is required" });
 
-  if (session.user.role !== "ADMIN") {
+  if (session.user.role === "PARENT") {
+    const linkedChild = await prisma.child.findFirst({
+      where: buildParentLinkedChildWhere(session.user.id, { centerId }),
+      select: { id: true },
+    });
+    if (!linkedChild) return res.status(403).json({ error: "Forbidden" });
+  } else if (session.user.role !== "ADMIN") {
     const ok = await hasAccessToCenter(session.user.id, centerId);
     if (!ok) return res.status(403).json({ error: "Forbidden" });
   }

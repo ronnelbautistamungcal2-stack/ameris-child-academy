@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { isChildLinkedToParent } from "@/lib/child-parent-links";
+import { emitNotification } from "@/lib/socket";
 
 export default async function handler(req, res) {
   try {
@@ -24,6 +25,7 @@ export default async function handler(req, res) {
             lastName: true,
             parentId: true,
             centerId: true,
+            classRoomId: true,
             guardians: { select: { guardianId: true } },
           },
         },
@@ -98,16 +100,35 @@ export default async function handler(req, res) {
     }).catch(() => []);
 
     if (admins.length > 0) {
-      await prisma.notification.createMany({
-        data: admins.map(({ userId }) => ({
-          userId,
-          type: "BEHAVIOR_PLAN_APPROVED",
-          title: "Individual Progress Plan Approved by Parent",
-          body: `${childName}'s Individual Progress Plan "${plan.title}" has been approved by the parent.`,
-          data: { planId: id, childId: plan.child.id },
-        })),
-        skipDuplicates: true,
-      }).catch(() => {});
+      const adminNotifications = admins.map(({ userId }) => ({
+        recipientId: userId,
+        type: "ACTIVITY_UPDATE",
+        title: "Individual Progress Plan Approved by Parent",
+        body: `${childName}'s Individual Progress Plan "${plan.title}" has been approved by the parent.`,
+        metadata: { planId: id, childId: plan.child.id },
+      }));
+      await prisma.notification.createMany({ data: adminNotifications, skipDuplicates: true }).catch(() => {});
+      adminNotifications.forEach((n) => emitNotification(n.recipientId, n));
+    }
+
+    // Notify the assigned teacher(s) when an admin approves on the parent's behalf
+    if (session.user.role === "ADMIN" && plan.child.classRoomId) {
+      const teacherAssignments = await prisma.teacherClass.findMany({
+        where: { classId: plan.child.classRoomId },
+        select: { teacherId: true },
+      }).catch(() => []);
+
+      if (teacherAssignments.length > 0) {
+        const teacherNotifications = teacherAssignments.map(({ teacherId }) => ({
+          recipientId: teacherId,
+          type: "ACTIVITY_UPDATE",
+          title: "Individual Progress Plan Approved",
+          body: `${childName}'s Individual Progress Plan "${plan.title}" has been approved by an admin.`,
+          metadata: { planId: id, childId: plan.child.id },
+        }));
+        await prisma.notification.createMany({ data: teacherNotifications, skipDuplicates: true }).catch(() => {});
+        teacherNotifications.forEach((n) => emitNotification(n.recipientId, n));
+      }
     }
 
     return res.status(200).json(updated);

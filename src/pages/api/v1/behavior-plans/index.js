@@ -4,6 +4,7 @@ import {
   buildTeacherChildWhere,
   teacherCanAccessChild,
 } from "@/lib/teacherScope";
+import { emitNotification } from "@/lib/socket";
 
 export default async function handler(req, res) {
   try {
@@ -140,16 +141,15 @@ async function handlePost(req, res, session) {
 
   if (parentIds.length > 0) {
     const childName = `${child?.firstName || ""} ${child?.lastName || ""}`.trim();
-    await prisma.notification.createMany({
-      data: parentIds.map((userId) => ({
-        userId,
-        type: "BEHAVIOR_PLAN_APPROVAL",
-        title: "Individual Progress Plan — Approval Required",
-        body: `An Individual Progress Plan titled "${title}" has been created for ${childName}. Please review and approve it.`,
-        data: { planId: plan.id, childId },
-      })),
-      skipDuplicates: true,
-    }).catch(() => {});
+    const parentNotifications = parentIds.map((userId) => ({
+      recipientId: userId,
+      type: "ACTIVITY_UPDATE",
+      title: "Individual Progress Plan — Approval Required",
+      body: `An Individual Progress Plan titled "${title}" has been created for ${childName}. Please review and approve it.`,
+      metadata: { planId: plan.id, childId },
+    }));
+    await prisma.notification.createMany({ data: parentNotifications, skipDuplicates: true }).catch(() => {});
+    parentNotifications.forEach((n) => emitNotification(n.recipientId, n));
   }
 
   return res.status(201).json(plan);

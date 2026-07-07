@@ -521,11 +521,11 @@ function RoleSwitcher({ activeRole, availableRoles, onSwitch }) {
   if (availableRoles.length <= 1) return null;
 
   return (
-    <div className="relative hidden md:block">
+    <div className="relative">
       <button
         ref={buttonRef}
         type="button"
-        className="inline-flex h-10 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-800 shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+        className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-2 text-sm font-semibold text-gray-800 shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 sm:gap-2 sm:px-3"
         aria-expanded={open}
         aria-haspopup="menu"
         aria-controls={panelId}
@@ -542,7 +542,7 @@ function RoleSwitcher({ activeRole, availableRoles, onSwitch }) {
           <span className="hidden text-xs font-medium text-gray-500 dark:text-gray-400 lg:inline">
             Role
           </span>
-          <span className="max-w-[7rem] truncate">
+          <span className="max-w-[5rem] truncate sm:max-w-[7rem]">
             {activeLabel}
           </span>
         </span>

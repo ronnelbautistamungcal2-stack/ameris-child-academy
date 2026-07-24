@@ -2,6 +2,7 @@ import TeacherLayout from "@/components/teacher/TeacherLayout";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
+import { FLAG_CATEGORY_OPTIONS, getFlagCategoryLabel } from "@/lib/childFlags";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
@@ -58,6 +59,8 @@ export default function TeacherChildren() {
   const [flagItems, setFlagItems] = useState([]);
   const [flagsLoading, setFlagsLoading] = useState(false);
   const [flagsError, setFlagsError] = useState("");
+  const [flagCategory, setFlagCategory] = useState("");
+  const [flagChildId, setFlagChildId] = useState("");
 
   async function load() {
     setError("");
@@ -153,6 +156,32 @@ export default function TeacherChildren() {
       .catch((e) => setFlagsError(e.message || "Failed to load flags"))
       .finally(() => setFlagsLoading(false));
   }, [flaggedOnly, centerId]);
+
+  useEffect(() => {
+    setFlagCategory("");
+    setFlagChildId("");
+  }, [centerId]);
+
+  const flaggedChildOptions = useMemo(() => {
+    const byId = new Map();
+    for (const item of flagItems) {
+      if (item?.child?.id && !byId.has(item.child.id)) {
+        byId.set(item.child.id, item.child.name || "Child");
+      }
+    }
+    return [...byId.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [flagItems]);
+
+  const filteredFlagItems = useMemo(() => {
+    return flagItems.filter((item) => {
+      if (classId && item?.classRoom?.id !== classId) return false;
+      if (flagCategory && item?.category !== flagCategory) return false;
+      if (flagChildId && item?.child?.id !== flagChildId) return false;
+      return true;
+    });
+  }, [flagItems, classId, flagCategory, flagChildId]);
 
   async function loadLogs(child) {
     if (!child?.id) {
@@ -286,7 +315,7 @@ export default function TeacherChildren() {
           </h2>
           <p className="text-sm text-gray-600">
             {flaggedOnly
-              ? "Open flags for children in this center."
+              ? "Open flags for children in your classroom(s)."
               : "Limited to centers you’re assigned to (admins see all)."}
           </p>
         </div>
@@ -302,7 +331,7 @@ export default function TeacherChildren() {
             <div>
               {flagsLoading
                 ? "Loading flags…"
-                : `${flagItems.length} open flag${flagItems.length === 1 ? "" : "s"} in this center.`}
+                : `${filteredFlagItems.length} of ${flagItems.length} open flag${flagItems.length === 1 ? "" : "s"} in your classroom(s).`}
             </div>
             <Link
               href={clearFlaggedHref}
@@ -352,16 +381,58 @@ export default function TeacherChildren() {
           </label>
         </div>
 
-        <div className="mt-3">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by child name or parent name/email..."
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-blue-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-300 sm:max-w-md"
-            disabled={!centerId}
-          />
-        </div>
+        {flaggedOnly ? (
+          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+            <label className="block">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Flag Type
+              </div>
+              <select
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                value={flagCategory}
+                onChange={(e) => setFlagCategory(e.target.value)}
+                disabled={!centerId}
+              >
+                <option value="">All flag types</option>
+                {FLAG_CATEGORY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Child
+              </div>
+              <select
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                value={flagChildId}
+                onChange={(e) => setFlagChildId(e.target.value)}
+                disabled={!centerId}
+              >
+                <option value="">All children</option>
+                {flaggedChildOptions.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : (
+          <div className="mt-3">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by child name or parent name/email..."
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-blue-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-300 sm:max-w-md"
+              disabled={!centerId}
+            />
+          </div>
+        )}
 
         <div className="mt-4">
           {loading || (flaggedOnly && flagsLoading) ? (
@@ -379,19 +450,28 @@ export default function TeacherChildren() {
                 </div>
               ) : flagItems.length === 0 ? (
                 <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-                  No open flags found for children in this center.
+                  No open flags found for children in your classroom(s).
+                </div>
+              ) : filteredFlagItems.length === 0 ? (
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                  No flags match the selected filters.
                 </div>
               ) : (
-                flagItems.map((item) => (
+                filteredFlagItems.map((item) => (
                   <div key={item.flagKey} className="rounded-xl border border-amber-200 bg-amber-50 p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="text-sm font-bold text-amber-900">
                           {item.child?.name || "Child"}
                         </div>
-                        <span className="mt-1 inline-block rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">
-                          {item.title}
-                        </span>
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          <span className="inline-block rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+                            {item.title}
+                          </span>
+                          <span className="inline-block rounded-full border border-amber-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                            {getFlagCategoryLabel(item.category)}
+                          </span>
+                        </div>
                         {item.summary ? (
                           <div className="mt-1 text-xs text-amber-700">{item.summary}</div>
                         ) : null}

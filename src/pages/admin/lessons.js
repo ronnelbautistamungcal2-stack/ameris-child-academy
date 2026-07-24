@@ -2160,19 +2160,43 @@ export default function AdminLessons() {
               <Field label="Lesson Attachment (optional)" className="flex-1">
                 <input
                   type="file"
+                  multiple
                   accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.webp"
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm disabled:opacity-60"
                   disabled={saving || uploadingResource}
                   onChange={async (e) => {
                     const files = e.target.files;
-                    await uploadSingleToField(files, setEditResource, setUploadingResource);
+                    await uploadAndAppendToField(
+                      files,
+                      editResource,
+                      setEditResource,
+                      setUploadingResource,
+                    );
                     e.target.value = "";
                   }}
                 />
                 {editResource ? (
-                  <a href={editResource} target="_blank" rel="noreferrer" className="mt-2 block text-xs text-blue-600 hover:text-blue-700">
-                    {editResource}
-                  </a>
+                  <ul className="mt-2 space-y-1">
+                    {splitResources(editResource).map((r, i) => (
+                      <li key={`${r}-${i}`} className="flex items-center justify-between gap-2">
+                        <a href={r} target="_blank" rel="noreferrer" className="truncate text-xs text-blue-600 hover:text-blue-700">
+                          {r}
+                        </a>
+                        <button
+                          type="button"
+                          className="shrink-0 text-xs text-red-600 hover:text-red-700"
+                          disabled={saving || uploadingResource}
+                          onClick={() => {
+                            const list = splitResources(editResource);
+                            list.splice(i, 1);
+                            setEditResource(list.join("\n"));
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 ) : null}
                 {uploadingResource && (
                   <div className="text-xs text-gray-500 mt-1">Uploading...</div>
@@ -2366,20 +2390,47 @@ export default function AdminLessons() {
               <Field label="Lesson Attachment (optional)">
                 <input
                   type="file"
+                  multiple
                   accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.webp"
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm disabled:opacity-60"
                   disabled={saving || uploadingResource}
                   onChange={async (e) => {
                     const files = e.target.files;
-                    await uploadSingleToField(files, setNewResource, setUploadingResource);
+                    await uploadAndAppendToField(
+                      files,
+                      newResource,
+                      setNewResource,
+                      setUploadingResource,
+                    );
                     e.target.value = "";
                   }}
                 />
                 {newResource ? (
-                  <a href={newResource} target="_blank" rel="noreferrer" className="mt-2 block text-xs text-blue-600 hover:text-blue-700">
-                    {newResource}
-                  </a>
+                  <ul className="mt-2 space-y-1">
+                    {splitResources(newResource).map((r, i) => (
+                      <li key={`${r}-${i}`} className="flex items-center justify-between gap-2">
+                        <a href={r} target="_blank" rel="noreferrer" className="truncate text-xs text-blue-600 hover:text-blue-700">
+                          {r}
+                        </a>
+                        <button
+                          type="button"
+                          className="shrink-0 text-xs text-red-600 hover:text-red-700"
+                          disabled={saving || uploadingResource}
+                          onClick={() => {
+                            const list = splitResources(newResource);
+                            list.splice(i, 1);
+                            setNewResource(list.join("\n"));
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 ) : null}
+                {uploadingResource && (
+                  <div className="text-xs text-gray-500 mt-1">Uploading...</div>
+                )}
               </Field>
               <Field label="Image (optional)">
                 <input

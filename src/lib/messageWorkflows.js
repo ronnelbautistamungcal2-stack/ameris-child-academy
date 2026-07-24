@@ -65,6 +65,11 @@ export function getAvailableThreadTypesForRole(role) {
   const normalizedRole = String(role || "").toUpperCase();
   if (normalizedRole === "ADMIN") return MESSAGE_THREAD_TYPES;
   if (normalizedRole === "COACH") return MESSAGE_THREAD_TYPES;
+  if (normalizedRole === "TEACHER" || normalizedRole === "OTHER_STAFF") {
+    return MESSAGE_THREAD_TYPES.filter((item) =>
+      ["MESSAGE", "REQUEST"].includes(item.value),
+    );
+  }
   return MESSAGE_THREAD_TYPES.filter((item) => item.value === "MESSAGE");
 }
 

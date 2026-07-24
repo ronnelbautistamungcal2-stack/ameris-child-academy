@@ -20,10 +20,18 @@ function normalizeTopics(input) {
     .filter((topic) => topic.title);
 }
 
-function includeConfig() {
+function includeConfig(teacherId) {
   return {
     topics: {
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      include: teacherId
+        ? {
+            completions: {
+              where: { teacherId },
+              select: { completedAt: true },
+            },
+          }
+        : undefined,
     },
     createdBy: {
       select: { id: true, name: true, email: true },
@@ -66,12 +74,21 @@ async function handleGet(req, res, session) {
         ? {}
         : { active: true }),
     },
-    include: includeConfig(),
+    include: includeConfig(session.user.id),
     orderBy: [{ active: "desc" }, { effectiveDate: "desc" }, { createdAt: "desc" }],
     take: 100,
   });
 
-  return res.status(200).json(rows);
+  const shaped = rows.map((pathway) => ({
+    ...pathway,
+    topics: (pathway.topics || []).map((topic) => ({
+      ...topic,
+      completedAt: topic.completions?.[0]?.completedAt || null,
+      completions: undefined,
+    })),
+  }));
+
+  return res.status(200).json(shaped);
 }
 
 async function handlePost(req, res, session) {

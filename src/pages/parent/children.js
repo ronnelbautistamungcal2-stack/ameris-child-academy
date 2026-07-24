@@ -34,6 +34,14 @@ const TAB_LIST = [
     description: "A parent-friendly overview of development progress and active goals.",
   },
   {
+    key: "PROGRESS_PLAN",
+    label: "Progress Plan",
+    eyebrow: "Individual plan",
+    tone: "violet",
+    icon: "plan",
+    description: "The Individual Progress Plan created for your child, including goals and your role.",
+  },
+  {
     key: "STEPS",
     label: "Steps of Progression",
     eyebrow: "Lesson detail",
@@ -71,8 +79,10 @@ export default function ParentChildren() {
   const [selectedChildId, setSelectedChildId] = useState("");
   const [activities, setActivities] = useState([]);
   const [progressRows, setProgressRows] = useState([]);
+  const [behaviorPlans, setBehaviorPlans] = useState([]);
   const [childrenLoading, setChildrenLoading] = useState(true);
   const [recordsLoading, setRecordsLoading] = useState(false);
+  const [approvingPlanId, setApprovingPlanId] = useState("");
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState(
     TAB_LIST.some((tab) => tab.key === routeTab) ? routeTab : DEFAULT_TAB,
@@ -127,6 +137,7 @@ export default function ParentChildren() {
 
   useEffect(() => {
     if (!router.isReady) return;
+    if (childrenLoading) return;
     const currentChild =
       typeof router.query.childId === "string" ? router.query.childId : "";
     const currentTab =
@@ -146,7 +157,7 @@ export default function ParentChildren() {
       shallow: true,
       scroll: false,
     });
-  }, [activeTab, router, selectedChildId]);
+  }, [activeTab, router, selectedChildId, childrenLoading]);
 
   const loadChildRecords = useCallback(async (targetChildId) => {
     if (!targetChildId) return;
@@ -154,22 +165,44 @@ export default function ParentChildren() {
     setError("");
     setActivities([]);
     setProgressRows([]);
+    setBehaviorPlans([]);
     try {
-      const [activityRes, progressRes] = await Promise.all([
+      const [activityRes, progressRes, planRes] = await Promise.all([
         apiJson(`/api/v1/activities?childId=${encodeURIComponent(targetChildId)}`),
         apiJson(`/api/v1/progress?childId=${encodeURIComponent(targetChildId)}`),
+        apiJson(`/api/v1/behavior-plans?childId=${encodeURIComponent(targetChildId)}`),
       ]);
       setActivities(Array.isArray(activityRes) ? activityRes : []);
       setProgressRows(Array.isArray(progressRes) ? progressRes : []);
+      setBehaviorPlans(Array.isArray(planRes) ? planRes : []);
       setLastSyncAt(new Date());
     } catch (e) {
       setError(e.message || "Failed to load child records");
       setActivities([]);
       setProgressRows([]);
+      setBehaviorPlans([]);
     } finally {
       setRecordsLoading(false);
     }
   }, []);
+
+  const approveBehaviorPlan = useCallback(
+    async (planId) => {
+      setApprovingPlanId(planId);
+      try {
+        await apiJson(`/api/v1/behavior-plans/${planId}/approve`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+        if (selectedChildId) await loadChildRecords(selectedChildId);
+      } catch (e) {
+        setError(e.message || "Failed to approve plan");
+      } finally {
+        setApprovingPlanId("");
+      }
+    },
+    [selectedChildId, loadChildRecords],
+  );
 
   useEffect(() => {
     if (selectedChildId) loadChildRecords(selectedChildId);
@@ -257,6 +290,10 @@ export default function ParentChildren() {
       null,
     [activityFeed],
   );
+  const pendingPlanApprovals = useMemo(
+    () => behaviorPlans.filter((plan) => !plan.parentApproved),
+    [behaviorPlans],
+  );
   const activeTabMeta = TAB_LIST.find((tab) => tab.key === activeTab) || TAB_LIST[0];
   const tabMetrics = {
     DAILY_REPORT: {
@@ -272,6 +309,15 @@ export default function ParentChildren() {
       hint: progressStats.total
         ? `${progressStats.completed} of ${progressStats.total} goals complete`
         : "No progress records yet",
+    },
+    PROGRESS_PLAN: {
+      primary: `${behaviorPlans.length}`,
+      secondary: behaviorPlans.length === 1 ? "plan" : "plans",
+      hint: pendingPlanApprovals.length
+        ? `${pendingPlanApprovals.length} awaiting your approval`
+        : behaviorPlans.length
+          ? "No pending approvals"
+          : "No individual progress plan on file yet",
     },
     STEPS: {
       primary: `${progressRows.length}`,
@@ -407,6 +453,11 @@ export default function ParentChildren() {
                   <HeroMetric label="Completion" value={`${progressStats.completionRate}%`} hint="Overall progress" />
                   <HeroMetric label="Open goals" value={progressStats.open} hint="Still active" />
                   <HeroMetric label="Support" value={progressStats.needsSupport} hint="Need attention" />
+                  <HeroMetric
+                    label="Progress plan"
+                    value={pendingPlanApprovals.length || behaviorPlans.length}
+                    hint={pendingPlanApprovals.length ? "Needs your approval" : behaviorPlans.length ? "On file" : "None yet"}
+                  />
                 </div>
               </div>
             </ParentSurface>
@@ -489,6 +540,14 @@ export default function ParentChildren() {
                     progressStats={progressStats}
                     domainStats={domainStats}
                     activeGoals={activeGoals}
+                  />
+                ) : null}
+                {activeTab === "PROGRESS_PLAN" ? (
+                  <ProgressPlanPanel
+                    plans={behaviorPlans}
+                    loading={recordsLoading}
+                    approvingPlanId={approvingPlanId}
+                    onApprove={approveBehaviorPlan}
                   />
                 ) : null}
                 {activeTab === "STEPS" ? (
@@ -795,6 +854,171 @@ function ProgressPanel({
   );
 }
 
+function ProgressPlanPanel({ plans, loading, approvingPlanId, onApprove }) {
+  if (loading) return <SkeletonCard />;
+  if (!plans.length) {
+    return (
+      <ParentEmpty
+        title="No Individual Progress Plan yet"
+        description="If the center creates an Individual Progress Plan for your child, it will appear here and you'll be notified."
+      />
+    );
+  }
+
+  const sortedPlans = [...plans].sort(
+    (a, b) => new Date(b.createdAt || b.startDate) - new Date(a.createdAt || a.startDate),
+  );
+
+  return (
+    <div className="space-y-3">
+      {sortedPlans.map((plan) => (
+        <BehaviorPlanCard
+          key={plan.id}
+          plan={plan}
+          approving={approvingPlanId === plan.id}
+          onApprove={() => onApprove(plan.id)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function BehaviorPlanCard({ plan, approving, onApprove }) {
+  const goals = Array.isArray(plan.goals) ? plan.goals : [];
+  const isActive = plan.status === "ACTIVE";
+
+  return (
+    <div className="rounded-[22px] border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-slate-900">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-base font-black tracking-tight text-gray-900 dark:text-gray-100">
+            {plan.title}
+          </div>
+          <div className="mt-1 flex flex-wrap gap-2 text-[12px] text-gray-500 dark:text-gray-400">
+            <span>Start {formatShortDate(plan.startDate)}</span>
+            {plan.reviewDate ? <span>· Review {formatShortDate(plan.reviewDate)}</span> : null}
+            {plan.createdBy?.name ? <span>· Created by {plan.createdBy.name}</span> : null}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-1.5">
+          <span
+            className={[
+              "rounded-full px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-[0.12em]",
+              isActive
+                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
+                : "bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-gray-200",
+            ].join(" ")}
+          >
+            {plan.status}
+          </span>
+          <span
+            className={[
+              "rounded-full px-2.5 py-1 text-[11px] font-extrabold",
+              plan.parentApproved
+                ? "bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-200"
+                : "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200",
+            ].join(" ")}
+          >
+            {plan.parentApproved ? "Approved" : "Approval needed"}
+          </span>
+        </div>
+      </div>
+
+      {plan.description ? (
+        <p className="mt-3 text-[13px] leading-5 text-gray-700 dark:text-gray-300">{plan.description}</p>
+      ) : null}
+
+      <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        {plan.parentTactics ? (
+          <PlanDetailBlock label="Your role (parent tactics)" value={plan.parentTactics} />
+        ) : null}
+        {plan.teacherTactics ? (
+          <PlanDetailBlock label="Teacher tactics" value={plan.teacherTactics} />
+        ) : null}
+        {plan.coachTactics ? (
+          <PlanDetailBlock label="Coach tactics" value={plan.coachTactics} />
+        ) : null}
+        {plan.disciplinaryAction ? (
+          <PlanDetailBlock label="Disciplinary action" value={plan.disciplinaryAction} />
+        ) : null}
+      </div>
+
+      {goals.length ? (
+        <div className="mt-3">
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+            Goals
+          </div>
+          <div className="mt-2 space-y-2">
+            {goals.map((goal) => (
+              <div
+                key={goal.id}
+                className="rounded-[16px] border border-gray-200 bg-gray-50/70 px-3.5 py-2.5 dark:border-gray-800 dark:bg-slate-800/80"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-[13px] font-extrabold text-gray-900 dark:text-gray-100">{goal.title}</div>
+                  <span className={["rounded-full px-2.5 py-1 text-[11px] font-extrabold", behaviorGoalTone(goal.status)].join(" ")}>
+                    {humanizeBehaviorGoalStatus(goal.status)}
+                  </span>
+                </div>
+                {goal.description ? (
+                  <div className="mt-1.5 text-[13px] leading-5 text-gray-600 dark:text-gray-300">{goal.description}</div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {!plan.parentApproved ? (
+        <div className="mt-4 rounded-[16px] border border-amber-200 bg-amber-50 p-3.5 dark:border-amber-800 dark:bg-amber-900/10">
+          <p className="text-[13px] leading-5 text-amber-800 dark:text-amber-200">
+            By approving, you acknowledge and consent to this Individual Progress Plan for your child.
+          </p>
+          <ParentButton
+            type="button"
+            variant="primary"
+            disabled={approving}
+            onClick={onApprove}
+            className="mt-2.5"
+          >
+            {approving ? "Approving..." : "Approve Plan"}
+          </ParentButton>
+        </div>
+      ) : (
+        <div className="mt-4 text-[12px] text-gray-500 dark:text-gray-400">
+          Approved {plan.parentApprovedAt ? formatRelativeDateTime(plan.parentApprovedAt) : ""}
+          {plan.parentSignatureName ? ` by ${plan.parentSignatureName}` : ""}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlanDetailBlock({ label, value }) {
+  return (
+    <div className="rounded-[16px] border border-gray-200 bg-gray-50/70 px-3.5 py-2.5 dark:border-gray-800 dark:bg-slate-800/80">
+      <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+        {label}
+      </div>
+      <div className="mt-1 text-[13px] leading-5 text-gray-700 dark:text-gray-200">{value}</div>
+    </div>
+  );
+}
+
+function behaviorGoalTone(status) {
+  if (status === "MET") return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200";
+  if (status === "IN_PROGRESS") return "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200";
+  if (status === "NOT_MET") return "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-200";
+  return "bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-gray-200";
+}
+
+function humanizeBehaviorGoalStatus(status) {
+  if (status === "MET") return "Met";
+  if (status === "IN_PROGRESS") return "In progress";
+  if (status === "NOT_MET") return "Not met";
+  return "Not started";
+}
+
 function StepsPanel({ progressRows, loading }) {
   if (loading) return <SkeletonCard />;
   if (!progressRows.length) {
@@ -1018,6 +1242,7 @@ function ReportTabIcon({ icon, tone = "sky" }) {
     emerald: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-200",
     amber: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-200",
     rose: "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-200",
+    violet: "bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-200",
   };
 
   let content = null;
@@ -1037,6 +1262,12 @@ function ReportTabIcon({ icon, tone = "sky" }) {
     content = (
       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 18.75h15m-15-6h10.5m-10.5-6h6" />
+      </svg>
+    );
+  } else if (icon === "plan") {
+    content = (
+      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 3.75h6a1.5 1.5 0 011.5 1.5v.75H7.5V5.25A1.5 1.5 0 019 3.75zM7.5 6h9a1.5 1.5 0 011.5 1.5v11.25a1.5 1.5 0 01-1.5 1.5h-9a1.5 1.5 0 01-1.5-1.5V7.5A1.5 1.5 0 017.5 6zm1.75 5.25l1.5 1.5 3-3.25" />
       </svg>
     );
   } else if (icon === "support") {

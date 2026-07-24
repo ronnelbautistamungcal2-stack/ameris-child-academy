@@ -7,6 +7,7 @@ import {
   sortChildFlags,
 } from "@/lib/childFlags";
 import prisma from "@/lib/prisma";
+import { buildTeacherChildWhere, teacherCanAccessChild } from "@/lib/teacherScope";
 
 function normalizeStatus(value) {
   const status = String(value || "open").toLowerCase();
@@ -14,10 +15,13 @@ function normalizeStatus(value) {
   return "open";
 }
 
-async function loadFlagData({ centerId = "", childId = "" } = {}) {
+async function loadFlagData({ centerId = "", childId = "", teacherWhere = null } = {}) {
   const childWhere = {
-    ...(centerId ? { centerId } : {}),
-    ...(childId ? { id: childId } : {}),
+    AND: [
+      centerId ? { centerId } : {},
+      childId ? { id: childId } : {},
+      teacherWhere || {},
+    ],
   };
 
   const children = await prisma.child.findMany({
@@ -166,27 +170,33 @@ export default async function handler(req, res) {
       centerId = "",
       childId = "",
       classRoomId = "",
+      category = "",
       from = "",
       to = "",
       status: rawStatus = "open",
       summaryOnly = "",
     } = req.query || {};
 
-    // Teachers must specify a centerId they belong to
+    const normalizedCenterId = typeof centerId === "string" ? centerId.trim() : "";
+
+    // Teachers must specify a centerId they belong to, and only see
+    // flags for children in classrooms they are assigned to.
+    let teacherWhere = null;
     if (isTeacher) {
-      const normalizedCenterId = typeof centerId === "string" ? centerId.trim() : "";
       if (!normalizedCenterId) {
         return res.status(400).json({ error: "centerId is required" });
       }
       if (!teacherAllowedCenterIds.includes(normalizedCenterId)) {
         return res.status(403).json({ error: "Forbidden" });
       }
+      teacherWhere = await buildTeacherChildWhere(session.user.id, normalizedCenterId);
     }
 
     const status = normalizeStatus(rawStatus);
     const data = await loadFlagData({
       centerId: typeof centerId === "string" ? centerId : "",
       childId: typeof childId === "string" ? childId : "",
+      teacherWhere,
     });
 
     const activeFlags = buildActiveChildFlags(data);
@@ -221,6 +231,7 @@ export default async function handler(req, res) {
     const filters = {
       childId: typeof childId === "string" ? childId : "",
       classRoomId: typeof classRoomId === "string" ? classRoomId : "",
+      category: typeof category === "string" ? category : "",
       from: typeof from === "string" ? from : "",
       to: typeof to === "string" ? to : "",
     };
@@ -259,10 +270,14 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "flagKey is required" });
     }
 
-    // Teachers may only modify flags in their assigned centers
+    // Teachers may only modify flags in their assigned centers, for
+    // children in classrooms they are assigned to.
     if (isTeacher) {
       const normalizedCenterId = typeof centerId === "string" ? centerId.trim() : "";
       if (!normalizedCenterId || !teacherAllowedCenterIds.includes(normalizedCenterId)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      if (childId && !(await teacherCanAccessChild(session.user.id, childId))) {
         return res.status(403).json({ error: "Forbidden" });
       }
     }

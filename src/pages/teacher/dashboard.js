@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/Workspace";
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
+import { getFlagCategoryLabel } from "@/lib/childFlags";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -26,6 +27,7 @@ export default function TeacherDashboard() {
   const [attendance, setAttendance] = useState(null);
   const [threads, setThreads] = useState([]);
   const [flags, setFlags] = useState({ items: [], summary: { openCount: 0, closedCount: 0 } });
+  const [supplies, setSupplies] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -57,6 +59,7 @@ export default function TeacherDashboard() {
       setChildren([]);
       setAttendance(null);
       setFlags({ items: [], summary: { openCount: 0, closedCount: 0 } });
+      setSupplies(null);
       return;
     }
 
@@ -64,12 +67,15 @@ export default function TeacherDashboard() {
       setLoading(true);
       setError("");
       try {
-        const [kids, att, flagData] = await Promise.all([
+        const [kids, att, flagData, supplyData] = await Promise.all([
           apiJson(`/api/v1/children?centerId=${encodeURIComponent(centerId)}`),
           apiJson(`/api/v1/attendance/today?centerId=${encodeURIComponent(centerId)}`).catch(
             () => null,
           ),
           apiJson(`/api/v1/child-flags?centerId=${encodeURIComponent(centerId)}&status=open`).catch(
+            () => null,
+          ),
+          apiJson(`/api/v1/lessons/next-week-supplies?centerId=${encodeURIComponent(centerId)}`).catch(
             () => null,
           ),
         ]);
@@ -80,6 +86,7 @@ export default function TeacherDashboard() {
             ? flagData
             : { items: [], summary: { openCount: 0, closedCount: 0 } },
         );
+        setSupplies(supplyData);
       } catch (e) {
         setError(e.message || "Failed to load dashboard data");
       } finally {
@@ -93,6 +100,28 @@ export default function TeacherDashboard() {
     const total = Number(attendance.totalChildren || 0);
     const checkedIn = Number(attendance.checkedInCount || 0);
     return { total, checkedIn };
+  }, [attendance]);
+
+  const classroomRoster = useMemo(() => {
+    if (!attendance) return [];
+    const rows = [
+      ...(attendance.checkedInChildren || []),
+      ...(attendance.missingChildren || []),
+    ];
+    return rows
+      .map((row) => {
+        const child = row.child;
+        const today = child?.todayAttendance;
+        const checkedInAt = today?.checkedInAt || row.checkedInAt || null;
+        const checkedOutAt = today?.checkedOutAt || null;
+        const status = checkedOutAt
+          ? "checked_out"
+          : checkedInAt
+            ? "checked_in"
+            : "not_checked_in";
+        return { child, checkedInAt, checkedOutAt, status };
+      })
+      .sort((a, b) => fullName(a.child).localeCompare(fullName(b.child)));
   }, [attendance]);
 
   const visibleThreads = useMemo(() => {
@@ -115,6 +144,15 @@ export default function TeacherDashboard() {
     () => visibleThreads.reduce((sum, thread) => sum + Number(thread?.unreadCount || 0), 0),
     [visibleThreads],
   );
+
+  const supplyList = supplies?.supplies || [];
+  const supplyWeekLabel = useMemo(() => {
+    if (!supplies?.weekStart || !supplies?.weekEnd) return "Next Week";
+    const start = new Date(`${supplies.weekStart}T00:00:00`);
+    const end = new Date(`${supplies.weekEnd}T00:00:00`);
+    const fmt = (d) => d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    return `${fmt(start)} – ${fmt(end)}`;
+  }, [supplies]);
 
   const selectedCenterName =
     centers.find((center) => center.id === centerId)?.name || "";
@@ -253,54 +291,54 @@ export default function TeacherDashboard() {
           <div className="grid auto-rows-fr grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
             <div className="lg:col-span-2 xl:col-span-2">
               <Card
-                title="Messages"
+                title="Classroom"
                 subtitle={
-                  visibleThreads.length
-                    ? `${visibleThreads.length} conversation${visibleThreads.length === 1 ? "" : "s"} in this center`
-                    : "No messages in this center yet"
+                  attendanceSummary
+                    ? `${formatCountSummary(attendanceSummary.checkedIn, attendanceSummary.total)} checked in`
+                    : "Attendance data not available"
                 }
-                href={messagesHref}
-                hrefLabel="Open Messages"
-                accent="violet"
+                href="/teacher/classroom"
+                hrefLabel="Open My Classroom"
+                accent="sky"
                 className="h-full"
               >
-                {visibleThreads.length ? (
-                  <ul className="mt-3 space-y-2">
-                    {visibleThreads.slice(0, 5).map((thread) => {
-                      const latestMessage = thread.messages?.[0] || null;
-                      const participants = (thread.participants || [])
-                        .map((participant) => participant?.user?.name || participant?.user?.email)
-                        .filter(Boolean)
-                        .slice(0, 2)
-                        .join(", ");
-
-                      return (
-                        <li
-                          key={thread.id}
-                          className="rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-semibold text-gray-900">
-                                {thread.title || participants || "Conversation"}
-                              </div>
-                              <div className="mt-1 line-clamp-2 text-sm text-gray-600">
-                                {latestMessage?.body || "No messages yet"}
-                              </div>
-                            </div>
-                            {(thread.unreadCount || 0) > 0 ? (
-                              <span className="shrink-0 rounded-full bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700">
-                                {thread.unreadCount} unread
-                              </span>
-                            ) : null}
-                          </div>
-                        </li>
-                      );
-                    })}
+                {classroomRoster.length ? (
+                  <ul className="mt-3 max-h-80 space-y-1 overflow-y-auto pr-1 text-sm text-gray-700">
+                    {classroomRoster.map((row) => (
+                      <li
+                        key={row.child?.id}
+                        className="flex items-center justify-between gap-3 border-b border-gray-100 py-1.5 last:border-b-0"
+                      >
+                        <span className="min-w-0 break-words font-semibold text-gray-900">
+                          {fullName(row.child) || row.child?.id}
+                        </span>
+                        <span className="flex shrink-0 items-center gap-2">
+                          {row.status === "checked_in" ? (
+                            <span className="text-xs text-gray-500">
+                              {row.checkedInAt ? new Date(row.checkedInAt).toLocaleTimeString() : ""}
+                            </span>
+                          ) : row.status === "checked_out" ? (
+                            <span className="text-xs text-gray-500">
+                              {row.checkedOutAt ? new Date(row.checkedOutAt).toLocaleTimeString() : ""}
+                            </span>
+                          ) : null}
+                          <StatusBadge
+                            status={row.status === "not_checked_in" ? "pending" : row.status === "checked_in" ? "active" : "completed"}
+                            label={
+                              row.status === "checked_in"
+                                ? "Clocked In"
+                                : row.status === "checked_out"
+                                  ? "Clocked Out"
+                                  : "Not Checked In"
+                            }
+                          />
+                        </span>
+                      </li>
+                    ))}
                   </ul>
                 ) : (
-                  <div className="mt-3 rounded-xl border border-dashed border-gray-300 bg-white/70 p-4 text-sm text-gray-600">
-                    Parent and staff conversations for this center will appear here.
+                  <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+                    No children are enrolled in this center yet.
                   </div>
                 )}
               </Card>
@@ -366,33 +404,37 @@ export default function TeacherDashboard() {
             </Card>
 
             <Card
-              title="Children clocked in"
-              subtitle={
-                attendanceSummary
-                  ? `${formatCountSummary(attendanceSummary.checkedIn, attendanceSummary.total)} checked in`
-                  : "Attendance data not available"
-              }
-              href="/teacher/classroom"
-              hrefLabel="Open My Classroom"
+              title="Supplies"
+              subtitle={`Needed for ${supplyWeekLabel}`}
+              href="/teacher/checklists"
+              hrefLabel="Open Checklists"
               accent="sky"
               className="h-full"
             >
-              {attendance?.checkedInChildren?.length ? (
-                <ul className="mt-3 space-y-1 text-sm text-gray-700">
-                  {attendance.checkedInChildren.slice(0, 6).map((row) => (
-                    <li key={row.child?.id} className="flex items-center justify-between gap-3">
-                      <span className="min-w-0 break-words font-semibold text-gray-900">
-                        {fullName(row.child) || row.child?.id}
-                      </span>
-                      <span className="shrink-0 text-xs text-gray-500">
-                        {row.checkedInAt ? new Date(row.checkedInAt).toLocaleTimeString() : "-"}
-                      </span>
+              {supplyList.length ? (
+                <ul className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">
+                  {supplyList.map((s) => (
+                    <li
+                      key={`${s.name}|${s.unit || ""}`}
+                      className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2"
+                    >
+                      <div className="break-words text-sm font-semibold text-sky-900">
+                        {s.name}
+                        {s.unit ? ` (${s.unit})` : ""}
+                        {s.totalQuantity > 1 ? ` ×${s.totalQuantity}` : ""}
+                      </div>
+                      {s.lessons?.length ? (
+                        <div className="mt-1 line-clamp-1 text-xs text-sky-700">
+                          Needed for{" "}
+                          {s.lessons.map((l) => l.title).join(", ")}
+                        </div>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
               ) : (
                 <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                  No check-ins have been recorded for this center yet today.
+                  No supplies are needed for lessons planned next week.
                 </div>
               )}
             </Card>
@@ -417,6 +459,9 @@ export default function TeacherDashboard() {
                       </div>
                       <div className="mt-1 flex flex-wrap gap-2 text-xs">
                         <StatusBadge status="high" label={item.title} />
+                        <span className="inline-flex items-center rounded-full border border-amber-300 bg-white px-2 py-0.5 font-semibold text-amber-700">
+                          {getFlagCategoryLabel(item.category)}
+                        </span>
                       </div>
                       {item.summary ? (
                         <div className="mt-1 line-clamp-1 text-xs text-amber-700">{item.summary}</div>
@@ -426,7 +471,7 @@ export default function TeacherDashboard() {
                 </ul>
               ) : (
                 <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                  No open flags for children in this center.
+                  No open flags for children in your classroom(s).
                 </div>
               )}
             </Card>

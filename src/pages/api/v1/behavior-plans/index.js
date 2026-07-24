@@ -146,6 +146,7 @@ async function handlePost(req, res, session) {
       type: "ACTIVITY_UPDATE",
       title: "Individual Progress Plan — Approval Required",
       body: `An Individual Progress Plan titled "${title}" has been created for ${childName}. Please review and approve it.`,
+      link: `/parent/children?childId=${childId}&tab=progress_plan`,
       metadata: { planId: plan.id, childId },
     }));
     await prisma.notification.createMany({ data: parentNotifications, skipDuplicates: true }).catch(() => {});

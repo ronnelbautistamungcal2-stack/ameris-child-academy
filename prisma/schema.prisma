@@ -239,6 +239,7 @@ model User {
   trainingLogs                 TrainingLog[]             @relation("TrainingLogs")
   trainingLogsRecorded         TrainingLog[]             @relation("TrainingLogsRecorded")
   createdTeacherTrainingPathways TeacherTrainingPathway[] @relation("TeacherTrainingPathwaysCreated")
+  trainingTopicCompletions      TeacherTrainingTopicCompletion[] @relation("TeacherTrainingTopicCompletions")
   evaluationsReceived          TeacherEvaluation[]       @relation("EvaluationsReceived")
   evaluationsGiven             TeacherEvaluation[]       @relation("EvaluationsGiven")
   budgetExpensesRecorded       BudgetExpense[]           @relation("BudgetExpensesRecorded")
@@ -1181,10 +1182,24 @@ model TeacherTrainingTopic {
   durationHours Float?
   required     Boolean                @default(true)
   notes        String?
+  completions  TeacherTrainingTopicCompletion[]
   createdAt    DateTime               @default(now())
   updatedAt    DateTime               @updatedAt
 
   @@index([pathwayId, sortOrder])
+}
+
+model TeacherTrainingTopicCompletion {
+  id          String               @id @default(uuid())
+  topic       TeacherTrainingTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  topicId     String
+  teacher     User                 @relation("TeacherTrainingTopicCompletions", fields: [teacherId], references: [id], onDelete: Cascade)
+  teacherId   String
+  completedAt DateTime             @default(now())
+  createdAt   DateTime             @default(now())
+
+  @@unique([topicId, teacherId])
+  @@index([teacherId])
 }
 
 model ClassroomBudget {

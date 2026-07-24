@@ -19,7 +19,6 @@ export const TEACHER_NAV_ITEMS = [
       { href: "/teacher/classroom", label: "My Classroom" },
       { href: "/teacher/logs", label: "Log Activity" },
       { href: "/teacher/messages", label: "Messages" },
-      { href: "/teacher/alerts", label: "Alerts" },
     ],
   },
   {
@@ -55,7 +54,7 @@ export const TEACHER_NAV_ITEMS = [
     ),
     children: [
       { href: "/teacher/training", label: "My Performance & Training" },
-      { href: "/teacher/metrics", label: "Metrics & Reports" },
+      { href: "/teacher/staff-advancement", label: "Staff Advancement Steps" },
       { href: "/teacher/time-off", label: "Time Off Request" },
     ],
   },

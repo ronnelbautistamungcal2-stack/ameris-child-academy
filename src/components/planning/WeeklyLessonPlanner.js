@@ -84,6 +84,18 @@ export default function WeeklyLessonPlanner({
 
   // cell drafts: "dayKey:rowIndex" → text
   const [cellDrafts, setCellDrafts] = useState({});
+  // cell lesson attachments: "dayKey:rowIndex" → lessonId | null
+  const [cellLessonIds, setCellLessonIds] = useState({});
+
+  // curriculum lessons for this center, used for the cell typeahead (admin only)
+  const [lessons, setLessons] = useState([]);
+  const [openComboKey, setOpenComboKey] = useState("");
+
+  // lesson detail viewer (teacher/coach click-through)
+  const [viewLessonId, setViewLessonId] = useState("");
+  const [viewLesson, setViewLesson] = useState(null);
+  const [viewLessonLoading, setViewLessonLoading] = useState(false);
+  const [viewLessonError, setViewLessonError] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -124,6 +136,23 @@ export default function WeeklyLessonPlanner({
     })();
   }, [centerId, classId]);
 
+  // Load curriculum lessons for the typeahead (admin only)
+  useEffect(() => {
+    if (!centerId || mode !== "admin") {
+      setLessons([]);
+      return;
+    }
+    (async () => {
+      try {
+        const data = await apiJson(`/api/v1/lessons?centerId=${encodeURIComponent(centerId)}`);
+        if (abortRef.current.aborted) return;
+        setLessons(Array.isArray(data) ? data : []);
+      } catch {
+        // typeahead just won't have suggestions
+      }
+    })();
+  }, [centerId, mode]);
+
   // Load plans for the current week
   const loadPlans = useCallback(async () => {
     if (!centerId || !classId) {
@@ -160,6 +189,16 @@ export default function WeeklyLessonPlanner({
         }
         return next;
       });
+      setCellLessonIds((prev) => {
+        const next = { ...prev };
+        for (const [dayKey, plan] of Object.entries(map)) {
+          for (const item of Array.isArray(plan.items) ? plan.items : []) {
+            const cellKey = `${dayKey}:${item.sortOrder}`;
+            if (!(cellKey in next)) next[cellKey] = item.lessonId || null;
+          }
+        }
+        return next;
+      });
     } catch (e) {
       if (!abortRef.current.aborted) setError(e.message || "Failed to load plans");
     } finally {
@@ -176,6 +215,22 @@ export default function WeeklyLessonPlanner({
     const plan = planByDayKey[dayKey];
     const item = (plan?.items || []).find((it) => it.sortOrder === rowIndex);
     return item?.title || "";
+  }
+
+  function getCellLessonId(dayKey, rowIndex) {
+    const cellKey = `${dayKey}:${rowIndex}`;
+    if (cellKey in cellLessonIds) return cellLessonIds[cellKey];
+    const plan = planByDayKey[dayKey];
+    const item = (plan?.items || []).find((it) => it.sortOrder === rowIndex);
+    return item?.lessonId || null;
+  }
+
+  function suggestionsFor(cellKey) {
+    const q = String(cellDrafts[cellKey] ?? "").trim().toLowerCase();
+    const pool = q
+      ? lessons.filter((l) => (l.title || "").toLowerCase().includes(q))
+      : lessons;
+    return pool.slice(0, 8);
   }
 
   async function ensurePlan(dayKey) {
@@ -201,7 +256,7 @@ export default function WeeklyLessonPlanner({
     return created;
   }
 
-  async function saveCellValue(dayKey, rowIndex, text) {
+  async function saveCellValue(dayKey, rowIndex, text, lessonId = null) {
     if (mode !== "admin") return;
     setSaving(true);
     setError("");
@@ -216,10 +271,15 @@ export default function WeeklyLessonPlanner({
         ...others.map((it) => ({
           title: it.title || "",
           sortOrder: it.sortOrder,
+          lessonId: it.lessonId || null,
+          lessonGoalId: it.lessonGoalId || null,
+          policyDocumentId: it.policyDocumentId || null,
+          url: it.url || null,
+          notes: it.notes || null,
         })),
       ];
-      if (text.trim()) {
-        nextItems.push({ title: text.trim(), sortOrder: rowIndex });
+      if (text.trim() || lessonId) {
+        nextItems.push({ title: text.trim(), sortOrder: rowIndex, lessonId: lessonId || null });
       }
       nextItems.sort((a, b) => a.sortOrder - b.sortOrder);
 
@@ -233,6 +293,36 @@ export default function WeeklyLessonPlanner({
     } finally {
       setSaving(false);
     }
+  }
+
+  function selectLessonForCell(dayKey, rowIndex, lesson) {
+    const cellKey = `${dayKey}:${rowIndex}`;
+    setCellDrafts((prev) => ({ ...prev, [cellKey]: lesson.title }));
+    setCellLessonIds((prev) => ({ ...prev, [cellKey]: lesson.id }));
+    setOpenComboKey("");
+    saveCellValue(dayKey, rowIndex, lesson.title, lesson.id);
+  }
+
+  async function openLessonDetail(lessonId) {
+    if (!lessonId) return;
+    setViewLessonId(lessonId);
+    setViewLesson(null);
+    setViewLessonError("");
+    setViewLessonLoading(true);
+    try {
+      const data = await apiJson(`/api/v1/lessons/${encodeURIComponent(lessonId)}`);
+      setViewLesson(data);
+    } catch (e) {
+      setViewLessonError(e.message || "Failed to load lesson");
+    } finally {
+      setViewLessonLoading(false);
+    }
+  }
+
+  function closeLessonDetail() {
+    setViewLessonId("");
+    setViewLesson(null);
+    setViewLessonError("");
   }
 
   async function saveLabelValue(rowIndex, label) {
@@ -256,16 +346,22 @@ export default function WeeklyLessonPlanner({
   function goToPrevWeek() {
     setAnchorDate((d) => addDays(d, -7));
     setCellDrafts({});
+    setCellLessonIds({});
+    setOpenComboKey("");
   }
 
   function goToNextWeek() {
     setAnchorDate((d) => addDays(d, 7));
     setCellDrafts({});
+    setCellLessonIds({});
+    setOpenComboKey("");
   }
 
   function goToToday() {
     setAnchorDate(startOfWeekMonday(new Date()));
     setCellDrafts({});
+    setCellLessonIds({});
+    setOpenComboKey("");
   }
 
   return (
@@ -362,35 +458,75 @@ export default function WeeklyLessonPlanner({
                     const dayKey = toDateKey(d);
                     const cellKey = `${dayKey}:${rowIndex}`;
                     const cellText = getCellText(dayKey, rowIndex);
+                    const cellLessonId = getCellLessonId(dayKey, rowIndex);
 
                     return (
                       <td key={dayKey} className="border-b border-r border-gray-200 px-1.5 py-1 align-middle">
                         {mode === "admin" ? (
-                          <input
-                            type="text"
-                            value={cellDrafts[cellKey] !== undefined ? cellDrafts[cellKey] : cellText}
-                            onChange={(e) =>
-                              setCellDrafts((prev) => ({
-                                ...prev,
-                                [cellKey]: e.target.value,
-                              }))
-                            }
-                            onBlur={(e) => {
-                              const val = e.target.value;
-                              // Only save if changed from what's stored
-                              const storedText = (() => {
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={cellDrafts[cellKey] !== undefined ? cellDrafts[cellKey] : cellText}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setCellDrafts((prev) => ({ ...prev, [cellKey]: val }));
+                                // any manual edit detaches the previously linked lesson
+                                setCellLessonIds((prev) => ({ ...prev, [cellKey]: null }));
+                                setOpenComboKey(cellKey);
+                              }}
+                              onFocus={() => setOpenComboKey(cellKey)}
+                              onBlur={(e) => {
+                                const val = e.target.value;
+                                setTimeout(() => {
+                                  setOpenComboKey((k) => (k === cellKey ? "" : k));
+                                }, 120);
                                 const plan = planByDayKey[dayKey];
                                 const item = (plan?.items || []).find((it) => it.sortOrder === rowIndex);
-                                return item?.title || "";
-                              })();
-                              if (val !== storedText) saveCellValue(dayKey, rowIndex, val);
-                            }}
-                            placeholder="—"
-                            className="w-full rounded border border-transparent bg-transparent px-1.5 py-0.5 text-xs text-gray-800 placeholder-gray-300 outline-none transition focus:border-sky-300 focus:bg-white focus:ring-1 focus:ring-sky-100"
-                          />
+                                const storedText = item?.title || "";
+                                const storedLessonId = item?.lessonId || null;
+                                const nextLessonId = cellLessonIds[cellKey] ?? null;
+                                if (val !== storedText || nextLessonId !== storedLessonId) {
+                                  saveCellValue(dayKey, rowIndex, val, nextLessonId);
+                                }
+                              }}
+                              placeholder="Type a note or pick a lesson…"
+                              className="w-full rounded border border-transparent bg-transparent px-1.5 py-0.5 text-xs text-gray-800 placeholder-gray-300 outline-none transition focus:border-sky-300 focus:bg-white focus:ring-1 focus:ring-sky-100"
+                            />
+                            {openComboKey === cellKey && suggestionsFor(cellKey).length > 0 ? (
+                              <ul className="absolute left-0 top-full z-20 mt-1 max-h-52 w-56 overflow-auto rounded-lg border border-gray-200 bg-white py-1 text-xs shadow-lg">
+                                {suggestionsFor(cellKey).map((l) => (
+                                  <li
+                                    key={l.id}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => selectLessonForCell(dayKey, rowIndex, l)}
+                                    className="cursor-pointer px-2.5 py-1.5 hover:bg-sky-50"
+                                  >
+                                    <div className="font-semibold text-gray-800">{l.title}</div>
+                                    {l.category?.name ? (
+                                      <div className="text-[10px] text-gray-400">{l.category.name}</div>
+                                    ) : null}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : null}
+                          </div>
                         ) : (
                           <span className="block px-1.5 text-xs text-gray-800">
-                            {cellText || <span className="text-gray-300">—</span>}
+                            {cellText ? (
+                              cellLessonId ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openLessonDetail(cellLessonId)}
+                                  className="text-left text-sky-700 underline decoration-dotted underline-offset-2 hover:text-sky-900"
+                                >
+                                  {cellText}
+                                </button>
+                              ) : (
+                                cellText
+                              )
+                            ) : (
+                              <span className="text-gray-300">—</span>
+                            )}
                           </span>
                         )}
                       </td>
@@ -405,9 +541,123 @@ export default function WeeklyLessonPlanner({
 
       {mode === "admin" && (
         <div className="border-t border-gray-100 px-4 py-2 text-xs text-gray-400">
-          Click any category name to rename it. Click any cell to enter the lesson for that day.
+          Click any category name to rename it. Click any cell to type a note, or start typing a
+          lesson title to attach it from the curriculum.
         </div>
       )}
+
+      {viewLessonId ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={closeLessonDetail}
+        >
+          <div
+            className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {viewLessonLoading ? (
+              <div className="py-8 text-center text-sm text-gray-500">Loading…</div>
+            ) : viewLessonError ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                {viewLessonError}
+              </div>
+            ) : viewLesson ? (
+              <>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-base font-extrabold text-gray-900">{viewLesson.title}</div>
+                    <div className="mt-1 text-xs text-gray-500">
+                      {viewLesson.category?.name || "Uncategorized"}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeLessonDetail}
+                    className="shrink-0 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                {viewLesson.policyDocument ? (
+                  <a
+                    href={viewLesson.policyDocument.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-block rounded-full bg-indigo-100 px-2 py-0.5 text-xs text-indigo-700 hover:bg-indigo-200 no-underline"
+                  >
+                    Policy: {viewLesson.policyDocument.title}
+                  </a>
+                ) : null}
+
+                {viewLesson.description ? (
+                  <div className="mt-3 whitespace-pre-wrap text-sm text-gray-700">
+                    {viewLesson.description}
+                  </div>
+                ) : null}
+
+                {viewLesson.reference ? (
+                  <div className="mt-3 text-xs text-gray-500">
+                    Reference: {viewLesson.reference}
+                  </div>
+                ) : null}
+
+                <div className="mt-4">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Media
+                  </div>
+                  {Array.isArray(viewLesson.media) && viewLesson.media.length ? (
+                    <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
+                      {viewLesson.media.map((m) => (
+                        <li key={m}>
+                          <a
+                            href={m}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-blue-600 hover:text-blue-700"
+                          >
+                            {m}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="mt-1 text-sm text-gray-600">—</div>
+                  )}
+                </div>
+
+                {Array.isArray(viewLesson.goals) && viewLesson.goals.length ? (
+                  <div className="mt-4">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Steps
+                    </div>
+                    <div className="mt-2 space-y-2">
+                      {viewLesson.goals
+                        .slice()
+                        .sort((a, b) => Number(a.goalIndex || 0) - Number(b.goalIndex || 0))
+                        .map((g) => (
+                          <div
+                            key={g.id || g.goalIndex}
+                            className="rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-sm"
+                          >
+                            <div className="font-semibold text-gray-900">
+                              Step {g.goalIndex}: {g.title}
+                            </div>
+                            {g.description ? (
+                              <div className="mt-1 whitespace-pre-wrap text-xs text-gray-700">
+                                {g.description}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

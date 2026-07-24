@@ -7,6 +7,33 @@ const CHILD_DOCUMENT_TYPES = [
   { field: "otherDocuments", label: "Other" },
 ];
 
+const FLAG_CATEGORY_BY_TYPE = {
+  OUTDATED_DOCUMENT: "DOCUMENTS",
+  BEHIND_STEPS: "PROGRESS_PLAN",
+  INCIDENT: "CITIZENSHIP",
+  BEHAVIOR_LEVEL_HIGH: "CITIZENSHIP",
+  BEHAVIOR_REPEAT: "CITIZENSHIP",
+  ALLERGY: "ALLERGY",
+  MISSING_DOB: "OTHER",
+  MISSING_CLASSROOM: "OTHER",
+};
+
+export const FLAG_CATEGORY_OPTIONS = [
+  { value: "DOCUMENTS", label: "Documents" },
+  { value: "PROGRESS_PLAN", label: "Individual Progress Plan" },
+  { value: "CITIZENSHIP", label: "Citizenship" },
+  { value: "ALLERGY", label: "Allergies" },
+  { value: "OTHER", label: "Other" },
+];
+
+export function getFlagCategory(flagType) {
+  return FLAG_CATEGORY_BY_TYPE[flagType] || "OTHER";
+}
+
+export function getFlagCategoryLabel(category) {
+  return FLAG_CATEGORY_OPTIONS.find((option) => option.value === category)?.label || "Other";
+}
+
 function childFullName(child) {
   return `${child?.firstName || ""} ${child?.lastName || ""}`.trim() || "Unnamed child";
 }
@@ -76,6 +103,7 @@ function buildFlag({
   return {
     flagKey,
     flagType,
+    category: getFlagCategory(flagType),
     title,
     summary,
     triggeredAt: toIsoString(triggeredAt) || toIsoString(child?.createdAt) || new Date().toISOString(),
@@ -109,6 +137,7 @@ export function createChildFlagSnapshot(flag) {
   return {
     flagKey: flag.flagKey,
     flagType: flag.flagType,
+    category: flag.category || getFlagCategory(flag.flagType),
     title: flag.title,
     summary: flag.summary,
     triggeredAt: flag.triggeredAt,
@@ -122,9 +151,11 @@ export function createChildFlagSnapshot(flag) {
 export function hydrateChildFlagFromSnapshot(review) {
   const snapshot =
     review?.snapshot && typeof review.snapshot === "object" ? review.snapshot : {};
+  const flagType = String(snapshot.flagType || "FLAG");
   return {
     flagKey: review?.flagKey || snapshot.flagKey || "",
-    flagType: String(snapshot.flagType || "FLAG"),
+    flagType,
+    category: snapshot.category || getFlagCategory(flagType),
     title: String(snapshot.title || "Closed child flag"),
     summary: String(snapshot.summary || ""),
     triggeredAt: toIsoString(snapshot.triggeredAt) || toIsoString(review?.createdAt),
@@ -138,11 +169,13 @@ export function hydrateChildFlagFromSnapshot(review) {
 export function filterChildFlags(items, filters = {}) {
   const childId = filters.childId || "";
   const classRoomId = filters.classRoomId || "";
+  const category = filters.category || "";
   const from = filters.from ? new Date(filters.from) : null;
   const to = filters.to ? new Date(filters.to) : null;
 
   return (Array.isArray(items) ? items : []).filter((item) => {
     if (childId && item?.child?.id !== childId) return false;
+    if (category && getFlagCategory(item?.flagType) !== category) return false;
     if (classRoomId) {
       if (classRoomId === "__unassigned__") {
         if (item?.classRoom?.id) return false;

@@ -242,13 +242,7 @@ export default function AdminClasses() {
                   <input value={capacity} onChange={(e) => setCapacity(e.target.value)} style={inputStyle} inputMode="numeric" placeholder="e.g. 20" disabled={saving} />
                 </FieldLabel>
                 <FieldLabel label="Age Range">
-                  <select value={ageRange} onChange={(e) => setAgeRange(e.target.value)} style={inputStyle} disabled={saving}>
-                    <option value="">Select age range</option>
-                    <option value="0-1 years">0-1 years</option>
-                    <option value="2-3 years">2-3 years</option>
-                    <option value="4-5 years">4-5 years</option>
-                    <option value="6-7 years">6-7 years</option>
-                  </select>
+                  <input value={ageRange} onChange={(e) => setAgeRange(e.target.value)} style={inputStyle} placeholder="e.g. 4-5 years" disabled={saving} />
                 </FieldLabel>
               </div>
 

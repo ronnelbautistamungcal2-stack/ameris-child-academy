@@ -4,6 +4,7 @@ import { SkeletonTable } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import { childAgeGroup, ageInMonths } from "@/lib/ageUtils";
 import { apiJson } from "@/lib/api";
+import { FLAG_CATEGORY_OPTIONS } from "@/lib/childFlags";
 import { userRoles } from "@/lib/roles";
 import {
   getLinkedParentIds,
@@ -213,6 +214,7 @@ export default function AdminChildren() {
   const [flagStatusFilter, setFlagStatusFilter] = useState("open");
   const [flagChildFilter, setFlagChildFilter] = useState("");
   const [flagClassroomFilter, setFlagClassroomFilter] = useState("");
+  const [flagCategoryFilter, setFlagCategoryFilter] = useState("");
   const [flagDateFrom, setFlagDateFrom] = useState("");
   const [flagDateTo, setFlagDateTo] = useState("");
   const [flagItems, setFlagItems] = useState([]);
@@ -356,6 +358,7 @@ export default function AdminChildren() {
         if (flagStatusFilter) params.set("status", flagStatusFilter);
         if (flagChildFilter) params.set("childId", flagChildFilter);
         if (flagClassroomFilter) params.set("classRoomId", flagClassroomFilter);
+        if (flagCategoryFilter) params.set("category", flagCategoryFilter);
         if (flagDateFrom) params.set("from", flagDateFrom);
         if (flagDateTo) params.set("to", flagDateTo);
 
@@ -394,6 +397,7 @@ export default function AdminChildren() {
       dashboardCenterId,
       flagChildFilter,
       flagClassroomFilter,
+      flagCategoryFilter,
       flagDateFrom,
       flagDateTo,
       flagStatusFilter,
@@ -1422,6 +1426,17 @@ export default function AdminChildren() {
                   <option value="__unassigned__">Unassigned</option>
                 </select>
               </div>
+              <div style={{ flex: "0 0 200px" }}>
+                <div style={filterLabelStyle}>Flag Type</div>
+                <select value={flagCategoryFilter} onChange={(e) => setFlagCategoryFilter(e.target.value)} style={inputStyle}>
+                  <option value="">All flag types</option>
+                  {FLAG_CATEGORY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div style={{ flex: "0 0 170px" }}>
                 <div style={filterLabelStyle}>From Date</div>
                 <input type="date" value={flagDateFrom} onChange={(e) => setFlagDateFrom(e.target.value)} style={inputStyle} />
@@ -1430,13 +1445,14 @@ export default function AdminChildren() {
                 <div style={filterLabelStyle}>To Date</div>
                 <input type="date" value={flagDateTo} onChange={(e) => setFlagDateTo(e.target.value)} style={inputStyle} />
               </div>
-              {(flagStatusFilter !== "open" || flagChildFilter || flagClassroomFilter || flagDateFrom || flagDateTo) && (
+              {(flagStatusFilter !== "open" || flagChildFilter || flagClassroomFilter || flagCategoryFilter || flagDateFrom || flagDateTo) && (
                 <button
                   type="button"
                   onClick={() => {
                     setFlagStatusFilter("open");
                     setFlagChildFilter("");
                     setFlagClassroomFilter("");
+                    setFlagCategoryFilter("");
                     setFlagDateFrom("");
                     setFlagDateTo("");
                   }}

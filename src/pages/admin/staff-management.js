@@ -55,13 +55,14 @@ const EVAL_TYPES = [
   "Other",
 ];
 
-function createDefaultEvaluationForm(teacherId = "") {
+function createDefaultEvaluationForm(teacherId = "", categories = EVAL_CATEGORIES) {
+  const list = Array.isArray(categories) && categories.length ? categories : EVAL_CATEGORIES;
   return {
     teacherId,
     evaluationType: "",
     periodStart: today(),
     periodEnd: addDays(today(), 13),
-    categories: Object.fromEntries(EVAL_CATEGORIES.map((category) => [category, 3])),
+    categories: Object.fromEntries(list.map((category) => [category, 3])),
     strengths: "",
     areasForImprovement: "",
     goals: "",
@@ -3106,13 +3107,45 @@ function EvaluationsTab({ centerId, teachers }) {
   const [form, setForm] = useState(createDefaultEvaluationForm());
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [categories, setCategories] = useState(EVAL_CATEGORIES);
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+
+  const loadCategories = useCallback(async () => {
+    if (!centerId) {
+      setCategories(EVAL_CATEGORIES);
+      return;
+    }
+    try {
+      const data = await apiJson(
+        `/api/v1/evaluation-category-config?centerId=${centerId}`,
+      );
+      setCategories(
+        Array.isArray(data?.categories) && data.categories.length
+          ? data.categories
+          : EVAL_CATEGORIES,
+      );
+    } catch {
+      setCategories(EVAL_CATEGORIES);
+    }
+  }, [centerId]);
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
+
+  useEffect(() => {
+    if (!showForm) {
+      setForm((prev) => createDefaultEvaluationForm(prev.teacherId, categories));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories]);
 
   const startEvaluationForTeacher = useCallback((teacherId) => {
-    setForm(createDefaultEvaluationForm(teacherId));
+    setForm(createDefaultEvaluationForm(teacherId, categories));
     setFormError("");
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }, []);
+  }, [categories]);
 
   const loadEvaluations = useCallback(async () => {
     if (!centerId) {
@@ -3190,7 +3223,7 @@ function EvaluationsTab({ centerId, teachers }) {
         }),
       });
       setShowForm(false);
-      setForm(createDefaultEvaluationForm());
+      setForm(createDefaultEvaluationForm(undefined, categories));
       await loadEvaluations();
     } catch (error) {
       setFormError(error.message || "Failed to save evaluation");
@@ -3306,6 +3339,9 @@ function EvaluationsTab({ centerId, teachers }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <SectionTitle icon="⭐" title="Employee Evaluations" />
           <div className="flex flex-wrap gap-2">
+            <SecondaryButton onClick={() => setShowCategoryManager((v) => !v)}>
+              {showCategoryManager ? "Close Categories" : "Manage Categories"}
+            </SecondaryButton>
             <PrimaryButton
               onClick={() => {
                 setFormError("");
@@ -3316,6 +3352,17 @@ function EvaluationsTab({ centerId, teachers }) {
             </PrimaryButton>
           </div>
         </div>
+
+        {showCategoryManager && (
+          <EvaluationCategoryManager
+            centerId={centerId}
+            categories={categories}
+            onSaved={(next) => {
+              setCategories(next);
+              setShowCategoryManager(false);
+            }}
+          />
+        )}
 
         <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
           Use a start date and end date for each evaluation period so shorter
@@ -3505,7 +3552,7 @@ function EvaluationsTab({ centerId, teachers }) {
                 Category Scores (1-5) — check &ldquo;Not Evaluated&rdquo; to skip a category without affecting the score
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                {EVAL_CATEGORIES.map((cat) => {
+                {categories.map((cat) => {
                   const notEval = form.categories[cat] === null;
                   return (
                     <div
@@ -3831,6 +3878,110 @@ function SectionTitle({ icon, title }) {
     <div className="flex items-center gap-2 text-sm font-extrabold text-gray-900">
       <span className="text-base">{icon}</span>
       {title}
+    </div>
+  );
+}
+
+function EvaluationCategoryManager({ centerId, categories, onSaved }) {
+  const [draft, setDraft] = useState(categories);
+  const [newName, setNewName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setDraft(categories);
+  }, [categories]);
+
+  function renameAt(index, value) {
+    setDraft((prev) => prev.map((c, i) => (i === index ? value : c)));
+  }
+
+  function removeAt(index) {
+    setDraft((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function addCategory() {
+    const name = newName.trim();
+    if (!name) return;
+    if (draft.some((c) => c.toLowerCase() === name.toLowerCase())) {
+      setError("That category already exists.");
+      return;
+    }
+    setDraft((prev) => [...prev, name]);
+    setNewName("");
+    setError("");
+  }
+
+  async function save() {
+    const cleaned = draft.map((c) => c.trim()).filter(Boolean);
+    if (cleaned.length === 0) {
+      setError("Keep at least one category.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const data = await apiJson(
+        `/api/v1/evaluation-category-config?centerId=${centerId}`,
+        { method: "PUT", body: JSON.stringify({ categories: cleaned }) },
+      );
+      onSaved(data.categories);
+    } catch (e) {
+      setError(e.message || "Failed to save categories");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+      <div className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">
+        Evaluation categories for this center — rename, remove, or add as many as you need
+      </div>
+      <div className="space-y-2">
+        {draft.map((cat, index) => (
+          <div key={index} className="flex items-center gap-2">
+            <input
+              value={cat}
+              onChange={(e) => renameAt(index, e.target.value)}
+              className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            />
+            <button
+              type="button"
+              onClick={() => removeAt(index)}
+              className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <input
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addCategory();
+            }
+          }}
+          placeholder="New category name..."
+          className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+        />
+        <SecondaryButton onClick={addCategory}>+ Add</SecondaryButton>
+      </div>
+      {error ? <div className="mt-2 text-sm text-red-600">{error}</div> : null}
+      <div className="mt-3 flex justify-end">
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving || !centerId}
+          className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 transition"
+        >
+          {saving ? "Saving…" : "Save Categories"}
+        </button>
+      </div>
     </div>
   );
 }

@@ -835,135 +835,35 @@ function ParentDashboardPanel({
   );
 }
 
-function ParentMiniStat({ label, value, tone = "sky" }) {
-  const tones = {
-    sky: "border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-500/25 dark:bg-sky-950/35 dark:text-sky-100",
-    emerald: "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/25 dark:bg-emerald-950/35 dark:text-emerald-100",
-    amber: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/25 dark:bg-amber-950/35 dark:text-amber-100",
-    rose: "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-500/25 dark:bg-rose-950/35 dark:text-rose-100",
-    gray: "border-gray-200 bg-gray-50 text-gray-900 dark:border-white/10 dark:bg-slate-900/85 dark:text-slate-100",
-  };
+function ParentApprovalAlert({ plans }) {
+  const count = plans.length;
+  const firstChildName = (() => {
+    const child = plans[0]?.child;
+    return child ? `${child.firstName || ""} ${child.lastName || ""}`.trim() : "";
+  })();
 
   return (
-    <div className={["rounded-2xl border p-3", tones[tone] || tones.sky].join(" ")}>
-      <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-400">
-        {label}
-      </div>
-      <div className="mt-2 text-xl font-black tracking-tight">{value}</div>
-    </div>
-  );
-}
-
-function ParentHeroStat({ label, value, detail, tone = "sky" }) {
-  const tones = {
-    sky: "border-sky-200 bg-sky-50/90 text-sky-900 dark:border-sky-500/25 dark:bg-sky-950/30 dark:text-sky-100",
-    emerald: "border-emerald-200 bg-emerald-50/90 text-emerald-900 dark:border-emerald-500/25 dark:bg-emerald-950/30 dark:text-emerald-100",
-    amber: "border-amber-200 bg-amber-50/90 text-amber-900 dark:border-amber-500/25 dark:bg-amber-950/30 dark:text-amber-100",
-    rose: "border-rose-200 bg-rose-50/90 text-rose-900 dark:border-rose-500/25 dark:bg-rose-950/30 dark:text-rose-100",
-    gray: "border-gray-200 bg-gray-50/95 text-gray-900 dark:border-white/10 dark:bg-slate-900/85 dark:text-slate-100",
-  };
-
-  return (
-    <div className={["rounded-[20px] border p-3", tones[tone] || tones.sky].join(" ")}>
-      <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-400">
-        {label}
-      </div>
-      <div className="mt-2 text-base font-black tracking-tight">{value}</div>
-      <div className="mt-1 text-xs leading-5 text-gray-600 dark:text-slate-400">{detail}</div>
-    </div>
-  );
-}
-
-function ParentHeroSnapshot({
-  selectedChild,
-  selectedChildProgress,
-  visibleChildrenCount,
-  urgentReminderCount,
-  nextReminder,
-  subscriptionSummary,
-}) {
-  const selectedChildAge = formatAge(selectedChild?.birthDate);
-  const selectedChildName = selectedChild
-    ? `${selectedChild.firstName}${selectedChild.lastName ? ` ${selectedChild.lastName}` : ""}`
-    : "";
-  const focusValue = selectedChild?.firstName || `${visibleChildrenCount || 0} linked`;
-  const focusDetail = selectedChild
-    ? [
-        selectedChildAge ? `Age ${selectedChildAge}` : null,
-        selectedChildProgress?.overall != null
-          ? `${selectedChildProgress.overall}% progress`
-          : "Progress syncing",
-      ]
-        .filter(Boolean)
-        .join(" - ")
-    : visibleChildrenCount
-      ? "Profiles linked to this family account."
-      : "Profiles will appear here after linking.";
-  const formsValue = urgentReminderCount ? `${urgentReminderCount} due` : "Up to date";
-  const formsDetail = nextReminder
-    ? `${nextReminder.title} - ${nextReminder.statusLabel}`
-    : "No renewals are currently blocking you.";
-  const billingValue = subscriptionSummary?.active
-    ? "Active"
-    : subscriptionSummary
-      ? "Review"
-      : "Pending";
-  const billingDetail = subscriptionSummary?.centerName
-    ? `${subscriptionSummary.centerName} - ${subscriptionSummary.tier}`
-    : "Billing snapshot will appear here once available.";
-
-  return (
-    <div className="w-full rounded-[24px] border border-amber-200/80 bg-white/90 p-3.5 shadow-[0_18px_45px_-30px_rgba(217,119,6,0.4)] backdrop-blur dark:border-amber-500/25 dark:bg-slate-950/80 dark:shadow-[0_28px_70px_-48px_rgba(2,6,23,0.95)]">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-amber-700 dark:border-amber-500/30 dark:bg-amber-950/45 dark:text-amber-300">
-            Family spotlight
+    <div className="w-full rounded-[24px] border border-amber-300 bg-amber-50 p-4 shadow-[0_18px_45px_-30px_rgba(217,119,6,0.4)] dark:border-amber-500/40 dark:bg-amber-950/30">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
           </div>
-          <div className="mt-2.5 text-base font-black tracking-tight text-gray-900 dark:text-slate-100">
-            {selectedChildName || "Everything in one place"}
-          </div>
-          <div className="mt-1 text-[13px] leading-5 text-gray-600 dark:text-slate-400">
-            {selectedChildName
-              ? `Keep ${selectedChild.firstName}'s updates, renewals, and support links close at hand.`
-              : "Use this card to jump from daily updates into forms, billing, and messages."}
+          <div>
+            <div className="text-sm font-black tracking-tight text-amber-900 dark:text-amber-100">
+              {count === 1
+                ? `An Individual Progress Plan for ${firstChildName || "your child"} needs your approval`
+                : `${count} Individual Progress Plans need your approval`}
+            </div>
+            <p className="mt-1 text-[13px] leading-5 text-amber-800/90 dark:text-amber-200/80">
+              Review the plan details and record your approval decision.
+            </p>
           </div>
         </div>
-        <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-sky-700 dark:border-sky-500/30 dark:bg-sky-950/45 dark:text-sky-300">
-          {selectedChildProgress?.overall != null
-            ? `${selectedChildProgress.overall}% progress`
-            : urgentReminderCount
-              ? `${urgentReminderCount} form${urgentReminderCount === 1 ? "" : "s"} due`
-              : "Ready"}
-        </span>
-      </div>
-
-      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <ParentHeroStat
-          label="Focus"
-          value={focusValue}
-          detail={focusDetail}
-          tone="sky"
-        />
-        <ParentHeroStat
-          label="Forms"
-          value={formsValue}
-          detail={formsDetail}
-          tone={urgentReminderCount ? "amber" : "emerald"}
-        />
-        <ParentHeroStat
-          label="Billing"
-          value={billingValue}
-          detail={billingDetail}
-          tone={subscriptionSummary?.active ? "emerald" : subscriptionSummary ? "amber" : "gray"}
-        />
-      </div>
-
-      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <ParentButton href="/parent/messages" variant="secondary" className="w-full px-3 py-2 text-xs">
-          Messages
-        </ParentButton>
-        <ParentButton href="/parent/forms" className="w-full px-3 py-2 text-xs">
-          Open forms
+        <ParentButton href="/parent/children?tab=progress_plan" className="shrink-0 px-3 py-2 text-xs">
+          Review now
         </ParentButton>
       </div>
     </div>
@@ -1248,11 +1148,25 @@ function ParentDashboard({
     return () => { cancelled = true; };
   }, [childIds]);
 
-  const billingHref = buildParentMessageComposeHref({
-    subject: "Billing support request",
-    message:
-      "Hello, I need help with tuition or account billing. Please share the next steps or a payment link when available.",
-  });
+  const [behaviorPlans, setBehaviorPlans] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const plans = await apiJson("/api/v1/behavior-plans");
+        if (!cancelled) setBehaviorPlans(Array.isArray(plans) ? plans : []);
+      } catch {
+        if (!cancelled) setBehaviorPlans([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const pendingPlanApprovals = useMemo(
+    () => behaviorPlans.filter((plan) => !plan.parentApproved),
+    [behaviorPlans],
+  );
 
   const reminders = useMemo(() => {
     const reminderItems = (submissions || [])
@@ -1294,8 +1208,6 @@ function ParentDashboard({
   const childrenWithProgress = visibleChildren.filter((child) => childGWAs[child.id]).length;
   const urgentReminderCount = reminders.filter((item) => item.tone !== "emerald").length;
   const billingTone = subscriptionSummary?.active ? "emerald" : subscriptionSummary ? "amber" : "rose";
-  const selectedChildProgress = selectedChild ? childGWAs[selectedChild.id] : null;
-  const nextReminder = reminders[0] || null;
 
   return (
     <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -1361,14 +1273,9 @@ function ParentDashboard({
             }
           />
 
-          <ParentHeroSnapshot
-            selectedChild={selectedChild}
-            selectedChildProgress={selectedChildProgress}
-            visibleChildrenCount={visibleChildren.length}
-            urgentReminderCount={urgentReminderCount}
-            nextReminder={nextReminder}
-            subscriptionSummary={subscriptionSummary}
-          />
+          {pendingPlanApprovals.length > 0 ? (
+            <ParentApprovalAlert plans={pendingPlanApprovals} />
+          ) : null}
         </div>
 
         <ParentSection
@@ -1522,109 +1429,6 @@ function ParentDashboard({
             <ParentButton href="/parent/messages" variant="secondary" className="mt-3 w-full px-3 py-2 text-xs">
               Open messages
             </ParentButton>
-          </ParentDashboardPanel>
-
-          <ParentDashboardPanel
-            eyebrow="Forms"
-            title="Renewal reminders"
-            description="Paperwork that still needs attention."
-            accent={urgentReminderCount ? "amber" : "emerald"}
-          >
-            <div className="space-y-2.5">
-              {reminders.map((item) => (
-                <div
-                  key={item.id}
-                  className={[
-                    "rounded-[18px] border p-3",
-                    item.tone === "emerald"
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-950/30 dark:text-emerald-100"
-                      : item.tone === "rose"
-                        ? "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-500/30 dark:bg-rose-950/30 dark:text-rose-100"
-                        : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100",
-                  ].join(" ")}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-[13px] font-extrabold">{item.title}</div>
-                      <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] opacity-80">
-                        {item.detail}
-                      </div>
-                    </div>
-                    <span className="rounded-full bg-white/70 px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em] dark:bg-slate-950/70 dark:text-slate-100">
-                      {item.statusLabel}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <ParentButton href="/parent/forms" variant="secondary" className="mt-3 w-full px-3 py-2 text-xs">
-              Review forms
-            </ParentButton>
-          </ParentDashboardPanel>
-
-          <ParentDashboardPanel
-            eyebrow="Billing"
-            title="Billing snapshot"
-            description="Plan status and support in one place."
-            accent={billingTone}
-          >
-            {subscriptionSummary ? (
-              <>
-                <div className="rounded-[18px] border border-gray-200 bg-gray-50 p-3 dark:border-white/10 dark:bg-slate-950/75">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-[13px] font-extrabold text-gray-900 dark:text-slate-100">
-                        {subscriptionSummary.centerName}
-                      </div>
-                      <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500 dark:text-slate-400">
-                        {subscriptionSummary.tier}
-                      </div>
-                    </div>
-                    <span
-                      className={[
-                        "rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.14em]",
-                        subscriptionSummary.active
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-950/45 dark:text-emerald-300"
-                          : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-950/45 dark:text-amber-300",
-                      ].join(" ")}
-                    >
-                      {subscriptionSummary.active ? "Active" : "Needs review"}
-                    </span>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <ParentMiniStat
-                      label="Status"
-                      value={subscriptionSummary.active ? "Active" : "Inactive"}
-                      tone={subscriptionSummary.active ? "emerald" : "amber"}
-                    />
-                    <ParentMiniStat
-                      label="Expires"
-                      value={
-                        subscriptionSummary.expiresAt
-                          ? subscriptionSummary.expiresAt.toLocaleDateString()
-                          : "-"
-                      }
-                      tone="gray"
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <ParentButton href="/parent/billing" variant="secondary" className="w-full px-3 py-2 text-xs">
-                    Open billing
-                  </ParentButton>
-                  <ParentButton href={billingHref} className="w-full px-3 py-2 text-xs">
-                    Request support
-                  </ParentButton>
-                </div>
-              </>
-            ) : (
-              <div className="rounded-[18px] border border-dashed border-gray-300 bg-gray-50 p-3 text-[13px] leading-5 text-gray-600 dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-400">
-                Billing details are not available yet.
-              </div>
-            )}
           </ParentDashboardPanel>
       </aside>
     </div>

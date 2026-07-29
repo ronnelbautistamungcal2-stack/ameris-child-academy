@@ -244,6 +244,7 @@ model User {
   evaluationsGiven             TeacherEvaluation[]       @relation("EvaluationsGiven")
   budgetExpensesRecorded       BudgetExpense[]           @relation("BudgetExpensesRecorded")
   permissionsGranted           ChildPermission[]         @relation("PermissionsGranted")
+  permissionPolicyConfigsUpdated PermissionPolicyConfig[]
   eventsCreated                Event[]                   @relation("EventsCreated")
   shiftSchedules               ShiftSchedule[]           @relation("ShiftSchedules")
   assignedChecklistItems       MilestoneChecklistItem[]   @relation("ChecklistItemAssignee")
@@ -313,6 +314,8 @@ model Center {
   performanceGradeConfig PerformanceGradeConfig?
   coachPerformanceGradeConfig CoachPerformanceGradeConfig?
   otherStaffGradeConfig OtherStaffGradeConfig?
+  evaluationCategoryConfig EvaluationCategoryConfig?
+  permissionPolicyConfigs PermissionPolicyConfig[]
   createdAt        DateTime         @default(now())
 }
 
@@ -863,6 +866,7 @@ model PolicyDocument {
   milestoneChecklistItems MilestoneChecklistItem[]
   lessons     Lesson[]
   dailyChecklistItems DailyChecklistItem[]
+  permissionPolicyConfigs PermissionPolicyConfig[]
 }
 
 model AuditLog {
@@ -1285,6 +1289,25 @@ model ChildPermission {
   @@index([childId, status])
 }
 
+model PermissionPolicyConfig {
+  id               String          @id @default(uuid())
+  center           Center?         @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId         String?
+  permissionType   PermissionType
+  label            String?
+  description      String?
+  policySummary    String?
+  policySections   String[]
+  policyDocument   PolicyDocument? @relation(fields: [policyDocumentId], references: [id], onDelete: SetNull)
+  policyDocumentId String?
+  updatedBy        User?           @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedById      String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@unique([centerId, permissionType])
+}
+
 model LessonSupply {
   id            String   @id @default(uuid())
   lesson        Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
@@ -1646,6 +1669,15 @@ model PerformanceGradeConfig {
   absenceDeductionPct   Float    @default(2)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+}
+
+model EvaluationCategoryConfig {
+  id         String   @id @default(uuid())
+  center     Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId   String   @unique
+  categories String[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model CoachPerformanceGradeConfig {

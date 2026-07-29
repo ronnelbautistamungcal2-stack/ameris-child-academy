@@ -6,112 +6,11 @@ import {
 } from "@/components/parent/ParentUI";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
+import {
+  DEFAULT_PERMISSION_POLICIES,
+  PERMISSION_GROUPS,
+} from "@/lib/permissionPolicies";
 import { useCallback, useEffect, useMemo, useState } from "react";
-
-const PERMISSION_TYPES = [
-  {
-    value: "PHOTO_RELEASE",
-    label: "Photo Release",
-    description:
-      "Allow photos and videos of your child for classroom updates and approved center use.",
-    policySummary:
-      "This permission covers photos and videos taken during classroom routines, daily updates, and other center-approved communication.",
-    policySections: [
-      "Media may be used for secure family updates, classroom documentation, and center communication that follows school policy.",
-      "Staff will avoid sharing sensitive information alongside media and will use reasonable care when handling images or videos.",
-      "Public-facing use outside standard family communication should follow the center's published policy and approval process.",
-    ],
-  },
-  {
-    value: "FIELD_TRIP",
-    label: "Field Trip",
-    description:
-      "Allow off-campus supervised field trips and educational visits.",
-    policySummary:
-      "This permission allows your child to participate in supervised outings connected to classroom learning and center programming.",
-    policySections: [
-      "Trips are planned and supervised by staff, with attendance, transportation, and emergency information managed before departure.",
-      "Families will still receive trip-specific communication when additional details, fees, or preparation are required.",
-      "Granting this permission does not remove the center's responsibility to follow staffing ratios, safety procedures, and sign-out controls.",
-    ],
-  },
-  {
-    value: "MEDICAL_TREATMENT",
-    label: "Medical Treatment",
-    description:
-      "Allow staff to authorize emergency treatment if immediate care is required.",
-    policySummary:
-      "This permission allows staff to act quickly if urgent medical attention is needed and a parent or guardian cannot be reached in time.",
-    policySections: [
-      "Emergency services or urgent care may be contacted when staff believe immediate treatment is necessary for your child's safety.",
-      "The center will continue attempting to contact parents, guardians, and emergency contacts using the information on file.",
-      "This permission is intended for urgent situations and does not replace normal family communication for routine care decisions.",
-    ],
-  },
-  {
-    value: "TRANSPORTATION",
-    label: "Transportation",
-    description:
-      "Allow transport arranged by the center for approved activities.",
-    policySummary:
-      "This permission covers center-arranged transportation for approved activities, outings, or operational needs tied to care.",
-    policySections: [
-      "Transportation will follow center safety procedures, including supervision, seat-belt or restraint expectations, and trip documentation.",
-      "Drivers and staff are expected to follow the center's operating and emergency procedures during transport.",
-      "Families may still receive separate notice when transportation is tied to a special event or schedule change.",
-    ],
-  },
-  {
-    value: "SUNSCREEN_APPLICATION",
-    label: "Sunscreen Application",
-    description:
-      "Allow staff to apply sunscreen during outdoor activities when appropriate.",
-    policySummary:
-      "This permission allows staff to apply sunscreen to help protect your child during outdoor play and other approved activities.",
-    policySections: [
-      "Application should follow the center's care procedures and any written family instructions provided to staff.",
-      "Families should notify the center about allergies, sensitivities, or brand-specific requirements before sunscreen is used.",
-      "Sunscreen use does not replace other outdoor safety practices such as shade, hydration, and routine supervision.",
-    ],
-  },
-  {
-    value: "WATER_ACTIVITIES",
-    label: "Water Activities",
-    description:
-      "Allow supervised participation in splash play and similar activities.",
-    policySummary:
-      "This permission covers supervised water play such as splash pads, sprinklers, and similar center-approved activities.",
-    policySections: [
-      "Water activities must follow the center's staffing, supervision, and safety expectations at all times.",
-      "Children may be excluded from a specific activity if staff determine the setting, behavior, or conditions are not appropriate that day.",
-      "Families should communicate any health or clothing needs that staff should know before participation.",
-    ],
-  },
-];
-
-const PERMISSION_GROUPS = [
-  {
-    id: "sharing",
-    title: "Sharing and outings",
-    description: "Media sharing and supervised experiences beyond the classroom.",
-    tone: "sky",
-    items: ["PHOTO_RELEASE", "FIELD_TRIP"],
-  },
-  {
-    id: "care",
-    title: "Health and care",
-    description: "Everyday care decisions that help staff respond quickly and safely.",
-    tone: "emerald",
-    items: ["MEDICAL_TREATMENT", "SUNSCREEN_APPLICATION"],
-  },
-  {
-    id: "activities",
-    title: "Movement and play",
-    description: "Permissions tied to transport and active play experiences.",
-    tone: "amber",
-    items: ["TRANSPORTATION", "WATER_ACTIVITIES"],
-  },
-];
 
 function todayDateValue() {
   return new Date().toISOString().slice(0, 10);
@@ -139,6 +38,7 @@ export default function ParentPermissions() {
     decisionDate: todayDateValue(),
     notes: "",
   });
+  const [permissionTypes, setPermissionTypes] = useState(DEFAULT_PERMISSION_POLICIES);
 
   useEffect(() => {
     (async () => {
@@ -188,6 +88,26 @@ export default function ParentPermissions() {
     [children, selectedChildId],
   );
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const qs = selectedChild?.centerId
+          ? `?centerId=${encodeURIComponent(selectedChild.centerId)}`
+          : "";
+        const data = await apiJson(`/api/v1/permission-policy-config${qs}`);
+        if (!cancelled && Array.isArray(data) && data.length) {
+          setPermissionTypes(data);
+        }
+      } catch {
+        if (!cancelled) setPermissionTypes(DEFAULT_PERMISSION_POLICIES);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedChild?.centerId]);
+
   const permMap = useMemo(() => {
     const map = {};
     for (const permission of permissions) {
@@ -199,22 +119,22 @@ export default function ParentPermissions() {
   const stats = useMemo(() => {
     const granted = permissions.filter((item) => item.status === "GRANTED").length;
     const denied = permissions.filter((item) => item.status === "DENIED").length;
-    const pending = PERMISSION_TYPES.length - granted - denied;
+    const pending = permissionTypes.length - granted - denied;
     return { granted, denied, pending };
-  }, [permissions]);
+  }, [permissions, permissionTypes.length]);
 
   const completionRate = useMemo(() => {
-    if (!PERMISSION_TYPES.length) return 0;
-    return Math.round(((stats.granted + stats.denied) / PERMISSION_TYPES.length) * 100);
-  }, [stats.denied, stats.granted]);
+    if (!permissionTypes.length) return 0;
+    return Math.round(((stats.granted + stats.denied) / permissionTypes.length) * 100);
+  }, [stats.denied, stats.granted, permissionTypes.length]);
 
   const pendingItems = useMemo(
     () =>
-      PERMISSION_TYPES.filter((item) => {
+      permissionTypes.filter((item) => {
         const status = permMap[item.value]?.status || "PENDING";
         return status === "PENDING";
       }),
-    [permMap],
+    [permMap, permissionTypes],
   );
 
   const groupedPermissions = useMemo(
@@ -222,10 +142,10 @@ export default function ParentPermissions() {
       PERMISSION_GROUPS.map((group) => ({
         ...group,
         items: group.items
-          .map((type) => PERMISSION_TYPES.find((item) => item.value === type))
+          .map((type) => permissionTypes.find((item) => item.value === type))
           .filter(Boolean),
       })),
-    [],
+    [permissionTypes],
   );
 
   function openDecisionModal(item) {
@@ -699,6 +619,16 @@ function PermissionPolicyModal({ item, permission, form, saving, onChange, onClo
                 </div>
               ))}
             </div>
+            {item.policyDocument ? (
+              <a
+                href={item.policyDocument.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-flex items-center gap-1.5 rounded-2xl border border-sky-200 bg-white px-3 py-2 text-xs font-bold text-sky-700 no-underline transition hover:bg-sky-50 dark:border-sky-800 dark:bg-slate-900 dark:text-sky-300"
+              >
+                View full policy document: {item.policyDocument.title}
+              </a>
+            ) : null}
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

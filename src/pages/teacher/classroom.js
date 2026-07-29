@@ -366,6 +366,11 @@ export default function TeacherClassroom() {
     return { total, checkedIn, checkedOut, flagged: redFlagged.length };
   }, [visibleChildren, attendanceByChildId, redFlagged.length]);
 
+  const checkedInSidebarList = useMemo(() => {
+    const rows = attendance?.checkedInChildren || [];
+    return classId ? rows.filter((row) => row.child?.classRoomId === classId) : rows;
+  }, [attendance, classId]);
+
   const attendanceFilterLabel =
     attendanceFilter === "checked-in"
       ? "Checked In"
@@ -856,9 +861,9 @@ export default function TeacherClassroom() {
                       </Link>
                     </div>
                   </div>
-                  {attendance?.checkedInChildren?.length ? (
+                  {checkedInSidebarList.length ? (
                     <div className="mt-3 divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-100 bg-white/70">
-                      {attendance.checkedInChildren.slice(0, 15).map((row) => (
+                      {checkedInSidebarList.slice(0, 15).map((row) => (
                         <div
                           key={row.child?.id}
                           className="flex items-center gap-2.5 px-2 py-2 hover:bg-gray-50"

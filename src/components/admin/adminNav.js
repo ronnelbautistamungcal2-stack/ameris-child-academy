@@ -66,6 +66,7 @@ export const ADMIN_NAV_ITEMS = [
       { href: "/admin/teacher-logging-alerts", label: "Compliance Alerts" },
       { href: "/admin/form-renewals", label: "Form Renewals" },
       { href: "/admin/policies", label: "Policies & Procedures" },
+      { href: "/admin/permission-policies", label: "Family Permission Policies" },
       { href: "/admin/reports", label: "Reports" },
       { href: "/admin/feeding-plans-report", label: "Feeding Plans Report" },
     ],

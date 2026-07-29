@@ -218,10 +218,10 @@ export default function TeacherChecklists() {
             Select a center to view the assigned checklist for that day.
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {/* Left: Daily task checklist */}
-            <TeacherDailyChecklist centerId={centerId} selectedDate={selectedDate} />
-            {/* Right: Weekly lesson plan (read-only, admin-assigned) */}
+          <div className="space-y-4">
+            {/* Daily task checklist */}
+            <TeacherDailyChecklist centerId={centerId} classId={classId} selectedDate={selectedDate} />
+            {/* Weekly lesson plan (read-only, admin-assigned) — full width so the whole week is visible without scrolling */}
             <div className="space-y-3">
               <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
                 <h3 className="text-sm font-extrabold text-gray-900">Weekly Lesson Plan</h3>
@@ -247,7 +247,7 @@ export default function TeacherChecklists() {
   );
 }
 
-function TeacherDailyChecklist({ centerId, selectedDate }) {
+function TeacherDailyChecklist({ centerId, classId, selectedDate }) {
   const [checklists, setChecklists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -268,7 +268,13 @@ function TeacherDailyChecklist({ centerId, selectedDate }) {
           centerId,
         )}&date=${encodeURIComponent(selectedDate)}`,
       );
-      const rows = Array.isArray(data) ? data : [];
+      const allRows = Array.isArray(data) ? data : [];
+      const rows = classId
+        ? allRows.filter((checklist) => {
+            const rooms = getChecklistClassRooms(checklist);
+            return !rooms.length || rooms.some((room) => room.id === classId);
+          })
+        : allRows;
       setChecklists(rows);
       setNoteDrafts((previousDrafts) =>
         buildNoteDrafts(rows, resetDrafts ? {} : previousDrafts, replaceDraftId),
@@ -285,7 +291,7 @@ function TeacherDailyChecklist({ centerId, selectedDate }) {
   useEffect(() => {
     load({ resetDrafts: true });
     setSelectedDetail(null);
-  }, [centerId, selectedDate]);
+  }, [centerId, classId, selectedDate]);
 
   async function toggleItem(item, isCompleted) {
     setCompleting(completionKey(item));

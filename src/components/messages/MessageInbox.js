@@ -543,6 +543,17 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
     }
   }
 
+  const matchingAudiences = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q || !canUseAudienceShortcuts) return [];
+    return audienceOptions.filter((option) => {
+      if (option.count === 0) return false;
+      if (selectedAudiences.some((selected) => selected.key === option.key)) return false;
+      const haystack = `${option.label} ${option.description || ""} all`.toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [audienceOptions, canUseAudienceShortcuts, searchQuery, selectedAudiences]);
+
   useEffect(() => {
     if (!searchQuery.trim() || searchQuery.length < 2) {
       setSearchResults([]);
@@ -1415,7 +1426,9 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
                   placeholder={
                     isAccommodationThread(newThreadType)
                       ? "Search teachers or staff by name or email..."
-                      : "Search by name or email to add individuals..."
+                      : canUseAudienceShortcuts
+                        ? "Search by name/email, or type \"all teachers\", \"all parents\"..."
+                        : "Search by name or email to add individuals..."
                   }
                 />
                 {searching ? (
@@ -1423,8 +1436,34 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
                     Searching...
                   </div>
                 ) : null}
-                {searchResults.length > 0 ? (
+                {matchingAudiences.length > 0 || searchResults.length > 0 ? (
                   <div className="mt-1 max-h-48 overflow-auto rounded-2xl border border-gray-200 bg-gray-50 dark:border-gray-600 dark:bg-gray-700">
+                    {matchingAudiences.map((option) => (
+                      <button
+                        key={`audience-${option.key}`}
+                        type="button"
+                        onClick={() => {
+                          setSelectedAudiences((prev) =>
+                            prev.some((item) => item.key === option.key)
+                              ? prev
+                              : [...prev, option],
+                          );
+                          setSearchQuery("");
+                          setSearchResults([]);
+                        }}
+                        className="flex w-full items-center gap-2 border-b border-gray-200 px-3 py-2 text-left text-sm hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-600"
+                      >
+                        <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-extrabold uppercase text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                          Group
+                        </span>
+                        <span className="font-semibold text-gray-900 dark:text-gray-100">
+                          {option.label}
+                        </span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {option.count} recipient{option.count === 1 ? "" : "s"}
+                        </span>
+                      </button>
+                    ))}
                     {searchResults.map((u) => (
                       <button
                         key={u.id}

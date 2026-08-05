@@ -1,8 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import {
   canTeacherAccessChecklist,
-  getChecklistClassRoomIds,
-  getChecklistClassRooms,
   hasChecklistClassroomScope,
   normalizeChecklistClassRoomIds,
 } from "@/lib/dailyChecklistClassrooms";
@@ -21,6 +19,10 @@ import {
   normalizeOneTimeDate,
   normalizeRepeatDays,
 } from "@/lib/checklistSchedule";
+import {
+  buildDailyChecklistInclude,
+  serializeDailyChecklist,
+} from "@/lib/dailyChecklistInclude";
 
 const LESSON_SELECT = {
   id: true,
@@ -62,85 +64,6 @@ function formatTaskTimeFromDate(value) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-function buildCompletionInclude(date) {
-  if (!date) return false;
-  return {
-    where: { date: new Date(date) },
-    include: {
-      completedBy: { select: { id: true, name: true, email: true } },
-    },
-  };
-}
-
-function buildNotesInclude(date) {
-  if (!date) return false;
-  return {
-    where: { date: new Date(date) },
-    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-    include: {
-      createdBy: { select: { id: true, name: true, email: true } },
-    },
-  };
-}
-
-function buildDailyChecklistInclude(date) {
-  const completionInclude = buildCompletionInclude(date);
-  const notesInclude = buildNotesInclude(date);
-
-  return {
-    items: {
-      orderBy: [{ taskTime: "asc" }, { sortOrder: "asc" }],
-      include: {
-        lesson: {
-          select: LESSON_SELECT,
-        },
-        lessonCategory: {
-          select: {
-            id: true,
-            name: true,
-            ageRange: true,
-          },
-        },
-        policyDocument: {
-          select: {
-            id: true,
-            title: true,
-            url: true,
-          },
-        },
-        ...(completionInclude ? { completions: completionInclude } : {}),
-      },
-    },
-    classRoom: { select: { id: true, name: true, ageRange: true } },
-    classrooms: {
-      orderBy: { classRoomId: "asc" },
-      include: {
-        classRoom: { select: { id: true, name: true, ageRange: true } },
-      },
-    },
-    center: { select: { id: true, name: true } },
-    assignedUser: { select: { id: true, name: true, email: true, role: true } },
-    ...(notesInclude ? { notes: notesInclude } : {}),
-  };
-}
-
-function serializeDailyChecklist(checklist) {
-  const classRooms = getChecklistClassRooms(checklist);
-  const classRoomIds = getChecklistClassRoomIds({
-    ...checklist,
-    classRooms,
-  });
-  const { classrooms, ...rest } = checklist;
-
-  return {
-    ...rest,
-    classRoomId: checklist.classRoomId || classRoomIds[0] || null,
-    classRoom: checklist.classRoom || classRooms[0] || null,
-    classRoomIds,
-    classRooms,
-  };
 }
 
 async function validateChecklistClassRoomIds(centerId, classRoomIds) {

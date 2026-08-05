@@ -938,6 +938,7 @@ function DailyChecklistManager({ centerId }) {
   const [saving, setSaving] = useState(false);
 
   const [expandedId, setExpandedId] = useState("");
+  const [duplicatingId, setDuplicatingId] = useState("");
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -1054,6 +1055,24 @@ function DailyChecklistManager({ centerId }) {
       await loadData();
     } catch (e) {
       setError(e.message || "Failed to update");
+    }
+  }
+
+  async function duplicateChecklist(cl) {
+    setDuplicatingId(cl.id);
+    setError("");
+    setSuccess("");
+    try {
+      await apiJson("/api/v1/daily-checklists/duplicate", {
+        method: "POST",
+        body: JSON.stringify({ id: cl.id }),
+      });
+      setSuccess(`Duplicated "${cl.title}".`);
+      await loadData();
+    } catch (e) {
+      setError(e.message || "Failed to duplicate checklist");
+    } finally {
+      setDuplicatingId("");
     }
   }
 
@@ -1440,6 +1459,14 @@ function DailyChecklistManager({ centerId }) {
                           className="rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-sky-50 hover:text-sky-700"
                         >
                           Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => duplicateChecklist(cl)}
+                          disabled={duplicatingId === cl.id}
+                          className="rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-sky-50 hover:text-sky-700 disabled:opacity-60"
+                        >
+                          {duplicatingId === cl.id ? "Duplicating..." : "Duplicate"}
                         </button>
                         <button
                           type="button"

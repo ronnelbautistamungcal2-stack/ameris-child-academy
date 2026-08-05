@@ -9,6 +9,16 @@ function normalizeSpaces(value) {
     .replace(/\s+/g, " ");
 }
 
+// Preserves newline delimiters between multiple resource URLs so they don't
+// get collapsed into a single unusable string by normalizeSpaces().
+function normalizeResourceList(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/[ \t]+/g, " "))
+    .filter(Boolean)
+    .join("\n");
+}
+
 function normalizeLessonTerm(value) {
   const raw = normalizeSpaces(value);
   if (!raw) return "";
@@ -149,8 +159,8 @@ export default async function handler(req, res) {
         additionalResources: hasAdditionalResources
           ? normalizeSpaces(additionalResources)
           : "",
-        lessonAttachment: normalizeSpaces(lessonAttachment),
-        lessonImage: normalizeSpaces(lessonImage),
+        lessonAttachment: normalizeResourceList(lessonAttachment),
+        lessonImage: normalizeResourceList(lessonImage),
         notes: normalizeSpaces(notes),
         age: normalizeSpaces(childAge),
         category: normalizeSpaces(category),

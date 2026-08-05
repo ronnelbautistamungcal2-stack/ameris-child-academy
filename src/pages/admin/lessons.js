@@ -1302,21 +1302,6 @@ export default function AdminLessons() {
     [],
   );
 
-  const uploadSingleToField = useCallback(async (files, setValue, setUploading) => {
-    const file = Array.from(files || [])[0];
-    if (!file) return;
-    setUploading(true);
-    setError("");
-    try {
-      const [uploaded] = await uploadFiles([file]);
-      setValue(uploaded?.url || "");
-    } catch (err) {
-      setError(err.message || "Upload failed");
-    } finally {
-      setUploading(false);
-    }
-  }, []);
-
   const confirmDelete = useCallback(
     async () => {
       if (!deleteTarget?.id) return;
@@ -1992,46 +1977,31 @@ export default function AdminLessons() {
                   Image
                 </div>
                 {detailsRecord?.lessonImage ? (
-                  <div className="mt-2 space-y-2">
-                    {isImageUrl(detailsRecord.lessonImage) ? (
-                      <img
-                        src={detailsRecord.lessonImage}
-                        alt={detailsRecord.lessonTitle || "Lesson image"}
-                        className="max-h-48 rounded-xl border border-gray-200 object-cover"
-                      />
-                    ) : null}
-                    {isProbablyLink(detailsRecord.lessonImage) ? (
-                      <a
-                        href={detailsRecord.lessonImage}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sm text-blue-600 hover:text-blue-700"
-                      >
-                        {detailsRecord.lessonImage}
-                      </a>
-                    ) : null}
+                  <div className="mt-2 flex flex-wrap gap-3">
+                    {splitResources(detailsRecord.lessonImage).map((r) => (
+                      <div key={r} className="space-y-1">
+                        {isImageUrl(r) ? (
+                          <img
+                            src={r}
+                            alt={detailsRecord.lessonTitle || "Lesson image"}
+                            className="max-h-48 rounded-xl border border-gray-200 object-cover"
+                          />
+                        ) : null}
+                        {isProbablyLink(r) ? (
+                          <a
+                            href={r}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block text-sm text-blue-600 hover:text-blue-700"
+                          >
+                            {r}
+                          </a>
+                        ) : (
+                          <span className="block text-sm text-gray-800">{r}</span>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ) : false ? (
-                  <ul className="mt-2 hidden list-disc space-y-1 pl-5 text-sm">
-                    {splitResources(detailsRecord.additionalResources).map(
-                      (r) => (
-                        <li key={r}>
-                          {isProbablyLink(r) ? (
-                            <a
-                              href={r}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-blue-600 hover:text-blue-700"
-                            >
-                              {r}
-                            </a>
-                          ) : (
-                            <span className="text-gray-800">{r}</span>
-                          )}
-                        </li>
-                      ),
-                    )}
-                  </ul>
                 ) : (
                   <div className="mt-2 text-sm text-gray-600">—</div>
                 )}
@@ -2206,13 +2176,15 @@ export default function AdminLessons() {
               <Field label="Image (optional)" className="flex-1">
                 <input
                   type="file"
+                  multiple
                   accept=".png,.jpg,.jpeg,.webp,.gif"
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm disabled:opacity-60"
                   disabled={saving || uploadingAdditionalResources}
                   onChange={async (e) => {
                     const files = e.target.files;
-                    await uploadSingleToField(
+                    await uploadAndAppendToField(
                       files,
+                      editAdditionalResources,
                       setEditAdditionalResources,
                       setUploadingAdditionalResources,
                     );
@@ -2220,18 +2192,36 @@ export default function AdminLessons() {
                   }}
                 />
                 {editAdditionalResources ? (
-                  <div className="mt-2 space-y-2">
-                    {isImageUrl(editAdditionalResources) ? (
-                      <img
-                        src={editAdditionalResources}
-                        alt="Lesson"
-                        className="max-h-28 rounded-lg border border-gray-200 object-cover"
-                      />
-                    ) : null}
-                    <a href={editAdditionalResources} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 hover:text-blue-700">
-                      {editAdditionalResources}
-                    </a>
-                  </div>
+                  <ul className="mt-2 space-y-2">
+                    {splitResources(editAdditionalResources).map((r, i) => (
+                      <li key={`${r}-${i}`} className="space-y-1">
+                        {isImageUrl(r) ? (
+                          <img
+                            src={r}
+                            alt="Lesson"
+                            className="max-h-28 rounded-lg border border-gray-200 object-cover"
+                          />
+                        ) : null}
+                        <div className="flex items-center justify-between gap-2">
+                          <a href={r} target="_blank" rel="noreferrer" className="truncate text-xs text-blue-600 hover:text-blue-700">
+                            {r}
+                          </a>
+                          <button
+                            type="button"
+                            className="shrink-0 text-xs text-red-600 hover:text-red-700"
+                            disabled={saving || uploadingAdditionalResources}
+                            onClick={() => {
+                              const list = splitResources(editAdditionalResources);
+                              list.splice(i, 1);
+                              setEditAdditionalResources(list.join("\n"));
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 ) : null}
                 {uploadingAdditionalResources && (
                   <div className="text-xs text-gray-500 mt-1">Uploading...</div>
@@ -2435,13 +2425,15 @@ export default function AdminLessons() {
               <Field label="Image (optional)">
                 <input
                   type="file"
+                  multiple
                   accept=".png,.jpg,.jpeg,.webp,.gif"
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm disabled:opacity-60"
                   disabled={saving || uploadingAdditionalResources}
                   onChange={async (e) => {
                     const files = e.target.files;
-                    await uploadSingleToField(
+                    await uploadAndAppendToField(
                       files,
+                      newAdditionalResources,
                       setNewAdditionalResources,
                       setUploadingAdditionalResources,
                     );
@@ -2449,19 +2441,40 @@ export default function AdminLessons() {
                   }}
                 />
                 {newAdditionalResources ? (
-                  <div className="mt-2 space-y-2">
-                    {isImageUrl(newAdditionalResources) ? (
-                      <img
-                        src={newAdditionalResources}
-                        alt="Lesson"
-                        className="max-h-28 rounded-lg border border-gray-200 object-cover"
-                      />
-                    ) : null}
-                    <a href={newAdditionalResources} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 hover:text-blue-700">
-                      {newAdditionalResources}
-                    </a>
-                  </div>
+                  <ul className="mt-2 space-y-2">
+                    {splitResources(newAdditionalResources).map((r, i) => (
+                      <li key={`${r}-${i}`} className="space-y-1">
+                        {isImageUrl(r) ? (
+                          <img
+                            src={r}
+                            alt="Lesson"
+                            className="max-h-28 rounded-lg border border-gray-200 object-cover"
+                          />
+                        ) : null}
+                        <div className="flex items-center justify-between gap-2">
+                          <a href={r} target="_blank" rel="noreferrer" className="truncate text-xs text-blue-600 hover:text-blue-700">
+                            {r}
+                          </a>
+                          <button
+                            type="button"
+                            className="shrink-0 text-xs text-red-600 hover:text-red-700"
+                            disabled={saving || uploadingAdditionalResources}
+                            onClick={() => {
+                              const list = splitResources(newAdditionalResources);
+                              list.splice(i, 1);
+                              setNewAdditionalResources(list.join("\n"));
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 ) : null}
+                {uploadingAdditionalResources && (
+                  <div className="text-xs text-gray-500 mt-1">Uploading...</div>
+                )}
               </Field>
             </div>
 

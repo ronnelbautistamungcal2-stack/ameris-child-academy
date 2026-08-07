@@ -1366,7 +1366,7 @@ export default function AdminLessons() {
                     "Category",
                     "Progression Step",
                     "Lesson Attachment",
-                    "Image",
+                    "Additional Resources",
                     "Notes",
                     "Sheet",
                   ],
@@ -1974,7 +1974,7 @@ export default function AdminLessons() {
 
               <div>
                 <div className="text-xs font-semibold text-gray-700">
-                  Image
+                  Additional Resources
                 </div>
                 {detailsRecord?.lessonImage ? (
                   <div className="mt-2 flex flex-wrap gap-3">
@@ -2173,11 +2173,10 @@ export default function AdminLessons() {
                 )}
               </Field>
 
-              <Field label="Image (optional)" className="flex-1">
+              <Field label="Additional Resources (optional)" className="flex-1">
                 <input
                   type="file"
                   multiple
-                  accept=".png,.jpg,.jpeg,.webp,.gif"
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm disabled:opacity-60"
                   disabled={saving || uploadingAdditionalResources}
                   onChange={async (e) => {
@@ -2422,11 +2421,10 @@ export default function AdminLessons() {
                   <div className="text-xs text-gray-500 mt-1">Uploading...</div>
                 )}
               </Field>
-              <Field label="Image (optional)">
+              <Field label="Additional Resources (optional)">
                 <input
                   type="file"
                   multiple
-                  accept=".png,.jpg,.jpeg,.webp,.gif"
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm disabled:opacity-60"
                   disabled={saving || uploadingAdditionalResources}
                   onChange={async (e) => {

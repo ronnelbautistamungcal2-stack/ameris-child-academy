@@ -3,12 +3,12 @@ import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 
-const MAX_BYTES = 10 * 1024 * 1024; // 10MB
+const MAX_BYTES = 25 * 1024 * 1024; // 25MB
 
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: "15mb",
+      sizeLimit: "40mb",
     },
   },
 };
@@ -46,7 +46,7 @@ export default async function handler(req, res) {
 
   if (!buffer.length) return res.status(400).json({ error: "Empty file" });
   if (buffer.length > MAX_BYTES) {
-    return res.status(413).json({ error: "File too large (max 10MB)" });
+    return res.status(413).json({ error: "File too large (max 25MB)" });
   }
 
   const base = safeBaseName(filename);

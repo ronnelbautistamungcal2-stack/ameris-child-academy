@@ -1216,11 +1216,11 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
 
       {showCompose ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm dark:bg-black/60"
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-gray-900/40 p-4 backdrop-blur-sm dark:bg-black/60 sm:items-center"
           onClick={closeCompose}
         >
           <div
-            className="w-full max-w-xl rounded-3xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800"
+            className="my-8 max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">

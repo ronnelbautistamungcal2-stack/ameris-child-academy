@@ -264,6 +264,33 @@ function splitResources(value) {
     .filter(Boolean);
 }
 
+function emptySupplyRow() {
+  return { name: "", quantity: 1, quantityType: "total", unit: "" };
+}
+
+function supplyRowsFromLesson(lesson) {
+  return (lesson?.supplies || []).map((s) => ({
+    name: s.name || "",
+    quantity: s.quantity || 1,
+    quantityType: s.quantityType === "per_student" ? "per_student" : "total",
+    unit: s.unit || "",
+  }));
+}
+
+function addSupplyRow(setRows) {
+  setRows((prev) => [...prev, emptySupplyRow()]);
+}
+
+function removeSupplyRow(setRows, index) {
+  setRows((prev) => prev.filter((_, i) => i !== index));
+}
+
+function updateSupplyRow(setRows, index, field, value) {
+  setRows((prev) =>
+    prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)),
+  );
+}
+
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -481,6 +508,15 @@ function IconClipboard(props) {
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
       <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       <rect x="8" y="2" width="8" height="4" rx="1" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function IconCopy(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -703,6 +739,81 @@ function Field({ label, children }) {
   );
 }
 
+function SupplyRowsEditor({ rows, setRows, disabled }) {
+  return (
+    <div>
+      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+        Supplies List (optional)
+      </div>
+      {rows.length ? (
+        <div className="space-y-2">
+          {rows.map((row, idx) => (
+            <div key={idx} className="flex flex-wrap items-center gap-2">
+              <input
+                className="min-w-[10rem] flex-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm"
+                placeholder="Supply name"
+                value={row.name}
+                onChange={(e) => updateSupplyRow(setRows, idx, "name", e.target.value)}
+                disabled={disabled}
+              />
+              <input
+                type="number"
+                min="1"
+                className="w-16 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-center"
+                placeholder="Qty"
+                value={row.quantity}
+                onChange={(e) => updateSupplyRow(setRows, idx, "quantity", parseInt(e.target.value, 10) || 1)}
+                disabled={disabled}
+              />
+              <select
+                className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm"
+                value={row.quantityType || "total"}
+                onChange={(e) => updateSupplyRow(setRows, idx, "quantityType", e.target.value)}
+                disabled={disabled}
+              >
+                <option value="total">Total</option>
+                <option value="per_student">Per Student</option>
+              </select>
+              <input
+                className="w-24 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm"
+                placeholder="Unit"
+                value={row.unit}
+                onChange={(e) => updateSupplyRow(setRows, idx, "unit", e.target.value)}
+                disabled={disabled}
+              />
+              <button
+                type="button"
+                className="shrink-0 text-xs font-semibold text-red-600 hover:text-red-700"
+                onClick={() => removeSupplyRow(setRows, idx)}
+                disabled={disabled}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-sm text-gray-500">No supplies added yet.</div>
+      )}
+      <button
+        type="button"
+        className="mt-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+        onClick={() => addSupplyRow(setRows)}
+        disabled={disabled}
+      >
+        + Add Supply
+      </button>
+      <p className="mt-1 text-xs text-gray-500">
+        Supplies added here automatically appear on the center&apos;s{" "}
+        <a href="/admin/supply-lists" className="font-semibold text-sky-700 hover:text-sky-800">
+          Supply List
+        </a>
+        .
+      </p>
+    </div>
+  );
+}
+
 export default function AdminLessons() {
   const [centers, setCenters] = useState([]);
   const [lessons, setLessons] = useState([]);
@@ -712,8 +823,6 @@ export default function AdminLessons() {
   const [importing, setImporting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingResource, setUploadingResource] = useState(false);
-  const [uploadingAdditionalResources, setUploadingAdditionalResources] =
-    useState(false);
   const [error, setError] = useState("");
   const [importResult, setImportResult] = useState(null);
 
@@ -739,8 +848,17 @@ export default function AdminLessons() {
   const [editStep, setEditStep] = useState("");
   const [editTestingQuestion, setEditTestingQuestion] = useState("");
   const [editResource, setEditResource] = useState("");
-  const [editAdditionalResources, setEditAdditionalResources] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [editLink, setEditLink] = useState("");
+  const [editEssentialQuestions, setEditEssentialQuestions] = useState("");
+  const [editKeyVocabulary, setEditKeyVocabulary] = useState("");
+  const [editNotesToTeacher, setEditNotesToTeacher] = useState("");
+  const [editIntroduction, setEditIntroduction] = useState("");
+  const [editInstructionalSetting, setEditInstructionalSetting] = useState("");
+  const [editLearningActivities, setEditLearningActivities] = useState("");
+  const [editAccommodations, setEditAccommodations] = useState("");
+  const [editTimeRequired, setEditTimeRequired] = useState("");
+  const [editSupplyRows, setEditSupplyRows] = useState([]);
 
   const [toast, setToast] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -756,8 +874,17 @@ export default function AdminLessons() {
   const [newStep, setNewStep] = useState("");
   const [newTestingQuestion, setNewTestingQuestion] = useState("");
   const [newResource, setNewResource] = useState("");
-  const [newAdditionalResources, setNewAdditionalResources] = useState("");
   const [newNotes, setNewNotes] = useState("");
+  const [newLink, setNewLink] = useState("");
+  const [newEssentialQuestions, setNewEssentialQuestions] = useState("");
+  const [newKeyVocabulary, setNewKeyVocabulary] = useState("");
+  const [newNotesToTeacher, setNewNotesToTeacher] = useState("");
+  const [newIntroduction, setNewIntroduction] = useState("");
+  const [newInstructionalSetting, setNewInstructionalSetting] = useState("");
+  const [newLearningActivities, setNewLearningActivities] = useState("");
+  const [newAccommodations, setNewAccommodations] = useState("");
+  const [newTimeRequired, setNewTimeRequired] = useState("");
+  const [newSupplyRows, setNewSupplyRows] = useState([]);
 
   const loading = loadingCenters || loadingLessons;
 
@@ -842,6 +969,7 @@ export default function AdminLessons() {
         const pc = goal?.passingCriteria || {};
         out.push({
           id: goal?.id,
+          lessonId: lesson?.id,
           refId: String(pc.reference ?? ""),
           lessonTitle: String(pc.lesson ?? lesson?.title ?? ""),
           subject: normalizeSubjectForRef({
@@ -860,9 +988,18 @@ export default function AdminLessons() {
           resource: String(pc.resource ?? ""),
           additionalResources: String(pc.additionalResources ?? ""),
           lessonAttachment: String(pc.lessonAttachment ?? pc.resource ?? ""),
-          lessonImage: String(pc.lessonImage ?? pc.additionalResources ?? ""),
           notes: String(pc.notes ?? ""),
           sheet: String(pc.sheet ?? ""),
+          link: String(pc.link ?? ""),
+          essentialQuestions: String(pc.essentialQuestions ?? ""),
+          keyVocabulary: String(pc.keyVocabulary ?? ""),
+          notesToTeacher: String(pc.notesToTeacher ?? ""),
+          introduction: String(pc.introduction ?? ""),
+          instructionalSetting: String(pc.instructionalSetting ?? ""),
+          learningActivities: String(pc.learningActivities ?? ""),
+          accommodations: String(pc.accommodations ?? ""),
+          timeRequired: String(pc.timeRequired ?? ""),
+          supplies: Array.isArray(lesson?.supplies) ? lesson.supplies : [],
         });
       }
     }
@@ -1106,8 +1243,17 @@ export default function AdminLessons() {
     setEditStep(String(rec?.progressionStep || ""));
     setEditTestingQuestion(String(rec?.testingQuestion || ""));
     setEditResource(String(rec?.lessonAttachment || ""));
-    setEditAdditionalResources(String(rec?.lessonImage || ""));
     setEditNotes(String(rec?.notes || ""));
+    setEditLink(String(rec?.link || ""));
+    setEditEssentialQuestions(String(rec?.essentialQuestions || ""));
+    setEditKeyVocabulary(String(rec?.keyVocabulary || ""));
+    setEditNotesToTeacher(String(rec?.notesToTeacher || ""));
+    setEditIntroduction(String(rec?.introduction || ""));
+    setEditInstructionalSetting(String(rec?.instructionalSetting || ""));
+    setEditLearningActivities(String(rec?.learningActivities || ""));
+    setEditAccommodations(String(rec?.accommodations || ""));
+    setEditTimeRequired(String(rec?.timeRequired || ""));
+    setEditSupplyRows(supplyRowsFromLesson(rec));
     setEditOpen(true);
   }, []);
 
@@ -1153,13 +1299,49 @@ export default function AdminLessons() {
     setNewStep("");
     setNewTestingQuestion("");
     setNewResource("");
-    setNewAdditionalResources("");
     setNewNotes("");
+    setNewLink("");
+    setNewEssentialQuestions("");
+    setNewKeyVocabulary("");
+    setNewNotesToTeacher("");
+    setNewIntroduction("");
+    setNewInstructionalSetting("");
+    setNewLearningActivities("");
+    setNewAccommodations("");
+    setNewTimeRequired("");
+    setNewSupplyRows([]);
     setCreateOpen(true);
   }, []);
 
   const closeCreate = useCallback(() => {
     setCreateOpen(false);
+  }, []);
+
+  const openDuplicate = useCallback((rec) => {
+    if (!rec) return;
+    setError("");
+    setNewLessonTitle(String(rec.lessonTitle || ""));
+    setNewChildAge(String(rec.childAge || ""));
+    setNewTerm(normalizeLessonTerm(rec.term || ""));
+    setNewCategory(normalizeLessonCategory(rec.category || ""));
+    setNewSubject(String(rec.subject || ""));
+    setNewReference("");
+    const step = normalizeSpaces(rec.progressionStep || "");
+    setNewStep(step ? `${step} (Copy)` : "");
+    setNewTestingQuestion(String(rec.testingQuestion || ""));
+    setNewResource(String(rec.lessonAttachment || ""));
+    setNewNotes(String(rec.notes || ""));
+    setNewLink(String(rec.link || ""));
+    setNewEssentialQuestions(String(rec.essentialQuestions || ""));
+    setNewKeyVocabulary(String(rec.keyVocabulary || ""));
+    setNewNotesToTeacher(String(rec.notesToTeacher || ""));
+    setNewIntroduction(String(rec.introduction || ""));
+    setNewInstructionalSetting(String(rec.instructionalSetting || ""));
+    setNewLearningActivities(String(rec.learningActivities || ""));
+    setNewAccommodations(String(rec.accommodations || ""));
+    setNewTimeRequired(String(rec.timeRequired || ""));
+    setNewSupplyRows(supplyRowsFromLesson(rec));
+    setCreateOpen(true);
   }, []);
 
   const saveNewRecord = useCallback(
@@ -1190,8 +1372,17 @@ export default function AdminLessons() {
             reference: normalizeSpaces(newReference),
             progressionStep: step,
             lessonAttachment: String(newResource || ""),
-            lessonImage: String(newAdditionalResources || ""),
             notes: String(newNotes || ""),
+            link: normalizeSpaces(newLink),
+            essentialQuestions: String(newEssentialQuestions || ""),
+            keyVocabulary: String(newKeyVocabulary || ""),
+            notesToTeacher: String(newNotesToTeacher || ""),
+            introduction: String(newIntroduction || ""),
+            instructionalSetting: normalizeSpaces(newInstructionalSetting),
+            learningActivities: String(newLearningActivities || ""),
+            accommodations: String(newAccommodations || ""),
+            timeRequired: normalizeSpaces(newTimeRequired),
+            supplies: newSupplyRows.filter((s) => normalizeSpaces(s.name)),
           }),
         });
         setCreateOpen(false);
@@ -1206,16 +1397,25 @@ export default function AdminLessons() {
     },
     [
       mainCenter?.id,
-      newAdditionalResources,
+      newAccommodations,
       newCategory,
       newChildAge,
+      newEssentialQuestions,
+      newIntroduction,
+      newInstructionalSetting,
+      newKeyVocabulary,
+      newLearningActivities,
       newLessonTitle,
+      newLink,
       newNotes,
+      newNotesToTeacher,
       newReference,
       newResource,
       newStep,
       newSubject,
+      newSupplyRows,
       newTerm,
+      newTimeRequired,
       refreshLessons,
     ],
   );
@@ -1249,8 +1449,17 @@ export default function AdminLessons() {
               reference: normalizeSpaces(editReference),
               progressionStep: step,
               lessonAttachment: String(editResource || ""),
-              lessonImage: String(editAdditionalResources || ""),
               notes: String(editNotes || ""),
+              link: normalizeSpaces(editLink),
+              essentialQuestions: String(editEssentialQuestions || ""),
+              keyVocabulary: String(editKeyVocabulary || ""),
+              notesToTeacher: String(editNotesToTeacher || ""),
+              introduction: String(editIntroduction || ""),
+              instructionalSetting: normalizeSpaces(editInstructionalSetting),
+              learningActivities: String(editLearningActivities || ""),
+              accommodations: String(editAccommodations || ""),
+              timeRequired: normalizeSpaces(editTimeRequired),
+              supplies: editSupplyRows.filter((s) => normalizeSpaces(s.name)),
             }),
           },
         );
@@ -1266,17 +1475,26 @@ export default function AdminLessons() {
       }
     },
     [
-      editAdditionalResources,
+      editAccommodations,
       editCategory,
       editChildAge,
+      editEssentialQuestions,
+      editIntroduction,
+      editInstructionalSetting,
+      editKeyVocabulary,
+      editLearningActivities,
       editLessonTitle,
+      editLink,
       editNotes,
+      editNotesToTeacher,
       editRecord?.id,
       editReference,
       editResource,
       editStep,
       editSubject,
+      editSupplyRows,
       editTerm,
+      editTimeRequired,
       refreshLessons,
     ],
   );
@@ -1365,7 +1583,15 @@ export default function AdminLessons() {
                     "Term",
                     "Category",
                     "Progression Step",
-                    "Lesson Attachment",
+                    "Link",
+                    "Time Required",
+                    "Instructional Setting",
+                    "Introduction",
+                    "Essential Questions",
+                    "Key Vocabulary",
+                    "Learning Activities",
+                    "Accommodations/Modifications",
+                    "Notes to Teacher",
                     "Additional Resources",
                     "Notes",
                     "Sheet",
@@ -1378,8 +1604,16 @@ export default function AdminLessons() {
                     r.term,
                     r.category,
                     r.progressionStep,
+                    r.link,
+                    r.timeRequired,
+                    r.instructionalSetting,
+                    r.introduction,
+                    r.essentialQuestions,
+                    r.keyVocabulary,
+                    r.learningActivities,
+                    r.accommodations,
+                    r.notesToTeacher,
                     r.lessonAttachment,
-                    r.lessonImage,
                     r.notes,
                     r.sheet,
                   ]),
@@ -1776,6 +2010,15 @@ export default function AdminLessons() {
                           </button>
                           <button
                             type="button"
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-60 transition-colors"
+                            onClick={() => openDuplicate(r)}
+                            disabled={saving || !mainCenter?.id}
+                            title="Duplicate"
+                          >
+                            <IconCopy className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
                             className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs font-semibold text-red-600 shadow-sm hover:bg-red-50 disabled:opacity-60 transition-colors"
                             onClick={() => setDeleteTarget(r)}
                             disabled={!r.id}
@@ -1890,6 +2133,18 @@ export default function AdminLessons() {
               </button>
               <button
                 type="button"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 transition-colors"
+                onClick={() => {
+                  closeDetails();
+                  openDuplicate(detailsRecord);
+                }}
+                disabled={saving || !mainCenter?.id}
+              >
+                <IconCopy className="h-3.5 w-3.5" />
+                Duplicate
+              </button>
+              <button
+                type="button"
                 className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60 transition-colors"
                 onClick={() => {
                   closeDetails();
@@ -1917,12 +2172,27 @@ export default function AdminLessons() {
                     { label: "Subject", value: detailsRecord?.subject },
                     { label: "Term", value: detailsRecord?.term },
                     { label: "Sheet", value: detailsRecord?.sheet },
+                    { label: "Time Required", value: detailsRecord?.timeRequired },
+                    { label: "Setting", value: detailsRecord?.instructionalSetting },
                   ].map(({ label, value }) => (
                     <div key={label} className="flex items-baseline gap-2 text-sm">
-                      <span className="flex-shrink-0 text-xs font-semibold text-gray-500 w-16">{label}</span>
+                      <span className="flex-shrink-0 text-xs font-semibold text-gray-500 w-24">{label}</span>
                       <span className="text-gray-800">{value || "—"}</span>
                     </div>
                   ))}
+                  {detailsRecord?.link ? (
+                    <div className="flex items-baseline gap-2 text-sm">
+                      <span className="flex-shrink-0 text-xs font-semibold text-gray-500 w-24">Link</span>
+                      <a
+                        href={detailsRecord.link}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="truncate text-blue-600 hover:text-blue-700"
+                      >
+                        {detailsRecord.link}
+                      </a>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -1940,73 +2210,85 @@ export default function AdminLessons() {
           </div>
 
           <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
+              Teacher Guide
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {[
+                { label: "Introduction", value: detailsRecord?.introduction },
+                { label: "Essential Questions", value: detailsRecord?.essentialQuestions },
+                { label: "Key Vocabulary", value: detailsRecord?.keyVocabulary },
+                { label: "Learning Activities", value: detailsRecord?.learningActivities },
+                { label: "Accommodations/Modifications", value: detailsRecord?.accommodations },
+                { label: "Notes to Teacher", value: detailsRecord?.notesToTeacher },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <div className="text-xs font-semibold text-gray-700">{label}</div>
+                  <div className="mt-1 whitespace-pre-wrap text-sm text-gray-800">
+                    {value || <span className="text-gray-500">—</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
             <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
               Lesson Assets
             </div>
-            <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div>
-                <div className="text-xs font-semibold text-gray-700">
-                  Lesson Attachment
-                </div>
-                {detailsRecord?.lessonAttachment ? (
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-                    {splitResources(detailsRecord.lessonAttachment).map((r) => (
-                      <li key={r}>
-                        {isProbablyLink(r) ? (
-                          <a
-                            href={r}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-blue-600 hover:text-blue-700"
-                          >
-                            {r}
-                          </a>
-                        ) : (
-                          <span className="text-gray-800">{r}</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="mt-2 text-sm text-gray-600">—</div>
-                )}
+            <div className="mt-2">
+              <div className="text-xs font-semibold text-gray-700">
+                Additional Resources
               </div>
-
-              <div>
-                <div className="text-xs font-semibold text-gray-700">
-                  Additional Resources
-                </div>
-                {detailsRecord?.lessonImage ? (
-                  <div className="mt-2 flex flex-wrap gap-3">
-                    {splitResources(detailsRecord.lessonImage).map((r) => (
-                      <div key={r} className="space-y-1">
-                        {isImageUrl(r) ? (
-                          <img
-                            src={r}
-                            alt={detailsRecord.lessonTitle || "Lesson image"}
-                            className="max-h-48 rounded-xl border border-gray-200 object-cover"
-                          />
-                        ) : null}
-                        {isProbablyLink(r) ? (
-                          <a
-                            href={r}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block text-sm text-blue-600 hover:text-blue-700"
-                          >
-                            {r}
-                          </a>
-                        ) : (
-                          <span className="block text-sm text-gray-800">{r}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mt-2 text-sm text-gray-600">—</div>
-                )}
-              </div>
+              {detailsRecord?.lessonAttachment ? (
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                  {splitResources(detailsRecord.lessonAttachment).map((r) => (
+                    <li key={r}>
+                      {isProbablyLink(r) ? (
+                        <a
+                          href={r}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          {r}
+                        </a>
+                      ) : (
+                        <span className="text-gray-800">{r}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="mt-2 text-sm text-gray-600">—</div>
+              )}
             </div>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Supplies List
+            </div>
+            {detailsRecord?.supplies?.length ? (
+              <div className="mt-2 space-y-1.5">
+                {detailsRecord.supplies.map((s) => (
+                  <div
+                    key={s.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm"
+                  >
+                    <span className="font-semibold text-gray-900">{s.name}</span>
+                    <span className="text-gray-600">
+                      x{s.quantity}
+                      {s.unit ? ` ${s.unit}` : ""}
+                      {" · "}
+                      {s.quantityType === "per_student" ? "Per Student" : "Total"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-2 text-sm text-gray-600">—</div>
+            )}
           </div>
         </Modal>
       ) : null}
@@ -2126,107 +2408,146 @@ export default function AdminLessons() {
               </Field>
             </div>
 
-            <div className="flex flex-col md:flex-row md:space-x-4 space-y-3 md:space-y-0">
-              <Field label="Lesson Attachment (optional)" className="flex-1">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <Field label="Link (optional)">
                 <input
-                  type="file"
-                  multiple
-                  accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.webp"
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm disabled:opacity-60"
-                  disabled={saving || uploadingResource}
-                  onChange={async (e) => {
-                    const files = e.target.files;
-                    await uploadAndAppendToField(
-                      files,
-                      editResource,
-                      setEditResource,
-                      setUploadingResource,
-                    );
-                    e.target.value = "";
-                  }}
+                  type="url"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={editLink}
+                  onChange={(e) => setEditLink(e.target.value)}
+                  placeholder="https://…"
+                  disabled={saving}
                 />
-                {editResource ? (
-                  <ul className="mt-2 space-y-1">
-                    {splitResources(editResource).map((r, i) => (
-                      <li key={`${r}-${i}`} className="flex items-center justify-between gap-2">
-                        <a href={r} target="_blank" rel="noreferrer" className="truncate text-xs text-blue-600 hover:text-blue-700">
-                          {r}
-                        </a>
-                        <button
-                          type="button"
-                          className="shrink-0 text-xs text-red-600 hover:text-red-700"
-                          disabled={saving || uploadingResource}
-                          onClick={() => {
-                            const list = splitResources(editResource);
-                            list.splice(i, 1);
-                            setEditResource(list.join("\n"));
-                          }}
-                        >
-                          Remove
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-                {uploadingResource && (
-                  <div className="text-xs text-gray-500 mt-1">Uploading...</div>
-                )}
               </Field>
-
-              <Field label="Additional Resources (optional)" className="flex-1">
+              <Field label="Time Required (optional)">
                 <input
-                  type="file"
-                  multiple
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm disabled:opacity-60"
-                  disabled={saving || uploadingAdditionalResources}
-                  onChange={async (e) => {
-                    const files = e.target.files;
-                    await uploadAndAppendToField(
-                      files,
-                      editAdditionalResources,
-                      setEditAdditionalResources,
-                      setUploadingAdditionalResources,
-                    );
-                    e.target.value = "";
-                  }}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={editTimeRequired}
+                  onChange={(e) => setEditTimeRequired(e.target.value)}
+                  placeholder="e.g. 30 minutes"
+                  disabled={saving}
                 />
-                {editAdditionalResources ? (
-                  <ul className="mt-2 space-y-2">
-                    {splitResources(editAdditionalResources).map((r, i) => (
-                      <li key={`${r}-${i}`} className="space-y-1">
-                        {isImageUrl(r) ? (
-                          <img
-                            src={r}
-                            alt="Lesson"
-                            className="max-h-28 rounded-lg border border-gray-200 object-cover"
-                          />
-                        ) : null}
-                        <div className="flex items-center justify-between gap-2">
-                          <a href={r} target="_blank" rel="noreferrer" className="truncate text-xs text-blue-600 hover:text-blue-700">
-                            {r}
-                          </a>
-                          <button
-                            type="button"
-                            className="shrink-0 text-xs text-red-600 hover:text-red-700"
-                            disabled={saving || uploadingAdditionalResources}
-                            onClick={() => {
-                              const list = splitResources(editAdditionalResources);
-                              list.splice(i, 1);
-                              setEditAdditionalResources(list.join("\n"));
-                            }}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-                {uploadingAdditionalResources && (
-                  <div className="text-xs text-gray-500 mt-1">Uploading...</div>
-                )}
+              </Field>
+              <Field label="Instructional Setting (optional)">
+                <input
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={editInstructionalSetting}
+                  onChange={(e) => setEditInstructionalSetting(e.target.value)}
+                  placeholder="e.g. Small group"
+                  disabled={saving}
+                />
               </Field>
             </div>
+
+            <Field label="Introduction (optional)">
+              <textarea
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                value={editIntroduction}
+                onChange={(e) => setEditIntroduction(e.target.value)}
+                rows={2}
+                disabled={saving}
+              />
+            </Field>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <Field label="Essential Questions (optional)">
+                <textarea
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={editEssentialQuestions}
+                  onChange={(e) => setEditEssentialQuestions(e.target.value)}
+                  rows={2}
+                  disabled={saving}
+                />
+              </Field>
+              <Field label="Key Vocabulary (optional)">
+                <textarea
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={editKeyVocabulary}
+                  onChange={(e) => setEditKeyVocabulary(e.target.value)}
+                  rows={2}
+                  disabled={saving}
+                />
+              </Field>
+            </div>
+
+            <Field label="Learning Activities (optional)">
+              <textarea
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                value={editLearningActivities}
+                onChange={(e) => setEditLearningActivities(e.target.value)}
+                rows={3}
+                disabled={saving}
+              />
+            </Field>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <Field label="Accommodations/Modifications (optional)">
+                <textarea
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={editAccommodations}
+                  onChange={(e) => setEditAccommodations(e.target.value)}
+                  rows={2}
+                  disabled={saving}
+                />
+              </Field>
+              <Field label="Notes to Teacher (optional)">
+                <textarea
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={editNotesToTeacher}
+                  onChange={(e) => setEditNotesToTeacher(e.target.value)}
+                  rows={2}
+                  disabled={saving}
+                />
+              </Field>
+            </div>
+
+            <SupplyRowsEditor rows={editSupplyRows} setRows={setEditSupplyRows} disabled={saving} />
+
+            <Field label="Additional Resources (optional)">
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.webp"
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm disabled:opacity-60"
+                disabled={saving || uploadingResource}
+                onChange={async (e) => {
+                  const files = e.target.files;
+                  await uploadAndAppendToField(
+                    files,
+                    editResource,
+                    setEditResource,
+                    setUploadingResource,
+                  );
+                  e.target.value = "";
+                }}
+              />
+              {editResource ? (
+                <ul className="mt-2 space-y-1">
+                  {splitResources(editResource).map((r, i) => (
+                    <li key={`${r}-${i}`} className="flex items-center justify-between gap-2">
+                      <a href={r} target="_blank" rel="noreferrer" className="truncate text-xs text-blue-600 hover:text-blue-700">
+                        {r}
+                      </a>
+                      <button
+                        type="button"
+                        className="shrink-0 text-xs text-red-600 hover:text-red-700"
+                        disabled={saving || uploadingResource}
+                        onClick={() => {
+                          const list = splitResources(editResource);
+                          list.splice(i, 1);
+                          setEditResource(list.join("\n"));
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {uploadingResource && (
+                <div className="text-xs text-gray-500 mt-1">Uploading...</div>
+              )}
+            </Field>
 
             <Field label="Notes (optional)">
               <textarea
@@ -2375,106 +2696,146 @@ export default function AdminLessons() {
               </Field>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <Field label="Lesson Attachment (optional)">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <Field label="Link (optional)">
                 <input
-                  type="file"
-                  multiple
-                  accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.webp"
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm disabled:opacity-60"
-                  disabled={saving || uploadingResource}
-                  onChange={async (e) => {
-                    const files = e.target.files;
-                    await uploadAndAppendToField(
-                      files,
-                      newResource,
-                      setNewResource,
-                      setUploadingResource,
-                    );
-                    e.target.value = "";
-                  }}
+                  type="url"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={newLink}
+                  onChange={(e) => setNewLink(e.target.value)}
+                  placeholder="https://…"
+                  disabled={saving}
                 />
-                {newResource ? (
-                  <ul className="mt-2 space-y-1">
-                    {splitResources(newResource).map((r, i) => (
-                      <li key={`${r}-${i}`} className="flex items-center justify-between gap-2">
-                        <a href={r} target="_blank" rel="noreferrer" className="truncate text-xs text-blue-600 hover:text-blue-700">
-                          {r}
-                        </a>
-                        <button
-                          type="button"
-                          className="shrink-0 text-xs text-red-600 hover:text-red-700"
-                          disabled={saving || uploadingResource}
-                          onClick={() => {
-                            const list = splitResources(newResource);
-                            list.splice(i, 1);
-                            setNewResource(list.join("\n"));
-                          }}
-                        >
-                          Remove
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-                {uploadingResource && (
-                  <div className="text-xs text-gray-500 mt-1">Uploading...</div>
-                )}
               </Field>
-              <Field label="Additional Resources (optional)">
+              <Field label="Time Required (optional)">
                 <input
-                  type="file"
-                  multiple
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm disabled:opacity-60"
-                  disabled={saving || uploadingAdditionalResources}
-                  onChange={async (e) => {
-                    const files = e.target.files;
-                    await uploadAndAppendToField(
-                      files,
-                      newAdditionalResources,
-                      setNewAdditionalResources,
-                      setUploadingAdditionalResources,
-                    );
-                    e.target.value = "";
-                  }}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={newTimeRequired}
+                  onChange={(e) => setNewTimeRequired(e.target.value)}
+                  placeholder="e.g. 30 minutes"
+                  disabled={saving}
                 />
-                {newAdditionalResources ? (
-                  <ul className="mt-2 space-y-2">
-                    {splitResources(newAdditionalResources).map((r, i) => (
-                      <li key={`${r}-${i}`} className="space-y-1">
-                        {isImageUrl(r) ? (
-                          <img
-                            src={r}
-                            alt="Lesson"
-                            className="max-h-28 rounded-lg border border-gray-200 object-cover"
-                          />
-                        ) : null}
-                        <div className="flex items-center justify-between gap-2">
-                          <a href={r} target="_blank" rel="noreferrer" className="truncate text-xs text-blue-600 hover:text-blue-700">
-                            {r}
-                          </a>
-                          <button
-                            type="button"
-                            className="shrink-0 text-xs text-red-600 hover:text-red-700"
-                            disabled={saving || uploadingAdditionalResources}
-                            onClick={() => {
-                              const list = splitResources(newAdditionalResources);
-                              list.splice(i, 1);
-                              setNewAdditionalResources(list.join("\n"));
-                            }}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-                {uploadingAdditionalResources && (
-                  <div className="text-xs text-gray-500 mt-1">Uploading...</div>
-                )}
+              </Field>
+              <Field label="Instructional Setting (optional)">
+                <input
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={newInstructionalSetting}
+                  onChange={(e) => setNewInstructionalSetting(e.target.value)}
+                  placeholder="e.g. Small group"
+                  disabled={saving}
+                />
               </Field>
             </div>
+
+            <Field label="Introduction (optional)">
+              <textarea
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                value={newIntroduction}
+                onChange={(e) => setNewIntroduction(e.target.value)}
+                rows={2}
+                disabled={saving}
+              />
+            </Field>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <Field label="Essential Questions (optional)">
+                <textarea
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={newEssentialQuestions}
+                  onChange={(e) => setNewEssentialQuestions(e.target.value)}
+                  rows={2}
+                  disabled={saving}
+                />
+              </Field>
+              <Field label="Key Vocabulary (optional)">
+                <textarea
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={newKeyVocabulary}
+                  onChange={(e) => setNewKeyVocabulary(e.target.value)}
+                  rows={2}
+                  disabled={saving}
+                />
+              </Field>
+            </div>
+
+            <Field label="Learning Activities (optional)">
+              <textarea
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                value={newLearningActivities}
+                onChange={(e) => setNewLearningActivities(e.target.value)}
+                rows={3}
+                disabled={saving}
+              />
+            </Field>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <Field label="Accommodations/Modifications (optional)">
+                <textarea
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={newAccommodations}
+                  onChange={(e) => setNewAccommodations(e.target.value)}
+                  rows={2}
+                  disabled={saving}
+                />
+              </Field>
+              <Field label="Notes to Teacher (optional)">
+                <textarea
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={newNotesToTeacher}
+                  onChange={(e) => setNewNotesToTeacher(e.target.value)}
+                  rows={2}
+                  disabled={saving}
+                />
+              </Field>
+            </div>
+
+            <SupplyRowsEditor rows={newSupplyRows} setRows={setNewSupplyRows} disabled={saving} />
+
+            <Field label="Additional Resources (optional)">
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.webp"
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm disabled:opacity-60"
+                disabled={saving || uploadingResource}
+                onChange={async (e) => {
+                  const files = e.target.files;
+                  await uploadAndAppendToField(
+                    files,
+                    newResource,
+                    setNewResource,
+                    setUploadingResource,
+                  );
+                  e.target.value = "";
+                }}
+              />
+              {newResource ? (
+                <ul className="mt-2 space-y-1">
+                  {splitResources(newResource).map((r, i) => (
+                    <li key={`${r}-${i}`} className="flex items-center justify-between gap-2">
+                      <a href={r} target="_blank" rel="noreferrer" className="truncate text-xs text-blue-600 hover:text-blue-700">
+                        {r}
+                      </a>
+                      <button
+                        type="button"
+                        className="shrink-0 text-xs text-red-600 hover:text-red-700"
+                        disabled={saving || uploadingResource}
+                        onClick={() => {
+                          const list = splitResources(newResource);
+                          list.splice(i, 1);
+                          setNewResource(list.join("\n"));
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {uploadingResource && (
+                <div className="text-xs text-gray-500 mt-1">Uploading...</div>
+              )}
+            </Field>
 
             <Field label="Notes (optional)">
               <textarea

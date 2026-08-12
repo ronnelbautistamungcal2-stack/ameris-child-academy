@@ -218,15 +218,18 @@ export default function TeacherChecklists() {
             Select a center to view the assigned checklist for that day.
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
             {/* Daily task checklist */}
-            <TeacherDailyChecklist centerId={centerId} classId={classId} selectedDate={selectedDate} />
-            {/* Weekly lesson plan (read-only, admin-assigned) — full width so the whole week is visible without scrolling */}
-            <div className="space-y-3">
+            <div className="min-w-0 flex-1">
+              <TeacherDailyChecklist centerId={centerId} classId={classId} selectedDate={selectedDate} />
+            </div>
+            {/* Weekly lesson plan (read-only, admin-assigned) — pinned to the right so it's always visible; shows one day at a time to avoid cutting off the week */}
+            <div className="w-full space-y-3 lg:sticky lg:top-20 lg:w-[360px] lg:shrink-0">
               <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
                 <h3 className="text-sm font-extrabold text-gray-900">Weekly Lesson Plan</h3>
                 <p className="mt-0.5 text-xs text-gray-500">
-                  Lessons assigned by admin for this week. Click any lesson to view its attachment.
+                  Lessons assigned by admin for this week. Use the arrows to move between days.
+                  Click any lesson to view its attachment.
                 </p>
               </div>
               {!classId ? (
@@ -235,7 +238,7 @@ export default function TeacherChecklists() {
                 </div>
               ) : (
                 <>
-                  <WeeklyLessonPlanner centerId={centerId} classId={classId} mode="teacher" />
+                  <WeeklyLessonPlanner centerId={centerId} classId={classId} mode="teacher" singleDay />
                   <NextWeekSupplies centerId={centerId} classRoomId={classId} />
                 </>
               )}

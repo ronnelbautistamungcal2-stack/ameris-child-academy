@@ -47,6 +47,7 @@ export default async function handler(req, res) {
     include: {
       items: { orderBy: [{ taskTime: "asc" }, { sortOrder: "asc" }] },
       classrooms: true,
+      assignees: true,
     },
   });
   if (!source) return res.status(404).json({ error: "Checklist not found" });
@@ -61,6 +62,9 @@ export default async function handler(req, res) {
         ? { create: source.classrooms.map((c) => ({ classRoomId: c.classRoomId })) }
         : undefined,
       assignedUserId: source.assignedUserId,
+      assignees: source.assignees.length
+        ? { create: source.assignees.map((a) => ({ userId: a.userId })) }
+        : undefined,
       title: nextTitle,
       description: source.description,
       category: source.category,

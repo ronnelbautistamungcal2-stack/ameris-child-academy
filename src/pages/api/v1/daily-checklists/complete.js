@@ -3,6 +3,7 @@ import {
   canTeacherAccessChecklist,
   hasChecklistClassroomScope,
 } from "@/lib/dailyChecklistClassrooms";
+import { canUserBeAssignedChecklist } from "@/lib/dailyChecklistAssignees";
 import prisma from "@/lib/prisma";
 import { getTeacherClassIds } from "@/lib/teacherScope";
 
@@ -158,6 +159,9 @@ export default async function handler(req, res) {
             },
             category: true,
             assignedUserId: true,
+            assignees: {
+              select: { userId: true },
+            },
           },
         },
       },
@@ -177,8 +181,7 @@ export default async function handler(req, res) {
     }
     if (
       ["TEACHER", "OTHER_STAFF"].includes(role) &&
-      item.checklist.assignedUserId &&
-      item.checklist.assignedUserId !== session.user.id
+      !canUserBeAssignedChecklist(item.checklist, session.user.id)
     ) {
       return res.status(403).json({ error: "This checklist is assigned to another staff member" });
     }

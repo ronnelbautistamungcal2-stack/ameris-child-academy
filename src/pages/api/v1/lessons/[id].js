@@ -66,6 +66,7 @@ export default async function handler(req, res) {
               lessonId: id,
               name: s.name,
               quantity: s.quantity || 1,
+              quantityType: s.quantityType === "per_student" ? "per_student" : "total",
               unit: s.unit || null,
               estimatedCost: s.estimatedCost ? parseFloat(s.estimatedCost) : null,
               category: s.category || "General",

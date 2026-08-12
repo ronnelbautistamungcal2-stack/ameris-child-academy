@@ -64,20 +64,29 @@ function formatWeekRange(weekStart) {
   return `${weekStart.toLocaleDateString(undefined, opts)} – ${end.toLocaleDateString(undefined, opts)}`;
 }
 
+function currentWeekdayIndex() {
+  const day = new Date().getDay();
+  if (day === 0) return 0;
+  if (day === 6) return 4;
+  return day - 1;
+}
+
 export default function WeeklyLessonPlanner({
   centerId,
   classId = "",
   mode = "teacher",
+  singleDay = false,
 }) {
   const [anchorDate, setAnchorDate] = useState(() => startOfWeekMonday(new Date()));
+  const [selectedDayIndex, setSelectedDayIndex] = useState(currentWeekdayIndex);
 
-  // Category row labels
-  const [rowLabels, setRowLabels] = useState(() =>
-    Array.from({ length: ROW_COUNT }, (_, i) => DEFAULT_ROW_LABELS[i] || ""),
+  // Category rows: [{ rowIndex, label }], in display order
+  const [rows, setRows] = useState(() =>
+    Array.from({ length: ROW_COUNT }, (_, i) => ({ rowIndex: i, label: DEFAULT_ROW_LABELS[i] || "" })),
   );
-  const [labelDrafts, setLabelDrafts] = useState(() =>
-    Array.from({ length: ROW_COUNT }, (_, i) => DEFAULT_ROW_LABELS[i] || ""),
-  );
+  const [labelDrafts, setLabelDrafts] = useState({});
+  const [addingRow, setAddingRow] = useState(false);
+  const [deletingRowIndex, setDeletingRowIndex] = useState(null);
 
   // plans: one per day key → { id, items: [{id, sortOrder, title}] }
   const [planByDayKey, setPlanByDayKey] = useState({});
@@ -110,31 +119,40 @@ export default function WeeklyLessonPlanner({
     return () => { abortRef.current.aborted = true; };
   }, []);
 
-  // Load row labels for this classroom
-  useEffect(() => {
+  // Load category rows for this classroom
+  const loadRows = useCallback(async () => {
+    const defaults = Array.from({ length: ROW_COUNT }, (_, i) => ({
+      rowIndex: i,
+      label: DEFAULT_ROW_LABELS[i] || "",
+    }));
     if (!centerId || !classId) {
-      setRowLabels(Array.from({ length: ROW_COUNT }, (_, i) => DEFAULT_ROW_LABELS[i] || ""));
-      setLabelDrafts(Array.from({ length: ROW_COUNT }, (_, i) => DEFAULT_ROW_LABELS[i] || ""));
+      setRows(defaults);
+      setLabelDrafts(Object.fromEntries(defaults.map((r) => [r.rowIndex, r.label])));
       return;
     }
-    (async () => {
-      try {
-        const data = await apiJson(
-          `/api/v1/lesson-plan-rows?centerId=${encodeURIComponent(centerId)}&classRoomId=${encodeURIComponent(classId)}`,
-        );
-        if (abortRef.current.aborted) return;
-        const arr = Array.isArray(data) ? data : [];
-        const labels = Array.from({ length: ROW_COUNT }, (_, i) => {
-          const found = arr.find((r) => r.rowIndex === i);
-          return found?.label || DEFAULT_ROW_LABELS[i] || "";
-        });
-        setRowLabels(labels);
-        setLabelDrafts(labels);
-      } catch {
-        // keep defaults
-      }
-    })();
+    try {
+      const data = await apiJson(
+        `/api/v1/lesson-plan-rows?centerId=${encodeURIComponent(centerId)}&classRoomId=${encodeURIComponent(classId)}`,
+      );
+      if (abortRef.current.aborted) return;
+      const arr = Array.isArray(data) ? data : [];
+      const normalized = arr
+        .map((r) => ({
+          rowIndex: r.rowIndex,
+          label: r.label || DEFAULT_ROW_LABELS[r.rowIndex] || "",
+        }))
+        .sort((a, b) => a.rowIndex - b.rowIndex);
+      setRows(normalized.length ? normalized : defaults);
+      setLabelDrafts(
+        Object.fromEntries((normalized.length ? normalized : defaults).map((r) => [r.rowIndex, r.label])),
+      );
+    } catch {
+      setRows(defaults);
+      setLabelDrafts(Object.fromEntries(defaults.map((r) => [r.rowIndex, r.label])));
+    }
   }, [centerId, classId]);
+
+  useEffect(() => { loadRows(); }, [loadRows]);
 
   // Load curriculum lessons for the typeahead (admin only)
   useEffect(() => {
@@ -233,27 +251,41 @@ export default function WeeklyLessonPlanner({
     return pool.slice(0, 8);
   }
 
+  const pendingPlanCreates = useRef({});
+
   async function ensurePlan(dayKey) {
     if (planByDayKey[dayKey]) return planByDayKey[dayKey];
     if (!centerId || !classId) return null;
+    // If a create for this day is already in flight, piggyback on it instead
+    // of firing a second POST that would collide on the unique constraint.
+    if (pendingPlanCreates.current[dayKey]) return pendingPlanCreates.current[dayKey];
+
     const day = new Date(dayKey);
     if (Number.isNaN(day.getTime())) return null;
 
-    const created = await apiJson("/api/v1/milestone-checklists", {
-      method: "POST",
-      body: JSON.stringify({
-        centerId,
-        classRoomId: classId,
-        title: DEFAULT_PLAN_TITLE,
-        description: null,
-        period: "DAY",
-        periodStart: toIsoDate(day),
-        active: true,
-        items: [],
-      }),
-    });
-    setPlanByDayKey((cur) => ({ ...cur, [dayKey]: created }));
-    return created;
+    const promise = (async () => {
+      try {
+        const created = await apiJson("/api/v1/milestone-checklists", {
+          method: "POST",
+          body: JSON.stringify({
+            centerId,
+            classRoomId: classId,
+            title: DEFAULT_PLAN_TITLE,
+            description: null,
+            period: "DAY",
+            periodStart: toIsoDate(day),
+            active: true,
+            items: [],
+          }),
+        });
+        setPlanByDayKey((cur) => ({ ...cur, [dayKey]: created }));
+        return created;
+      } finally {
+        delete pendingPlanCreates.current[dayKey];
+      }
+    })();
+    pendingPlanCreates.current[dayKey] = promise;
+    return promise;
   }
 
   async function saveCellValue(dayKey, rowIndex, text, lessonId = null) {
@@ -328,11 +360,7 @@ export default function WeeklyLessonPlanner({
   async function saveLabelValue(rowIndex, label) {
     if (mode !== "admin") return;
     const trimmed = label.trim();
-    setRowLabels((prev) => {
-      const next = [...prev];
-      next[rowIndex] = trimmed;
-      return next;
-    });
+    setRows((prev) => prev.map((r) => (r.rowIndex === rowIndex ? { ...r, label: trimmed } : r)));
     try {
       await apiJson("/api/v1/lesson-plan-rows", {
         method: "PUT",
@@ -340,6 +368,52 @@ export default function WeeklyLessonPlanner({
       });
     } catch {
       // non-critical, label already updated in state
+    }
+  }
+
+  async function addCategory() {
+    if (mode !== "admin" || !centerId || !classId || addingRow) return;
+    setAddingRow(true);
+    setError("");
+    try {
+      const created = await apiJson("/api/v1/lesson-plan-rows", {
+        method: "POST",
+        body: JSON.stringify({ centerId, classRoomId: classId, label: "New Category" }),
+      });
+      setRows((prev) => [...prev, { rowIndex: created.rowIndex, label: created.label || "" }]);
+      setLabelDrafts((prev) => ({ ...prev, [created.rowIndex]: created.label || "" }));
+    } catch (e) {
+      setError(e.message || "Failed to add category");
+    } finally {
+      setAddingRow(false);
+    }
+  }
+
+  async function deleteCategory(rowIndex) {
+    if (mode !== "admin" || !centerId || !classId || rows.length <= 1) return;
+    const row = rows.find((r) => r.rowIndex === rowIndex);
+    const label = row?.label || DEFAULT_ROW_LABELS[rowIndex] || `Row ${rowIndex + 1}`;
+    if (typeof window !== "undefined") {
+      const ok = window.confirm(`Remove the "${label}" category from this class's planner?`);
+      if (!ok) return;
+    }
+    setDeletingRowIndex(rowIndex);
+    setError("");
+    try {
+      await apiJson("/api/v1/lesson-plan-rows", {
+        method: "DELETE",
+        body: JSON.stringify({ centerId, classRoomId: classId, rowIndex }),
+      });
+      setRows((prev) => prev.filter((r) => r.rowIndex !== rowIndex));
+      setLabelDrafts((prev) => {
+        const next = { ...prev };
+        delete next[rowIndex];
+        return next;
+      });
+    } catch (e) {
+      setError(e.message || "Failed to remove category");
+    } finally {
+      setDeletingRowIndex(null);
     }
   }
 
@@ -359,10 +433,37 @@ export default function WeeklyLessonPlanner({
 
   function goToToday() {
     setAnchorDate(startOfWeekMonday(new Date()));
+    setSelectedDayIndex(currentWeekdayIndex());
     setCellDrafts({});
     setCellLessonIds({});
     setOpenComboKey("");
   }
+
+  function goToPrevDay() {
+    if (selectedDayIndex > 0) {
+      setSelectedDayIndex((i) => i - 1);
+    } else {
+      setAnchorDate((d) => addDays(d, -7));
+      setSelectedDayIndex(4);
+    }
+    setCellDrafts({});
+    setCellLessonIds({});
+    setOpenComboKey("");
+  }
+
+  function goToNextDay() {
+    if (selectedDayIndex < 4) {
+      setSelectedDayIndex((i) => i + 1);
+    } else {
+      setAnchorDate((d) => addDays(d, 7));
+      setSelectedDayIndex(0);
+    }
+    setCellDrafts({});
+    setCellLessonIds({});
+    setOpenComboKey("");
+  }
+
+  const displayDays = singleDay ? [weekDays[selectedDayIndex]] : weekDays;
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white">
@@ -373,27 +474,60 @@ export default function WeeklyLessonPlanner({
           <div className="mt-0.5 text-xs text-gray-500">{formatWeekRange(weekStart)}</div>
         </div>
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={goToPrevWeek}
-            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-          >
-            Prev
-          </button>
-          <button
-            type="button"
-            onClick={goToToday}
-            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-          >
-            Today
-          </button>
-          <button
-            type="button"
-            onClick={goToNextWeek}
-            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-          >
-            Next
-          </button>
+          {singleDay ? (
+            <>
+              <button
+                type="button"
+                onClick={goToPrevDay}
+                aria-label="Previous day"
+                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                ‹
+              </button>
+              <span className="min-w-[92px] text-center text-xs font-semibold text-gray-700">
+                {formatDayHeader(weekDays[selectedDayIndex])}
+              </span>
+              <button
+                type="button"
+                onClick={goToNextDay}
+                aria-label="Next day"
+                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                ›
+              </button>
+              <button
+                type="button"
+                onClick={goToToday}
+                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Today
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={goToPrevWeek}
+                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Prev
+              </button>
+              <button
+                type="button"
+                onClick={goToToday}
+                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                onClick={goToNextWeek}
+                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Next
+              </button>
+            </>
+          )}
           {saving && (
             <span className="ml-1 text-xs text-sky-600 font-semibold">Saving…</span>
           )}
@@ -410,13 +544,15 @@ export default function WeeklyLessonPlanner({
         <div className="px-4 py-8 text-center text-sm text-gray-500">Loading…</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[600px] border-collapse text-sm">
+          <table
+            className={`w-full border-collapse text-sm ${singleDay ? "" : "min-w-[600px]"}`}
+          >
             <thead>
               <tr className="bg-gray-50">
                 <th className="border-b border-r border-gray-200 px-3 py-2 text-left text-xs font-semibold text-gray-500 w-36">
                   Categories
                 </th>
-                {weekDays.map((d) => (
+                {displayDays.map((d) => (
                   <th
                     key={toDateKey(d)}
                     className="border-b border-r border-gray-200 px-3 py-2 text-center text-xs font-semibold text-gray-700"
@@ -427,34 +563,56 @@ export default function WeeklyLessonPlanner({
               </tr>
             </thead>
             <tbody>
-              {Array.from({ length: ROW_COUNT }, (_, rowIndex) => (
+              {rows.map(({ rowIndex, label: rowLabel }) => (
                 <tr key={rowIndex} className="group hover:bg-gray-50/60">
                   {/* Category label cell */}
                   <td className="border-b border-r border-gray-200 px-2 py-1.5 align-middle bg-gray-50/80">
                     {mode === "admin" ? (
-                      <input
-                        type="text"
-                        value={labelDrafts[rowIndex] ?? rowLabels[rowIndex] ?? ""}
-                        onChange={(e) =>
-                          setLabelDrafts((prev) => {
-                            const next = [...prev];
-                            next[rowIndex] = e.target.value;
-                            return next;
-                          })
-                        }
-                        onBlur={(e) => saveLabelValue(rowIndex, e.target.value)}
-                        placeholder={DEFAULT_ROW_LABELS[rowIndex] || `Row ${rowIndex + 1}`}
-                        className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-xs font-semibold text-gray-700 placeholder-gray-300 outline-none transition focus:border-sky-300 focus:bg-white focus:ring-1 focus:ring-sky-100"
-                      />
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={labelDrafts[rowIndex] ?? rowLabel ?? ""}
+                          onChange={(e) =>
+                            setLabelDrafts((prev) => ({ ...prev, [rowIndex]: e.target.value }))
+                          }
+                          onBlur={(e) => saveLabelValue(rowIndex, e.target.value)}
+                          placeholder={DEFAULT_ROW_LABELS[rowIndex] || `Row ${rowIndex + 1}`}
+                          className="w-full min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-xs font-semibold text-gray-700 placeholder-gray-300 outline-none transition focus:border-sky-300 focus:bg-white focus:ring-1 focus:ring-sky-100"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => deleteCategory(rowIndex)}
+                          disabled={rows.length <= 1 || deletingRowIndex === rowIndex}
+                          title={rows.length <= 1 ? "At least one category is required" : "Remove category"}
+                          className="shrink-0 rounded p-0.5 text-gray-300 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-0"
+                        >
+                          {deletingRowIndex === rowIndex ? (
+                            <span className="block px-1 text-[10px]">…</span>
+                          ) : (
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                              className="h-3.5 w-3.5"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M8.75 1A1.75 1.75 0 007 2.75V3H4.25a.75.75 0 000 1.5h.3l.6 10.06A2.25 2.25 0 007.4 16.5h5.2a2.25 2.25 0 002.25-1.94l.6-10.06h.3a.75.75 0 000-1.5H13v-.25A1.75 1.75 0 0011.25 1h-2.5zM8.5 2.75a.25.25 0 01.25-.25h2.5a.25.25 0 01.25.25V3h-3v-.25zM8 7.25a.75.75 0 011.5 0v6a.75.75 0 01-1.5 0v-6zm3.25-.75a.75.75 0 00-.75.75v6a.75.75 0 001.5 0v-6a.75.75 0 00-.75-.75z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
                     ) : (
                       <span className="block px-1 text-xs font-semibold text-gray-700">
-                        {rowLabels[rowIndex] || DEFAULT_ROW_LABELS[rowIndex] || `Row ${rowIndex + 1}`}
+                        {rowLabel || DEFAULT_ROW_LABELS[rowIndex] || `Row ${rowIndex + 1}`}
                       </span>
                     )}
                   </td>
 
                   {/* Lesson cells for each day */}
-                  {weekDays.map((d) => {
+                  {displayDays.map((d) => {
                     const dayKey = toDateKey(d);
                     const cellKey = `${dayKey}:${rowIndex}`;
                     const cellText = getCellText(dayKey, rowIndex);
@@ -502,8 +660,8 @@ export default function WeeklyLessonPlanner({
                                     className="cursor-pointer px-2.5 py-1.5 hover:bg-sky-50"
                                   >
                                     <div className="font-semibold text-gray-800">{l.title}</div>
-                                    {l.category?.name ? (
-                                      <div className="text-[10px] text-gray-400">{l.category.name}</div>
+                                    {l.category?.ageRange ? (
+                                      <div className="text-[10px] text-gray-400">{l.category.ageRange}</div>
                                     ) : null}
                                   </li>
                                 ))}
@@ -539,10 +697,23 @@ export default function WeeklyLessonPlanner({
         </div>
       )}
 
+      {mode === "admin" && !loading && (
+        <div className="border-t border-gray-100 px-4 py-2">
+          <button
+            type="button"
+            onClick={addCategory}
+            disabled={addingRow}
+            className="rounded-lg border border-dashed border-gray-300 px-2.5 py-1 text-xs font-semibold text-gray-600 hover:border-sky-300 hover:text-sky-700 disabled:opacity-60"
+          >
+            {addingRow ? "Adding…" : "+ Add Category"}
+          </button>
+        </div>
+      )}
+
       {mode === "admin" && (
         <div className="border-t border-gray-100 px-4 py-2 text-xs text-gray-400">
-          Click any category name to rename it. Click any cell to type a note, or start typing a
-          lesson title to attach it from the curriculum.
+          Click any category name to rename it, or hover a row to remove it. Click any cell to
+          type a note, or start typing a lesson title to attach it from the curriculum.
         </div>
       )}
 

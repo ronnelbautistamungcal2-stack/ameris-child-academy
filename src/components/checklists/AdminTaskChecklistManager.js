@@ -4,6 +4,7 @@ import {
   getChecklistClassRooms,
   normalizeChecklistClassRoomIds,
 } from "@/lib/dailyChecklistClassrooms";
+import { getChecklistAssignedUsers } from "@/lib/dailyChecklistAssignees";
 import {
   CHECKLIST_FREQUENCY_OPTIONS,
   WEEKDAY_OPTIONS,
@@ -91,13 +92,6 @@ function formatTaskTime(value) {
   return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
-function roleLabel(role) {
-  return String(role || "")
-    .toLowerCase()
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (match) => match.toUpperCase());
-}
-
 function lessonCategoryLabel(category) {
   if (!category) return "";
   const parts = [category.name || ""];
@@ -159,6 +153,30 @@ function selectedClassroomSummary(classrooms, selectedIds) {
   };
 }
 
+function toggleAssigneeSelection(ids, userId) {
+  const set = new Set(ids);
+  if (set.has(userId)) set.delete(userId);
+  else set.add(userId);
+  return [...set];
+}
+
+function selectedAssigneeSummary(staffMembers, selectedIds) {
+  const selected = staffMembers.filter((user) => selectedIds.includes(user.id));
+  if (!selected.length) {
+    return {
+      title: "Anyone in scope",
+    };
+  }
+  if (selected.length === 1) {
+    return {
+      title: selected[0].name || selected[0].email,
+    };
+  }
+  return {
+    title: `${selected.length} staff selected`,
+  };
+}
+
 function blankTermCalendarRow() {
   return {
     term: "",
@@ -200,7 +218,8 @@ export default function AdminTaskChecklistManager({ centerId }) {
   const [newMonthlyDay, setNewMonthlyDay] = useState("");
   const [newClassRoomIds, setNewClassRoomIds] = useState([]);
   const [classroomAccordionOpen, setClassroomAccordionOpen] = useState(false);
-  const [newAssignedUserId, setNewAssignedUserId] = useState("");
+  const [newAssignedUserIds, setNewAssignedUserIds] = useState([]);
+  const [assigneeAccordionOpen, setAssigneeAccordionOpen] = useState(false);
   const [newItems, setNewItems] = useState([blankItemRow()]);
   const [saving, setSaving] = useState(false);
   const [savingTermCalendars, setSavingTermCalendars] = useState(false);
@@ -261,7 +280,8 @@ export default function AdminTaskChecklistManager({ centerId }) {
     setNewMonthlyDay("");
     setNewClassRoomIds([]);
     setClassroomAccordionOpen(false);
-    setNewAssignedUserId("");
+    setNewAssignedUserIds([]);
+    setAssigneeAccordionOpen(false);
     setNewItems([blankItemRow()]);
   }
 
@@ -288,7 +308,13 @@ export default function AdminTaskChecklistManager({ centerId }) {
     setNewRepeatDays(normalizeRepeatDays(checklist.repeatDays));
     setNewMonthlyDay(checklist.monthlyDay ? String(checklist.monthlyDay) : "");
     setNewClassRoomIds(normalizeChecklistClassRoomIds(checklist.classRoomIds, checklist.classRoomId));
-    setNewAssignedUserId(checklist.assignedUserId || "");
+    setNewAssignedUserIds(
+      Array.isArray(checklist.assignedUserIds) && checklist.assignedUserIds.length
+        ? checklist.assignedUserIds
+        : checklist.assignedUserId
+          ? [checklist.assignedUserId]
+          : [],
+    );
     const rows = sortByTaskTime(checklist.items).map((item) => {
       const schedule = getEffectiveItemSchedule(item, checklist);
       const lessonSource = normalizeLessonSource(
@@ -397,7 +423,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
           repeatDays: newFrequency === "WEEKLY" ? normalizeRepeatDays(newRepeatDays) : [],
           monthlyDay: newFrequency === "MONTHLY" ? normalizeMonthlyDay(newMonthlyDay) : null,
           classRoomIds: normalizeChecklistClassRoomIds(newClassRoomIds),
-          assignedUserId: newAssignedUserId || null,
+          assignedUserIds: newAssignedUserIds,
           items: newItems
             .filter((item) => item.title.trim())
             .map((item) => ({
@@ -561,6 +587,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
         ...(checklist.classRooms || []).map((room) => room.name),
         checklist.assignedUser?.name,
         checklist.assignedUser?.email,
+        ...getChecklistAssignedUsers(checklist).flatMap((user) => [user.name, user.email]),
         ...(checklist.items || []).flatMap((item) => [
           item.title,
           item.description,
@@ -604,6 +631,16 @@ export default function AdminTaskChecklistManager({ centerId }) {
   const classroomScopeSummary = useMemo(
     () => selectedClassroomSummary(classrooms, newClassRoomIds),
     [classrooms, newClassRoomIds],
+  );
+
+  const selectedAssignees = useMemo(
+    () => staffMembers.filter((user) => newAssignedUserIds.includes(user.id)),
+    [staffMembers, newAssignedUserIds],
+  );
+
+  const assigneeScopeSummary = useMemo(
+    () => selectedAssigneeSummary(staffMembers, newAssignedUserIds),
+    [staffMembers, newAssignedUserIds],
   );
 
   const lessonSlotOptions = useMemo(() => {
@@ -710,9 +747,27 @@ export default function AdminTaskChecklistManager({ centerId }) {
 
         {showCreate ? (
           <form onSubmit={saveChecklist} className="mt-4 space-y-4 border-t border-gray-100 pt-4">
-            <h3 className="text-sm font-bold text-gray-900">
-              {editingChecklistId ? "Edit Checklist" : "New Checklist"}
-            </h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-bold text-gray-900">
+                {editingChecklistId ? "Edit Checklist" : "New Checklist"}
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-sky-700 disabled:opacity-50"
+                >
+                  {saving ? "Saving..." : editingChecklistId ? "Save Checklist" : "Create Checklist"}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeForm}
+                  className="rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-100"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
             <datalist id="lesson-slot-options">
               {lessonSlotOptions.map((slot) => (
                 <option key={slot} value={slot} />
@@ -819,18 +874,77 @@ export default function AdminTaskChecklistManager({ centerId }) {
               </label>
               <label className="block">
                 <div className="mb-1 text-xs font-semibold text-gray-500">Teacher / Staff</div>
-                <select
-                  value={newAssignedUserId}
-                  onChange={(event) => setNewAssignedUserId(event.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:border-sky-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-200"
-                >
-                  <option value="">Anyone in scope</option>
-                  {staffMembers.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {(user.name || user.email) + ` (${roleLabel(user.role)})`}
-                    </option>
-                  ))}
-                </select>
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                  <button
+                    type="button"
+                    onClick={() => setAssigneeAccordionOpen((current) => !current)}
+                    className="flex w-full items-center justify-between gap-3 text-left"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-900">
+                        {assigneeScopeSummary.title}
+                      </div>
+                    </div>
+                    <svg
+                      className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${assigneeAccordionOpen ? "rotate-180" : ""}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                    </svg>
+                  </button>
+
+                  {assigneeAccordionOpen ? (
+                    <div className="mt-3 space-y-2 border-t border-gray-200 pt-3">
+                      <label className="flex cursor-pointer items-center gap-3 rounded-lg bg-white px-3 py-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={newAssignedUserIds.length === 0}
+                          onChange={() => setNewAssignedUserIds([])}
+                          className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+                        />
+                        <span className="font-medium">Anyone in scope</span>
+                      </label>
+
+                      <div className="space-y-2">
+                        {staffMembers.map((user) => {
+                          const selected = newAssignedUserIds.includes(user.id);
+                          return (
+                            <label
+                              key={user.id}
+                              className="flex cursor-pointer items-center gap-3 rounded-lg bg-white px-3 py-2 text-sm text-gray-700"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={() =>
+                                  setNewAssignedUserIds((current) => toggleAssigneeSelection(current, user.id))
+                                }
+                                className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+                              />
+                              <span>{user.name || user.email}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {selectedAssignees.length ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {selectedAssignees.map((user) => (
+                        <span
+                          key={user.id}
+                          className="rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-medium text-violet-700"
+                        >
+                          {user.name || user.email}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               </label>
               <label className="block md:col-span-2 lg:col-span-3">
                 <div className="mb-1 text-xs font-semibold text-gray-500">Description</div>
@@ -1159,6 +1273,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
                 const stylesForCard = CATEGORY_STYLES[checklist.category] || CATEGORY_STYLES.OTHER;
                 const items = sortByTaskTime(checklist.items);
                 const checklistRooms = getChecklistClassRooms(checklist);
+                const checklistAssignedUsers = getChecklistAssignedUsers(checklist);
                 const expanded = expandedId === checklist.id;
                 const scheduleKey = summarizeChecklistFrequency(checklist);
                 const scheduleLabel = summarizeChecklistSchedule(checklist);
@@ -1206,9 +1321,17 @@ export default function AdminTaskChecklistManager({ centerId }) {
                                 +{checklistRooms.length - 2} more
                               </span>
                             ) : null}
-                            {checklist.assignedUser ? (
+                            {checklistAssignedUsers.slice(0, 2).map((user) => (
+                              <span
+                                key={user.id}
+                                className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700"
+                              >
+                                {user.name || user.email}
+                              </span>
+                            ))}
+                            {checklistAssignedUsers.length > 2 ? (
                               <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
-                                {checklist.assignedUser.name || checklist.assignedUser.email}
+                                +{checklistAssignedUsers.length - 2} more
                               </span>
                             ) : null}
                             {!checklist.active ? (

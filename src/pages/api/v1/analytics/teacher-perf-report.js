@@ -156,7 +156,14 @@ export default async function handler(req, res) {
     });
     const assignedChecklistItems = await prisma.dailyChecklistItem.count({
       where: {
-        checklist: { centerId, assignedUserId: resolvedTeacherId, active: true },
+        checklist: {
+          centerId,
+          active: true,
+          OR: [
+            { assignedUserId: resolvedTeacherId },
+            { assignees: { some: { userId: resolvedTeacherId } } },
+          ],
+        },
       },
     });
     // Days in range

@@ -2,6 +2,10 @@ import {
   getChecklistClassRoomIds,
   getChecklistClassRooms,
 } from "@/lib/dailyChecklistClassrooms";
+import {
+  getChecklistAssignedUserIds,
+  getChecklistAssignedUsers,
+} from "@/lib/dailyChecklistAssignees";
 
 function buildCompletionInclude(date) {
   if (!date) return false;
@@ -87,6 +91,12 @@ export function buildDailyChecklistInclude(date) {
     },
     center: { select: { id: true, name: true } },
     assignedUser: { select: { id: true, name: true, email: true, role: true } },
+    assignees: {
+      orderBy: { createdAt: "asc" },
+      include: {
+        user: { select: { id: true, name: true, email: true, role: true } },
+      },
+    },
     ...(notesInclude ? { notes: notesInclude } : {}),
   };
 }
@@ -97,7 +107,12 @@ export function serializeDailyChecklist(checklist) {
     ...checklist,
     classRooms,
   });
-  const { classrooms, ...rest } = checklist;
+  const assignedUsers = getChecklistAssignedUsers(checklist);
+  const assignedUserIds = getChecklistAssignedUserIds({
+    ...checklist,
+    assignedUsers,
+  });
+  const { classrooms, assignees, ...rest } = checklist;
 
   return {
     ...rest,
@@ -105,5 +120,9 @@ export function serializeDailyChecklist(checklist) {
     classRoom: checklist.classRoom || classRooms[0] || null,
     classRoomIds,
     classRooms,
+    assignedUserId: checklist.assignedUserId || assignedUserIds[0] || null,
+    assignedUser: checklist.assignedUser || assignedUsers[0] || null,
+    assignedUserIds,
+    assignedUsers,
   };
 }

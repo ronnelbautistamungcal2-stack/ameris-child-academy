@@ -5,6 +5,10 @@ import {
   normalizeChecklistClassRoomIds,
 } from "@/lib/dailyChecklistClassrooms";
 import {
+  canUserBeAssignedChecklist,
+  normalizeChecklistAssignedUserIds,
+} from "@/lib/dailyChecklistAssignees";
+import {
   normalizeLessonSlot,
   normalizeLessonSource,
   resolveAutoLessonMatch,
@@ -122,6 +126,20 @@ function buildChecklistClassroomScopeData(classRoomIds) {
   };
 }
 
+function buildChecklistAssigneeScopeData(assignedUserIds) {
+  return {
+    assignedUserId: assignedUserIds[0] || null,
+    assignees: {
+      deleteMany: {},
+      ...(assignedUserIds.length
+        ? {
+            create: assignedUserIds.map((userId) => ({ userId })),
+          }
+        : {}),
+    },
+  };
+}
+
 function scheduledPlanToChecklist(plan) {
   const items = (plan.items || []).map((item) => ({
     id: item.id,
@@ -168,6 +186,8 @@ function scheduledPlanToChecklist(plan) {
     centerId: plan.centerId,
     assignedUser: null,
     assignedUserId: null,
+    assignedUsers: [],
+    assignedUserIds: [],
     notes: [],
     items,
     createdAt: plan.createdAt,
@@ -250,7 +270,7 @@ function normalizeChecklistPayload(body = {}) {
     description: body.description || null,
     centerId: body.centerId,
     classRoomIds: normalizeChecklistClassRoomIds(body.classRoomIds, body.classRoomId),
-    assignedUserId: body.assignedUserId || null,
+    assignedUserIds: normalizeChecklistAssignedUserIds(body.assignedUserIds, body.assignedUserId),
     category: ["OPENING", "CLOSING", "HEALTH_SAFETY", "CLEANING", "MEALS", "CLASSROOM", "OTHER"].includes(body.category)
       ? body.category
       : "OTHER",
@@ -269,9 +289,6 @@ function applyChecklistPatch(data, body = {}) {
   }
   if (Object.prototype.hasOwnProperty.call(body, "centerId")) {
     data.centerId = body.centerId;
-  }
-  if (Object.prototype.hasOwnProperty.call(body, "assignedUserId")) {
-    data.assignedUserId = body.assignedUserId || null;
   }
   if (Object.prototype.hasOwnProperty.call(body, "category")) {
     data.category = ["OPENING", "CLOSING", "HEALTH_SAFETY", "CLEANING", "MEALS", "CLASSROOM", "OTHER"].includes(body.category)
@@ -482,7 +499,7 @@ export default async function handler(req, res) {
         }
 
         if (["TEACHER", "OTHER_STAFF"].includes(role)) {
-          if (list.assignedUserId && list.assignedUserId !== session.user.id) {
+          if (!canUserBeAssignedChecklist(list, session.user.id)) {
             return false;
           }
         }
@@ -565,7 +582,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: error.message });
     }
 
-    const { classRoomIds: _classRoomIds, ...checklistData } = normalized;
+    const { classRoomIds: _classRoomIds, assignedUserIds, ...checklistData } = normalized;
 
     const created = await prisma.dailyChecklist.create({
       data: {
@@ -575,6 +592,14 @@ export default async function handler(req, res) {
           ? {
               classrooms: {
                 create: classRoomIds.map((classRoomId) => ({ classRoomId })),
+              },
+            }
+          : {}),
+        assignedUserId: assignedUserIds[0] || null,
+        ...(assignedUserIds.length
+          ? {
+              assignees: {
+                create: assignedUserIds.map((userId) => ({ userId })),
               },
             }
           : {}),
@@ -642,6 +667,18 @@ export default async function handler(req, res) {
       } catch (error) {
         return res.status(400).json({ error: error.message });
       }
+    }
+
+    const hasAssigneeScopePatch =
+      Object.prototype.hasOwnProperty.call(req.body || {}, "assignedUserIds") ||
+      Object.prototype.hasOwnProperty.call(req.body || {}, "assignedUserId");
+
+    if (hasAssigneeScopePatch) {
+      const assignedUserIds = normalizeChecklistAssignedUserIds(
+        req.body?.assignedUserIds,
+        req.body?.assignedUserId,
+      );
+      Object.assign(data, buildChecklistAssigneeScopeData(assignedUserIds));
     }
 
     const updated = await prisma.dailyChecklist.update({

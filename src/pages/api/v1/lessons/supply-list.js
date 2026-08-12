@@ -40,14 +40,16 @@ export default async function handler(req, res) {
     orderBy: { name: "asc" },
   });
 
-  // Aggregate by name + unit
+  // Aggregate by name + unit + quantityType (per-student and total quantities aren't comparable)
   const aggregated = {};
   for (const s of supplies) {
-    const key = `${s.name.toLowerCase()}|${(s.unit || "").toLowerCase()}`;
+    const quantityType = s.quantityType === "per_student" ? "per_student" : "total";
+    const key = `${s.name.toLowerCase()}|${(s.unit || "").toLowerCase()}|${quantityType}`;
     if (!aggregated[key]) {
       aggregated[key] = {
         name: s.name,
         unit: s.unit,
+        quantityType,
         totalQuantity: 0,
         estimatedCost: 0,
         category: s.category,

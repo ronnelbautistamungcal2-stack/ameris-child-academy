@@ -255,6 +255,7 @@ model User {
   milestoneChecklistStaffCompletions MilestoneChecklistStaffCompletion[] @relation("MilestoneChecklistStaffCompletedBy")
   dailyChecklistCompletions    DailyChecklistCompletion[] @relation("DailyChecklistCompletedBy")
   assignedDailyChecklists      DailyChecklist[]           @relation("DailyChecklistAssignedUser")
+  dailyChecklistAssignments    DailyChecklistAssignee[]
   dailyChecklistNotes          DailyChecklistNote[]       @relation("DailyChecklistNotesCreatedBy")
   closedChildFlagReviews       ChildFlagReview[]          @relation("ChildFlagReviewClosedBy")
   parentInvolvements           ParentInvolvement[]
@@ -691,6 +692,7 @@ model LessonPlanRow {
   classRoomId String
   rowIndex    Int
   label       String    @default("")
+  active      Boolean   @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -1314,6 +1316,7 @@ model LessonSupply {
   lessonId      String
   name          String
   quantity      Int      @default(1)
+  quantityType  String   @default("total")
   unit          String?
   estimatedCost Float?
   category      String   @default("General")
@@ -1468,6 +1471,7 @@ model DailyChecklist {
   classrooms  DailyChecklistClassroom[]
   assignedUser   User?           @relation("DailyChecklistAssignedUser", fields: [assignedUserId], references: [id], onDelete: SetNull)
   assignedUserId String?
+  assignees   DailyChecklistAssignee[]
   title       String
   description String?
   category    ChecklistCategory  @default(OTHER)
@@ -1495,6 +1499,18 @@ model DailyChecklistClassroom {
 
   @@unique([checklistId, classRoomId])
   @@index([classRoomId])
+}
+
+model DailyChecklistAssignee {
+  id          String         @id @default(uuid())
+  checklist   DailyChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  checklistId String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  createdAt   DateTime       @default(now())
+
+  @@unique([checklistId, userId])
+  @@index([userId])
 }
 
 model DailyChecklistItem {

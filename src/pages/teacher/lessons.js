@@ -273,6 +273,18 @@ export default function TeacherLessons() {
                                 const additional =
                                   criteria?.additionalResources || "";
                                 const notes = criteria?.notes || "";
+                                const link = criteria?.link || "";
+                                const timeRequired = criteria?.timeRequired || "";
+                                const instructionalSetting =
+                                  criteria?.instructionalSetting || "";
+                                const introduction = criteria?.introduction || "";
+                                const essentialQuestions =
+                                  criteria?.essentialQuestions || "";
+                                const keyVocabulary = criteria?.keyVocabulary || "";
+                                const learningActivities =
+                                  criteria?.learningActivities || "";
+                                const accommodations = criteria?.accommodations || "";
+                                const notesToTeacher = criteria?.notesToTeacher || "";
 
                                 return (
                                   <div
@@ -291,6 +303,62 @@ export default function TeacherLessons() {
                                         <div className="mt-1 whitespace-pre-wrap">
                                           {g.description}
                                         </div>
+                                      </div>
+                                    ) : null}
+
+                                    {timeRequired || instructionalSetting || link ? (
+                                      <div className="mt-2 flex flex-wrap gap-3 text-xs text-gray-600">
+                                        {timeRequired ? (
+                                          <span>
+                                            <span className="font-semibold text-gray-500">Time: </span>
+                                            {timeRequired}
+                                          </span>
+                                        ) : null}
+                                        {instructionalSetting ? (
+                                          <span>
+                                            <span className="font-semibold text-gray-500">Setting: </span>
+                                            {instructionalSetting}
+                                          </span>
+                                        ) : null}
+                                        {link ? (
+                                          <a
+                                            className="text-blue-600 hover:text-blue-700"
+                                            href={link}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                          >
+                                            {link}
+                                          </a>
+                                        ) : null}
+                                      </div>
+                                    ) : null}
+
+                                    {introduction ||
+                                    essentialQuestions ||
+                                    keyVocabulary ||
+                                    learningActivities ||
+                                    accommodations ||
+                                    notesToTeacher ? (
+                                      <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+                                        {[
+                                          { label: "Introduction", value: introduction },
+                                          { label: "Essential questions", value: essentialQuestions },
+                                          { label: "Key vocabulary", value: keyVocabulary },
+                                          { label: "Learning activities", value: learningActivities },
+                                          { label: "Accommodations/Modifications", value: accommodations },
+                                          { label: "Notes to teacher", value: notesToTeacher },
+                                        ]
+                                          .filter((item) => item.value)
+                                          .map((item) => (
+                                            <div key={item.label} className="text-xs text-gray-700">
+                                              <div className="font-semibold text-gray-500">
+                                                {item.label}
+                                              </div>
+                                              <div className="mt-0.5 whitespace-pre-wrap">
+                                                {item.value}
+                                              </div>
+                                            </div>
+                                          ))}
                                       </div>
                                     ) : null}
 
@@ -364,6 +432,8 @@ export default function TeacherLessons() {
                                     <span className="font-semibold text-gray-900">{s.name}</span>
                                     <span className="ml-2 text-gray-500">
                                       x{s.quantity}{s.unit ? ` ${s.unit}` : ""}
+                                      {" · "}
+                                      {s.quantityType === "per_student" ? "per student" : "total"}
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-2">
@@ -379,6 +449,10 @@ export default function TeacherLessons() {
                         ) : null}
                       </div>
                     ) : null}
+
+                    <div className="mt-3 border-t border-gray-100 pt-2 text-[11px] text-gray-400">
+                      &copy; {new Date().getFullYear()} Ameris Academy Inc. All rights reserved.
+                    </div>
                   </div>
                 );
               })}

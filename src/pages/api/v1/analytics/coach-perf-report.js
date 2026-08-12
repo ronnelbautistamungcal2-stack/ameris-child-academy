@@ -130,7 +130,16 @@ export default async function handler(req, res) {
       },
     });
     const assignedChecklistItems = await prisma.dailyChecklistItem.count({
-      where: { checklist: { centerId, assignedUserId: resolvedCoachId, active: true } },
+      where: {
+        checklist: {
+          centerId,
+          active: true,
+          OR: [
+            { assignedUserId: resolvedCoachId },
+            { assignees: { some: { userId: resolvedCoachId } } },
+          ],
+        },
+      },
     });
     const dayRange = Math.max(1, Math.round((dateTo - dateFrom) / (1000 * 60 * 60 * 24)));
     const expectedItems = assignedChecklistItems * dayRange;

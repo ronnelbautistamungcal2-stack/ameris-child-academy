@@ -3,6 +3,7 @@ import {
   canTeacherAccessChecklist,
   hasChecklistClassroomScope,
 } from "@/lib/dailyChecklistClassrooms";
+import { canUserBeAssignedChecklist } from "@/lib/dailyChecklistAssignees";
 import prisma from "@/lib/prisma";
 import { getTeacherClassIds } from "@/lib/teacherScope";
 
@@ -41,6 +42,9 @@ async function loadChecklist(checklistId) {
       },
       category: true,
       assignedUserId: true,
+      assignees: {
+        select: { userId: true },
+      },
     },
   });
 }
@@ -72,8 +76,7 @@ async function assertChecklistAccess(session, checklist) {
 
   if (
     ["TEACHER", "OTHER_STAFF"].includes(role) &&
-    checklist.assignedUserId &&
-    checklist.assignedUserId !== session.user.id
+    !canUserBeAssignedChecklist(checklist, session.user.id)
   ) {
     return {
       ok: false,

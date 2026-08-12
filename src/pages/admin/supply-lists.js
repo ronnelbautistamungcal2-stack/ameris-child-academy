@@ -118,6 +118,7 @@ export default function AdminSupplyLists() {
       (lesson.supplies || []).map((s) => ({
         name: s.name || "",
         quantity: s.quantity || 1,
+        quantityType: s.quantityType === "per_student" ? "per_student" : "total",
         unit: s.unit || "",
         estimatedCost: s.estimatedCost || "",
         category: s.category || "General",
@@ -128,7 +129,7 @@ export default function AdminSupplyLists() {
   }
 
   function addSupplyRow() {
-    setSupplyRows((prev) => [...prev, { name: "", quantity: 1, unit: "", estimatedCost: "", category: "General" }]);
+    setSupplyRows((prev) => [...prev, { name: "", quantity: 1, quantityType: "total", unit: "", estimatedCost: "", category: "General" }]);
   }
 
   function removeSupplyRow(index) {
@@ -165,11 +166,19 @@ export default function AdminSupplyLists() {
 
   function exportCsv() {
     if (!supplyList.length) return;
-    const lines = ["Name,Quantity,Unit,Estimated Cost,Category,Lessons"];
+    const lines = ["Name,Quantity,Type,Unit,Estimated Cost,Category,Lessons"];
     for (const s of supplyList) {
       const lessonNames = (s.lessons || []).map((l) => l.title).join("; ");
       lines.push(
-        [csvEscape(s.name), s.totalQuantity, csvEscape(s.unit || ""), (s.estimatedCost || 0).toFixed(2), csvEscape(s.category || ""), csvEscape(lessonNames)].join(","),
+        [
+          csvEscape(s.name),
+          s.totalQuantity,
+          csvEscape(s.quantityType === "per_student" ? "Per Student" : "Total"),
+          csvEscape(s.unit || ""),
+          (s.estimatedCost || 0).toFixed(2),
+          csvEscape(s.category || ""),
+          csvEscape(lessonNames),
+        ].join(","),
       );
     }
     const blob = new Blob([lines.join("\n")], { type: "text/csv" });
@@ -335,6 +344,7 @@ export default function AdminSupplyLists() {
                     <tr>
                       <th style={thStyle}>Supply Name</th>
                       <th style={{ ...thStyle, width: 70 }}>Qty</th>
+                      <th style={{ ...thStyle, width: 90 }}>Type</th>
                       <th style={{ ...thStyle, width: 80 }}>Unit</th>
                       <th style={{ ...thStyle, width: 100 }}>Est. Cost</th>
                       <th style={{ ...thStyle, width: 120 }}>Category</th>
@@ -357,6 +367,16 @@ export default function AdminSupplyLists() {
                               background: "var(--admin-bg-tertiary)", fontWeight: 700, fontSize: 13,
                             }}>
                               {s.totalQuantity}
+                            </span>
+                          </td>
+                          <td style={tdStyle}>
+                            <span style={{
+                              display: "inline-block", padding: "2px 8px", borderRadius: 999,
+                              background: s.quantityType === "per_student" ? "#f59e0b14" : "var(--admin-bg-tertiary)",
+                              color: s.quantityType === "per_student" ? "#f59e0b" : "var(--admin-text-muted)",
+                              fontWeight: 600, fontSize: 11,
+                            }}>
+                              {s.quantityType === "per_student" ? "Per Student" : "Total"}
                             </span>
                           </td>
                           <td style={{ ...tdStyle, color: s.unit ? "var(--admin-text)" : "var(--admin-text-muted)" }}>
@@ -484,7 +504,7 @@ function LessonManager({
               {supplyRows.map((row, idx) => (
                 <div key={idx} style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 70px 70px 90px 110px 36px",
+                  gridTemplateColumns: "1fr 70px 110px 70px 90px 110px 36px",
                   gap: 8, alignItems: "center",
                   background: "var(--admin-bg)", borderRadius: 10,
                   padding: "10px 12px",
@@ -505,6 +525,14 @@ function LessonManager({
                     onChange={(e) => updateSupplyRow(idx, "quantity", parseInt(e.target.value) || 1)}
                     style={{ ...inputStyle, textAlign: "center" }}
                   />
+                  <select
+                    value={row.quantityType || "total"}
+                    onChange={(e) => updateSupplyRow(idx, "quantityType", e.target.value)}
+                    style={inputStyle}
+                  >
+                    <option value="total">Total</option>
+                    <option value="per_student">Per Student</option>
+                  </select>
                   <input
                     placeholder="Unit"
                     value={row.unit}
@@ -550,12 +578,12 @@ function LessonManager({
             {supplyRows.length > 0 && (
               <div style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 70px 70px 90px 110px 36px",
+                gridTemplateColumns: "1fr 70px 110px 70px 90px 110px 36px",
                 gap: 8, padding: "4px 12px 0",
                 fontSize: 10, fontWeight: 600, textTransform: "uppercase",
                 letterSpacing: "0.05em", color: "var(--admin-text-muted)",
               }}>
-                <span>Name</span><span>Qty</span><span>Unit</span><span>Cost</span><span>Category</span><span></span>
+                <span>Name</span><span>Qty</span><span>Type</span><span>Unit</span><span>Cost</span><span>Category</span><span></span>
               </div>
             )}
 

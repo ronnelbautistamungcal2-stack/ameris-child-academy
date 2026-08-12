@@ -180,60 +180,76 @@ export default async function handler(req, res) {
       return "";
     }
 
-    const created = await prisma.milestoneChecklistPlan.create({
-      data: {
-        centerId,
-        classRoomId: classRoomId || null,
-        title,
-        description: description || null,
-        period,
-        periodStart: startDate,
-        active: active !== undefined ? !!active : true,
-        items: incomingItems.length
-          ? {
-              create: incomingItems
-                .filter(
-                  (it) =>
-                    it &&
-                    (it.title ||
-                      it.lessonId ||
-                      it.lessonGoalId ||
-                      it.policyDocumentId ||
-                      it.url),
-                )
-                .map((it, idx) => ({
-                  title: computeTitle(it),
-                  sortOrder: Number.isFinite(Number(it.sortOrder)) ? Number(it.sortOrder) : idx,
-                  kind: normalizeKind(it),
-                  url: it.url || null,
-                  notes: it.notes || null,
-                  policyDocumentId: it.policyDocumentId || null,
-                  lessonId:
+    const createData = {
+      centerId,
+      classRoomId: classRoomId || null,
+      title,
+      description: description || null,
+      period,
+      periodStart: startDate,
+      active: active !== undefined ? !!active : true,
+      items: incomingItems.length
+        ? {
+            create: incomingItems
+              .filter(
+                (it) =>
+                  it &&
+                  (it.title ||
                     it.lessonId ||
-                    lessonIdByGoalId[it.lessonGoalId] ||
-                    (it.lessonGoalId ? lessonGoalMetaById[it.lessonGoalId]?.lessonId : null) ||
-                    null,
-                  lessonGoalId: it.lessonGoalId || null,
-                  priority: it.priority || null,
-                  dueAt: it.dueAt ? new Date(it.dueAt) : null,
-                  assignedToId: it.assignedToId || null,
-                })),
-            }
-          : undefined,
-      },
-      include: {
-        items: {
-          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-          include: {
-            policyDocument: true,
-            lesson: { include: { category: true } },
-            lessonGoal: true,
-          },
+                    it.lessonGoalId ||
+                    it.policyDocumentId ||
+                    it.url),
+              )
+              .map((it, idx) => ({
+                title: computeTitle(it),
+                sortOrder: Number.isFinite(Number(it.sortOrder)) ? Number(it.sortOrder) : idx,
+                kind: normalizeKind(it),
+                url: it.url || null,
+                notes: it.notes || null,
+                policyDocumentId: it.policyDocumentId || null,
+                lessonId:
+                  it.lessonId ||
+                  lessonIdByGoalId[it.lessonGoalId] ||
+                  (it.lessonGoalId ? lessonGoalMetaById[it.lessonGoalId]?.lessonId : null) ||
+                  null,
+                lessonGoalId: it.lessonGoalId || null,
+                priority: it.priority || null,
+                dueAt: it.dueAt ? new Date(it.dueAt) : null,
+                assignedToId: it.assignedToId || null,
+              })),
+          }
+        : undefined,
+    };
+    const includeItems = {
+      items: {
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        include: {
+          policyDocument: true,
+          lesson: { include: { category: true } },
+          lessonGoal: true,
         },
       },
-    });
+    };
 
-    return res.status(201).json(created);
+    try {
+      const created = await prisma.milestoneChecklistPlan.create({
+        data: createData,
+        include: includeItems,
+      });
+      return res.status(201).json(created);
+    } catch (e) {
+      // Two overlapping saves for a day with no plan yet can both try to
+      // create it; treat the loser as "already created" and return that row
+      // instead of a hard failure.
+      if (e?.code === "P2002") {
+        const existing = await prisma.milestoneChecklistPlan.findFirst({
+          where: { centerId, period, periodStart: startDate, title, classRoomId: classRoomId || null },
+          include: includeItems,
+        });
+        if (existing) return res.status(200).json(existing);
+      }
+      throw e;
+    }
   }
 
   res.setHeader("Allow", ["GET", "POST"]);

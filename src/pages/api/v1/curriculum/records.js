@@ -107,6 +107,16 @@ export default async function handler(req, res) {
     lessonAttachment,
     lessonImage,
     notes,
+    link,
+    essentialQuestions,
+    keyVocabulary,
+    notesToTeacher,
+    introduction,
+    instructionalSetting,
+    learningActivities,
+    accommodations,
+    timeRequired,
+    supplies,
   } = req.body || {};
 
   const step = normalizeSpaces(progressionStep);
@@ -169,9 +179,36 @@ export default async function handler(req, res) {
           refId: normalizeSpaces(reference),
         }),
         sheet: "Manual",
+        link: normalizeSpaces(link),
+        essentialQuestions: normalizeSpaces(essentialQuestions),
+        keyVocabulary: normalizeSpaces(keyVocabulary),
+        notesToTeacher: normalizeSpaces(notesToTeacher),
+        introduction: normalizeSpaces(introduction),
+        instructionalSetting: normalizeSpaces(instructionalSetting),
+        learningActivities: normalizeSpaces(learningActivities),
+        accommodations: normalizeSpaces(accommodations),
+        timeRequired: normalizeSpaces(timeRequired),
       },
     },
   });
+
+  if (Array.isArray(supplies) && supplies.length) {
+    const validSupplies = supplies.filter((s) => s && normalizeSpaces(s.name));
+    if (validSupplies.length) {
+      await prisma.lessonSupply.createMany({
+        data: validSupplies.map((s) => ({
+          lessonId: lesson.id,
+          name: normalizeSpaces(s.name),
+          quantity: Number(s.quantity) > 0 ? Number(s.quantity) : 1,
+          quantityType: s.quantityType === "per_student" ? "per_student" : "total",
+          unit: normalizeSpaces(s.unit) || null,
+          estimatedCost: s.estimatedCost ? parseFloat(s.estimatedCost) : null,
+          category: normalizeSpaces(s.category) || "General",
+          notes: normalizeSpaces(s.notes) || null,
+        })),
+      });
+    }
+  }
 
   const updated = await prisma.lesson.findUnique({
     where: { id: lesson.id },
@@ -179,6 +216,7 @@ export default async function handler(req, res) {
       category: true,
       goals: { orderBy: { goalIndex: "asc" } },
       remediationsFrom: { include: { toLesson: true } },
+      supplies: { orderBy: { name: "asc" } },
     },
   });
 

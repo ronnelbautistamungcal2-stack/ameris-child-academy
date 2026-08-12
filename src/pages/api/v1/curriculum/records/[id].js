@@ -66,6 +66,16 @@ export default async function handler(req, res) {
     lessonAttachment,
     lessonImage,
     notes,
+    link,
+    essentialQuestions,
+    keyVocabulary,
+    notesToTeacher,
+    introduction,
+    instructionalSetting,
+    learningActivities,
+    accommodations,
+    timeRequired,
+    supplies,
   } = req.body || {};
 
   const step = normalizeSpaces(progressionStep);
@@ -113,37 +123,67 @@ export default async function handler(req, res) {
     ? normalizeResourceList(lessonImage)
     : normalizeResourceList(previousPc.lessonImage);
 
-  const updated = await prisma.lessonGoal.update({
-    where: { id: goalId },
-    data: {
-      title: step,
-      description: hasTestingQuestion
-        ? nextTestingQuestion || null
-        : existing.description,
-      passingCriteria: {
-        ...previousPc,
-        reference: normalizeSpaces(reference),
-        term: normalizeLessonTerm(term),
-        lesson: normalizeSpaces(lessonTitle),
-        stepOfProgression: step,
-        testingQuestion: nextTestingQuestion,
-        resource: nextResource,
-        additionalResources: nextAdditionalResources,
-        lessonAttachment: nextLessonAttachment,
-        lessonImage: nextLessonImage,
-        notes: normalizeSpaces(notes),
-        age: normalizeSpaces(childAge),
-        category: normalizeSpaces(category),
-        subject: normalizeSubjectForRef({
-          subject: normalizeSpaces(subject),
-          refId: normalizeSpaces(reference),
-        }),
-        sheet,
+  const updated = await prisma.$transaction(async (tx) => {
+    if (Array.isArray(supplies)) {
+      await tx.lessonSupply.deleteMany({ where: { lessonId: existing.lessonId } });
+      const validSupplies = supplies.filter((s) => s && normalizeSpaces(s.name));
+      if (validSupplies.length) {
+        await tx.lessonSupply.createMany({
+          data: validSupplies.map((s) => ({
+            lessonId: existing.lessonId,
+            name: normalizeSpaces(s.name),
+            quantity: Number(s.quantity) > 0 ? Number(s.quantity) : 1,
+            quantityType: s.quantityType === "per_student" ? "per_student" : "total",
+            unit: normalizeSpaces(s.unit) || null,
+            estimatedCost: s.estimatedCost ? parseFloat(s.estimatedCost) : null,
+            category: normalizeSpaces(s.category) || "General",
+            notes: normalizeSpaces(s.notes) || null,
+          })),
+        });
+      }
+    }
+
+    return tx.lessonGoal.update({
+      where: { id: goalId },
+      data: {
+        title: step,
+        description: hasTestingQuestion
+          ? nextTestingQuestion || null
+          : existing.description,
+        passingCriteria: {
+          ...previousPc,
+          reference: normalizeSpaces(reference),
+          term: normalizeLessonTerm(term),
+          lesson: normalizeSpaces(lessonTitle),
+          stepOfProgression: step,
+          testingQuestion: nextTestingQuestion,
+          resource: nextResource,
+          additionalResources: nextAdditionalResources,
+          lessonAttachment: nextLessonAttachment,
+          lessonImage: nextLessonImage,
+          notes: normalizeSpaces(notes),
+          age: normalizeSpaces(childAge),
+          category: normalizeSpaces(category),
+          subject: normalizeSubjectForRef({
+            subject: normalizeSpaces(subject),
+            refId: normalizeSpaces(reference),
+          }),
+          sheet,
+          link: normalizeSpaces(link),
+          essentialQuestions: normalizeSpaces(essentialQuestions),
+          keyVocabulary: normalizeSpaces(keyVocabulary),
+          notesToTeacher: normalizeSpaces(notesToTeacher),
+          introduction: normalizeSpaces(introduction),
+          instructionalSetting: normalizeSpaces(instructionalSetting),
+          learningActivities: normalizeSpaces(learningActivities),
+          accommodations: normalizeSpaces(accommodations),
+          timeRequired: normalizeSpaces(timeRequired),
+        },
       },
-    },
-    include: {
-      lesson: { include: { category: true } },
-    },
+      include: {
+        lesson: { include: { category: true, supplies: { orderBy: { name: "asc" } } } },
+      },
+    });
   });
 
   return res.status(200).json({ goal: updated });

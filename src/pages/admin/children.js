@@ -235,6 +235,7 @@ export default function AdminChildren() {
 
   const [emergencyContacts, setEmergencyContacts] = useState(createEmergencyContacts());
   const [allergies, setAllergies] = useState("");
+  const [carpool, setCarpool] = useState("");
   const [enrollmentStartDate, setEnrollmentStartDate] = useState("");
   const [enrollmentEndDate, setEnrollmentEndDate] = useState("");
 
@@ -604,6 +605,7 @@ export default function AdminChildren() {
     setParentContacts(createParentContacts());
     setEmergencyContacts(createEmergencyContacts());
     setAllergies("");
+    setCarpool("");
     setEnrollmentStartDate("");
     setEnrollmentEndDate("");
 
@@ -640,6 +642,7 @@ export default function AdminChildren() {
     setParentContacts(createParentContacts(getParentContacts(child)));
     setEmergencyContacts(createEmergencyContacts(getEmergencyContacts(child)));
     setAllergies(child.allergies || "");
+    setCarpool(child.carpool || "");
     setEnrollmentStartDate(child.enrollmentStartDate ? child.enrollmentStartDate.slice(0, 10) : "");
     setEnrollmentEndDate(child.enrollmentEndDate ? child.enrollmentEndDate.slice(0, 10) : "");
 
@@ -978,6 +981,7 @@ export default function AdminChildren() {
           parentContacts,
           emergencyContacts,
           allergies: allergies || null,
+          carpool: carpool || null,
           enrollmentStartDate: enrollmentStartDate || null,
           enrollmentEndDate: enrollmentEndDate || null,
           healthAssessmentDocuments: buildDocumentPayload(
@@ -1052,6 +1056,7 @@ export default function AdminChildren() {
           parentContacts,
           emergencyContacts,
           allergies: allergies || null,
+          carpool: carpool || null,
           enrollmentStartDate: enrollmentStartDate || null,
           enrollmentEndDate: enrollmentEndDate || null,
           healthAssessmentDocuments: buildDocumentPayload(
@@ -2644,6 +2649,14 @@ export default function AdminChildren() {
                   onChange={(e) => setAllergies(e.target.value)}
                   style={inputStyle}
                   placeholder="e.g. peanuts, dairy"
+                />
+              </Field>
+              <Field label="Carpool (optional)">
+                <input
+                  value={carpool}
+                  onChange={(e) => setCarpool(e.target.value)}
+                  style={inputStyle}
+                  placeholder="e.g. School 1"
                 />
               </Field>
             </div>

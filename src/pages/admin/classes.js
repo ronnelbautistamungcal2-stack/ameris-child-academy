@@ -2,6 +2,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
+import { userRoles } from "@/lib/roles";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 export default function AdminClasses() {
@@ -35,7 +36,7 @@ export default function AdminClasses() {
       ]);
       setClasses(Array.isArray(cls) ? cls : []);
       setCenters(Array.isArray(c) ? c : []);
-      setTeachers(Array.isArray(t) ? t : []);
+      setTeachers(Array.isArray(t) ? t.filter((u) => userRoles(u).includes("TEACHER")) : []);
     } catch (e) {
       setError(e.message || "Failed to load classes");
     } finally {

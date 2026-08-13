@@ -7,11 +7,14 @@ import {
 import { getChecklistAssignedUsers } from "@/lib/dailyChecklistAssignees";
 import {
   CHECKLIST_FREQUENCY_OPTIONS,
+  MONTHLY_WEEK_OPTIONS,
   WEEKDAY_OPTIONS,
   describeChecklistSchedule,
   formatDateInputValue,
   getEffectiveItemSchedule,
   normalizeMonthlyDay,
+  normalizeMonthlyWeek,
+  normalizeMonthlyWeekday,
   normalizeOneTimeDate,
   normalizeRepeatDays,
   summarizeChecklistFrequency,
@@ -59,7 +62,10 @@ function blankItemRow() {
     description: "",
     frequency: "DAILY",
     repeatDays: [],
+    monthlyMode: "DAY",
     monthlyDay: "",
+    monthlyWeek: "",
+    monthlyWeekday: "",
     oneTimeDate: "",
     lessonSource: "NONE",
     lessonSlot: "",
@@ -120,6 +126,13 @@ function summaryForItem(item) {
   if (item.mediaLink) labels.push("Training video");
   if (item.policyLink) labels.push("Reference link");
   return labels;
+}
+
+function isValidMonthlySchedule(item) {
+  if (item.monthlyMode === "WEEKDAY") {
+    return normalizeMonthlyWeek(item.monthlyWeek) !== null && normalizeMonthlyWeekday(item.monthlyWeekday) !== null;
+  }
+  return !!normalizeMonthlyDay(item.monthlyDay);
 }
 
 function toggleRepeatDay(days, dayValue) {
@@ -328,9 +341,15 @@ export default function AdminTaskChecklistManager({ centerId }) {
         description: item.description || "",
         frequency: schedule.frequency,
         repeatDays: schedule.repeatDays,
+        monthlyMode: schedule.monthlyWeek && schedule.monthlyWeekday !== null ? "WEEKDAY" : "DAY",
         monthlyDay: schedule.monthlyDay
           ? String(schedule.monthlyDay)
           : "",
+        monthlyWeek: schedule.monthlyWeek ? String(schedule.monthlyWeek) : "",
+        monthlyWeekday:
+          schedule.monthlyWeekday !== null && schedule.monthlyWeekday !== undefined
+            ? String(schedule.monthlyWeekday)
+            : "",
         oneTimeDate: schedule.oneTimeDate
           ? formatDateInputValue(schedule.oneTimeDate)
           : "",
@@ -361,7 +380,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
         return normalizeRepeatDays(item.repeatDays).length === 0;
       }
       if (item.frequency === "MONTHLY") {
-        return !normalizeMonthlyDay(item.monthlyDay);
+        return !isValidMonthlySchedule(item);
       }
       if (item.frequency === "ONE_TIME") {
         return !normalizeOneTimeDate(item.oneTimeDate);
@@ -381,7 +400,9 @@ export default function AdminTaskChecklistManager({ centerId }) {
         return `Task item ${itemNumber} must include at least one weekday.`;
       }
       if (invalidItem.frequency === "MONTHLY") {
-        return `Task item ${itemNumber} needs a valid day of month between 1 and 31.`;
+        return invalidItem.monthlyMode === "WEEKDAY"
+          ? `Task item ${itemNumber} needs a week and weekday selected (e.g. 2nd Tuesday).`
+          : `Task item ${itemNumber} needs a valid day of month between 1 and 31.`;
       }
       if (invalidItem.frequency === "ONE_TIME") {
         return `Task item ${itemNumber} needs a one-time date.`;
@@ -432,7 +453,18 @@ export default function AdminTaskChecklistManager({ centerId }) {
               description: item.description.trim() || null,
               frequency: item.frequency || "DAILY",
               repeatDays: item.frequency === "WEEKLY" ? normalizeRepeatDays(item.repeatDays) : [],
-              monthlyDay: item.frequency === "MONTHLY" ? normalizeMonthlyDay(item.monthlyDay) : null,
+              monthlyDay:
+                item.frequency === "MONTHLY" && item.monthlyMode !== "WEEKDAY"
+                  ? normalizeMonthlyDay(item.monthlyDay)
+                  : null,
+              monthlyWeek:
+                item.frequency === "MONTHLY" && item.monthlyMode === "WEEKDAY"
+                  ? normalizeMonthlyWeek(item.monthlyWeek)
+                  : null,
+              monthlyWeekday:
+                item.frequency === "MONTHLY" && item.monthlyMode === "WEEKDAY"
+                  ? normalizeMonthlyWeekday(item.monthlyWeekday)
+                  : null,
               oneTimeDate: item.frequency === "ONE_TIME" ? item.oneTimeDate || null : null,
               lessonSource: normalizeLessonSource(
                 item.lessonSource,
@@ -1020,7 +1052,12 @@ export default function AdminTaskChecklistManager({ centerId }) {
                             const next = event.target.value;
                             updateItemRow(index, "frequency", next);
                             if (next !== "WEEKLY") updateItemRow(index, "repeatDays", []);
-                            if (next !== "MONTHLY") updateItemRow(index, "monthlyDay", "");
+                            if (next !== "MONTHLY") {
+                              updateItemRow(index, "monthlyMode", "DAY");
+                              updateItemRow(index, "monthlyDay", "");
+                              updateItemRow(index, "monthlyWeek", "");
+                              updateItemRow(index, "monthlyWeekday", "");
+                            }
                             if (next !== "ONE_TIME") updateItemRow(index, "oneTimeDate", "");
                           }}
                           className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-200"
@@ -1189,18 +1226,82 @@ export default function AdminTaskChecklistManager({ centerId }) {
                     ) : null}
 
                     {item.frequency === "MONTHLY" ? (
-                      <label className="mt-3 block max-w-xs">
-                        <div className="mb-1 text-xs font-semibold text-gray-500">Day of month</div>
-                        <input
-                          type="number"
-                          min="1"
-                          max="31"
-                          value={item.monthlyDay || ""}
-                          onChange={(event) => updateItemRow(index, "monthlyDay", event.target.value)}
-                          placeholder="20"
-                          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-200"
-                        />
-                      </label>
+                      <div className="mt-3">
+                        <div className="mb-2 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => updateItemRow(index, "monthlyMode", "DAY")}
+                            className={[
+                              "rounded-full px-3 py-1.5 text-xs font-semibold transition",
+                              (item.monthlyMode || "DAY") === "DAY"
+                                ? "bg-sky-600 text-white"
+                                : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                            ].join(" ")}
+                          >
+                            Day of month
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateItemRow(index, "monthlyMode", "WEEKDAY")}
+                            className={[
+                              "rounded-full px-3 py-1.5 text-xs font-semibold transition",
+                              item.monthlyMode === "WEEKDAY"
+                                ? "bg-sky-600 text-white"
+                                : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                            ].join(" ")}
+                          >
+                            Day of week
+                          </button>
+                        </div>
+
+                        {(item.monthlyMode || "DAY") === "DAY" ? (
+                          <label className="block max-w-xs">
+                            <div className="mb-1 text-xs font-semibold text-gray-500">Day of month</div>
+                            <input
+                              type="number"
+                              min="1"
+                              max="31"
+                              value={item.monthlyDay || ""}
+                              onChange={(event) => updateItemRow(index, "monthlyDay", event.target.value)}
+                              placeholder="20"
+                              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-200"
+                            />
+                          </label>
+                        ) : (
+                          <div className="flex max-w-md gap-3">
+                            <label className="block flex-1">
+                              <div className="mb-1 text-xs font-semibold text-gray-500">Week</div>
+                              <select
+                                value={item.monthlyWeek || ""}
+                                onChange={(event) => updateItemRow(index, "monthlyWeek", event.target.value)}
+                                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-200"
+                              >
+                                <option value="">Select week</option>
+                                {MONTHLY_WEEK_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="block flex-1">
+                              <div className="mb-1 text-xs font-semibold text-gray-500">Weekday</div>
+                              <select
+                                value={item.monthlyWeekday || ""}
+                                onChange={(event) => updateItemRow(index, "monthlyWeekday", event.target.value)}
+                                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-200"
+                              >
+                                <option value="">Select weekday</option>
+                                {WEEKDAY_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+                        )}
+                      </div>
                     ) : null}
 
                     {item.frequency === "ONE_TIME" ? (

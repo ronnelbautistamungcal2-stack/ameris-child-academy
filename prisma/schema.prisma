@@ -368,6 +368,7 @@ model Child {
   emergencyContacts Json?
   parentContacts   Json?
   allergies       String?
+  carpool         String?
   healthAssessmentDocuments Json?
   enrollmentDocuments Json?
   iefDocuments    Json?
@@ -1478,6 +1479,8 @@ model DailyChecklist {
   frequency   ChecklistFrequency @default(DAILY)
   repeatDays  Int[]              @default([])
   monthlyDay  Int?
+  monthlyWeek Int?
+  monthlyWeekday Int?
   active      Boolean            @default(true)
   items       DailyChecklistItem[]
   notes       DailyChecklistNote[]
@@ -1523,6 +1526,8 @@ model DailyChecklistItem {
   frequency   ChecklistFrequency  @default(DAILY)
   repeatDays  Int[]               @default([])
   monthlyDay  Int?
+  monthlyWeek Int?
+  monthlyWeekday Int?
   oneTimeDate DateTime?           @db.Date
   lessonSource String             @default("NONE")
   lessonSlot   String?

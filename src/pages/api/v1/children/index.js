@@ -184,6 +184,7 @@ export default async function handler(req, res) {
       emergencyContacts,
       emergencyContact,
       allergies,
+      carpool,
       healthAssessmentDocuments,
       enrollmentDocuments,
       iefDocuments,
@@ -246,6 +247,10 @@ export default async function handler(req, res) {
           allergies:
             typeof allergies === "string" && allergies.trim()
               ? allergies.trim()
+              : null,
+          carpool:
+            typeof carpool === "string" && carpool.trim()
+              ? carpool.trim()
               : null,
           healthAssessmentDocuments: normalizeDocs(healthAssessmentDocuments),
           enrollmentDocuments: normalizeDocs(enrollmentDocuments),

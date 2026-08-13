@@ -220,7 +220,7 @@ test.describe.serial("Admin Teachers Page", () => {
     await page.goto("/admin/teachers");
 
     await expect(
-      page.getByText("Click a teacher to manage their assignments."),
+      page.getByText("Click a staff member to manage their assignments."),
     ).toBeVisible();
 
     const searchInput = page.locator('input[type="text"]').first();
@@ -239,7 +239,7 @@ test.describe.serial("Admin Teachers Page", () => {
 
     await page.goto("/admin/teachers");
     await expect(
-      page.getByText("Click a teacher to manage their assignments."),
+      page.getByText("Click a staff member to manage their assignments."),
     ).toBeVisible();
 
     await page.getByRole("button", { name: fixture.teacherName }).click();

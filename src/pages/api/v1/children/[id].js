@@ -130,6 +130,7 @@ export default async function handler(req, res) {
       emergencyContacts,
       emergencyContact,
       allergies,
+      carpool,
       healthAssessmentDocuments,
       enrollmentDocuments,
       iefDocuments,
@@ -209,6 +210,11 @@ export default async function handler(req, res) {
           allergies: Object.prototype.hasOwnProperty.call(req.body, "allergies")
             ? typeof allergies === "string" && allergies.trim()
               ? allergies.trim()
+              : null
+            : undefined,
+          carpool: Object.prototype.hasOwnProperty.call(req.body, "carpool")
+            ? typeof carpool === "string" && carpool.trim()
+              ? carpool.trim()
               : null
             : undefined,
           healthAssessmentDocuments: Object.prototype.hasOwnProperty.call(

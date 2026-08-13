@@ -44,6 +44,30 @@ export function normalizeMonthlyDay(value) {
   return num;
 }
 
+export const MONTHLY_WEEK_OPTIONS = [
+  { value: 1, label: "1st" },
+  { value: 2, label: "2nd" },
+  { value: 3, label: "3rd" },
+  { value: 4, label: "4th" },
+  { value: -1, label: "Last" },
+];
+
+export function normalizeMonthlyWeek(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const num = Number(value);
+  if (!Number.isInteger(num)) return null;
+  if (num === -1) return -1;
+  if (num >= 1 && num <= 4) return num;
+  return null;
+}
+
+export function normalizeMonthlyWeekday(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const num = Number(value);
+  if (!Number.isInteger(num) || num < 0 || num > 6) return null;
+  return num;
+}
+
 function toDate(value) {
   if (value instanceof Date) return value;
   if (typeof value === "string") {
@@ -65,6 +89,15 @@ export function normalizeOneTimeDate(value) {
   const date = toDate(value);
   if (!date) return null;
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function isNthWeekdayOfMonth(date, weekday, week) {
+  if (date.getDay() !== weekday) return false;
+  if (week === -1) {
+    const next = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 7);
+    return next.getMonth() !== date.getMonth();
+  }
+  return Math.ceil(date.getDate() / 7) === week;
 }
 
 function sameCalendarDate(left, right) {
@@ -113,6 +146,15 @@ export function describeChecklistSchedule(checklist) {
   }
 
   if (frequency === "MONTHLY") {
+    const week = normalizeMonthlyWeek(checklist?.monthlyWeek);
+    const weekday = normalizeMonthlyWeekday(checklist?.monthlyWeekday);
+    if (week !== null && weekday !== null) {
+      const weekLabel =
+        MONTHLY_WEEK_OPTIONS.find((option) => option.value === week)?.label || ordinal(week);
+      const weekdayLabel =
+        WEEKDAY_OPTIONS.find((option) => option.value === weekday)?.label || `Day ${weekday}`;
+      return `Every ${weekLabel} ${weekdayLabel}`;
+    }
     const day = normalizeMonthlyDay(checklist?.monthlyDay);
     return day ? `Monthly on the ${ordinal(day)}` : "Monthly";
   }
@@ -143,6 +185,11 @@ export function scheduleMatchesDate(checklist, value) {
   }
 
   if (frequency === "MONTHLY") {
+    const week = normalizeMonthlyWeek(checklist?.monthlyWeek);
+    const weekday = normalizeMonthlyWeekday(checklist?.monthlyWeekday);
+    if (week !== null && weekday !== null) {
+      return isNthWeekdayOfMonth(date, weekday, week);
+    }
     const day = normalizeMonthlyDay(checklist?.monthlyDay);
     if (!day) return true;
     return date.getDate() === day;
@@ -166,6 +213,17 @@ export function getEffectiveItemSchedule(item, checklist) {
     item?.frequency || checklist?.frequency,
   );
 
+  const itemHasOwnMonthlySchedule =
+    normalizeMonthlyDay(item?.monthlyDay) !== null ||
+    (normalizeMonthlyWeek(item?.monthlyWeek) !== null &&
+      normalizeMonthlyWeekday(item?.monthlyWeekday) !== null);
+  const monthlySource = itemHasOwnMonthlySchedule ? item : checklist;
+  const monthlyWeek =
+    frequency === "MONTHLY" ? normalizeMonthlyWeek(monthlySource?.monthlyWeek) : null;
+  const monthlyWeekday =
+    frequency === "MONTHLY" ? normalizeMonthlyWeekday(monthlySource?.monthlyWeekday) : null;
+  const usesMonthlyWeekdayMode = monthlyWeek !== null && monthlyWeekday !== null;
+
   return {
     frequency,
     repeatDays:
@@ -177,9 +235,11 @@ export function getEffectiveItemSchedule(item, checklist) {
           )
         : [],
     monthlyDay:
-      frequency === "MONTHLY"
-        ? normalizeMonthlyDay(item?.monthlyDay ?? checklist?.monthlyDay)
+      frequency === "MONTHLY" && !usesMonthlyWeekdayMode
+        ? normalizeMonthlyDay(monthlySource?.monthlyDay)
         : null,
+    monthlyWeek: usesMonthlyWeekdayMode ? monthlyWeek : null,
+    monthlyWeekday: usesMonthlyWeekdayMode ? monthlyWeekday : null,
     oneTimeDate:
       frequency === "ONE_TIME" ? normalizeOneTimeDate(item?.oneTimeDate) : null,
   };
@@ -194,11 +254,17 @@ function scheduleSignature(schedule) {
   const repeatDays =
     frequency === "WEEKLY" ? normalizeRepeatDays(schedule?.repeatDays).join(",") : "";
   const monthlyDay = frequency === "MONTHLY" ? String(normalizeMonthlyDay(schedule?.monthlyDay) || "") : "";
+  const monthlyWeekday =
+    frequency === "MONTHLY" &&
+    normalizeMonthlyWeek(schedule?.monthlyWeek) !== null &&
+    normalizeMonthlyWeekday(schedule?.monthlyWeekday) !== null
+      ? `${schedule.monthlyWeek}-${schedule.monthlyWeekday}`
+      : "";
   const oneTimeDate =
     frequency === "ONE_TIME" && normalizeOneTimeDate(schedule?.oneTimeDate)
       ? formatDateInputValue(schedule.oneTimeDate)
       : "";
-  return `${frequency}|${repeatDays}|${monthlyDay}|${oneTimeDate}`;
+  return `${frequency}|${repeatDays}|${monthlyDay}|${monthlyWeekday}|${oneTimeDate}`;
 }
 
 export function summarizeChecklistFrequency(checklist) {

@@ -69,6 +69,7 @@ export const ADMIN_NAV_ITEMS = [
       { href: "/admin/permission-policies", label: "Family Permission Policies" },
       { href: "/admin/reports", label: "Reports" },
       { href: "/admin/feeding-plans-report", label: "Feeding Plans Report" },
+      { href: "/admin/carpool-report", label: "Carpool Report" },
     ],
   },
   {

@@ -20,6 +20,8 @@ import {
   itemMatchesDate,
   normalizeChecklistFrequency,
   normalizeMonthlyDay,
+  normalizeMonthlyWeek,
+  normalizeMonthlyWeekday,
   normalizeOneTimeDate,
   normalizeRepeatDays,
 } from "@/lib/checklistSchedule";
@@ -55,6 +57,19 @@ const LESSON_SELECT = {
     },
   },
 };
+
+function resolveMonthlySchedule(source = {}) {
+  const monthlyWeek = normalizeMonthlyWeek(source.monthlyWeek);
+  const monthlyWeekday = normalizeMonthlyWeekday(source.monthlyWeekday);
+  if (monthlyWeek !== null && monthlyWeekday !== null) {
+    return { monthlyDay: null, monthlyWeek, monthlyWeekday };
+  }
+  return {
+    monthlyDay: normalizeMonthlyDay(source.monthlyDay),
+    monthlyWeek: null,
+    monthlyWeekday: null,
+  };
+}
 
 function parseDateOnly(value) {
   if (!value) return null;
@@ -260,10 +275,10 @@ function normalizeChecklistPayload(body = {}) {
     normalizedFrequency === "WEEKLY"
       ? normalizeRepeatDays(body.repeatDays)
       : [];
-  const monthlyDay =
+  const { monthlyDay, monthlyWeek, monthlyWeekday } =
     normalizedFrequency === "MONTHLY"
-      ? normalizeMonthlyDay(body.monthlyDay)
-      : null;
+      ? resolveMonthlySchedule(body)
+      : { monthlyDay: null, monthlyWeek: null, monthlyWeekday: null };
 
   return {
     title: body.title,
@@ -277,6 +292,8 @@ function normalizeChecklistPayload(body = {}) {
     frequency: normalizedFrequency,
     repeatDays,
     monthlyDay,
+    monthlyWeek,
+    monthlyWeekday,
   };
 }
 
@@ -298,7 +315,9 @@ function applyChecklistPatch(data, body = {}) {
   if (
     Object.prototype.hasOwnProperty.call(body, "frequency") ||
     Object.prototype.hasOwnProperty.call(body, "repeatDays") ||
-    Object.prototype.hasOwnProperty.call(body, "monthlyDay")
+    Object.prototype.hasOwnProperty.call(body, "monthlyDay") ||
+    Object.prototype.hasOwnProperty.call(body, "monthlyWeek") ||
+    Object.prototype.hasOwnProperty.call(body, "monthlyWeekday")
   ) {
     const frequency = ["DAILY", "WEEKLY", "MONTHLY"].includes(
       String(body.frequency || data.frequency || "").toUpperCase(),
@@ -310,10 +329,13 @@ function applyChecklistPatch(data, body = {}) {
       frequency === "WEEKLY"
         ? normalizeRepeatDays(body.repeatDays)
         : [];
-    data.monthlyDay =
+    const monthlySchedule =
       frequency === "MONTHLY"
-        ? normalizeMonthlyDay(body.monthlyDay)
-        : null;
+        ? resolveMonthlySchedule(body)
+        : { monthlyDay: null, monthlyWeek: null, monthlyWeekday: null };
+    data.monthlyDay = monthlySchedule.monthlyDay;
+    data.monthlyWeek = monthlySchedule.monthlyWeek;
+    data.monthlyWeekday = monthlySchedule.monthlyWeekday;
   }
 }
 
@@ -324,12 +346,18 @@ function serializeItem(it, sortOrder) {
     it.lessonId,
     it.lessonSlot,
   );
+  const monthlySchedule =
+    frequency === "MONTHLY"
+      ? resolveMonthlySchedule(it)
+      : { monthlyDay: null, monthlyWeek: null, monthlyWeekday: null };
   return {
     title: it.title,
     description: it.description || null,
     frequency,
     repeatDays: frequency === "WEEKLY" ? normalizeRepeatDays(it.repeatDays) : [],
-    monthlyDay: frequency === "MONTHLY" ? normalizeMonthlyDay(it.monthlyDay) : null,
+    monthlyDay: monthlySchedule.monthlyDay,
+    monthlyWeek: monthlySchedule.monthlyWeek,
+    monthlyWeekday: monthlySchedule.monthlyWeekday,
     oneTimeDate: frequency === "ONE_TIME" ? normalizeOneTimeDate(it.oneTimeDate) : null,
     lessonSource,
     lessonSlot: lessonSource === "AUTO_SLOT" ? normalizeLessonSlot(it.lessonSlot) : null,

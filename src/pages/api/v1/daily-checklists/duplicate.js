@@ -13,6 +13,8 @@ function cloneItemData(item, sortOrder) {
     frequency: item.frequency,
     repeatDays: item.repeatDays,
     monthlyDay: item.monthlyDay,
+    monthlyWeek: item.monthlyWeek,
+    monthlyWeekday: item.monthlyWeekday,
     oneTimeDate: item.oneTimeDate,
     lessonSource: item.lessonSource,
     lessonSlot: item.lessonSlot,
@@ -71,6 +73,8 @@ export default async function handler(req, res) {
       frequency: source.frequency,
       repeatDays: source.repeatDays,
       monthlyDay: source.monthlyDay,
+      monthlyWeek: source.monthlyWeek,
+      monthlyWeekday: source.monthlyWeekday,
       active: source.active,
       items: source.items.length
         ? { create: source.items.map((item, i) => cloneItemData(item, i)) }

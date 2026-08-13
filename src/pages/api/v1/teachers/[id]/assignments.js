@@ -1,27 +1,30 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { userRoles } from "@/lib/roles";
+import { isEmployeeRole, userRoles } from "@/lib/roles";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
   if (session.user.role !== "ADMIN") {
-    return res.status(403).json({ error: "Only admins can manage teachers" });
+    return res.status(403).json({ error: "Only admins can manage staff" });
   }
 
   const { id } = req.query;
 
-  const teacher = await prisma.user.findUnique({ where: { id } });
-  if (!teacher) return res.status(404).json({ error: "Teacher not found" });
-  if (!userRoles(teacher).includes("TEACHER")) {
-    return res.status(400).json({ error: "User is not a teacher" });
+  const staffMember = await prisma.user.findUnique({ where: { id } });
+  if (!staffMember) return res.status(404).json({ error: "Staff member not found" });
+  const roles = userRoles(staffMember);
+  if (!roles.some(isEmployeeRole)) {
+    return res.status(400).json({ error: "User is not a staff member" });
   }
+  const isTeacher = roles.includes("TEACHER");
+  const assignmentRole = roles.find(isEmployeeRole);
 
   if (req.method === "PUT") {
     const { centerIds, classIds } = req.body || {};
 
     const centers = Array.isArray(centerIds) ? centerIds.filter(Boolean) : null;
-    const classes = Array.isArray(classIds) ? classIds.filter(Boolean) : null;
+    const classes = isTeacher && Array.isArray(classIds) ? classIds.filter(Boolean) : null;
 
     await prisma.$transaction(async (tx) => {
       if (centers) {
@@ -30,11 +33,11 @@ export default async function handler(req, res) {
           select: { id: true, centerId: true, role: true },
         });
 
-        const teacherCenterRows = existing.filter((r) => r.role === "TEACHER");
-        const teacherCenterIds = new Set(teacherCenterRows.map((r) => r.centerId));
+        const ownCenterRows = existing.filter((r) => r.role === assignmentRole);
+        const ownCenterIds = new Set(ownCenterRows.map((r) => r.centerId));
         const desired = new Set(centers);
 
-        const toDelete = teacherCenterRows
+        const toDelete = ownCenterRows
           .filter((r) => !desired.has(r.centerId))
           .map((r) => r.id);
 
@@ -42,10 +45,10 @@ export default async function handler(req, res) {
           await tx.centerUser.deleteMany({ where: { id: { in: toDelete } } });
         }
 
-        const toCreate = centers.filter((cId) => !teacherCenterIds.has(cId));
+        const toCreate = centers.filter((cId) => !ownCenterIds.has(cId));
         if (toCreate.length) {
           await tx.centerUser.createMany({
-            data: toCreate.map((cId) => ({ userId: id, centerId: cId, role: "TEACHER" })),
+            data: toCreate.map((cId) => ({ userId: id, centerId: cId, role: assignmentRole })),
             skipDuplicates: true,
           });
         }

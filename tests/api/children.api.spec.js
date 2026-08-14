@@ -108,6 +108,25 @@ test.describe("Children API @api", () => {
     expect(data.firstName).toBe("E2E_Updated");
   });
 
+  test("PUT /api/v1/children/:id updates carpool", async ({ request }) => {
+    if (!createdChildId) test.skip();
+    const cookies = await loginAsAdmin(request);
+    const res = await apiPut(
+      request,
+      `/api/v1/children/${createdChildId}`,
+      { carpool: "Route 7 - Smith Van" },
+      cookies,
+    );
+    expect(res.status()).toBe(200);
+    const data = await res.json();
+    expect(data.carpool).toBe("Route 7 - Smith Van");
+
+    const getRes = await apiGet(request, `/api/v1/children/${createdChildId}`, cookies);
+    expect(getRes.status()).toBe(200);
+    const child = await getRes.json();
+    expect(child.carpool).toBe("Route 7 - Smith Van");
+  });
+
   test("PUT /api/v1/children/:id updates document expiration metadata", async ({ request }) => {
     if (!createdChildId) test.skip();
     const cookies = await loginAsAdmin(request);

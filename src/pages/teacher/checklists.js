@@ -240,6 +240,7 @@ export default function TeacherChecklists() {
                 <>
                   <WeeklyLessonPlanner centerId={centerId} classId={classId} mode="teacher" singleDay />
                   <NextWeekSupplies centerId={centerId} classRoomId={classId} />
+                  <AdditionalSupplyRequest centerId={centerId} classRoomId={classId} />
                 </>
               )}
             </div>
@@ -883,11 +884,18 @@ function ChecklistItemDetailModal({ detail, onClose }) {
   );
 }
 
+const SUPPLY_STATUS_OPTIONS = [
+  { value: "in_class", label: "In Class" },
+  { value: "in_inventory", label: "In Inventory" },
+  { value: "requested", label: "Request Supply" },
+];
+
 function NextWeekSupplies({ centerId, classRoomId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [checked, setChecked] = useState({});
+  const [itemStatus, setItemStatus] = useState({});
+  const [requesting, setRequesting] = useState({});
   const [open, setOpen] = useState(true);
 
   const load = useCallback(async () => {
@@ -898,7 +906,7 @@ function NextWeekSupplies({ centerId, classRoomId }) {
       const qs = new URLSearchParams({ centerId, classRoomId });
       const result = await apiJson(`/api/v1/lessons/next-week-supplies?${qs}`);
       setData(result);
-      setChecked({});
+      setItemStatus({});
     } catch (e) {
       setError(e.message || "Failed to load next week's supplies");
     } finally {
@@ -917,7 +925,34 @@ function NextWeekSupplies({ centerId, classRoomId }) {
   }, [data]);
 
   const supplies = data?.supplies || [];
-  const checkedCount = Object.values(checked).filter(Boolean).length;
+  const resolvedCount = Object.keys(itemStatus).length;
+
+  async function handleStatusChange(supply, key, status) {
+    setItemStatus((prev) => ({ ...prev, [key]: status }));
+    if (status !== "requested") return;
+
+    setRequesting((prev) => ({ ...prev, [key]: true }));
+    setError("");
+    try {
+      const lessonTitles = (supply.lessons || []).map((l) => l.title).join(", ");
+      await apiJson("/api/v1/supply-requests", {
+        method: "POST",
+        body: JSON.stringify({
+          centerId,
+          classRoomId,
+          item: supply.name,
+          quantity: supply.totalQuantity || 1,
+          purpose: lessonTitles ? `Needed for: ${lessonTitles}` : null,
+          lessonId: supply.lessons?.[0]?.id || null,
+        }),
+      });
+    } catch (e) {
+      setError(e.message || "Failed to send supply request");
+      setItemStatus((prev) => ({ ...prev, [key]: undefined }));
+    } finally {
+      setRequesting((prev) => ({ ...prev, [key]: false }));
+    }
+  }
 
   return (
     <div className="rounded-xl border border-emerald-200 bg-white">
@@ -932,7 +967,7 @@ function NextWeekSupplies({ centerId, classRoomId }) {
           </h3>
           {supplies.length > 0 && (
             <p className="mt-0.5 text-xs text-gray-500">
-              {checkedCount}/{supplies.length} items marked as have
+              {resolvedCount}/{supplies.length} items marked
             </p>
           )}
         </div>
@@ -942,59 +977,67 @@ function NextWeekSupplies({ centerId, classRoomId }) {
       {open && (
         <div className="border-t border-emerald-100 px-4 pb-4 pt-2">
           {error ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{error}</div>
-          ) : loading ? (
+            <div className="mb-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{error}</div>
+          ) : null}
+          {loading ? (
             <div className="text-xs text-gray-500 py-2">Loading supplies…</div>
           ) : supplies.length === 0 ? (
             <div className="text-xs text-gray-500 py-2">
-              No supplies are attached to lessons planned for next week. Supplies are added by admins inside each lesson.
+              No supplies are attached to lessons planned for next week. Supplies are added by admins when a lesson is created.
             </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="py-2 pr-3 text-left text-xs font-semibold text-gray-500 w-10">Have?</th>
-                  <th className="py-2 pr-3 text-left text-xs font-semibold text-gray-500">Supply</th>
-                  <th className="py-2 text-left text-xs font-semibold text-gray-500">Needed For</th>
-                </tr>
-              </thead>
-              <tbody>
-                {supplies.map((s, idx) => {
-                  const key = `${s.name}|${s.unit || ""}`;
-                  const isChecked = checked[key] || false;
-                  return (
-                    <tr
-                      key={key}
-                      className={`border-b border-gray-50 ${isChecked ? "opacity-50" : ""}`}
-                    >
-                      <td className="py-2 pr-3">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => setChecked((prev) => ({ ...prev, [key]: e.target.checked }))}
-                          className="h-4 w-4 rounded accent-emerald-600"
-                        />
-                      </td>
-                      <td className="py-2 pr-3">
-                        <span className={`font-semibold ${isChecked ? "line-through text-gray-400" : "text-amber-700"}`}>
+            <div className="flex flex-col gap-2">
+              {supplies.map((s) => {
+                const key = `${s.name}|${s.unit || ""}`;
+                const status = itemStatus[key];
+                const isRequesting = !!requesting[key];
+                return (
+                  <div key={key} className="rounded-lg border border-gray-100 p-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className={`text-sm font-semibold ${status ? "text-gray-500" : "text-amber-700"}`}>
                           {s.name}
                           {s.unit ? ` (${s.unit})` : ""}
-                          {s.totalQuantity > 1 ? ` ×${s.totalQuantity}` : ""}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Needed: {s.totalQuantity || 1}
+                          {s.lessons?.length ? (
+                            <span> · For: {s.lessons.map((l) => l.title).join(", ")}</span>
+                          ) : null}
+                        </div>
+                      </div>
+                      {status === "requested" && (
+                        <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                          {isRequesting ? "Sending…" : "Requested ✓"}
                         </span>
-                      </td>
-                      <td className="py-2 text-xs text-gray-600">
-                        {s.lessons.map((l, i) => (
-                          <span key={l.id}>
-                            {l.title}
-                            {i < s.lessons.length - 1 ? ", " : ""}
-                          </span>
-                        ))}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      )}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {SUPPLY_STATUS_OPTIONS.map((opt) => {
+                        const active = status === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            disabled={isRequesting}
+                            onClick={() => handleStatusChange(s, key, opt.value)}
+                            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                              active
+                                ? opt.value === "requested"
+                                  ? "bg-rose-600 text-white"
+                                  : "bg-emerald-600 text-white"
+                                : "border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                            } disabled:opacity-60`}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
           <button
             type="button"
@@ -1003,6 +1046,107 @@ function NextWeekSupplies({ centerId, classRoomId }) {
           >
             Refresh
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdditionalSupplyRequest({ centerId, classRoomId }) {
+  const emptyForm = { item: "", quantity: 1, purpose: "", notes: "" };
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!form.item.trim() || !centerId) return;
+    setSaving(true);
+    setError("");
+    setSuccess("");
+    try {
+      await apiJson("/api/v1/supply-requests", {
+        method: "POST",
+        body: JSON.stringify({
+          centerId,
+          classRoomId: classRoomId || null,
+          item: form.item.trim(),
+          quantity: Number(form.quantity) || 1,
+          purpose: form.purpose || null,
+          notes: form.notes || null,
+        }),
+      });
+      setSuccess("Supply request sent to admin.");
+      setForm(emptyForm);
+      setTimeout(() => setSuccess(""), 4000);
+    } catch (e2) {
+      setError(e2.message || "Failed to send supply request");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-sky-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-4 py-3 text-left"
+      >
+        <h3 className="text-sm font-extrabold text-gray-900">Request Additional Supplies</h3>
+        <span className="text-xs text-gray-400">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="border-t border-sky-100 px-4 pb-4 pt-3">
+          <p className="mb-3 text-xs text-gray-500">
+            Need something that isn't part of a lesson? Request it here and it will go straight to the admin's supply request list.
+          </p>
+          {error ? (
+            <div className="mb-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{error}</div>
+          ) : null}
+          {success ? (
+            <div className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-700">{success}</div>
+          ) : null}
+          <form onSubmit={submit} className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <input
+                className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none"
+                placeholder="Item (e.g. Paper towels)"
+                value={form.item}
+                onChange={(e) => setForm((p) => ({ ...p, item: e.target.value }))}
+                required
+              />
+              <input
+                type="number"
+                min="1"
+                className="w-16 rounded-lg border border-gray-200 px-2 py-2 text-center text-sm focus:border-sky-400 focus:outline-none"
+                value={form.quantity}
+                onChange={(e) => setForm((p) => ({ ...p, quantity: parseInt(e.target.value) || 1 }))}
+              />
+            </div>
+            <input
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none"
+              placeholder="Purpose (optional)"
+              value={form.purpose}
+              onChange={(e) => setForm((p) => ({ ...p, purpose: e.target.value }))}
+            />
+            <textarea
+              rows={2}
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none"
+              placeholder="Notes (optional)"
+              value={form.notes}
+              onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+            />
+            <button
+              type="submit"
+              disabled={saving || !form.item.trim()}
+              className="self-start rounded-lg bg-sky-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-sky-700 disabled:opacity-60"
+            >
+              {saving ? "Sending…" : "Send Request"}
+            </button>
+          </form>
         </div>
       )}
     </div>

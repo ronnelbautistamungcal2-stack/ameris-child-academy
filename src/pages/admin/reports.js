@@ -311,7 +311,14 @@ const ACTIVITY_TYPE_LABELS = {
   CITIZENSHIP: "Citizenship",
   ACCOMPLISHMENT: "Accomplishment",
   INCIDENT: "Incident",
+  TOILETING: "Toileting",
   OTHER: "Grade",
+};
+
+const TOILETING_TYPE_LABELS = {
+  SUCCESS: "Success",
+  TRIED: "Tried",
+  ACCIDENT: "Accident",
 };
 
 function filterByDateRange(items, from, to, field = "createdAt") {
@@ -697,6 +704,12 @@ function ActivityLogEntry({ activity: a }) {
       if (a.notes) parts.push(a.notes);
       return parts.join(" | ") || null;
     }
+    if (a.type === "TOILETING") {
+      const parts = [];
+      if (details.toiletingType) parts.push(TOILETING_TYPE_LABELS[details.toiletingType] || details.toiletingType);
+      if (a.notes) parts.push(a.notes);
+      return parts.join(" | ") || null;
+    }
     return a.notes || null;
   }
 
@@ -723,7 +736,7 @@ function ActivityIcon({ type }) {
     NAP: "💤", BOTTLE: "🍼", MEAL: "🍽️", SNACK: "🥨",
     DIAPER_CHANGE: "🧷", ACTIVITY: "🎨", CITIZENSHIP: "⭐",
     ACCOMPLISHMENT: "🏆", INCIDENT: "⚠️", BEHAVIOR: "📋",
-    TASK_CHECKLIST: "✅", OTHER: "📝",
+    TASK_CHECKLIST: "✅", TOILETING: "🚽", OTHER: "📝",
   };
   return <span className="text-base">{icons[type] || "📄"}</span>;
 }
@@ -1372,7 +1385,7 @@ const CLASS_ACTIVITY_ICONS = {
   NAP: "💤", BOTTLE: "🍼", MEAL: "🍽️", SNACK: "🥨",
   DIAPER_CHANGE: "🧷", ACTIVITY: "🎨", CITIZENSHIP: "⭐",
   ACCOMPLISHMENT: "🏆", INCIDENT: "⚠️", BEHAVIOR: "📋",
-  TASK_CHECKLIST: "✅", OTHER: "📝",
+  TASK_CHECKLIST: "✅", TOILETING: "🚽", OTHER: "📝",
 };
 
 function ClassPerformanceTab({ centerId, classes, dateFrom, dateTo }) {

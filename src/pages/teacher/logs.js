@@ -4,20 +4,6 @@ import { useToast } from "@/contexts/ToastContext";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const TYPES = [
-  "DIAPER_CHANGE",
-  "NAP",
-  "BOTTLE",
-  "MEAL",
-  "SNACK",
-  "ACTIVITY",
-  "TASK_CHECKLIST",
-  "BEHAVIOR",
-  "ACCOMPLISHMENT",
-  "INCIDENT",
-  "OTHER",
-];
-
 const TYPE_LABELS = {
   DIAPER_CHANGE: "Diaper Change",
   NAP: "Nap",
@@ -29,6 +15,7 @@ const TYPE_LABELS = {
   BEHAVIOR: "Citizenship",
   ACCOMPLISHMENT: "Accomplishment",
   INCIDENT: "Incident",
+  TOILETING: "Toileting",
   OTHER: "Grade",
 };
 
@@ -48,14 +35,6 @@ const PORTION_OPTIONS = [
   { value: "NONE", label: "None" },
 ];
 
-const BOTTLE_PORTION_OPTIONS = [
-  { value: "FULL", label: "Full" },
-  { value: "MOST", label: "Most" },
-  { value: "HALF", label: "Half" },
-  { value: "SOME", label: "Some" },
-  { value: "NONE", label: "None" },
-];
-
 const BEHAVIOR_TYPE_OPTIONS = [
   { value: "PHYSICAL_VIOLENCE", label: "Physical violence" },
   { value: "VIRTUE", label: "Virtue" },
@@ -70,6 +49,12 @@ const DIAPER_TYPE_OPTIONS = [
   { value: "BM", label: "BM" },
   { value: "W", label: "W" },
   { value: "D", label: "D" },
+];
+
+const TOILETING_TYPE_OPTIONS = [
+  { value: "SUCCESS", label: "Success" },
+  { value: "TRIED", label: "Tried" },
+  { value: "ACCIDENT", label: "Accident" },
 ];
 
 function supportsBehaviorDetails(type) {
@@ -104,61 +89,18 @@ function buildCreatedAtForToday(timeValue) {
 function defaultActivityFields(nextType) {
   return {
     activityTime: toTimeInputValue(new Date()),
-    napStartTime: "",
+    napStartTime: nextType === "NAP" ? toTimeInputValue(new Date()) : "",
     napEndTime: "",
     mealType: nextType === "SNACK" ? "AM_SNACK" : "BREAKFAST",
     quantity: "ALL",
-    bottleQuantity: "FULL",
+    bottleQuantity: "",
     diaperType: "W",
     behaviorType: "OTHER",
     behaviorLevel: "1",
+    toiletingType: "SUCCESS",
   };
 }
 
-const ASSESSMENT_DOMAINS = [
-  {
-    key: "cognitive",
-    label: "Cognitive Development",
-    description: "Problem-solving, curiosity, focus & memory",
-    emoji: "\uD83E\uDDE0",
-    color: "bg-blue-100 text-blue-800",
-  },
-  {
-    key: "social",
-    label: "Social-Emotional",
-    description: "Sharing, empathy, self-regulation & cooperation",
-    emoji: "\uD83E\uDD1D",
-    color: "bg-sky-100 text-sky-700",
-  },
-  {
-    key: "physical",
-    label: "Physical Development",
-    description: "Motor skills, coordination & physical activity",
-    emoji: "\uD83C\uDFC3",
-    color: "bg-emerald-100 text-emerald-700",
-  },
-  {
-    key: "language",
-    label: "Language & Communication",
-    description: "Vocabulary, expression, listening & comprehension",
-    emoji: "\uD83D\uDCAC",
-    color: "bg-amber-100 text-amber-700",
-  },
-  {
-    key: "creative",
-    label: "Creative Expression",
-    description: "Art, music, imaginative play & self-expression",
-    emoji: "\uD83C\uDFA8",
-    color: "bg-rose-100 text-rose-700",
-  },
-];
-
-const RUBRIC_LEVELS = [
-  { value: 1, label: "Emerging", activeClass: "bg-amber-100 text-amber-800 border border-amber-300" },
-  { value: 2, label: "Developing", activeClass: "bg-sky-100 text-sky-800 border border-sky-300" },
-  { value: 3, label: "Proficient", activeClass: "bg-emerald-100 text-emerald-800 border border-emerald-300" },
-  { value: 4, label: "Advanced", activeClass: "bg-blue-100 text-blue-900 border border-blue-200" },
-];
 const Icon = ({ className, children, viewBox = "0 0 24 24" }) => (
   <svg
     viewBox={viewBox}
@@ -264,18 +206,14 @@ export default function TeacherLogs() {
   const [attendance, setAttendance] = useState(null);
   const [showClockedInOnly, setShowClockedInOnly] = useState(false);
   const [centerId, setCenterId] = useState(initialCenterId);
-  const [childId, setChildId] = useState(initialChildId);
   const [childSearch, setChildSearch] = useState("");
 
-  const [mode, setMode] = useState("single"); // single | bulk
-  const [bulkChildIds, setBulkChildIds] = useState([]);
+  const [bulkChildIds, setBulkChildIds] = useState(() => (initialChildId ? [initialChildId] : []));
 
   const [type, setType] = useState("MEAL");
   const [activityFields, setActivityFields] = useState(() => defaultActivityFields("MEAL"));
   const [notes, setNotes] = useState("");
   const [dailyGrade, setDailyGrade] = useState("");
-  const [assessmentOpen, setAssessmentOpen] = useState(false);
-  const [domainScores, setDomainScores] = useState({});
   const [photoFiles, setPhotoFiles] = useState([]);
 
   const [loading, setLoading] = useState(true);
@@ -344,8 +282,7 @@ export default function TeacherLogs() {
       typeof router.query.childId === "string" ? router.query.childId : "";
     if (qCenterId) setCenterId(qCenterId);
     if (qChildId) {
-      setMode("single");
-      setChildId(qChildId);
+      setBulkChildIds((prev) => (prev.includes(qChildId) ? prev : [...prev, qChildId]));
     }
   }, [router.isReady, router.query.centerId, router.query.childId]);
 
@@ -356,12 +293,6 @@ export default function TeacherLogs() {
     setChildSearch("");
     loadChildren(centerId);
   }, [centerId]);
-
-  useEffect(() => {
-    if (!childId) return;
-    const exists = children.some((c) => c.id === childId);
-    if (!exists) setChildId("");
-  }, [children, childId]);
 
   useEffect(() => {
     const urls = photoFiles.map((file) => URL.createObjectURL(file));
@@ -426,12 +357,6 @@ export default function TeacherLogs() {
     return list.sort((a, b) => (a.firstName || "").localeCompare(b.firstName || ""));
   }, [children, classId, showClockedInOnly, clockedInChildIds, childSearch]);
 
-  const childLabel = useMemo(() => {
-    const ch = children.find((c) => c.id === childId);
-    if (!ch) return "";
-    return `${ch.firstName}${ch.lastName ? ` ${ch.lastName}` : ""}`;
-  }, [children, childId]);
-
   const centerLabel = useMemo(() => {
     const center = centers.find((c) => c.id === centerId);
     return center ? center.name : "";
@@ -456,11 +381,12 @@ export default function TeacherLogs() {
       return {
         ...defaults,
         activityTime: current.activityTime || defaults.activityTime,
-        napStartTime: nextType === "NAP" ? current.napStartTime : "",
+        napStartTime: nextType === "NAP" ? current.napStartTime || defaults.napStartTime : "",
         napEndTime: nextType === "NAP" ? current.napEndTime : "",
         diaperType: nextType === "DIAPER_CHANGE" ? current.diaperType || defaults.diaperType : defaults.diaperType,
         behaviorType: supportsBehaviorDetails(nextType) ? current.behaviorType || defaults.behaviorType : defaults.behaviorType,
         behaviorLevel: supportsBehaviorDetails(nextType) ? current.behaviorLevel || defaults.behaviorLevel : defaults.behaviorLevel,
+        toiletingType: nextType === "TOILETING" ? current.toiletingType || defaults.toiletingType : defaults.toiletingType,
       };
     });
   }
@@ -718,14 +644,13 @@ export default function TeacherLogs() {
   }
 
   function buildPayload(photoUrls = []) {
-    const hasDomainScores = Object.keys(domainScores).length > 0;
     const gradeNum = dailyGrade === "" ? null : Number(dailyGrade);
     const hasDirectGrade =
       supportsDirectGrade(type) &&
       dailyGrade !== "" &&
       Number.isFinite(gradeNum);
 
-    if (supportsDirectGrade(type) && !hasDomainScores) {
+    if (supportsDirectGrade(type)) {
       if (!hasDirectGrade) {
         throw new Error("Enter a grade from 0 to 10.");
       }
@@ -734,22 +659,10 @@ export default function TeacherLogs() {
       }
     }
 
-    const payloadType = hasDomainScores || supportsDirectGrade(type) ? "OTHER" : type;
+    const payloadType = type;
 
     let details = null;
-    if (hasDomainScores) {
-      // Compute overall average from domain scores (1-4 scale)
-      const scores = Object.values(domainScores).filter((v) => v > 0);
-      const avg = scores.length ? Math.round((scores.reduce((s, v) => s + v, 0) / scores.length) * 10) / 10 : null;
-      // Map 1-4 domain scale to 1-5 legacy scale for backward compat
-      const legacyGrade = avg !== null ? Math.round((avg / 4) * 5) : null;
-      details = {
-        kind: "DAILY_GRADE",
-        grade: legacyGrade,
-        domains: { ...domainScores },
-        domainAvg: avg,
-      };
-    } else if (hasDirectGrade) {
+    if (hasDirectGrade) {
       details = { kind: "DAILY_GRADE", grade: gradeNum };
     }
 
@@ -777,7 +690,7 @@ export default function TeacherLogs() {
       details = {
         ...(details || {}),
         time: timeValue,
-        quantity: activityFields.bottleQuantity || "FULL",
+        quantity: activityFields.bottleQuantity || "",
       };
     } else if (payloadType === "DIAPER_CHANGE") {
       details = {
@@ -791,6 +704,12 @@ export default function TeacherLogs() {
         time: timeValue,
         behaviorType: activityFields.behaviorType || "OTHER",
         behaviorLevel: activityFields.behaviorLevel || "1",
+      };
+    } else if (payloadType === "TOILETING") {
+      details = {
+        ...(details || {}),
+        time: timeValue,
+        toiletingType: activityFields.toiletingType || "SUCCESS",
       };
     } else if (!supportsDirectGrade(type)) {
       details = {
@@ -821,40 +740,6 @@ export default function TeacherLogs() {
     };
   }
 
-  async function submitSingle(e) {
-    e.preventDefault();
-    if (!childId) {
-      setError("Please select a child.");
-      return;
-    }
-    setSaving(true);
-    setError("");
-    setSuccess("");
-    try {
-      const { urls: photoUrls, warning } = await uploadPhotoUrls();
-      const { payloadType, details, createdAt } = buildPayload(photoUrls);
-      await apiJson("/api/v1/activities", {
-        method: "POST",
-        body: JSON.stringify({ childId, type: payloadType, notes, details, createdAt }),
-      });
-      setNotes("");
-      setDailyGrade("");
-      setDomainScores({});
-      setAssessmentOpen(false);
-      setActivityFields(defaultActivityFields(type));
-      clearPhotos();
-      toast.success(
-        warning
-          ? `Logged ${payloadType} for ${childLabel || "child"}. ${warning}`
-          : `Activity logged for ${childLabel || "child"}.`,
-      );
-    } catch (e2) {
-      setError(e2.message || "Failed to log activity");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function submitBulk(e) {
     e.preventDefault();
     const ids = Array.isArray(bulkChildIds) ? bulkChildIds.filter(Boolean) : [];
@@ -883,8 +768,6 @@ export default function TeacherLogs() {
 
       setNotes("");
       setDailyGrade("");
-      setDomainScores({});
-      setAssessmentOpen(false);
       setActivityFields(defaultActivityFields(type));
       clearPhotos();
       setBulkChildIds([]);
@@ -915,26 +798,20 @@ export default function TeacherLogs() {
           <div>
             <h2 className="text-lg font-extrabold text-gray-900">Daily Activity Logging</h2>
             <p className="mt-1 text-sm text-gray-600">
-              Teachers can set the time for today's entry, but the date stays locked to today. Grade entries use a 0-10 score instead of a time. Bulk logging is supported.
+              Teachers can set the time for today's entry, but the date stays locked to today. Grade entries use a 0-10 score instead of a time. Select one or more children below to log at once.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-700">
-              <Icons.list className="h-3.5 w-3.5" />
-              Mode: {mode === "bulk" ? "Bulk" : "Single"}
-            </span>
             {centerLabel ? (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">
                 <Icons.building className="h-3.5 w-3.5" />
                 Center: {centerLabel}
               </span>
             ) : null}
-            {mode === "single" && childLabel ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
-                <Icons.users className="h-3.5 w-3.5" />
-                Child: {childLabel}
-              </span>
-            ) : null}
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
+              <Icons.users className="h-3.5 w-3.5" />
+              Selected: {bulkChildIds.length} child{bulkChildIds.length === 1 ? "" : "ren"}
+            </span>
             {saving ? (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
                 <Icons.info className="h-3.5 w-3.5" />
@@ -954,54 +831,8 @@ export default function TeacherLogs() {
           </div>
         ) : null}
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
-            <Icons.list className="h-4 w-4 text-gray-400" />
-            Logging mode
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              setMode("single");
-              setSuccess("");
-              setError("");
-            }}
-            className={[
-              "rounded-xl px-3 py-2 text-sm font-extrabold transition",
-              mode === "single"
-                ? "bg-sky-100 text-sky-900 shadow-sm"
-                : "border border-gray-200 bg-white text-gray-800 hover:bg-gray-50",
-          ].join(" ")}
-          >
-            <span className="inline-flex items-center gap-2">
-              <Icons.users className="h-4 w-4" />
-              Single child
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMode("bulk");
-              setSuccess("");
-              setError("");
-              setChildId("");
-            }}
-            className={[
-              "rounded-xl px-3 py-2 text-sm font-extrabold transition",
-              mode === "bulk"
-                ? "bg-sky-100 text-sky-900 shadow-sm"
-                : "border border-gray-200 bg-white text-gray-800 hover:bg-gray-50",
-          ].join(" ")}
-          >
-            <span className="inline-flex items-center gap-2">
-              <Icons.users className="h-4 w-4" />
-              Bulk logging
-            </span>
-          </button>
-        </div>
-
         <form
-          onSubmit={mode === "bulk" ? submitBulk : submitSingle}
+          onSubmit={submitBulk}
           className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2"
         >
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 md:col-span-2">
@@ -1124,35 +955,7 @@ export default function TeacherLogs() {
             </div>
 
             <div className="mt-3">
-              {mode === "single" ? (
-                <label className="block">
-                  <div className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    <Icons.users className="h-3.5 w-3.5" />
-                    Child
-                  </div>
-                  <select
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                    value={childId}
-                    onChange={(e) => setChildId(e.target.value)}
-                    disabled={!centerId || loading}
-                    required
-                  >
-                    <option value="">Select a child...</option>
-                    {sortedChildren.map((ch) => {
-                      const isIn = clockedInChildIds.has(ch.id);
-                      return (
-                        <option key={ch.id} value={ch.id}>
-                          {isIn ? "✓ " : ""}{ch.firstName} {ch.lastName || ""}
-                        </option>
-                      );
-                    })}
-                  </select>
-                  {centerId && !loading && sortedChildren.length === 0 ? (
-                    <div className="mt-2 text-xs text-amber-700">No children match the current filters.</div>
-                  ) : null}
-                </label>
-              ) : (
-                <div className="rounded-xl border border-gray-200 bg-white p-3">
+              <div className="rounded-xl border border-gray-200 bg-white p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                       Children (bulk)
@@ -1222,8 +1025,7 @@ export default function TeacherLogs() {
                     <Icons.check className="h-3.5 w-3.5" />
                     Selected: {bulkChildIds.length}
                   </div>
-                </div>
-              )}
+              </div>
             </div>
           </div>
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 md:col-span-2">
@@ -1246,19 +1048,8 @@ export default function TeacherLogs() {
                   <Icons.list className="h-3.5 w-3.5" />
                   Type
                 </div>
-                <select
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                  value={type}
-                  onChange={(e) => handleTypeChange(e.target.value)}
-                >
-                  {TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {TYPE_LABELS[t] || t}
-                    </option>
-                  ))}
-                </select>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {["MEAL", "NAP", "DIAPER_CHANGE", "ACTIVITY", "BEHAVIOR", "ACCOMPLISHMENT", "INCIDENT", "OTHER"].map((t) => (
+                <div className="flex flex-wrap gap-2">
+                  {["MEAL", "BOTTLE", "NAP", "DIAPER_CHANGE", "TOILETING", "ACTIVITY", "BEHAVIOR", "ACCOMPLISHMENT", "INCIDENT", "OTHER"].map((t) => (
                     <button
                       key={t}
                       type="button"
@@ -1380,19 +1171,17 @@ export default function TeacherLogs() {
                   {type === "BOTTLE" ? (
                     <label className="block">
                       <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        Quantity
+                        # Ounces
                       </div>
-                      <select
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.5"
                         value={activityFields.bottleQuantity}
                         onChange={(e) => updateActivityField("bottleQuantity", e.target.value)}
+                        placeholder="e.g. 4"
                         className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                      >
-                        {BOTTLE_PORTION_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </label>
                   ) : null}
 
@@ -1407,6 +1196,25 @@ export default function TeacherLogs() {
                         className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
                       >
                         {DIAPER_TYPE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+
+                  {type === "TOILETING" ? (
+                    <label className="block">
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Type
+                      </div>
+                      <select
+                        value={activityFields.toiletingType}
+                        onChange={(e) => updateActivityField("toiletingType", e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      >
+                        {TOILETING_TYPE_OPTIONS.map((option) => (
                           <option key={option.value} value={option.value}>
                             {option.label}
                           </option>
@@ -1458,10 +1266,12 @@ export default function TeacherLogs() {
                     : ["MEAL", "SNACK"].includes(type)
                       ? "Meal entries capture the time, meal type, quantity, and description."
                       : type === "BOTTLE"
-                        ? "Bottle entries capture the time, quantity, and description."
+                        ? "Bottle entries capture the time, ounces, and description."
                         : type === "DIAPER_CHANGE"
                           ? "Diaper entries capture the time, diaper type, and description."
-                          : type === "BEHAVIOR"
+                          : type === "TOILETING"
+                            ? "Toileting entries capture the time, type (success, tried, or accident), and description."
+                            : type === "BEHAVIOR"
                             ? "Citizenship entries capture type, level, time, and description."
                             : type === "ACCOMPLISHMENT"
                               ? "Accomplishment entries capture the time and a description of what was achieved."
@@ -1496,112 +1306,6 @@ export default function TeacherLogs() {
             </div>
           </div>
 
-          {/* Developmental Assessment Panel */}
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 md:col-span-2">
-            <button
-              type="button"
-              onClick={() => setAssessmentOpen((v) => !v)}
-              className="flex w-full items-center justify-between text-left"
-            >
-              <div className="flex items-start gap-3">
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
-                  <Icons.sparkles className="h-4 w-4" />
-                </span>
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Step 3 - Developmental Assessment (optional)
-                  </div>
-                  <div className="mt-0.5 text-xs text-gray-500">
-                    {Object.keys(domainScores).length > 0
-                      ? `${Object.keys(domainScores).length} domain(s) rated`
-                      : "Rate child across developmental domains"}
-                  </div>
-                </div>
-              </div>
-              <svg
-                viewBox="0 0 24 24"
-                className={`h-5 w-5 text-gray-400 transition ${assessmentOpen ? "rotate-180" : ""}`}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-
-            {assessmentOpen && (
-              <div className="mt-3 space-y-3">
-                {ASSESSMENT_DOMAINS.map((domain) => {
-                  const current = domainScores[domain.key] || 0;
-                  return (
-                    <div key={domain.key} className="rounded-lg border border-gray-200 bg-white p-3">
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-flex h-7 w-7 items-center justify-center rounded-lg text-xs ${domain.color}`}>
-                          {domain.emoji}
-                        </span>
-                        <div>
-                          <div className="text-sm font-semibold text-gray-900">{domain.label}</div>
-                          <div className="text-xs text-gray-500">{domain.description}</div>
-                        </div>
-                      </div>
-                      <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-                        {RUBRIC_LEVELS.map((level) => (
-                          <button
-                            key={level.value}
-                            type="button"
-                            onClick={() =>
-                              setDomainScores((prev) => {
-                                const next = { ...prev };
-                                if (next[domain.key] === level.value) {
-                                  delete next[domain.key];
-                                } else {
-                                  next[domain.key] = level.value;
-                                }
-                                return next;
-                              })
-                            }
-                            className={[
-                              "rounded-lg px-2 py-1.5 text-xs font-semibold transition",
-                              current === level.value
-                                ? level.activeClass
-                                : "border border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
-                            ].join(" ")}
-                          >
-                            {level.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {Object.keys(domainScores).length > 0 && (
-                  <div className="flex items-center justify-between rounded-lg border border-sky-200 bg-sky-50 px-3 py-2">
-                    <div className="text-xs text-sky-800">
-                      <span className="font-semibold">Overall: </span>
-                      {(() => {
-                        const scores = Object.entries(domainScores);
-                        const avg = scores.reduce((s, [, v]) => s + v, 0) / scores.length;
-                        const level = RUBRIC_LEVELS.find((l) => l.value === Math.round(avg));
-                        return level ? level.label : `${avg.toFixed(1)}/4`;
-                      })()}
-                      <span className="ml-2 text-sky-600">
-                        ({Object.keys(domainScores).length}/{ASSESSMENT_DOMAINS.length} domains)
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setDomainScores({})}
-                      className="text-xs font-semibold text-sky-700 hover:text-sky-800"
-                    >
-                      Clear all
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 md:col-span-2">
             <div className="flex items-start gap-3">
               <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
@@ -1609,7 +1313,7 @@ export default function TeacherLogs() {
               </span>
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Step 4 - Child photos (optional)
+                  Step 3 - Child photos (optional)
                 </div>
                 <div className="mt-1 text-xs text-gray-500">
                   Upload or capture photos. Large files will be optimized automatically.
@@ -1755,7 +1459,7 @@ export default function TeacherLogs() {
                 ))}
               </div>
             ) : null}
-            {mode === "bulk" && photoFiles.length ? (
+            {photoFiles.length ? (
               <div className="mt-1 text-xs text-amber-700">
                 Selected photos will be attached to each selected child log.
               </div>
@@ -1768,25 +1472,17 @@ export default function TeacherLogs() {
                 <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-gray-50 text-gray-600">
                   <Icons.check className="h-4 w-4" />
                 </span>
-                {mode === "bulk"
-                  ? `Bulk logging ${bulkChildIds.length} child${bulkChildIds.length === 1 ? "" : "ren"}`
-                  : childLabel
-                    ? `Logging for ${childLabel}`
-                    : "Select a child to continue"}
+                {`Logging for ${bulkChildIds.length} child${bulkChildIds.length === 1 ? "" : "ren"}`}
                 {photoFiles.length ? ` - ${photoFiles.length} photo(s)` : ""}
               </div>
               <button
                 type="submit"
-                disabled={
-                  saving ||
-                  !centerId ||
-                  (mode === "single" ? !childId : bulkChildIds.length === 0)
-                }
+                disabled={saving || !centerId || bulkChildIds.length === 0}
                 className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <span className="inline-flex items-center gap-2">
                   <Icons.check className="h-4 w-4" />
-                  {saving ? "Saving..." : mode === "bulk" ? "Bulk Log Activity" : "Log Activity"}
+                  {saving ? "Saving..." : "Log Activity"}
                 </span>
               </button>
             </div>

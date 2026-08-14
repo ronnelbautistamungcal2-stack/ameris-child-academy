@@ -10,6 +10,8 @@ const TABS = [
   { key: "remediations", label: "Remediations", icon: TabIconRemediations },
 ];
 
+const SUPPLY_CATEGORIES = ["General", "Art", "Science", "Craft", "Outdoor", "Music", "Math", "Other"];
+
 export default function CurriculumManager() {
   const [tab, setTab] = useState("categories");
   const [centers, setCenters] = useState([]);
@@ -416,6 +418,7 @@ function LessonsTab({ centerId }) {
     reference: "",
     linkedLessonId: "",
     media: [],
+    supplies: [],
   });
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState({});
@@ -495,6 +498,7 @@ function LessonsTab({ centerId }) {
       reference: "",
       linkedLessonId: "",
       media: [],
+      supplies: [],
     });
     setFormAgeRange(ageFilter || "");
   }
@@ -512,8 +516,34 @@ function LessonsTab({ centerId }) {
       reference: lesson.reference || "",
       linkedLessonId: lesson.linkedLessonId || "",
       media: lesson.media || [],
+      supplies: (lesson.supplies || []).map((s) => ({
+        name: s.name || "",
+        quantity: s.quantity || 1,
+        quantityType: s.quantityType === "per_student" ? "per_student" : "total",
+        unit: s.unit || "",
+        estimatedCost: s.estimatedCost || "",
+        category: s.category || "General",
+      })),
     });
     setFormAgeRange(lesson.category?.ageRange || "");
+  }
+
+  function addSupplyRow() {
+    setForm((prev) => ({
+      ...prev,
+      supplies: [...prev.supplies, { name: "", quantity: 1, quantityType: "total", unit: "", estimatedCost: "", category: "General" }],
+    }));
+  }
+
+  function removeSupplyRow(index) {
+    setForm((prev) => ({ ...prev, supplies: prev.supplies.filter((_, i) => i !== index) }));
+  }
+
+  function updateSupplyRow(index, field, value) {
+    setForm((prev) => ({
+      ...prev,
+      supplies: prev.supplies.map((row, i) => (i === index ? { ...row, [field]: value } : row)),
+    }));
   }
 
   function handleAgeFilterChange(nextAgeRange) {
@@ -577,6 +607,7 @@ function LessonsTab({ centerId }) {
         media: form.media,
         categoryId: form.categoryId || null,
         linkedLessonId: form.linkedLessonId || null,
+        supplies: form.supplies.filter((s) => s.name.trim()),
       };
 
       if (editing === "new") {
@@ -793,6 +824,84 @@ function LessonsTab({ centerId }) {
                     <input type="file" className="hidden" accept="video/*,audio/*,image/*,.pdf,.doc,.docx" onChange={handleMediaUpload} />
                   </label>
                 </div>
+              </div>
+
+              {/* Supplies */}
+              <div className="mt-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="text-xs font-bold uppercase tracking-wider text-gray-400">Supplies Needed</div>
+                  <button type="button" className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-600 transition hover:bg-gray-50" onClick={addSupplyRow}>
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Supply
+                  </button>
+                </div>
+                {form.supplies.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-gray-200 py-4 text-center text-xs text-gray-400">
+                    No supplies yet. Click "Add Supply" to list what this lesson needs.
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {form.supplies.map((row, idx) => (
+                      <div key={idx} className="grid grid-cols-[1fr_60px_100px_70px_80px_100px_28px] items-center gap-1.5 rounded-lg border border-gray-200 bg-white p-1.5">
+                        <input
+                          className="min-w-0 rounded-md border border-gray-200 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
+                          placeholder="Supply name"
+                          value={row.name}
+                          onChange={(e) => updateSupplyRow(idx, "name", e.target.value)}
+                        />
+                        <input
+                          type="number"
+                          min="1"
+                          className="w-full min-w-0 rounded-md border border-gray-200 px-1.5 py-1.5 text-center text-xs focus:border-indigo-400 focus:outline-none"
+                          value={row.quantity}
+                          onChange={(e) => updateSupplyRow(idx, "quantity", parseInt(e.target.value) || 1)}
+                        />
+                        <select
+                          className="min-w-0 rounded-md border border-gray-200 px-1 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
+                          value={row.quantityType || "total"}
+                          onChange={(e) => updateSupplyRow(idx, "quantityType", e.target.value)}
+                        >
+                          <option value="total">Total</option>
+                          <option value="per_student">Per Student</option>
+                        </select>
+                        <input
+                          className="min-w-0 rounded-md border border-gray-200 px-1.5 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
+                          placeholder="Unit"
+                          value={row.unit}
+                          onChange={(e) => updateSupplyRow(idx, "unit", e.target.value)}
+                        />
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          className="min-w-0 rounded-md border border-gray-200 px-1.5 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
+                          placeholder="$ Cost"
+                          value={row.estimatedCost}
+                          onChange={(e) => updateSupplyRow(idx, "estimatedCost", e.target.value)}
+                        />
+                        <select
+                          className="min-w-0 rounded-md border border-gray-200 px-1 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
+                          value={row.category}
+                          onChange={(e) => updateSupplyRow(idx, "category", e.target.value)}
+                        >
+                          {SUPPLY_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <button
+                          type="button"
+                          className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition hover:bg-red-50 hover:text-red-500"
+                          onClick={() => removeSupplyRow(idx)}
+                          title="Remove supply"
+                        >
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
+                            <path d="M3 4.5h10M6.5 4.5V3a1 1 0 011-1h1a1 1 0 011 1v1.5M5 4.5l.5 8.5h5l.5-8.5M7 7v3.5M9 7v3.5" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="mt-4 flex gap-2">

@@ -17,6 +17,7 @@ const ACTIVITY_TYPES = [
   "TASK_CHECKLIST",
   "BEHAVIOR",
   "INCIDENT",
+  "TOILETING",
   "OTHER",
 ];
 

@@ -21,6 +21,7 @@ export default async function handler(req, res) {
       include: {
         centers: { include: { center: true } },
         teacherClasses: { include: { classRoom: true } },
+        coachTeamMembers: { include: { staff: { select: { id: true, name: true, email: true } } } },
       },
     });
     return res.status(200).json(staff);

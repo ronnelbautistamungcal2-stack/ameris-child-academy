@@ -2,7 +2,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useRouter } from "next/router";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const TYPES = [
   "DIAPER_CHANGE",
@@ -15,23 +15,25 @@ const TYPES = [
   "BEHAVIOR",
   "ACCOMPLISHMENT",
   "INCIDENT",
+  "TOILETING",
   "OTHER",
 ];
 
-const QUICK_TYPE_OPTIONS = ["MEAL", "NAP", "DIAPER_CHANGE", "ACTIVITY", "BEHAVIOR", "ACCOMPLISHMENT", "INCIDENT", "OTHER"];
+const QUICK_TYPE_OPTIONS = ["MEAL", "NAP", "DIAPER_CHANGE", "TOILETING", "ACTIVITY", "BEHAVIOR", "ACCOMPLISHMENT", "INCIDENT", "OTHER"];
 
 const TYPE_META = {
-  INCIDENT: { label: "Incident", color: "#b91c1c", tint: "#fee2e2" },
-  DIAPER_CHANGE: { label: "Diaper Change", color: "#7c3aed", tint: "#f3e8ff" },
-  NAP: { label: "Nap", color: "#4338ca", tint: "#e0e7ff" },
-  BOTTLE: { label: "Bottle", color: "#0369a1", tint: "#e0f2fe" },
-  MEAL: { label: "Meal", color: "#b45309", tint: "#fef3c7" },
-  SNACK: { label: "Snack", color: "#047857", tint: "#d1fae5" },
-  ACTIVITY: { label: "Activity", color: "#be185d", tint: "#fce7f3" },
-  TASK_CHECKLIST: { label: "Task / Checklist", color: "#0f766e", tint: "#ccfbf1" },
-  BEHAVIOR: { label: "Citizenship", color: "#c2410c", tint: "#ffedd5" },
-  ACCOMPLISHMENT: { label: "Accomplishment", color: "#15803d", tint: "#dcfce7" },
-  OTHER: { label: "Grade", color: "#475569", tint: "#e2e8f0" },
+  INCIDENT: { label: "Incident", color: "#b91c1c", tint: "#fee2e2", icon: "⚠️" },
+  DIAPER_CHANGE: { label: "Diaper Change", color: "#7c3aed", tint: "#f3e8ff", icon: "💧" },
+  NAP: { label: "Nap", color: "#4338ca", tint: "#e0e7ff", icon: "😴" },
+  BOTTLE: { label: "Bottle", color: "#0369a1", tint: "#e0f2fe", icon: "🍼" },
+  MEAL: { label: "Meal", color: "#b45309", tint: "#fef3c7", icon: "🍽️" },
+  SNACK: { label: "Snack", color: "#047857", tint: "#d1fae5", icon: "🍎" },
+  ACTIVITY: { label: "Activity", color: "#be185d", tint: "#fce7f3", icon: "🎨" },
+  TASK_CHECKLIST: { label: "Task / Checklist", color: "#0f766e", tint: "#ccfbf1", icon: "✅" },
+  BEHAVIOR: { label: "Citizenship", color: "#c2410c", tint: "#ffedd5", icon: "🤝" },
+  ACCOMPLISHMENT: { label: "Accomplishment", color: "#15803d", tint: "#dcfce7", icon: "🏆" },
+  TOILETING: { label: "Toileting", color: "#0891b2", tint: "#cffafe", icon: "🚽" },
+  OTHER: { label: "Grade", color: "#475569", tint: "#e2e8f0", icon: "📝" },
 };
 
 const MEAL_OCCASIONS = [
@@ -72,6 +74,12 @@ const DIAPER_TYPE_OPTIONS = [
   { value: "BM", label: "BM" },
   { value: "W", label: "W" },
   { value: "D", label: "D" },
+];
+
+const TOILETING_TYPE_OPTIONS = [
+  { value: "SUCCESS", label: "Success" },
+  { value: "TRIED", label: "Tried" },
+  { value: "ACCIDENT", label: "Accident" },
 ];
 
 const ASSESSMENT_DOMAINS = [
@@ -145,6 +153,7 @@ const MANAGED_DETAIL_KEYS = new Set([
   "diaperType",
   "behaviorType",
   "behaviorLevel",
+  "toiletingType",
 ]);
 
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
@@ -157,6 +166,10 @@ function supportsBehaviorDetails(type) {
   return type === "BEHAVIOR";
 }
 
+function supportsToiletingDetails(type) {
+  return type === "TOILETING";
+}
+
 function supportsDirectGrade(type) {
   return type === "OTHER";
 }
@@ -167,6 +180,38 @@ function asObject(value) {
 
 function fullChildName(child) {
   return `${child?.firstName || ""}${child?.lastName ? ` ${child.lastName}` : ""}`.trim();
+}
+
+function childInitials(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join("");
+}
+
+function dayLabel(dateKey) {
+  if (!dateKey) return "Unknown date";
+  const date = new Date(dateKey);
+  if (Number.isNaN(date.getTime())) return "Unknown date";
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return "Today";
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" });
+}
+
+function groupActivitiesByDay(activities) {
+  const groups = new Map();
+  for (const activity of activities) {
+    const date = new Date(activity.createdAt);
+    const key = Number.isNaN(date.getTime()) ? "unknown" : date.toDateString();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(activity);
+  }
+  return [...groups.entries()].map(([key, items]) => ({ key, label: dayLabel(key === "unknown" ? "" : key), items }));
 }
 
 function relativeTime(dateStr) {
@@ -235,6 +280,7 @@ function defaultActivityFields(nextType) {
     diaperType: "W",
     behaviorType: "OTHER",
     behaviorLevel: "1",
+    toiletingType: "SUCCESS",
   };
 }
 
@@ -285,6 +331,10 @@ function applyTypeChange(form, nextType) {
         supportsBehaviorDetails(nextType)
           ? currentFields.behaviorLevel || defaults.behaviorLevel
           : defaults.behaviorLevel,
+      toiletingType:
+        supportsToiletingDetails(nextType)
+          ? currentFields.toiletingType || defaults.toiletingType
+          : defaults.toiletingType,
     },
   };
 }
@@ -342,6 +392,7 @@ function buildFormFromActivity(activity) {
       diaperType: details.diaperType || "W",
       behaviorType: details.behaviorType || "OTHER",
       behaviorLevel: details.behaviorLevel || "1",
+      toiletingType: details.toiletingType || "SUCCESS",
     },
     dailyGrade: extractDailyGrade(details),
     domainScores: extractDomainScores(details),
@@ -454,6 +505,9 @@ function buildPayloadFromForm(form) {
     details.time = entryTime;
     details.behaviorType = fields.behaviorType || "OTHER";
     details.behaviorLevel = fields.behaviorLevel || "1";
+  } else if (payloadType === "TOILETING") {
+    details.time = entryTime;
+    details.toiletingType = fields.toiletingType || "SUCCESS";
   } else if (!supportsDirectGrade(form?.type)) {
     details.time = entryTime;
   }
@@ -522,6 +576,10 @@ function formatActivitySummary(activity) {
   if (activity?.type === "INCIDENT") {
     return mediaCount ? `${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : "Incident entry";
   }
+  if (activity?.type === "TOILETING") {
+    const label = TOILETING_TYPE_OPTIONS.find((option) => option.value === details.toiletingType)?.label;
+    return `${label || "Toileting"}${mediaCount ? ` | ${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : ""}`;
+  }
   return mediaCount ? `${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : "Logged entry";
 }
 
@@ -579,6 +637,9 @@ function composerHelperText(type) {
   }
   if (type === "INCIDENT") {
     return "Incident entries capture the time and description.";
+  }
+  if (type === "TOILETING") {
+    return "Toileting entries capture the time, type (success, tried, or accident), and description.";
   }
   if (supportsDirectGrade(type)) {
     return "Grade entries capture a 0-10 score and description.";
@@ -697,6 +758,7 @@ export default function AdminActivityOverrides() {
   const [filterChildId, setFilterChildId] = useState("");
   const [filterFromDate, setFilterFromDate] = useState("");
   const [filterToDate, setFilterToDate] = useState("");
+  const [detailChildId, setDetailChildId] = useState("");
   const createPhotoInputRef = useRef(null);
   const editPhotoInputRef = useRef(null);
 
@@ -902,6 +964,42 @@ export default function AdminActivityOverrides() {
     const assessments = activities.filter((activity) => hasAssessment(activity)).length;
     return { total, withPhotos, assessments };
   }, [activities]);
+
+  const childSummaries = useMemo(() => {
+    const map = new Map();
+    for (const activity of filteredActivities) {
+      const child = activity?.child;
+      if (!child?.id) continue;
+      if (!map.has(child.id)) {
+        map.set(child.id, { child, counts: {}, total: 0, latestAt: activity.createdAt, activities: [] });
+      }
+      const entry = map.get(child.id);
+      entry.counts[activity.type] = (entry.counts[activity.type] || 0) + 1;
+      entry.total += 1;
+      entry.activities.push(activity);
+      if (new Date(activity.createdAt) > new Date(entry.latestAt)) {
+        entry.latestAt = activity.createdAt;
+      }
+    }
+    const list = [...map.values()];
+    for (const entry of list) {
+      entry.activities.sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+    }
+    list.sort((left, right) => fullChildName(left.child).localeCompare(fullChildName(right.child)));
+    return list;
+  }, [filteredActivities]);
+
+  const detailSummary = useMemo(
+    () => childSummaries.find((summary) => summary.child.id === detailChildId) || null,
+    [childSummaries, detailChildId],
+  );
+
+  useEffect(() => {
+    if (!detailChildId) return;
+    if (!childSummaries.some((summary) => summary.child.id === detailChildId)) {
+      setDetailChildId("");
+    }
+  }, [childSummaries, detailChildId]);
 
   const dismissError = useCallback(() => setError(""), []);
   const dismissSuccess = useCallback(() => setSuccess(""), []);
@@ -1361,12 +1459,12 @@ export default function AdminActivityOverrides() {
             title="No center selected"
             description="Select a center above to review and manage activity logs."
           />
-        ) : filteredActivities.length === 0 && activities.length === 0 ? (
+        ) : childSummaries.length === 0 && activities.length === 0 ? (
           <EmptyState
             title="No activity logs yet"
             description={`No logs found for ${childLabel || "this center"}. Use the composer above to create one once a child is selected.`}
           />
-        ) : filteredActivities.length === 0 ? (
+        ) : childSummaries.length === 0 ? (
           <EmptyState
             title="No matching logs"
             description="Adjust the filter or search text to find the logs you need."
@@ -1377,64 +1475,137 @@ export default function AdminActivityOverrides() {
               <table style={tableStyle}>
               <thead>
                 <tr>
-                  <th style={thStyle}>Type</th>
                   <th style={thStyle}>Child</th>
-                  <th style={thStyle}>When</th>
-                  <th style={thStyle}>Details</th>
-                  <th style={{ ...thStyle, width: 110, textAlign: "center" }}>Actions</th>
+                  <th style={thStyle}>Activity</th>
+                  <th style={{ ...thStyle, width: 150 }}>Last Logged</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredActivities.map((activity) => {
-                  const meta = TYPE_META[activity.type] || TYPE_META.OTHER;
-                  const isEditing = editingId === activity.id;
-                  const isDeleting = deletingActivityId === activity.id;
+                {childSummaries.map((summary) => {
+                  const { child, counts, total, latestAt } = summary;
                   return (
-                    <Fragment key={activity.id}>
-                      <tr style={rowStyle}>
-                        <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                          <span style={{ ...badgeStyle, background: meta.tint, color: meta.color }}>
-                            {meta.label}
+                    <tr key={child.id} style={rowStyle}>
+                      <td style={tdStyle}>
+                        <button
+                          type="button"
+                          onClick={() => setDetailChildId(child.id)}
+                          style={childNameButtonStyle}
+                        >
+                          <span style={childAvatarStyle}>{childInitials(fullChildName(child))}</span>
+                          <span>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-brand, #2563eb)" }}>
+                              {fullChildName(child) || "Unnamed child"}
+                            </div>
+                            <div style={{ marginTop: 2, fontSize: 12, color: "var(--admin-text-muted)" }}>
+                              {classroomNameById.get(child.classRoomId) || "No classroom"}
+                            </div>
                           </span>
-                        </td>
-                        <td style={tdStyle}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>
-                            {fullChildName(activity.child) || childLabel || "-"}
+                        </button>
+                      </td>
+                      <td style={tdStyle}>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {TYPES.map((type) => {
+                            const meta = TYPE_META[type];
+                            const count = counts[type] || 0;
+                            return (
+                              <span
+                                key={type}
+                                title={`${meta.label}: ${count}`}
+                                style={{
+                                  ...typeIconBadgeStyle,
+                                  background: count ? meta.tint : "var(--admin-bg-secondary, #f1f5f9)",
+                                  color: count ? meta.color : "var(--admin-text-muted)",
+                                  opacity: count ? 1 : 0.45,
+                                }}
+                              >
+                                <span aria-hidden="true">{meta.icon}</span>
+                                <span style={typeIconCountStyle}>{count}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </td>
+                      <td style={tdStyle}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>
+                          {relativeTime(latestAt)}
+                        </div>
+                        <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>
+                          {total} log{total === 1 ? "" : "s"} recorded
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </Panel>
+
+      {detailSummary ? (
+        <div style={drawerBackdropStyle} onClick={() => setDetailChildId("")}>
+          <div style={drawerPanelStyle} onClick={(event) => event.stopPropagation()}>
+            <div style={drawerHeaderStyle}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={childAvatarStyle}>{childInitials(fullChildName(detailSummary.child))}</span>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: "var(--admin-text)" }}>
+                    {fullChildName(detailSummary.child) || "Unnamed child"}
+                  </div>
+                  <div style={{ marginTop: 2, fontSize: 12, color: "var(--admin-text-muted)" }}>
+                    {classroomNameById.get(detailSummary.child.classRoomId) || "No classroom"} &middot;{" "}
+                    {detailSummary.total} log{detailSummary.total === 1 ? "" : "s"}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailChildId("")}
+                style={drawerCloseButtonStyle}
+                aria-label="Close child activity details"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={drawerTypeSummaryStyle}>
+              {TYPES.filter((type) => detailSummary.counts[type]).map((type) => {
+                const meta = TYPE_META[type];
+                return (
+                  <span key={type} style={{ ...typeIconBadgeStyle, background: meta.tint, color: meta.color }}>
+                    <span aria-hidden="true">{meta.icon}</span> {meta.label} &middot; {detailSummary.counts[type]}
+                  </span>
+                );
+              })}
+            </div>
+
+            <div style={drawerBodyStyle}>
+              {groupActivitiesByDay(detailSummary.activities).map((group) => (
+                <div key={group.key} style={{ marginBottom: 18 }}>
+                  <div style={drawerDayHeaderStyle}>{group.label}</div>
+                  {group.items.map((activity) => {
+                    const meta = TYPE_META[activity.type] || TYPE_META.OTHER;
+                    const isEditing = editingId === activity.id;
+                    const isDeleting = deletingActivityId === activity.id;
+                    const metaPills = buildActivityMetaPills(activity);
+                    return (
+                      <div key={activity.id} style={drawerEntryCardStyle}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ ...typeIconBadgeStyle, background: meta.tint, color: meta.color }}>
+                              <span aria-hidden="true">{meta.icon}</span>
+                            </span>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>
+                                {meta.label}
+                              </div>
+                              <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>
+                                {formatDateTime(activity.createdAt)}
+                              </div>
+                            </div>
                           </div>
-                          <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>
-                            {classroomNameById.get(activity?.child?.classRoomId)
-                              ? `${classroomNameById.get(activity?.child?.classRoomId)} | `
-                              : ""}
-                            {buildActivityMetaPills(activity)
-                              .slice(0, 2)
-                              .map((pill) => pill.label)
-                              .join(" | ") || " "}
-                          </div>
-                        </td>
-                        <td style={tdStyle}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>
-                            {relativeTime(activity.createdAt)}
-                          </div>
-                          <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>
-                            {formatDateTime(activity.createdAt)}
-                          </div>
-                        </td>
-                        <td style={tdStyle}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>
-                            {activity.notes || "No notes"}
-                          </div>
-                          <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>
-                            {formatActivitySummary(activity)}
-                          </div>
-                          <div style={{ marginTop: 6, fontSize: 12, color: "var(--admin-text-muted)" }}>
-                            {buildActivityMetaPills(activity)
-                              .slice(2)
-                              .map((pill) => pill.label)
-                              .join(" | ") || " "}
-                          </div>
-                        </td>
-                        <td style={{ ...tdStyle, textAlign: "center" }}>
-                          <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
+                          <div style={{ display: "flex", gap: 6 }}>
                             <button
                               type="button"
                               onClick={() => startEditActivity(activity)}
@@ -1453,11 +1624,26 @@ export default function AdminActivityOverrides() {
                               {isDeleting ? "..." : "Delete"}
                             </button>
                           </div>
-                        </td>
-                      </tr>
-                      {isEditing ? (
-                        <tr>
-                          <td colSpan={5} style={{ ...tdStyle, background: "var(--admin-bg-secondary)" }}>
+                        </div>
+                        <div style={{ marginTop: 8, fontSize: 13, color: "var(--admin-text)" }}>
+                          {activity.notes || formatActivitySummary(activity) || "No additional notes"}
+                        </div>
+                        {activity.notes ? (
+                          <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>
+                            {formatActivitySummary(activity)}
+                          </div>
+                        ) : null}
+                        {metaPills.length ? (
+                          <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            {metaPills.map((pill, index) => (
+                              <span key={index} style={metaPillStyle}>
+                                {pill.label}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                        {isEditing ? (
+                          <div style={{ marginTop: 12 }}>
                             <ActivityComposer
                               title="Edit Activity Log"
                               description="Update the structured details, photos, and admin-controlled timestamp for this log."
@@ -1480,18 +1666,17 @@ export default function AdminActivityOverrides() {
                               onCancel={cancelEditActivity}
                               submitLabel="Save Changes"
                             />
-                          </td>
-                        </tr>
-                      ) : null}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-              </table>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           </div>
-        )}
-      </Panel>
+        </div>
+      ) : null}
     </AdminLayout>
   );
 }
@@ -1741,6 +1926,23 @@ function ActivityComposer({
                   </Field>
                 ) : null}
 
+                {supportsToiletingDetails(form.type) ? (
+                  <Field label="Type" style={{ minWidth: 0 }}>
+                    <select
+                      value={form.fields.toiletingType}
+                      onChange={(event) => onNestedFieldChange("toiletingType", event.target.value)}
+                      style={inputStyle}
+                      disabled={interactionDisabled}
+                    >
+                      {TOILETING_TYPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                ) : null}
+
                 {supportsBehaviorDetails(form.type) ? (
                   <>
                     <Field label="Behavior type" style={{ minWidth: 0 }}>
@@ -1774,7 +1976,7 @@ function ActivityComposer({
                   </>
                 ) : null}
               </div>
-              {!["NAP", "MEAL", "SNACK", "BOTTLE", "DIAPER_CHANGE", "BEHAVIOR", "INCIDENT"].includes(form.type) ? (
+              {!["NAP", "MEAL", "SNACK", "BOTTLE", "DIAPER_CHANGE", "BEHAVIOR", "INCIDENT", "TOILETING"].includes(form.type) ? (
                 <div style={inlineHelperStyle}>
                   This activity type only needs the timestamp and description unless you want to attach assessment, photos, or custom JSON.
                 </div>
@@ -2506,16 +2708,6 @@ const countChipStyle = {
   borderRadius: 999,
 };
 
-const badgeStyle = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  padding: "4px 10px",
-  borderRadius: 999,
-  fontSize: 12,
-  fontWeight: 700,
-};
-
 const tableStyle = {
   width: "100%",
   borderCollapse: "collapse",
@@ -2622,4 +2814,125 @@ const mediaRemoveButtonStyle = {
   cursor: "pointer",
   fontWeight: 700,
   fontSize: 12,
+};
+
+const childAvatarStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 34,
+  height: 34,
+  borderRadius: "50%",
+  background: "linear-gradient(135deg, #2563eb, #3b82f6)",
+  color: "white",
+  fontSize: 12,
+  fontWeight: 800,
+  flexShrink: 0,
+};
+
+const childNameButtonStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  border: "none",
+  background: "transparent",
+  padding: 0,
+  cursor: "pointer",
+  textAlign: "left",
+};
+
+const typeIconBadgeStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 4,
+  padding: "4px 8px",
+  borderRadius: 999,
+  fontSize: 12,
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+};
+
+const typeIconCountStyle = {
+  fontSize: 11,
+  fontWeight: 800,
+};
+
+const metaPillStyle = {
+  fontSize: 11,
+  fontWeight: 600,
+  padding: "3px 8px",
+  borderRadius: 999,
+  background: "var(--admin-bg-secondary, #f1f5f9)",
+  color: "var(--admin-text-muted)",
+};
+
+const drawerBackdropStyle = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(15, 23, 42, 0.45)",
+  display: "flex",
+  justifyContent: "flex-end",
+  zIndex: 1000,
+};
+
+const drawerPanelStyle = {
+  width: "min(480px, 100%)",
+  height: "100%",
+  background: "var(--admin-bg)",
+  boxShadow: "-16px 0 40px rgba(15, 23, 42, 0.18)",
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+};
+
+const drawerHeaderStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  padding: "18px 20px",
+  borderBottom: "1px solid var(--admin-border)",
+};
+
+const drawerCloseButtonStyle = {
+  border: "1px solid #e5e7eb",
+  background: "var(--admin-bg)",
+  color: "var(--admin-text)",
+  borderRadius: 10,
+  width: 32,
+  height: 32,
+  cursor: "pointer",
+  fontSize: 14,
+  flexShrink: 0,
+};
+
+const drawerTypeSummaryStyle = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 6,
+  padding: "14px 20px",
+  borderBottom: "1px solid var(--admin-border)",
+};
+
+const drawerBodyStyle = {
+  padding: "16px 20px",
+  overflowY: "auto",
+  flex: 1,
+};
+
+const drawerDayHeaderStyle = {
+  fontSize: 11,
+  fontWeight: 800,
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  color: "var(--admin-text-muted)",
+  marginBottom: 8,
+};
+
+const drawerEntryCardStyle = {
+  border: "1px solid var(--admin-border)",
+  borderRadius: 12,
+  padding: 12,
+  marginBottom: 10,
+  background: "var(--admin-bg-secondary, #f8fafc)",
 };

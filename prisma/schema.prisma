@@ -28,6 +28,7 @@ enum ActivityType {
   CITIZENSHIP
   ACCOMPLISHMENT
   INCIDENT
+  TOILETING
   OTHER
 }
 
@@ -267,6 +268,8 @@ model User {
   staffCommendationsCreated    StaffCommendation[]        @relation("StaffCommendationsCreated")
   staffCitations               StaffCitation[]            @relation("StaffCitations")
   staffCitationsCreated        StaffCitation[]            @relation("StaffCitationsCreated")
+  coachTeamMembers             CoachTeamMember[]          @relation("CoachTeamMembers")
+  coachTeamOf                  CoachTeamMember[]          @relation("CoachTeamStaff")
 }
 
 model Center {

@@ -2643,7 +2643,7 @@ export default function AdminChildren() {
                   </div>
                 </div>
               ))}
-              <Field label="Allergies">
+              <Field label="Allergies/Special Notes">
                 <input
                   value={allergies}
                   onChange={(e) => setAllergies(e.target.value)}

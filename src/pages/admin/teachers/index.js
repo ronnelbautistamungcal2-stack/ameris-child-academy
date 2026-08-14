@@ -17,6 +17,7 @@ export default function AdminTeachers() {
   const [selectedTeacherId, setSelectedTeacherId] = useState("");
   const [selectedCenterIds, setSelectedCenterIds] = useState([]);
   const [selectedClassIds, setSelectedClassIds] = useState([]);
+  const [selectedTeamMemberIds, setSelectedTeamMemberIds] = useState([]);
   const [saving, setSaving] = useState(false);
 
   async function refresh() {
@@ -47,15 +48,17 @@ export default function AdminTeachers() {
   }, [staff]);
 
   const selectedStaffMember = selectedTeacherId ? staffById[selectedTeacherId] : null;
-  const selectedIsTeacher = (selectedStaffMember?.roles?.length
+  const selectedRoles = selectedStaffMember?.roles?.length
     ? selectedStaffMember.roles
-    : [selectedStaffMember?.role]
-  ).includes("TEACHER");
+    : [selectedStaffMember?.role];
+  const selectedIsTeacher = selectedRoles.includes("TEACHER");
+  const selectedIsCoach = selectedRoles.includes("COACH");
 
   useEffect(() => {
     if (!selectedStaffMember) {
       setSelectedCenterIds([]);
       setSelectedClassIds([]);
+      setSelectedTeamMemberIds([]);
       return;
     }
 
@@ -68,9 +71,11 @@ export default function AdminTeachers() {
       .map((cu) => cu.centerId);
 
     const staffClasses = (selectedStaffMember.teacherClasses || []).map((tc) => tc.classId);
+    const staffTeamMembers = (selectedStaffMember.coachTeamMembers || []).map((tm) => tm.staffId);
 
     setSelectedCenterIds(staffCenters);
     setSelectedClassIds(staffClasses);
+    setSelectedTeamMemberIds(staffTeamMembers);
   }, [selectedTeacherId]);
 
   const sortedStaff = useMemo(() => {
@@ -109,6 +114,17 @@ export default function AdminTeachers() {
     });
   }, [availableClassIds]);
 
+  const teamCandidates = useMemo(() => {
+    if (!selectedIsCoach || !selectedStaffMember) return [];
+    return staff
+      .filter((s) => s.id !== selectedStaffMember.id)
+      .filter((s) => {
+        const sRoles = s.roles?.length ? s.roles : [s.role];
+        return sRoles.includes("TEACHER") || sRoles.includes("OTHER_STAFF");
+      })
+      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  }, [staff, selectedIsCoach, selectedStaffMember]);
+
   function toggleInList(list, id) {
     return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
   }
@@ -129,6 +145,7 @@ export default function AdminTeachers() {
         body: JSON.stringify({
           centerIds: selectedCenterIds,
           classIds: selectedClassIds,
+          teamMemberIds: selectedTeamMemberIds,
         }),
       });
       await refresh();
@@ -469,6 +486,54 @@ export default function AdminTeachers() {
                       <p className="text-xs text-gray-500">Select at least one center to choose classrooms.</p>
                     ) : availableClasses.length === 0 && (
                       <p className="text-xs text-gray-500">No classrooms available.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Team (coaches only) */}
+              {selectedIsCoach && (
+                <div className="mt-5">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                      Coaching Team
+                    </div>
+                    {selectedTeamMemberIds.length > 0 && (
+                      <span className="text-xs font-semibold text-purple-700">
+                        {selectedTeamMemberIds.length} selected
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-400">
+                    Only staff selected here will be included in this coach's performance report.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {teamCandidates.map((member) => {
+                      const active = selectedTeamMemberIds.includes(member.id);
+                      return (
+                        <button
+                          key={member.id}
+                          type="button"
+                          aria-pressed={active}
+                          className={[
+                            "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-sm font-semibold transition",
+                            active
+                              ? "border-purple-300 bg-purple-50 text-purple-800"
+                              : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                          ].join(" ")}
+                          onClick={() =>
+                            setSelectedTeamMemberIds((cur) => toggleInList(cur, member.id))
+                          }
+                        >
+                          {active && (
+                            <CheckCircleIcon className="h-4 w-4 text-purple-600" />
+                          )}
+                          {member.name || member.email}
+                        </button>
+                      );
+                    })}
+                    {teamCandidates.length === 0 && (
+                      <p className="text-xs text-gray-500">No eligible staff available.</p>
                     )}
                   </div>
                 </div>

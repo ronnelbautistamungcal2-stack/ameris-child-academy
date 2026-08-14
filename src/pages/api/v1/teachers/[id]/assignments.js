@@ -18,13 +18,17 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "User is not a staff member" });
   }
   const isTeacher = roles.includes("TEACHER");
+  const isCoach = roles.includes("COACH");
   const assignmentRole = roles.find(isEmployeeRole);
 
   if (req.method === "PUT") {
-    const { centerIds, classIds } = req.body || {};
+    const { centerIds, classIds, teamMemberIds } = req.body || {};
 
     const centers = Array.isArray(centerIds) ? centerIds.filter(Boolean) : null;
     const classes = isTeacher && Array.isArray(classIds) ? classIds.filter(Boolean) : null;
+    const teamMembers = isCoach && Array.isArray(teamMemberIds)
+      ? teamMemberIds.filter((tid) => Boolean(tid) && tid !== id)
+      : null;
 
     await prisma.$transaction(async (tx) => {
       if (centers) {
@@ -75,6 +79,28 @@ export default async function handler(req, res) {
           });
         }
       }
+
+      if (teamMembers) {
+        const existing = await tx.coachTeamMember.findMany({
+          where: { coachId: id },
+          select: { id: true, staffId: true },
+        });
+        const existingIds = new Set(existing.map((r) => r.staffId));
+        const desired = new Set(teamMembers);
+
+        const toDelete = existing.filter((r) => !desired.has(r.staffId)).map((r) => r.id);
+        if (toDelete.length) {
+          await tx.coachTeamMember.deleteMany({ where: { id: { in: toDelete } } });
+        }
+
+        const toCreate = teamMembers.filter((sId) => !existingIds.has(sId));
+        if (toCreate.length) {
+          await tx.coachTeamMember.createMany({
+            data: toCreate.map((sId) => ({ coachId: id, staffId: sId })),
+            skipDuplicates: true,
+          });
+        }
+      }
     });
 
     const updated = await prisma.user.findUnique({
@@ -82,6 +108,7 @@ export default async function handler(req, res) {
       include: {
         centers: { include: { center: true } },
         teacherClasses: { include: { classRoom: true } },
+        coachTeamMembers: { include: { staff: { select: { id: true, name: true, email: true } } } },
       },
     });
     return res.status(200).json(updated);

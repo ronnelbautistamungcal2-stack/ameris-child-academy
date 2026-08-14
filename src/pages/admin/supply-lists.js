@@ -16,23 +16,38 @@ const CATEGORY_META = {
   Other:    { icon: "📝", color: "#94a3b8" },
 };
 
+const REQUEST_STATUSES = ["PENDING", "APPROVED", "FULFILLED", "DENIED"];
+
+const STATUS_META = {
+  PENDING:   { label: "Pending",   color: "#f59e0b" },
+  APPROVED:  { label: "Approved",  color: "#0ea5e9" },
+  FULFILLED: { label: "Fulfilled", color: "#10b981" },
+  DENIED:    { label: "Denied",    color: "#ef4444" },
+};
+
+const EMPTY_REQUEST_FORM = { item: "", quantity: 1, classRoomId: "", purpose: "", notes: "", status: "PENDING" };
+
 export default function AdminSupplyLists() {
   const [centers, setCenters] = useState([]);
+  const [classrooms, setClassrooms] = useState([]);
   const [lessons, setLessons] = useState([]);
   const [supplyList, setSupplyList] = useState([]);
+  const [requests, setRequests] = useState([]);
   const [centerId, setCenterId] = useState("");
   const [loading, setLoading] = useState(true);
   const [supplyLoading, setSupplyLoading] = useState(false);
+  const [requestsLoading, setRequestsLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
-  const [lessonSearch, setLessonSearch] = useState("");
+  const [requestStatusFilter, setRequestStatusFilter] = useState("");
 
-  // Manage supplies on individual lessons
-  const [manageLessonId, setManageLessonId] = useState("");
-  const [supplyRows, setSupplyRows] = useState([]);
-  const [savingSupplies, setSavingSupplies] = useState(false);
+  // Manual supply request entry / edit modal
+  const [requestModalOpen, setRequestModalOpen] = useState(false);
+  const [editingRequestId, setEditingRequestId] = useState("");
+  const [requestForm, setRequestForm] = useState(EMPTY_REQUEST_FORM);
+  const [savingRequest, setSavingRequest] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -47,6 +62,16 @@ export default function AdminSupplyLists() {
         setLoading(false);
       }
     })();
+  }, []);
+
+  const loadClassrooms = useCallback(async (cId) => {
+    if (!cId) return;
+    try {
+      const data = await apiJson(`/api/v1/classes?centerId=${encodeURIComponent(cId)}`);
+      setClassrooms(Array.isArray(data) ? data : []);
+    } catch {
+      setClassrooms([]);
+    }
   }, []);
 
   const loadLessons = useCallback(async (cId) => {
@@ -72,12 +97,27 @@ export default function AdminSupplyLists() {
     }
   }, []);
 
+  const loadRequests = useCallback(async (cId) => {
+    if (!cId) return;
+    setRequestsLoading(true);
+    try {
+      const data = await apiJson(`/api/v1/supply-requests?centerId=${encodeURIComponent(cId)}`);
+      setRequests(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setError(e.message || "Failed to load supply requests");
+    } finally {
+      setRequestsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (centerId) {
+      loadClassrooms(centerId);
       loadLessons(centerId);
       loadSupplyList(centerId);
+      loadRequests(centerId);
     }
-  }, [centerId, loadLessons, loadSupplyList]);
+  }, [centerId, loadClassrooms, loadLessons, loadSupplyList, loadRequests]);
 
   const totalCost = useMemo(() => supplyList.reduce((sum, s) => sum + (s.estimatedCost || 0), 0), [supplyList]);
   const totalQty = useMemo(() => supplyList.reduce((s, i) => s + i.totalQuantity, 0), [supplyList]);
@@ -97,11 +137,12 @@ export default function AdminSupplyLists() {
     return list;
   }, [supplyList, filterCategory, search]);
 
-  const filteredLessons = useMemo(() => {
-    if (!lessonSearch.trim()) return lessons;
-    const q = lessonSearch.toLowerCase();
-    return lessons.filter((l) => l.title.toLowerCase().includes(q));
-  }, [lessons, lessonSearch]);
+  const filteredRequests = useMemo(() => {
+    if (!requestStatusFilter) return requests;
+    return requests.filter((r) => r.status === requestStatusFilter);
+  }, [requests, requestStatusFilter]);
+
+  const pendingRequestCount = useMemo(() => requests.filter((r) => r.status === "PENDING").length, [requests]);
 
   const categoryBreakdown = useMemo(() => {
     const counts = {};
@@ -112,55 +153,90 @@ export default function AdminSupplyLists() {
     return counts;
   }, [supplyList]);
 
-  function openManageSupplies(lesson) {
-    setManageLessonId(lesson.id);
-    setSupplyRows(
-      (lesson.supplies || []).map((s) => ({
-        name: s.name || "",
-        quantity: s.quantity || 1,
-        quantityType: s.quantityType === "per_student" ? "per_student" : "total",
-        unit: s.unit || "",
-        estimatedCost: s.estimatedCost || "",
-        category: s.category || "General",
-      })),
-    );
-    setError("");
-    setSuccess("");
+  function openAddRequest() {
+    setEditingRequestId("");
+    setRequestForm(EMPTY_REQUEST_FORM);
+    setRequestModalOpen(true);
   }
 
-  function addSupplyRow() {
-    setSupplyRows((prev) => [...prev, { name: "", quantity: 1, quantityType: "total", unit: "", estimatedCost: "", category: "General" }]);
+  function openEditRequest(r) {
+    setEditingRequestId(r.id);
+    setRequestForm({
+      item: r.item || "",
+      quantity: r.quantity || 1,
+      classRoomId: r.classRoomId || "",
+      purpose: r.purpose || "",
+      notes: r.notes || "",
+      status: r.status || "PENDING",
+    });
+    setRequestModalOpen(true);
   }
 
-  function removeSupplyRow(index) {
-    setSupplyRows((prev) => prev.filter((_, i) => i !== index));
+  function closeRequestModal() {
+    setRequestModalOpen(false);
+    setEditingRequestId("");
+    setRequestForm(EMPTY_REQUEST_FORM);
   }
 
-  function updateSupplyRow(index, field, value) {
-    setSupplyRows((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
-  }
-
-  async function saveSupplies(e) {
+  async function saveRequest(e) {
     e.preventDefault();
-    if (!manageLessonId) return;
-    setSavingSupplies(true);
+    if (!requestForm.item.trim() || !centerId) return;
+    setSavingRequest(true);
     setError("");
     setSuccess("");
     try {
-      const validSupplies = supplyRows.filter((s) => s.name.trim());
-      await apiJson(`/api/v1/lessons/${manageLessonId}`, {
-        method: "PUT",
-        body: JSON.stringify({ supplies: validSupplies }),
-      });
-      setSuccess("Supplies saved successfully.");
-      setManageLessonId("");
-      await loadLessons(centerId);
-      await loadSupplyList(centerId);
+      const payload = {
+        centerId,
+        item: requestForm.item.trim(),
+        quantity: Number(requestForm.quantity) || 1,
+        classRoomId: requestForm.classRoomId || null,
+        purpose: requestForm.purpose || null,
+        notes: requestForm.notes || null,
+        status: requestForm.status,
+      };
+      if (editingRequestId) {
+        await apiJson(`/api/v1/supply-requests/${editingRequestId}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+      } else {
+        await apiJson("/api/v1/supply-requests", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+      }
+      setSuccess(editingRequestId ? "Supply request updated." : "Supply request added.");
+      closeRequestModal();
+      await loadRequests(centerId);
       setTimeout(() => setSuccess(""), 4000);
     } catch (e2) {
-      setError(e2.message || "Failed to save supplies");
+      setError(e2.message || "Failed to save supply request");
     } finally {
-      setSavingSupplies(false);
+      setSavingRequest(false);
+    }
+  }
+
+  async function changeRequestStatus(id, status) {
+    setError("");
+    try {
+      await apiJson(`/api/v1/supply-requests/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ status }),
+      });
+      setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
+    } catch (e) {
+      setError(e.message || "Failed to update status");
+    }
+  }
+
+  async function deleteRequest(id) {
+    if (!confirm("Delete this supply request?")) return;
+    setError("");
+    try {
+      await apiJson(`/api/v1/supply-requests/${id}`, { method: "DELETE" });
+      setRequests((prev) => prev.filter((r) => r.id !== id));
+    } catch (e) {
+      setError(e.message || "Failed to delete request");
     }
   }
 
@@ -210,7 +286,7 @@ export default function AdminSupplyLists() {
           <div>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Supply Lists</h2>
             <p style={{ margin: 0, fontSize: 13, color: "var(--admin-text-muted)" }}>
-              Consolidated supply lists auto-generated from lesson requirements.
+              Consolidated supply lists auto-generated from lesson requirements, plus supply requests from staff.
             </p>
           </div>
         </div>
@@ -237,29 +313,11 @@ export default function AdminSupplyLists() {
       {loading || supplyLoading ? (
         <Panel><SkeletonTable rows={5} cols={4} /></Panel>
       ) : supplyList.length === 0 ? (
-        <>
-          <EmptyState
-            icon="📋"
-            title="No supplies found"
-            description="Add supplies to lessons to auto-generate a consolidated supply list."
-          />
-          {/* Still show lesson manager even with no supplies */}
-          <LessonManager
-            lessons={lessons}
-            filteredLessons={filteredLessons}
-            lessonSearch={lessonSearch}
-            setLessonSearch={setLessonSearch}
-            manageLessonId={manageLessonId}
-            supplyRows={supplyRows}
-            savingSupplies={savingSupplies}
-            openManageSupplies={openManageSupplies}
-            setManageLessonId={setManageLessonId}
-            addSupplyRow={addSupplyRow}
-            removeSupplyRow={removeSupplyRow}
-            updateSupplyRow={updateSupplyRow}
-            saveSupplies={saveSupplies}
-          />
-        </>
+        <EmptyState
+          icon="📋"
+          title="No supplies found"
+          description="Supplies are added when a lesson is created in Curriculum & Progress and will auto-populate here."
+        />
       ) : (
         <>
           {/* Stats Cards */}
@@ -423,266 +481,240 @@ export default function AdminSupplyLists() {
               </div>
             )}
           </Panel>
-
-          {/* Lesson Manager */}
-          <LessonManager
-            lessons={lessons}
-            filteredLessons={filteredLessons}
-            lessonSearch={lessonSearch}
-            setLessonSearch={setLessonSearch}
-            manageLessonId={manageLessonId}
-            supplyRows={supplyRows}
-            savingSupplies={savingSupplies}
-            openManageSupplies={openManageSupplies}
-            setManageLessonId={setManageLessonId}
-            addSupplyRow={addSupplyRow}
-            removeSupplyRow={removeSupplyRow}
-            updateSupplyRow={updateSupplyRow}
-            saveSupplies={saveSupplies}
-          />
         </>
+      )}
+
+      {/* Supply Request List */}
+      <Panel style={{ marginTop: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>Supply Requests</div>
+              <div style={{ fontSize: 13, color: "var(--admin-text-muted)", marginTop: 2 }}>
+                Requests submitted by teachers, plus supplies logged manually.
+              </div>
+            </div>
+            {pendingRequestCount > 0 && (
+              <span style={{
+                fontSize: 11, fontWeight: 700, background: "#f59e0b14", color: "#f59e0b",
+                padding: "2px 8px", borderRadius: 999,
+              }}>
+                {pendingRequestCount} pending
+              </span>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <select value={requestStatusFilter} onChange={(e) => setRequestStatusFilter(e.target.value)} style={selectStyle}>
+              <option value="">All statuses</option>
+              {REQUEST_STATUSES.map((s) => (
+                <option key={s} value={s}>{STATUS_META[s].label}</option>
+              ))}
+            </select>
+            <button type="button" onClick={openAddRequest} style={primaryButton} disabled={!centerId}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />
+                </svg>
+                Add Supply Request
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {requestsLoading ? (
+          <SkeletonTable rows={4} cols={8} />
+        ) : filteredRequests.length === 0 ? (
+          <EmptyState
+            icon="🧾"
+            title="No supply requests"
+            description="Requests teachers submit from their checklist, or that you log manually, will appear here."
+          />
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={tableStyle}>
+              <thead>
+                <tr>
+                  <th style={{ ...thStyle, width: 110 }}>Date Requested</th>
+                  <th style={thStyle}>Item</th>
+                  <th style={{ ...thStyle, width: 60 }}>Qty</th>
+                  <th style={{ ...thStyle, width: 120 }}>Classroom</th>
+                  <th style={{ ...thStyle, width: 140 }}>Requested By</th>
+                  <th style={thStyle}>Purpose</th>
+                  <th style={{ ...thStyle, width: 140 }}>Status</th>
+                  <th style={thStyle}>Notes</th>
+                  <th style={{ ...thStyle, width: 80 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRequests.map((r) => {
+                  const meta = STATUS_META[r.status] || STATUS_META.PENDING;
+                  return (
+                    <tr key={r.id}
+                      style={{ transition: "background 0.15s" }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = "var(--admin-bg-secondary)"}
+                      onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+                      <td style={{ ...tdStyle, whiteSpace: "nowrap", color: "var(--admin-text-muted)", fontSize: 12 }}>
+                        {r.createdAt ? new Date(r.createdAt).toLocaleDateString() : "—"}
+                      </td>
+                      <td style={{ ...tdStyle, fontWeight: 600 }}>{r.item}</td>
+                      <td style={tdStyle}>{r.quantity}</td>
+                      <td style={tdStyle}>{r.classRoom?.name || "—"}</td>
+                      <td style={tdStyle}>{r.requestedBy?.name || r.requestedBy?.email || "—"}</td>
+                      <td style={{ ...tdStyle, color: r.purpose ? "var(--admin-text)" : "var(--admin-text-muted)", fontSize: 12 }}>
+                        {r.purpose || "—"}
+                      </td>
+                      <td style={tdStyle}>
+                        <select
+                          value={r.status}
+                          onChange={(e) => changeRequestStatus(r.id, e.target.value)}
+                          style={{
+                            ...selectStyle, padding: "4px 8px", fontSize: 12, fontWeight: 700,
+                            color: meta.color, background: meta.color + "14", border: `1px solid ${meta.color}40`,
+                          }}
+                        >
+                          {REQUEST_STATUSES.map((s) => (
+                            <option key={s} value={s}>{STATUS_META[s].label}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td style={{ ...tdStyle, color: r.notes ? "var(--admin-text)" : "var(--admin-text-muted)", fontSize: 12 }}>
+                        {r.notes || "—"}
+                      </td>
+                      <td style={tdStyle}>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button type="button" onClick={() => openEditRequest(r)} title="Edit" style={deleteIconBtn}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--admin-bg-tertiary)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M11 2l3 3-8 8-3.5 1L3 11l8-9z" />
+                            </svg>
+                          </button>
+                          <button type="button" onClick={() => deleteRequest(r.id)} title="Delete" style={deleteIconBtn}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.color = "#dc2626"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--admin-text-muted)"; }}>
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                              <path d="M3 4.5h10M6.5 4.5V3a1 1 0 011-1h1a1 1 0 011 1v1.5M5 4.5l.5 8.5h5l.5-8.5M7 7v3.5M9 7v3.5" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      {/* Add / Edit Supply Request Modal */}
+      {requestModalOpen && (
+        <div style={modalOverlay} onClick={closeRequestModal}>
+          <div style={modalPanel} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <div style={{ fontSize: 16, fontWeight: 700 }}>
+                {editingRequestId ? "Edit Supply Request" : "Add Supply Request"}
+              </div>
+              <button type="button" onClick={closeRequestModal} style={linkButton}>Cancel</button>
+            </div>
+            <form onSubmit={saveRequest}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: 10, marginBottom: 10 }}>
+                <FormField label="Item">
+                  <input
+                    autoFocus
+                    placeholder="e.g. Construction paper"
+                    value={requestForm.item}
+                    onChange={(e) => setRequestForm((p) => ({ ...p, item: e.target.value }))}
+                    style={inputStyle}
+                    required
+                  />
+                </FormField>
+                <FormField label="Qty">
+                  <input
+                    type="number"
+                    min="1"
+                    value={requestForm.quantity}
+                    onChange={(e) => setRequestForm((p) => ({ ...p, quantity: parseInt(e.target.value) || 1 }))}
+                    style={inputStyle}
+                  />
+                </FormField>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                <FormField label="Classroom">
+                  <select
+                    value={requestForm.classRoomId}
+                    onChange={(e) => setRequestForm((p) => ({ ...p, classRoomId: e.target.value }))}
+                    style={inputStyle}
+                  >
+                    <option value="">None / Center-wide</option>
+                    {classrooms.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </FormField>
+                <FormField label="Status">
+                  <select
+                    value={requestForm.status}
+                    onChange={(e) => setRequestForm((p) => ({ ...p, status: e.target.value }))}
+                    style={inputStyle}
+                  >
+                    {REQUEST_STATUSES.map((s) => (
+                      <option key={s} value={s}>{STATUS_META[s].label}</option>
+                    ))}
+                  </select>
+                </FormField>
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <FormField label="Purpose">
+                  <input
+                    placeholder="What is this supply for?"
+                    value={requestForm.purpose}
+                    onChange={(e) => setRequestForm((p) => ({ ...p, purpose: e.target.value }))}
+                    style={inputStyle}
+                  />
+                </FormField>
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <FormField label="Notes">
+                  <textarea
+                    rows={2}
+                    placeholder="Optional notes"
+                    value={requestForm.notes}
+                    onChange={(e) => setRequestForm((p) => ({ ...p, notes: e.target.value }))}
+                    style={{ ...inputStyle, resize: "vertical" }}
+                  />
+                </FormField>
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button type="submit" disabled={savingRequest || !requestForm.item.trim()} style={primaryButton}>
+                  {savingRequest ? (
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <Spinner /> Saving…
+                    </span>
+                  ) : editingRequestId ? "Save Changes" : "Add Request"}
+                </button>
+                <button type="button" onClick={closeRequestModal} style={outlineButton}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </AdminLayout>
   );
 }
 
-/* ── Lesson Manager Section ─────────────────────────────────── */
+/* ── Sub-components ─────────────────────────────────────────── */
 
-function LessonManager({
-  lessons, filteredLessons, lessonSearch, setLessonSearch,
-  manageLessonId, supplyRows, savingSupplies,
-  openManageSupplies, setManageLessonId,
-  addSupplyRow, removeSupplyRow, updateSupplyRow, saveSupplies,
-}) {
-  const managingLesson = lessons.find((l) => l.id === manageLessonId);
-
+function FormField({ label, children }) {
   return (
-    <Panel style={{ marginTop: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 600 }}>Manage Supplies per Lesson</div>
-          <div style={{ fontSize: 13, color: "var(--admin-text-muted)", marginTop: 2 }}>
-            Select a lesson to add or edit its supply requirements.
-          </div>
-        </div>
+    <label style={{ display: "block" }}>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--admin-text-muted)", marginBottom: 4 }}>
+        {label}
       </div>
-
-      {manageLessonId && managingLesson ? (
-        <div style={{
-          border: "2px solid #6366f130", borderRadius: 12,
-          background: "var(--admin-bg-secondary)", padding: 20,
-        }}>
-          {/* Editor Header */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: 8,
-                background: "#6366f114", color: "#6366f1",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 16,
-              }}>✏️</div>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700 }}>{managingLesson.title}</div>
-                <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>
-                  {supplyRows.length} supply item{supplyRows.length !== 1 ? "s" : ""}
-                </div>
-              </div>
-            </div>
-            <button type="button" onClick={() => setManageLessonId("")} style={linkButton}>
-              Cancel
-            </button>
-          </div>
-
-          {/* Supply Rows */}
-          <form onSubmit={saveSupplies}>
-            {supplyRows.length === 0 && (
-              <div style={{ textAlign: "center", padding: "20px 0", color: "var(--admin-text-muted)", fontSize: 13 }}>
-                No supplies yet. Click "Add Supply" to get started.
-              </div>
-            )}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {supplyRows.map((row, idx) => (
-                <div key={idx} style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 70px 110px 70px 90px 110px 36px",
-                  gap: 8, alignItems: "center",
-                  background: "var(--admin-bg)", borderRadius: 10,
-                  padding: "10px 12px",
-                  border: "1px solid var(--admin-border)",
-                }}>
-                  <input
-                    placeholder="Supply name"
-                    value={row.name}
-                    onChange={(e) => updateSupplyRow(idx, "name", e.target.value)}
-                    style={inputStyle}
-                    required
-                  />
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="Qty"
-                    value={row.quantity}
-                    onChange={(e) => updateSupplyRow(idx, "quantity", parseInt(e.target.value) || 1)}
-                    style={{ ...inputStyle, textAlign: "center" }}
-                  />
-                  <select
-                    value={row.quantityType || "total"}
-                    onChange={(e) => updateSupplyRow(idx, "quantityType", e.target.value)}
-                    style={inputStyle}
-                  >
-                    <option value="total">Total</option>
-                    <option value="per_student">Per Student</option>
-                  </select>
-                  <input
-                    placeholder="Unit"
-                    value={row.unit}
-                    onChange={(e) => updateSupplyRow(idx, "unit", e.target.value)}
-                    style={inputStyle}
-                  />
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="$ Cost"
-                    value={row.estimatedCost}
-                    onChange={(e) => updateSupplyRow(idx, "estimatedCost", e.target.value)}
-                    style={inputStyle}
-                  />
-                  <select
-                    value={row.category}
-                    onChange={(e) => updateSupplyRow(idx, "category", e.target.value)}
-                    style={inputStyle}
-                  >
-                    {SUPPLY_CATEGORIES.map((c) => {
-                      const m = CATEGORY_META[c];
-                      return <option key={c} value={c}>{m?.icon} {c}</option>;
-                    })}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => removeSupplyRow(idx)}
-                    title="Remove supply"
-                    style={deleteIconBtn}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.color = "#dc2626"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--admin-text-muted)"; }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                      <path d="M3 4.5h10M6.5 4.5V3a1 1 0 011-1h1a1 1 0 011 1v1.5M5 4.5l.5 8.5h5l.5-8.5M7 7v3.5M9 7v3.5" />
-                    </svg>
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {/* Column labels (only show if there are rows) */}
-            {supplyRows.length > 0 && (
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 70px 110px 70px 90px 110px 36px",
-                gap: 8, padding: "4px 12px 0",
-                fontSize: 10, fontWeight: 600, textTransform: "uppercase",
-                letterSpacing: "0.05em", color: "var(--admin-text-muted)",
-              }}>
-                <span>Name</span><span>Qty</span><span>Type</span><span>Unit</span><span>Cost</span><span>Category</span><span></span>
-              </div>
-            )}
-
-            <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
-              <button type="button" onClick={addSupplyRow} style={outlineButton}>
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />
-                </svg>
-                Add Supply
-              </button>
-              <button type="submit" disabled={savingSupplies} style={primaryButton}>
-                {savingSupplies ? (
-                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <Spinner /> Saving…
-                  </span>
-                ) : "Save Supplies"}
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : (
-        <>
-          {/* Lesson Search */}
-          {lessons.length > 6 && (
-            <div style={{ marginBottom: 12, position: "relative" }}>
-              <SearchIcon />
-              <input
-                value={lessonSearch}
-                onChange={(e) => setLessonSearch(e.target.value)}
-                placeholder="Search lessons…"
-                style={{ ...inputStyle, padding: "8px 12px 8px 32px", fontSize: 13, maxWidth: 280 }}
-              />
-            </div>
-          )}
-
-          {/* Lesson Grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
-            {filteredLessons.slice(0, 60).map((lesson) => {
-              const supCount = lesson.supplies?.length || 0;
-              return (
-                <button
-                  key={lesson.id}
-                  type="button"
-                  onClick={() => openManageSupplies(lesson)}
-                  style={lessonCard}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#6366f180"; e.currentTarget.style.background = "var(--admin-bg-secondary)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--admin-border)"; e.currentTarget.style.background = "var(--admin-bg)"; }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{
-                      width: 32, height: 32, borderRadius: 8,
-                      background: supCount > 0 ? "#10b98114" : "var(--admin-bg-tertiary)",
-                      color: supCount > 0 ? "#10b981" : "var(--admin-text-muted)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 15, flexShrink: 0,
-                    }}>
-                      {supCount > 0 ? "📦" : "📖"}
-                    </div>
-                    <div style={{ overflow: "hidden", textAlign: "left" }}>
-                      <div style={{
-                        fontSize: 13, fontWeight: 600, color: "var(--admin-text)",
-                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                      }}>
-                        {lesson.title}
-                      </div>
-                      <div style={{ fontSize: 11, color: "var(--admin-text-muted)", marginTop: 1 }}>
-                        {supCount > 0 ? (
-                          <span style={{ color: "#10b981", fontWeight: 600 }}>
-                            {supCount} item{supCount !== 1 ? "s" : ""}
-                          </span>
-                        ) : (
-                          "No supplies"
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {filteredLessons.length > 60 && (
-            <div style={{ padding: 12, fontSize: 13, color: "var(--admin-text-muted)", textAlign: "center" }}>
-              Showing first 60 lessons. Use search to find specific lessons.
-            </div>
-          )}
-          {filteredLessons.length === 0 && lessons.length > 0 && (
-            <EmptyState icon="🔍" title="No matching lessons" description="Try adjusting your search." />
-          )}
-          {lessons.length === 0 && (
-            <EmptyState icon="📖" title="No lessons found" description="No lessons found for this center." />
-          )}
-        </>
-      )}
-    </Panel>
+      {children}
+    </label>
   );
 }
-
-/* ── Sub-components ─────────────────────────────────────────── */
 
 function Panel({ children, style }) {
   return (
@@ -885,20 +917,25 @@ const linkButton = {
 };
 
 const deleteIconBtn = {
-  width: 32, height: 32, borderRadius: 8,
+  width: 28, height: 28, borderRadius: 8,
   display: "inline-flex", alignItems: "center", justifyContent: "center",
   background: "transparent", border: "none",
   color: "var(--admin-text-muted)", cursor: "pointer",
   transition: "all 0.15s", flexShrink: 0,
 };
 
-const lessonCard = {
-  display: "block",
-  padding: "12px 14px",
-  border: "1px solid var(--admin-border)",
-  borderRadius: 10,
+const modalOverlay = {
+  position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.5)",
+  display: "flex", alignItems: "center", justifyContent: "center",
+  padding: 20, zIndex: 1000,
+};
+
+const modalPanel = {
   background: "var(--admin-bg)",
-  cursor: "pointer",
-  transition: "all 0.15s",
+  borderRadius: 14,
+  padding: 22,
   width: "100%",
+  maxWidth: 440,
+  boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+  border: "1px solid var(--admin-border)",
 };

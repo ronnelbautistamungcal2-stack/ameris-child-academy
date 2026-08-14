@@ -13,7 +13,7 @@ import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const PROGRESS_STATUS_OPTIONS = ["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "PASSED", "FAILED"];
-const ACTIVITY_TYPES = ["DIAPER_CHANGE", "NAP", "BOTTLE", "MEAL", "SNACK", "ACTIVITY", "TASK_CHECKLIST", "BEHAVIOR", "OTHER"];
+const ACTIVITY_TYPES = ["DIAPER_CHANGE", "NAP", "BOTTLE", "MEAL", "SNACK", "ACTIVITY", "TASK_CHECKLIST", "BEHAVIOR", "TOILETING", "OTHER"];
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 const ACTIVITY_TYPE_LABELS = {
   DIAPER_CHANGE: "Diaper Change",
@@ -24,6 +24,7 @@ const ACTIVITY_TYPE_LABELS = {
   ACTIVITY: "Activity",
   TASK_CHECKLIST: "Task Checklist",
   BEHAVIOR: "Behavior",
+  TOILETING: "Toileting",
   OTHER: "Grade",
 };
 
@@ -2135,6 +2136,7 @@ function teacherActivityTitle(activity, index) {
   }
   if (activity?.type === "MEAL" || activity?.type === "SNACK" || activity?.type === "BOTTLE") return "Meals & Nutrition";
   if (activity?.type === "DIAPER_CHANGE") return "Diaper / Potty";
+  if (activity?.type === "TOILETING") return "Toileting";
   if (activity?.type === "NAP") return "Rest Time";
   return `${teacherFormatActivityType(activity?.type) || "Update"} ${index + 1}`;
 }

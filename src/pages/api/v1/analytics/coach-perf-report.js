@@ -30,15 +30,22 @@ export default async function handler(req, res) {
     });
     if (!coach) return res.status(404).json({ error: "Coach not found" });
 
-    // Teachers assigned to this coach (unique teacherIds from CoachObservation)
-    const observedTeachers = await prisma.coachObservation.findMany({
-      where: { coachId: resolvedCoachId, centerId },
-      select: { teacherId: true, teacher: { select: { id: true, name: true, email: true } } },
-      distinct: ["teacherId"],
+    // Staff explicitly assigned to this coach's team (admin-managed roster)
+    const teamMembers = await prisma.coachTeamMember.findMany({
+      where: { coachId: resolvedCoachId },
+      select: {
+        staffId: true,
+        staff: {
+          select: { id: true, name: true, email: true, centers: { select: { centerId: true } } },
+        },
+      },
     });
-    const teacherIds = observedTeachers.map((o) => o.teacherId);
+    const teamAtCenter = teamMembers.filter((tm) =>
+      (tm.staff?.centers || []).some((c) => c.centerId === centerId)
+    );
+    const teacherIds = teamAtCenter.map((tm) => tm.staffId);
     const teacherMap = Object.fromEntries(
-      observedTeachers.map((o) => [o.teacherId, o.teacher?.name || o.teacher?.email || "Unknown"])
+      teamAtCenter.map((tm) => [tm.staffId, tm.staff?.name || tm.staff?.email || "Unknown"])
     );
 
     // ── Team Performance: avg teacher composite scores from snapshots over time ──
@@ -64,17 +71,20 @@ export default async function handler(req, res) {
         score: Math.round((sum / count) * 10) / 10,
       }));
 
-    // Also compute from observations (observations within date range by this coach)
-    const observations = await prisma.coachObservation.findMany({
-      where: {
-        coachId: resolvedCoachId,
-        centerId,
-        date: { gte: dateFrom, lte: dateTo },
-        NOT: { score: null },
-      },
-      select: { teacherId: true, score: true, date: true, type: true },
-      orderBy: { date: "asc" },
-    });
+    // Also compute from observations (observations within date range by this coach, for team members only)
+    const observations = teacherIds.length > 0
+      ? await prisma.coachObservation.findMany({
+          where: {
+            coachId: resolvedCoachId,
+            centerId,
+            teacherId: { in: teacherIds },
+            date: { gte: dateFrom, lte: dateTo },
+            NOT: { score: null },
+          },
+          select: { teacherId: true, score: true, date: true, type: true },
+          orderBy: { date: "asc" },
+        })
+      : [];
 
     // Weekly observation avg for team trend chart (fallback if no snapshots)
     const obsByWeek = {};
@@ -247,7 +257,7 @@ export default async function handler(req, res) {
       gradeConfig: cfg,
       overallGrade,
       team: {
-        teachers: observedTeachers.map((o) => ({ id: o.teacherId, name: teacherMap[o.teacherId] })),
+        teachers: teacherIds.map((tid) => ({ id: tid, name: teacherMap[tid] })),
         avgScore: teamAvgScore,
         normalized: teamNorm,
         trend: finalTeamTrend,

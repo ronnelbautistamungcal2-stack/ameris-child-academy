@@ -1454,9 +1454,20 @@ function buildActivityFacts(activity) {
     facts.push({ label: "Care type", value: "Toileting" });
   }
   if (details.meal) facts.push({ label: "Meal", value: String(details.meal) });
-  if (details.quantity) facts.push({ label: "Quantity", value: String(details.quantity) });
+  if (activity.type === "BOTTLE") {
+    if (details.amount) facts.push({ label: "Ounces served", value: String(details.amount) });
+    if (details.consumed) facts.push({ label: "Ounces drank", value: String(details.consumed) });
+  } else if (details.quantity) {
+    facts.push({ label: "Quantity", value: String(details.quantity) });
+  }
   if (details.startTime && details.endTime) {
     facts.push({ label: "Nap", value: `${details.startTime} - ${details.endTime}` });
+  }
+  if (activity.type === "CHARACTER_HIGHLIGHT" && details.characterHighlightType) {
+    facts.push({
+      label: "Highlight",
+      value: CHARACTER_HIGHLIGHT_TYPE_LABELS[details.characterHighlightType] || String(details.characterHighlightType),
+    });
   }
   if (details.time) facts.push({ label: "Logged time", value: String(details.time) });
   const media = extractMediaUrls(activity);
@@ -1516,10 +1527,20 @@ function activityTitle(activity) {
 }
 
 function formatActivityType(type) {
-  if (type === "BEHAVIOR") return "Citizenship";
+  if (type === "BEHAVIOR") return "Course Correction";
   if (type === "ACCOMPLISHMENT") return "Accomplishment";
   return String(type || "OTHER").toLowerCase().split("_").map((part) => part.slice(0, 1).toUpperCase() + part.slice(1)).join(" ");
 }
+
+const CHARACTER_HIGHLIGHT_TYPE_LABELS = {
+  BROTHERS_KEEPER: "Brother's Keeper",
+  CHAMPION_OF_VIRTUE: "Champion of Virtue",
+  FULL_REPENTANCE: "Full Repentance",
+  CHAMPION_OF_OBEDIENCE: "Champion of Obedience",
+  CHAMPION_OF_RESPECT: "Champion of Respect",
+  CHAMPION_OF_HONESTY: "Champion of Honesty",
+  OTHER: "Other",
+};
 
 function renderActivityDetails(activity) {
   const media = extractMediaUrls(activity);

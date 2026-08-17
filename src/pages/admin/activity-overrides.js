@@ -13,13 +13,13 @@ const TYPES = [
   "ACTIVITY",
   "TASK_CHECKLIST",
   "BEHAVIOR",
-  "ACCOMPLISHMENT",
   "INCIDENT",
   "TOILETING",
+  "CHARACTER_HIGHLIGHT",
   "OTHER",
 ];
 
-const QUICK_TYPE_OPTIONS = ["MEAL", "NAP", "DIAPER_CHANGE", "TOILETING", "ACTIVITY", "BEHAVIOR", "ACCOMPLISHMENT", "INCIDENT", "OTHER"];
+const QUICK_TYPE_OPTIONS = ["MEAL", "NAP", "DIAPER_CHANGE", "TOILETING", "ACTIVITY", "BEHAVIOR", "CHARACTER_HIGHLIGHT", "INCIDENT", "OTHER"];
 
 const TYPE_META = {
   INCIDENT: { label: "Incident", color: "#b91c1c", tint: "#fee2e2", icon: "⚠️" },
@@ -30,10 +30,11 @@ const TYPE_META = {
   SNACK: { label: "Snack", color: "#047857", tint: "#d1fae5", icon: "🍎" },
   ACTIVITY: { label: "Activity", color: "#be185d", tint: "#fce7f3", icon: "🎨" },
   TASK_CHECKLIST: { label: "Task / Checklist", color: "#0f766e", tint: "#ccfbf1", icon: "✅" },
-  BEHAVIOR: { label: "Citizenship", color: "#c2410c", tint: "#ffedd5", icon: "🤝" },
+  BEHAVIOR: { label: "Course Correction", color: "#c2410c", tint: "#ffedd5", icon: "🤝" },
   ACCOMPLISHMENT: { label: "Accomplishment", color: "#15803d", tint: "#dcfce7", icon: "🏆" },
   TOILETING: { label: "Toileting", color: "#0891b2", tint: "#cffafe", icon: "🚽" },
-  OTHER: { label: "Grade", color: "#475569", tint: "#e2e8f0", icon: "📝" },
+  CHARACTER_HIGHLIGHT: { label: "Character Highlight", color: "#a16207", tint: "#fef9c3", icon: "🌟" },
+  OTHER: { label: "Citizenship Grade", color: "#475569", tint: "#e2e8f0", icon: "📝" },
 };
 
 const MEAL_OCCASIONS = [
@@ -52,19 +53,12 @@ const PORTION_OPTIONS = [
   { value: "NONE", label: "None" },
 ];
 
-const BOTTLE_PORTION_OPTIONS = [
-  { value: "FULL", label: "Full" },
-  { value: "MOST", label: "Most" },
-  { value: "HALF", label: "Half" },
-  { value: "SOME", label: "Some" },
-  { value: "NONE", label: "None" },
-];
-
 const BEHAVIOR_TYPE_OPTIONS = [
   { value: "PHYSICAL_VIOLENCE", label: "Physical violence" },
   { value: "VIRTUE", label: "Virtue" },
   { value: "RESPECT", label: "Respect" },
   { value: "OBEDIENCE", label: "Obedience" },
+  { value: "HONESTY", label: "Honesty" },
   { value: "OTHER", label: "Other" },
 ];
 
@@ -80,6 +74,16 @@ const TOILETING_TYPE_OPTIONS = [
   { value: "SUCCESS", label: "Success" },
   { value: "TRIED", label: "Tried" },
   { value: "ACCIDENT", label: "Accident" },
+];
+
+const CHARACTER_HIGHLIGHT_TYPE_OPTIONS = [
+  { value: "BROTHERS_KEEPER", label: "Brother's Keeper" },
+  { value: "CHAMPION_OF_VIRTUE", label: "Champion of Virtue" },
+  { value: "FULL_REPENTANCE", label: "Full Repentance" },
+  { value: "CHAMPION_OF_OBEDIENCE", label: "Champion of Obedience" },
+  { value: "CHAMPION_OF_RESPECT", label: "Champion of Respect" },
+  { value: "CHAMPION_OF_HONESTY", label: "Champion of Honesty" },
+  { value: "OTHER", label: "Other" },
 ];
 
 const ASSESSMENT_DOMAINS = [
@@ -154,6 +158,7 @@ const MANAGED_DETAIL_KEYS = new Set([
   "behaviorType",
   "behaviorLevel",
   "toiletingType",
+  "characterHighlightType",
 ]);
 
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
@@ -168,6 +173,10 @@ function supportsBehaviorDetails(type) {
 
 function supportsToiletingDetails(type) {
   return type === "TOILETING";
+}
+
+function supportsCharacterHighlightDetails(type) {
+  return type === "CHARACTER_HIGHLIGHT";
 }
 
 function supportsDirectGrade(type) {
@@ -276,11 +285,14 @@ function defaultActivityFields(nextType) {
     napEndTime: "",
     mealType: nextType === "SNACK" ? "AM_SNACK" : "BREAKFAST",
     quantity: "ALL",
-    bottleQuantity: "FULL",
+    bottleAmount: "",
+    bottleConsumed: "",
     diaperType: "W",
     behaviorType: "OTHER",
     behaviorLevel: "1",
+    ipp: false,
     toiletingType: "SUCCESS",
+    characterHighlightType: "BROTHERS_KEEPER",
   };
 }
 
@@ -315,10 +327,14 @@ function applyTypeChange(form, nextType) {
         ["MEAL", "SNACK"].includes(nextType)
           ? currentFields.quantity || defaults.quantity
           : defaults.quantity,
-      bottleQuantity:
+      bottleAmount:
         nextType === "BOTTLE"
-          ? currentFields.bottleQuantity || defaults.bottleQuantity
-          : defaults.bottleQuantity,
+          ? currentFields.bottleAmount || defaults.bottleAmount
+          : defaults.bottleAmount,
+      bottleConsumed:
+        nextType === "BOTTLE"
+          ? currentFields.bottleConsumed || defaults.bottleConsumed
+          : defaults.bottleConsumed,
       diaperType:
         nextType === "DIAPER_CHANGE"
           ? currentFields.diaperType || defaults.diaperType
@@ -331,10 +347,15 @@ function applyTypeChange(form, nextType) {
         supportsBehaviorDetails(nextType)
           ? currentFields.behaviorLevel || defaults.behaviorLevel
           : defaults.behaviorLevel,
+      ipp: supportsBehaviorDetails(nextType) ? !!currentFields.ipp : false,
       toiletingType:
         supportsToiletingDetails(nextType)
           ? currentFields.toiletingType || defaults.toiletingType
           : defaults.toiletingType,
+      characterHighlightType:
+        supportsCharacterHighlightDetails(nextType)
+          ? currentFields.characterHighlightType || defaults.characterHighlightType
+          : defaults.characterHighlightType,
     },
   };
 }
@@ -388,11 +409,14 @@ function buildFormFromActivity(activity) {
       napEndTime: details.endTime || "",
       mealType: details.mealType || (nextType === "SNACK" ? "AM_SNACK" : "BREAKFAST"),
       quantity: details.quantity || "ALL",
-      bottleQuantity: details.quantity || "FULL",
+      bottleAmount: details.amount || "",
+      bottleConsumed: details.consumed || "",
       diaperType: details.diaperType || "W",
       behaviorType: details.behaviorType || "OTHER",
       behaviorLevel: details.behaviorLevel || "1",
+      ipp: !!details.ipp,
       toiletingType: details.toiletingType || "SUCCESS",
+      characterHighlightType: details.characterHighlightType || "BROTHERS_KEEPER",
     },
     dailyGrade: extractDailyGrade(details),
     domainScores: extractDomainScores(details),
@@ -497,7 +521,8 @@ function buildPayloadFromForm(form) {
     details.quantity = fields.quantity || "ALL";
   } else if (payloadType === "BOTTLE") {
     details.time = entryTime;
-    details.quantity = fields.bottleQuantity || "FULL";
+    details.amount = fields.bottleAmount || "";
+    details.consumed = fields.bottleConsumed || "";
   } else if (payloadType === "DIAPER_CHANGE") {
     details.time = entryTime;
     details.diaperType = fields.diaperType || "W";
@@ -505,9 +530,13 @@ function buildPayloadFromForm(form) {
     details.time = entryTime;
     details.behaviorType = fields.behaviorType || "OTHER";
     details.behaviorLevel = fields.behaviorLevel || "1";
+    details.ipp = !!fields.ipp;
   } else if (payloadType === "TOILETING") {
     details.time = entryTime;
     details.toiletingType = fields.toiletingType || "SUCCESS";
+  } else if (payloadType === "CHARACTER_HIGHLIGHT") {
+    details.time = entryTime;
+    details.characterHighlightType = fields.characterHighlightType || "BROTHERS_KEEPER";
   } else if (!supportsDirectGrade(form?.type)) {
     details.time = entryTime;
   }
@@ -547,7 +576,7 @@ function formatActivitySummary(activity) {
     return `${domainSummary || "Assessment logged"}${mediaCount ? ` | ${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : ""}`;
   }
   if (details.kind === "DAILY_GRADE" && details.grade != null) {
-    return `Grade ${details.grade}/10${mediaCount ? ` | ${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : ""}`;
+    return `Citizenship Grade ${details.grade}/10${mediaCount ? ` | ${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : ""}`;
   }
   if (activity?.type === "NAP") {
     if (details.startTime || details.endTime) {
@@ -561,7 +590,10 @@ function formatActivitySummary(activity) {
     return parts.join(" | ") || "Meal entry";
   }
   if (activity?.type === "BOTTLE") {
-    const parts = [details.quantity || ""].filter(Boolean);
+    const parts = [
+      details.amount ? `Served ${details.amount} oz` : "",
+      details.consumed ? `Drank ${details.consumed} oz` : "",
+    ].filter(Boolean);
     if (mediaCount) parts.push(`${mediaCount} photo${mediaCount === 1 ? "" : "s"}`);
     return parts.join(" | ") || "Bottle entry";
   }
@@ -571,7 +603,7 @@ function formatActivitySummary(activity) {
   if (activity?.type === "BEHAVIOR") {
     const parts = [details.behaviorType || "", details.behaviorLevel ? `Level ${details.behaviorLevel}` : ""].filter(Boolean);
     if (mediaCount) parts.push(`${mediaCount} photo${mediaCount === 1 ? "" : "s"}`);
-    return parts.join(" | ") || "Citizenship entry";
+    return parts.join(" | ") || "Course Correction entry";
   }
   if (activity?.type === "INCIDENT") {
     return mediaCount ? `${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : "Incident entry";
@@ -579,6 +611,10 @@ function formatActivitySummary(activity) {
   if (activity?.type === "TOILETING") {
     const label = TOILETING_TYPE_OPTIONS.find((option) => option.value === details.toiletingType)?.label;
     return `${label || "Toileting"}${mediaCount ? ` | ${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : ""}`;
+  }
+  if (activity?.type === "CHARACTER_HIGHLIGHT") {
+    const label = CHARACTER_HIGHLIGHT_TYPE_OPTIONS.find((option) => option.value === details.characterHighlightType)?.label;
+    return `${label || "Character Highlight"}${mediaCount ? ` | ${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : ""}`;
   }
   return mediaCount ? `${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : "Logged entry";
 }
@@ -601,7 +637,7 @@ function buildActivityMetaPills(activity) {
 
   if (hasAssessment(activity)) {
     pills.push({
-      label: details.domains ? "Domain Assessment" : "Grade",
+      label: details.domains ? "Domain Assessment" : "Citizenship Grade",
       tone: "sky",
     });
   }
@@ -624,16 +660,13 @@ function composerHelperText(type) {
     return "Meal entries capture the time, meal type, quantity, and description.";
   }
   if (type === "BOTTLE") {
-    return "Bottle entries capture the time, quantity, and description.";
+    return "Bottle entries capture the time, ounces served, ounces drank, and description.";
   }
   if (type === "DIAPER_CHANGE") {
     return "Diaper entries capture the time, diaper type, and description.";
   }
   if (type === "BEHAVIOR") {
-    return "Citizenship entries capture type, level, time, and description.";
-  }
-  if (type === "ACCOMPLISHMENT") {
-    return "Accomplishment entries capture the time and a description of what was achieved.";
+    return "Course Correction entries capture type, level, time, and description.";
   }
   if (type === "INCIDENT") {
     return "Incident entries capture the time and description.";
@@ -641,8 +674,11 @@ function composerHelperText(type) {
   if (type === "TOILETING") {
     return "Toileting entries capture the time, type (success, tried, or accident), and description.";
   }
+  if (type === "CHARACTER_HIGHLIGHT") {
+    return "Character Highlight entries capture the time, highlight type, and description.";
+  }
   if (supportsDirectGrade(type)) {
-    return "Grade entries capture a 0-10 score and description.";
+    return "Citizenship Grade entries capture a 0-10 score and description.";
   }
   return "Activity entries capture the time and description.";
 }
@@ -1257,7 +1293,7 @@ export default function AdminActivityOverrides() {
             <div style={heroMetricCardStyle}>
               <div style={heroMetricLabelStyle}>Assessments</div>
               <div style={heroMetricValueStyle}>{activityStats.assessments}</div>
-              <div style={heroMetricHintStyle}>Grade or domain scoring</div>
+              <div style={heroMetricHintStyle}>Citizenship Grade or domain scoring</div>
             </div>
           </div>
         </div>
@@ -1813,7 +1849,7 @@ function ActivityComposer({
                 })}
               </div>
               <div style={inlineNoteStyle}>
-                Use <strong>Grade</strong> for a 0-10 score entry.
+                Use <strong>Citizenship Grade</strong> for a 0-10 score entry.
               </div>
             </div>
 
@@ -1844,7 +1880,7 @@ function ActivityComposer({
                 ) : null}
 
                 {supportsDirectGrade(form.type) ? (
-                  <Field label="Grade" style={{ minWidth: 0 }}>
+                  <Field label="Citizenship Grade" style={{ minWidth: 0 }}>
                     <input
                       type="number"
                       min="0"
@@ -1893,20 +1929,32 @@ function ActivityComposer({
                 ) : null}
 
                 {form.type === "BOTTLE" ? (
-                  <Field label="Quantity" style={{ minWidth: 0 }}>
-                    <select
-                      value={form.fields.bottleQuantity}
-                      onChange={(event) => onNestedFieldChange("bottleQuantity", event.target.value)}
-                      style={inputStyle}
-                      disabled={interactionDisabled}
-                    >
-                      {BOTTLE_PORTION_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
+                  <>
+                    <Field label="# Ounces Served" style={{ minWidth: 0 }}>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        value={form.fields.bottleAmount}
+                        onChange={(event) => onNestedFieldChange("bottleAmount", event.target.value)}
+                        style={inputStyle}
+                        disabled={interactionDisabled}
+                        placeholder="e.g. 4"
+                      />
+                    </Field>
+                    <Field label="# Ounces Drank" style={{ minWidth: 0 }}>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        value={form.fields.bottleConsumed}
+                        onChange={(event) => onNestedFieldChange("bottleConsumed", event.target.value)}
+                        style={inputStyle}
+                        disabled={interactionDisabled}
+                        placeholder="e.g. 3"
+                      />
+                    </Field>
+                  </>
                 ) : null}
 
                 {form.type === "DIAPER_CHANGE" ? (
@@ -1973,10 +2021,38 @@ function ActivityComposer({
                         ))}
                       </select>
                     </Field>
+                    <Field label="IPP" style={{ minWidth: 0, gridColumn: "1 / -1" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>
+                        <input
+                          type="checkbox"
+                          checked={!!form.fields.ipp}
+                          onChange={(event) => onNestedFieldChange("ipp", event.target.checked)}
+                          disabled={interactionDisabled}
+                        />
+                        Individual Progress Plan — notifies admin immediately when checked
+                      </label>
+                    </Field>
                   </>
                 ) : null}
+
+                {supportsCharacterHighlightDetails(form.type) ? (
+                  <Field label="Type" style={{ minWidth: 0 }}>
+                    <select
+                      value={form.fields.characterHighlightType}
+                      onChange={(event) => onNestedFieldChange("characterHighlightType", event.target.value)}
+                      style={inputStyle}
+                      disabled={interactionDisabled}
+                    >
+                      {CHARACTER_HIGHLIGHT_TYPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                ) : null}
               </div>
-              {!["NAP", "MEAL", "SNACK", "BOTTLE", "DIAPER_CHANGE", "BEHAVIOR", "INCIDENT", "TOILETING"].includes(form.type) ? (
+              {!["NAP", "MEAL", "SNACK", "BOTTLE", "DIAPER_CHANGE", "BEHAVIOR", "INCIDENT", "TOILETING", "CHARACTER_HIGHLIGHT"].includes(form.type) ? (
                 <div style={inlineHelperStyle}>
                   This activity type only needs the timestamp and description unless you want to attach assessment, photos, or custom JSON.
                 </div>

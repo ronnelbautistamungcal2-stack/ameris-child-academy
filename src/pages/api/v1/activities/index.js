@@ -1,6 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { emitActivityLog } from "@/lib/socket";
+import { emitActivityLog, emitNotification } from "@/lib/socket";
 import {
   buildTeacherChildWhere,
   teacherCanAccessChild,
@@ -144,6 +144,27 @@ export default async function handler(req, res) {
     const child = await prisma.child.findUnique({ where: { id: cId } });
     if (child) {
       emitActivityLog(child.centerId, activity);
+
+      if (actType === "BEHAVIOR" && details && details.ipp) {
+        const childName = `${child.firstName || ""} ${child.lastName || ""}`.trim() || "A child";
+        const admins = await prisma.centerUser.findMany({
+          where: { centerId: child.centerId, user: { role: "ADMIN" } },
+          select: { userId: true },
+        }).catch(() => []);
+
+        if (admins.length > 0) {
+          const adminNotifications = admins.map(({ userId }) => ({
+            recipientId: userId,
+            type: "COMPLIANCE_ALERT",
+            title: "IPP Flagged on Course Correction Log",
+            body: `${childName}'s Course Correction log was flagged for an Individual Progress Plan (IPP) by ${session.user.name || session.user.email || "a teacher"}.`,
+            link: `/admin/activity-overrides?childId=${cId}`,
+            metadata: { activityId: activity.id, childId: cId },
+          }));
+          await prisma.notification.createMany({ data: adminNotifications, skipDuplicates: true }).catch(() => {});
+          adminNotifications.forEach((n) => emitNotification(n.recipientId, n));
+        }
+      }
     }
 
     return res.status(201).json(activity);

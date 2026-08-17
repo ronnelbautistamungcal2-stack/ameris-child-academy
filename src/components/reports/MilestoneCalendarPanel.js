@@ -73,7 +73,7 @@ function categoryFromActivity(activity) {
   const type = String(activity?.type || "").toUpperCase();
   if (["DIAPER_CHANGE", "NAP", "BOTTLE", "MEAL", "SNACK"].includes(type)) return "PHYSICAL";
   if (["ACTIVITY", "TASK_CHECKLIST"].includes(type)) return "COGNITIVE";
-  if (type === "BEHAVIOR") return "EMOTIONAL";
+  if (type === "BEHAVIOR" || type === "CHARACTER_HIGHLIGHT") return "EMOTIONAL";
   return "GROSS_MOTOR";
 }
 

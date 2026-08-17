@@ -2,6 +2,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import MonthlyCalendar from "@/components/calendar/MonthlyCalendar";
 import { apiJson } from "@/lib/api";
+import { toCalendarDay } from "@/lib/calendar";
 import { TIME_OFF_TYPE_OPTIONS } from "@/lib/time-off";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -120,6 +121,7 @@ export default function EmployeeTimeOffPage({
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [calEvents, setCalEvents] = useState([]);
+  const [selectedDay, setSelectedDay] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -283,6 +285,17 @@ export default function EmployeeTimeOffPage({
       setCancelTarget(null);
     }
   }
+
+  const dayItems = useMemo(() => {
+    if (!selectedDay) return [];
+    const day = new Date(calYear, calMonth, selectedDay);
+    return calEvents.filter((evt) => {
+      const start = toCalendarDay(evt.startDate, { allDay: !!evt.allDay });
+      const end = toCalendarDay(evt.endDate, { allDay: !!evt.allDay });
+      if (!start || !end) return false;
+      return day >= start && day <= end;
+    });
+  }, [calEvents, calYear, calMonth, selectedDay]);
 
   const pending = useMemo(() => requests.filter((row) => row.status === "PENDING"), [requests]);
   const approved = useMemo(() => requests.filter((row) => row.status === "APPROVED"), [requests]);
@@ -499,17 +512,79 @@ export default function EmployeeTimeOffPage({
                 <p className="mt-1 text-sm text-gray-600">
                   Center events plus pending and approved time-off requests appear here so you can avoid conflicts before submitting.
                 </p>
-                <div className="mt-3">
+                <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_minmax(0,280px)]">
                   <MonthlyCalendar
                     year={calYear}
                     month={calMonth}
                     events={calEvents}
                     legendItems={CALENDAR_LEGEND}
+                    selectedDay={selectedDay}
+                    onDayClick={setSelectedDay}
                     onMonthChange={(nextYear, nextMonth) => {
                       setCalYear(nextYear);
                       setCalMonth(nextMonth);
+                      setSelectedDay(null);
                     }}
                   />
+
+                  {selectedDay ? (
+                    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm font-extrabold text-gray-900">
+                          {new Date(calYear, calMonth, selectedDay).toLocaleDateString(undefined, {
+                            weekday: "short",
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDay(null)}
+                          aria-label="Close day detail"
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          &#10005;
+                        </button>
+                      </div>
+
+                      {dayItems.length === 0 ? (
+                        <div className="mt-3 text-sm text-gray-500">No items this day.</div>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          {dayItems.map((item) => (
+                            <div key={item.id} className="rounded-xl border border-gray-200 bg-white p-3">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+                                    item._source === "event"
+                                      ? "bg-indigo-100 text-indigo-700"
+                                      : "bg-emerald-100 text-emerald-700"
+                                  }`}
+                                >
+                                  {item._source === "event" ? "EVENT" : "TIME OFF"}
+                                </span>
+                                <span className="text-sm font-semibold text-gray-900">{item.label}</span>
+                              </div>
+                              {item._source === "event" && item.description ? (
+                                <div className="mt-1 text-xs text-gray-600">{item.description}</div>
+                              ) : null}
+                              {item._source === "timeoff" ? (
+                                <>
+                                  <div className="mt-1 text-xs text-gray-600">
+                                    Status: {item.status}
+                                    {item.reason ? ` • ${item.reason}` : ""}
+                                  </div>
+                                  <div className="mt-1 text-xs text-gray-600">
+                                    {fmtRange(item.startDate, item.endDate)}
+                                  </div>
+                                </>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>

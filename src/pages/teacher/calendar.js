@@ -5,6 +5,37 @@ import { toCalendarDay } from "@/lib/calendar";
 import { getTimeOffTypeLabel } from "@/lib/time-off";
 import { useEffect, useState, useCallback } from "react";
 
+function formatDateTimeRange(start, end) {
+  if (!start || !end) return "";
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return "";
+
+  const sameDay =
+    startDate.getFullYear() === endDate.getFullYear() &&
+    startDate.getMonth() === endDate.getMonth() &&
+    startDate.getDate() === endDate.getDate();
+
+  if (sameDay) {
+    return `${startDate.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    })} - ${endDate.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    })}`;
+  }
+
+  const dateTimeOptions = {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  };
+
+  return `${startDate.toLocaleString(undefined, dateTimeOptions)} - ${endDate.toLocaleString(undefined, dateTimeOptions)}`;
+}
+
 const SOURCE_BADGE = {
   event: "bg-indigo-100 text-indigo-700",
   shift: "bg-blue-100 text-blue-700",
@@ -189,7 +220,15 @@ function getDayItems(day) {
                       <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Position: {item._raw.position}{item._raw.notes ? ` • ${item._raw.notes}` : ""}</div>
                     )}
                     {item._source === "timeoff" && (
-                      <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Status: {item._raw.status}{item._raw.reason ? ` • ${item._raw.reason}` : ""}</div>
+                      <>
+                        <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Status: {item._raw.status}{item._raw.reason ? ` • ${item._raw.reason}` : ""}</div>
+                        {formatDateTimeRange(item._raw.startDate, item._raw.endDate) && (
+                          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Time: {formatDateTimeRange(item._raw.startDate, item._raw.endDate)}</div>
+                        )}
+                        {item._raw.coverageName && (
+                          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Coverage: {item._raw.coverageName}</div>
+                        )}
+                      </>
                     )}
                   </div>
                 ))}

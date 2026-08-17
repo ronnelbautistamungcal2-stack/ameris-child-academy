@@ -307,11 +307,12 @@ const ACTIVITY_TYPE_LABELS = {
   SNACK: "Snack",
   ACTIVITY: "Activity",
   TASK_CHECKLIST: "Task Checklist",
-  BEHAVIOR: "Citizenship",
+  BEHAVIOR: "Course Correction",
   CITIZENSHIP: "Citizenship",
   ACCOMPLISHMENT: "Accomplishment",
   INCIDENT: "Incident",
   TOILETING: "Toileting",
+  CHARACTER_HIGHLIGHT: "Character Highlight",
   OTHER: "Grade",
 };
 
@@ -319,6 +320,16 @@ const TOILETING_TYPE_LABELS = {
   SUCCESS: "Success",
   TRIED: "Tried",
   ACCIDENT: "Accident",
+};
+
+const CHARACTER_HIGHLIGHT_TYPE_LABELS = {
+  BROTHERS_KEEPER: "Brother's Keeper",
+  CHAMPION_OF_VIRTUE: "Champion of Virtue",
+  FULL_REPENTANCE: "Full Repentance",
+  CHAMPION_OF_OBEDIENCE: "Champion of Obedience",
+  CHAMPION_OF_RESPECT: "Champion of Respect",
+  CHAMPION_OF_HONESTY: "Champion of Honesty",
+  OTHER: "Other",
 };
 
 function filterByDateRange(items, from, to, field = "createdAt") {
@@ -707,6 +718,14 @@ function ActivityLogEntry({ activity: a }) {
     if (a.type === "TOILETING") {
       const parts = [];
       if (details.toiletingType) parts.push(TOILETING_TYPE_LABELS[details.toiletingType] || details.toiletingType);
+      if (a.notes) parts.push(a.notes);
+      return parts.join(" | ") || null;
+    }
+    if (a.type === "CHARACTER_HIGHLIGHT") {
+      const parts = [];
+      if (details.characterHighlightType) {
+        parts.push(CHARACTER_HIGHLIGHT_TYPE_LABELS[details.characterHighlightType] || details.characterHighlightType);
+      }
       if (a.notes) parts.push(a.notes);
       return parts.join(" | ") || null;
     }
@@ -1385,7 +1404,7 @@ const CLASS_ACTIVITY_ICONS = {
   NAP: "💤", BOTTLE: "🍼", MEAL: "🍽️", SNACK: "🥨",
   DIAPER_CHANGE: "🧷", ACTIVITY: "🎨", CITIZENSHIP: "⭐",
   ACCOMPLISHMENT: "🏆", INCIDENT: "⚠️", BEHAVIOR: "📋",
-  TASK_CHECKLIST: "✅", TOILETING: "🚽", OTHER: "📝",
+  TASK_CHECKLIST: "✅", TOILETING: "🚽", CHARACTER_HIGHLIGHT: "🌟", OTHER: "📝",
 };
 
 function ClassPerformanceTab({ centerId, classes, dateFrom, dateTo }) {
@@ -1476,16 +1495,16 @@ function ClassPerformanceTab({ centerId, classes, dateFrom, dateTo }) {
             </div>
           </div>
 
-          {/* Citizenship Logs (level 2 or 3) */}
+          {/* Course Correction Logs (level 2 or 3) */}
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <div className="text-sm font-extrabold text-gray-900">Citizenship Logs</div>
-                <p className="mt-0.5 text-xs text-gray-500">Citizenship activity entries at level 2 or level 3.</p>
+                <div className="text-sm font-extrabold text-gray-900">Course Correction Logs</div>
+                <p className="mt-0.5 text-xs text-gray-500">Course Correction activity entries at level 2 or level 3.</p>
               </div>
             </div>
             {(report.citizenshipLogs?.length ?? 0) === 0 ? (
-              <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-500">No citizenship logs at level 2 or 3 in this period.</div>
+              <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-500">No Course Correction logs at level 2 or 3 in this period.</div>
             ) : (
               <div className="mt-3 overflow-auto rounded-xl border border-gray-200">
                 <table className="min-w-full text-sm">

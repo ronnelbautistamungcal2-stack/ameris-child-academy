@@ -12,11 +12,11 @@ const TYPE_LABELS = {
   SNACK: "Snack",
   ACTIVITY: "Activity",
   TASK_CHECKLIST: "Task Checklist",
-  BEHAVIOR: "Citizenship",
-  ACCOMPLISHMENT: "Accomplishment",
+  BEHAVIOR: "Course Correction",
   INCIDENT: "Incident",
   TOILETING: "Toileting",
-  OTHER: "Grade",
+  CHARACTER_HIGHLIGHT: "Character Highlight",
+  OTHER: "Citizenship Grade",
 };
 
 const MEAL_OCCASIONS = [
@@ -40,6 +40,7 @@ const BEHAVIOR_TYPE_OPTIONS = [
   { value: "VIRTUE", label: "Virtue" },
   { value: "RESPECT", label: "Respect" },
   { value: "OBEDIENCE", label: "Obedience" },
+  { value: "HONESTY", label: "Honesty" },
   { value: "OTHER", label: "Other" },
 ];
 
@@ -57,8 +58,22 @@ const TOILETING_TYPE_OPTIONS = [
   { value: "ACCIDENT", label: "Accident" },
 ];
 
+const CHARACTER_HIGHLIGHT_TYPE_OPTIONS = [
+  { value: "BROTHERS_KEEPER", label: "Brother's Keeper" },
+  { value: "CHAMPION_OF_VIRTUE", label: "Champion of Virtue" },
+  { value: "FULL_REPENTANCE", label: "Full Repentance" },
+  { value: "CHAMPION_OF_OBEDIENCE", label: "Champion of Obedience" },
+  { value: "CHAMPION_OF_RESPECT", label: "Champion of Respect" },
+  { value: "CHAMPION_OF_HONESTY", label: "Champion of Honesty" },
+  { value: "OTHER", label: "Other" },
+];
+
 function supportsBehaviorDetails(type) {
   return type === "BEHAVIOR";
+}
+
+function supportsCharacterHighlightDetails(type) {
+  return type === "CHARACTER_HIGHLIGHT";
 }
 
 function supportsDirectGrade(type) {
@@ -93,11 +108,14 @@ function defaultActivityFields(nextType) {
     napEndTime: "",
     mealType: nextType === "SNACK" ? "AM_SNACK" : "BREAKFAST",
     quantity: "ALL",
-    bottleQuantity: "",
+    bottleAmount: "",
+    bottleConsumed: "",
     diaperType: "W",
     behaviorType: "OTHER",
     behaviorLevel: "1",
+    ipp: false,
     toiletingType: "SUCCESS",
+    characterHighlightType: "BROTHERS_KEEPER",
   };
 }
 
@@ -386,7 +404,11 @@ export default function TeacherLogs() {
         diaperType: nextType === "DIAPER_CHANGE" ? current.diaperType || defaults.diaperType : defaults.diaperType,
         behaviorType: supportsBehaviorDetails(nextType) ? current.behaviorType || defaults.behaviorType : defaults.behaviorType,
         behaviorLevel: supportsBehaviorDetails(nextType) ? current.behaviorLevel || defaults.behaviorLevel : defaults.behaviorLevel,
+        ipp: supportsBehaviorDetails(nextType) ? !!current.ipp : false,
         toiletingType: nextType === "TOILETING" ? current.toiletingType || defaults.toiletingType : defaults.toiletingType,
+        characterHighlightType: supportsCharacterHighlightDetails(nextType)
+          ? current.characterHighlightType || defaults.characterHighlightType
+          : defaults.characterHighlightType,
       };
     });
   }
@@ -690,7 +712,8 @@ export default function TeacherLogs() {
       details = {
         ...(details || {}),
         time: timeValue,
-        quantity: activityFields.bottleQuantity || "",
+        amount: activityFields.bottleAmount || "",
+        consumed: activityFields.bottleConsumed || "",
       };
     } else if (payloadType === "DIAPER_CHANGE") {
       details = {
@@ -704,12 +727,19 @@ export default function TeacherLogs() {
         time: timeValue,
         behaviorType: activityFields.behaviorType || "OTHER",
         behaviorLevel: activityFields.behaviorLevel || "1",
+        ipp: !!activityFields.ipp,
       };
     } else if (payloadType === "TOILETING") {
       details = {
         ...(details || {}),
         time: timeValue,
         toiletingType: activityFields.toiletingType || "SUCCESS",
+      };
+    } else if (payloadType === "CHARACTER_HIGHLIGHT") {
+      details = {
+        ...(details || {}),
+        time: timeValue,
+        characterHighlightType: activityFields.characterHighlightType || "BROTHERS_KEEPER",
       };
     } else if (!supportsDirectGrade(type)) {
       details = {
@@ -798,7 +828,7 @@ export default function TeacherLogs() {
           <div>
             <h2 className="text-lg font-extrabold text-gray-900">Daily Activity Logging</h2>
             <p className="mt-1 text-sm text-gray-600">
-              Teachers can set the time for today's entry, but the date stays locked to today. Grade entries use a 0-10 score instead of a time. Select one or more children below to log at once.
+              Teachers can set the time for today's entry, but the date stays locked to today. Citizenship Grade entries use a 0-10 score instead of a time. Select one or more children below to log at once.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1049,7 +1079,7 @@ export default function TeacherLogs() {
                   Type
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {["MEAL", "BOTTLE", "NAP", "DIAPER_CHANGE", "TOILETING", "ACTIVITY", "BEHAVIOR", "ACCOMPLISHMENT", "INCIDENT", "OTHER"].map((t) => (
+                  {["MEAL", "BOTTLE", "NAP", "DIAPER_CHANGE", "TOILETING", "ACTIVITY", "BEHAVIOR", "CHARACTER_HIGHLIGHT", "INCIDENT", "OTHER"].map((t) => (
                     <button
                       key={t}
                       type="button"
@@ -1066,7 +1096,7 @@ export default function TeacherLogs() {
                   ))}
                 </div>
                 <div className="mt-2 text-xs text-gray-600">
-                  Use <span className="font-semibold">Grade</span> for a 0-10 score entry.
+                  Use <span className="font-semibold">Citizenship Grade</span> for a 0-10 score entry.
                 </div>
               </div>
 
@@ -1104,7 +1134,7 @@ export default function TeacherLogs() {
                   ) : supportsDirectGrade(type) ? (
                     <label className="block">
                       <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        Grade
+                        Citizenship Grade
                       </div>
                       <input
                         type="number"
@@ -1169,20 +1199,36 @@ export default function TeacherLogs() {
                   ) : null}
 
                   {type === "BOTTLE" ? (
-                    <label className="block">
-                      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        # Ounces
-                      </div>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.5"
-                        value={activityFields.bottleQuantity}
-                        onChange={(e) => updateActivityField("bottleQuantity", e.target.value)}
-                        placeholder="e.g. 4"
-                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                      />
-                    </label>
+                    <>
+                      <label className="block">
+                        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          # Ounces Served
+                        </div>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={activityFields.bottleAmount}
+                          onChange={(e) => updateActivityField("bottleAmount", e.target.value)}
+                          placeholder="e.g. 4"
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        />
+                      </label>
+                      <label className="block">
+                        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          # Ounces Drank
+                        </div>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={activityFields.bottleConsumed}
+                          onChange={(e) => updateActivityField("bottleConsumed", e.target.value)}
+                          placeholder="e.g. 3"
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        />
+                      </label>
+                    </>
                   ) : null}
 
                   {type === "DIAPER_CHANGE" ? (
@@ -1257,7 +1303,37 @@ export default function TeacherLogs() {
                           ))}
                         </select>
                       </label>
+                      <label className="flex items-center gap-2 md:col-span-2">
+                        <input
+                          type="checkbox"
+                          checked={!!activityFields.ipp}
+                          onChange={(e) => updateActivityField("ipp", e.target.checked)}
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-400"
+                        />
+                        <span className="text-sm font-semibold text-gray-700">
+                          IPP (Individual Progress Plan) — notifies admin immediately when checked
+                        </span>
+                      </label>
                     </>
+                  ) : null}
+
+                  {supportsCharacterHighlightDetails(type) ? (
+                    <label className="block">
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Type
+                      </div>
+                      <select
+                        value={activityFields.characterHighlightType}
+                        onChange={(e) => updateActivityField("characterHighlightType", e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      >
+                        {CHARACTER_HIGHLIGHT_TYPE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   ) : null}
                 </div>
                 <div className="mt-3 text-xs text-gray-600">
@@ -1266,20 +1342,20 @@ export default function TeacherLogs() {
                     : ["MEAL", "SNACK"].includes(type)
                       ? "Meal entries capture the time, meal type, quantity, and description."
                       : type === "BOTTLE"
-                        ? "Bottle entries capture the time, ounces, and description."
+                        ? "Bottle entries capture the time, ounces served, ounces drank, and description."
                         : type === "DIAPER_CHANGE"
                           ? "Diaper entries capture the time, diaper type, and description."
                           : type === "TOILETING"
                             ? "Toileting entries capture the time, type (success, tried, or accident), and description."
                             : type === "BEHAVIOR"
-                            ? "Citizenship entries capture type, level, time, and description."
-                            : type === "ACCOMPLISHMENT"
-                              ? "Accomplishment entries capture the time and a description of what was achieved."
+                            ? "Course Correction entries capture type, level, time, and description."
+                            : type === "CHARACTER_HIGHLIGHT"
+                              ? "Character Highlight entries capture the time, highlight type, and description."
                               : supportsDirectGrade(type)
-                                ? "Grade entries capture a 0-10 score and description."
-                                : type === "INCIDENT"
-                                  ? "Incident entries capture the time and description."
-                                  : "Activity entries capture the time and description."}
+                              ? "Citizenship Grade entries capture a 0-10 score and description."
+                              : type === "INCIDENT"
+                                ? "Incident entries capture the time and description."
+                                : "Activity entries capture the time and description."}
                 </div>
               </div>
 

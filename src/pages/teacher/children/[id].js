@@ -13,7 +13,7 @@ import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const PROGRESS_STATUS_OPTIONS = ["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "PASSED", "FAILED"];
-const ACTIVITY_TYPES = ["DIAPER_CHANGE", "NAP", "BOTTLE", "MEAL", "SNACK", "ACTIVITY", "TASK_CHECKLIST", "BEHAVIOR", "TOILETING", "OTHER"];
+const ACTIVITY_TYPES = ["DIAPER_CHANGE", "NAP", "BOTTLE", "MEAL", "SNACK", "ACTIVITY", "TASK_CHECKLIST", "BEHAVIOR", "TOILETING", "CHARACTER_HIGHLIGHT", "OTHER"];
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 const ACTIVITY_TYPE_LABELS = {
   DIAPER_CHANGE: "Diaper Change",

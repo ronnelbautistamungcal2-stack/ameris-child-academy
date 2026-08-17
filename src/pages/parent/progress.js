@@ -1683,6 +1683,13 @@ function activityMeta(type) {
         "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/60 dark:text-fuchsia-200",
     };
   }
+  if (type === "CHARACTER_HIGHLIGHT") {
+    return {
+      code: "CH",
+      bubble:
+        "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/60 dark:text-yellow-200",
+    };
+  }
   return {
     code: "UP",
     bubble:
@@ -1690,12 +1697,23 @@ function activityMeta(type) {
   };
 }
 
+const CHARACTER_HIGHLIGHT_TYPE_LABELS = {
+  BROTHERS_KEEPER: "Brother's Keeper",
+  CHAMPION_OF_VIRTUE: "Champion of Virtue",
+  FULL_REPENTANCE: "Full Repentance",
+  CHAMPION_OF_OBEDIENCE: "Champion of Obedience",
+  CHAMPION_OF_RESPECT: "Champion of Respect",
+  CHAMPION_OF_HONESTY: "Champion of Honesty",
+  OTHER: "Other",
+};
+
 function activityTitle(activity) {
   if (activity?.type === "ACTIVITY") return "Classroom activity";
   if (activity?.type === "NAP") return "Rest time";
   if (activity?.type === "DIAPER_CHANGE") return "Care routine";
   if (["MEAL", "SNACK", "BOTTLE"].includes(activity?.type)) return "Meals and nutrition";
   if (activity?.type === "BEHAVIOR") return "Behavior update";
+  if (activity?.type === "CHARACTER_HIGHLIGHT") return "Character Highlight";
   return "Classroom update";
 }
 
@@ -1717,7 +1735,14 @@ function activityDescription(activity) {
     return "Rest time was logged for the day.";
   }
   if (activity?.type === "DIAPER_CHANGE") return "A care routine update was recorded.";
-  if (["MEAL", "SNACK", "BOTTLE"].includes(activity?.type)) {
+  if (activity?.type === "BOTTLE") {
+    if (details.amount && details.consumed) {
+      return `A bottle was served with ${details.amount} oz, and ${details.consumed} oz was drank.`;
+    }
+    if (details.amount) return `A bottle was served with ${details.amount} oz.`;
+    return "A bottle update was shared.";
+  }
+  if (["MEAL", "SNACK"].includes(activity?.type)) {
     if (details.meal && details.quantity) {
       return `${details.meal} was recorded with quantity marked as ${String(details.quantity).toLowerCase()}.`;
     }
@@ -1726,6 +1751,10 @@ function activityDescription(activity) {
   }
   if (activity?.type === "ACTIVITY") return "A classroom learning moment was shared.";
   if (activity?.type === "BEHAVIOR") return "A behavior or regulation update was shared.";
+  if (activity?.type === "CHARACTER_HIGHLIGHT") {
+    const label = CHARACTER_HIGHLIGHT_TYPE_LABELS[details.characterHighlightType];
+    return label ? `${label} was recognized as a Character Highlight.` : "A Character Highlight was recorded.";
+  }
   return "A new classroom note was added.";
 }
 

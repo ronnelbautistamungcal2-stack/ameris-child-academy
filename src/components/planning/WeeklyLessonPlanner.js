@@ -1,4 +1,5 @@
 import { apiJson } from "@/lib/api";
+import { formatTermDaysLabel, normalizeTermDaySelections } from "@/lib/lessonScheduling";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const ROW_COUNT = 10;
@@ -50,6 +51,20 @@ function toIsoDate(date) {
   return startOfDay(date).toISOString();
 }
 
+// Parses a "YYYY-MM-DD" key as a local-time date. `new Date("YYYY-MM-DD")`
+// parses as UTC midnight, which rolls back to the previous local calendar
+// day (once passed through startOfDay's local setHours) in any timezone
+// behind UTC — shifting every saved plan a day earlier than intended.
+function fromDateKey(key) {
+  const match = String(key || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    const d = new Date(key);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  const [, y, m, d] = match;
+  return new Date(Number(y), Number(m) - 1, Number(d));
+}
+
 function formatDayHeader(date) {
   return date.toLocaleDateString(undefined, {
     weekday: "short",
@@ -87,6 +102,8 @@ export default function WeeklyLessonPlanner({
   const [labelDrafts, setLabelDrafts] = useState({});
   const [addingRow, setAddingRow] = useState(false);
   const [deletingRowIndex, setDeletingRowIndex] = useState(null);
+  const [dragRowIndex, setDragRowIndex] = useState(null);
+  const [dragOverRowIndex, setDragOverRowIndex] = useState(null);
 
   // plans: one per day key → { id, items: [{id, sortOrder, title}] }
   const [planByDayKey, setPlanByDayKey] = useState({});
@@ -136,12 +153,12 @@ export default function WeeklyLessonPlanner({
       );
       if (abortRef.current.aborted) return;
       const arr = Array.isArray(data) ? data : [];
-      const normalized = arr
-        .map((r) => ({
-          rowIndex: r.rowIndex,
-          label: r.label || DEFAULT_ROW_LABELS[r.rowIndex] || "",
-        }))
-        .sort((a, b) => a.rowIndex - b.rowIndex);
+      // Server already returns rows in display order (position, falling back to
+      // rowIndex) — don't re-sort by rowIndex here or dragged order would be lost.
+      const normalized = arr.map((r) => ({
+        rowIndex: r.rowIndex,
+        label: r.label || DEFAULT_ROW_LABELS[r.rowIndex] || "",
+      }));
       setRows(normalized.length ? normalized : defaults);
       setLabelDrafts(
         Object.fromEntries((normalized.length ? normalized : defaults).map((r) => [r.rowIndex, r.label])),
@@ -260,8 +277,8 @@ export default function WeeklyLessonPlanner({
     // of firing a second POST that would collide on the unique constraint.
     if (pendingPlanCreates.current[dayKey]) return pendingPlanCreates.current[dayKey];
 
-    const day = new Date(dayKey);
-    if (Number.isNaN(day.getTime())) return null;
+    const day = fromDateKey(dayKey);
+    if (!day || Number.isNaN(day.getTime())) return null;
 
     const promise = (async () => {
       try {
@@ -417,6 +434,68 @@ export default function WeeklyLessonPlanner({
     }
   }
 
+  // Drag-and-drop category reordering. Rows are keyed by rowIndex, which is
+  // also the identity that lesson-plan cells attach to (`dayKey:rowIndex`),
+  // so reordering only ever changes display order — never rowIndex — and
+  // every cell/lesson stays with its category as it's dragged around.
+  async function persistRowOrder(order) {
+    if (mode !== "admin" || !centerId || !classId) return;
+    try {
+      const updated = await apiJson("/api/v1/lesson-plan-rows", {
+        method: "PUT",
+        body: JSON.stringify({ centerId, classRoomId: classId, order }),
+      });
+      if (Array.isArray(updated)) {
+        setRows(updated.map((r) => ({ rowIndex: r.rowIndex, label: r.label || "" })));
+      }
+    } catch (e) {
+      setError(e.message || "Failed to save category order");
+      loadRows();
+    }
+  }
+
+  function handleRowDragStart(e, rowIndex) {
+    if (mode !== "admin" || rows.length <= 1) return;
+    setDragRowIndex(rowIndex);
+    e.dataTransfer.effectAllowed = "move";
+    try {
+      e.dataTransfer.setData("text/plain", String(rowIndex));
+    } catch {
+      // some browsers restrict setData outside real drag events (e.g. tests); ignore
+    }
+  }
+
+  function handleRowDragOver(e, rowIndex) {
+    if (dragRowIndex === null || mode !== "admin") return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (rowIndex !== dragOverRowIndex) setDragOverRowIndex(rowIndex);
+  }
+
+  function handleRowDrop(e, targetRowIndex) {
+    e.preventDefault();
+    const sourceRowIndex = dragRowIndex;
+    setDragRowIndex(null);
+    setDragOverRowIndex(null);
+    if (sourceRowIndex === null || sourceRowIndex === targetRowIndex) return;
+
+    setRows((prev) => {
+      const sourcePos = prev.findIndex((r) => r.rowIndex === sourceRowIndex);
+      const targetPos = prev.findIndex((r) => r.rowIndex === targetRowIndex);
+      if (sourcePos === -1 || targetPos === -1) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(sourcePos, 1);
+      next.splice(targetPos, 0, moved);
+      persistRowOrder(next.map((r) => r.rowIndex));
+      return next;
+    });
+  }
+
+  function handleRowDragEnd() {
+    setDragRowIndex(null);
+    setDragOverRowIndex(null);
+  }
+
   function goToPrevWeek() {
     setAnchorDate((d) => addDays(d, -7));
     setCellDrafts({});
@@ -564,11 +643,40 @@ export default function WeeklyLessonPlanner({
             </thead>
             <tbody>
               {rows.map(({ rowIndex, label: rowLabel }) => (
-                <tr key={rowIndex} className="group hover:bg-gray-50/60">
+                <tr
+                  key={rowIndex}
+                  onDragOver={(e) => handleRowDragOver(e, rowIndex)}
+                  onDrop={(e) => handleRowDrop(e, rowIndex)}
+                  className={`group hover:bg-gray-50/60 ${
+                    dragRowIndex === rowIndex ? "opacity-40" : ""
+                  } ${
+                    dragOverRowIndex === rowIndex && dragRowIndex !== rowIndex
+                      ? "border-t-2 border-sky-400"
+                      : ""
+                  }`}
+                >
                   {/* Category label cell */}
                   <td className="border-b border-r border-gray-200 px-2 py-1.5 align-middle bg-gray-50/80">
                     {mode === "admin" ? (
                       <div className="flex items-center gap-1">
+                        {rows.length > 1 ? (
+                          <span
+                            draggable
+                            onDragStart={(e) => handleRowDragStart(e, rowIndex)}
+                            onDragEnd={handleRowDragEnd}
+                            title="Drag to reorder"
+                            className="shrink-0 cursor-grab select-none rounded p-0.5 text-gray-300 hover:text-gray-500 active:cursor-grabbing"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                              className="h-3.5 w-3.5"
+                            >
+                              <path d="M7 4a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm0 6a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm0 6a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm4-12a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm0 6a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm0 6a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0z" />
+                            </svg>
+                          </span>
+                        ) : null}
                         <input
                           type="text"
                           value={labelDrafts[rowIndex] ?? rowLabel ?? ""}
@@ -712,8 +820,9 @@ export default function WeeklyLessonPlanner({
 
       {mode === "admin" && (
         <div className="border-t border-gray-100 px-4 py-2 text-xs text-gray-400">
-          Click any category name to rename it, or hover a row to remove it. Click any cell to
-          type a note, or start typing a lesson title to attach it from the curriculum.
+          Click any category name to rename it, drag the grip to reorder it, or hover a row to
+          remove it. Click any cell to type a note, or start typing a lesson title to attach it
+          from the curriculum.
         </div>
       )}
 
@@ -748,6 +857,39 @@ export default function WeeklyLessonPlanner({
                   >
                     Close
                   </button>
+                </div>
+
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {viewLesson.category?.ageRange ? (
+                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-semibold text-gray-700">
+                      {viewLesson.category.ageRange}
+                    </span>
+                  ) : null}
+                  {viewLesson.term ? (
+                    <span className="inline-flex items-center rounded-full bg-violet-50 px-2.5 py-0.5 text-[11px] font-semibold text-violet-700">
+                      {viewLesson.term}
+                    </span>
+                  ) : null}
+                  {viewLesson.lessonSlot ? (
+                    <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700">
+                      Slot: {viewLesson.lessonSlot}
+                    </span>
+                  ) : null}
+                  {normalizeTermDaySelections(viewLesson.termDays).length > 0 ? (
+                    <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700">
+                      {formatTermDaysLabel(viewLesson.termDays)}
+                    </span>
+                  ) : null}
+                  {viewLesson.subCategory ? (
+                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                      {viewLesson.subCategory}
+                    </span>
+                  ) : null}
+                  {viewLesson.linkedLesson ? (
+                    <span className="inline-flex items-center rounded-full bg-violet-50 px-2.5 py-0.5 text-[11px] font-semibold text-violet-700">
+                      Linked: {viewLesson.linkedLesson.title}
+                    </span>
+                  ) : null}
                 </div>
 
                 {viewLesson.policyDocument ? (
@@ -796,6 +938,28 @@ export default function WeeklyLessonPlanner({
                     <div className="mt-1 text-sm text-gray-600">—</div>
                   )}
                 </div>
+
+                {Array.isArray(viewLesson.supplies) && viewLesson.supplies.length ? (
+                  <div className="mt-4">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Supplies
+                    </div>
+                    <ul className="mt-2 space-y-1">
+                      {viewLesson.supplies.map((s) => (
+                        <li key={s.id} className="text-sm text-gray-700">
+                          <span className="font-semibold text-gray-900">{s.name}</span>
+                          {" — "}
+                          {s.quantity || 1}
+                          {s.quantityType === "per_student" ? " per student" : ""}
+                          {s.unit ? ` ${s.unit}` : ""}
+                          {s.notes ? (
+                            <span className="text-gray-500"> ({s.notes})</span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
 
                 {Array.isArray(viewLesson.goals) && viewLesson.goals.length ? (
                   <div className="mt-4">

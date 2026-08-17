@@ -191,4 +191,81 @@ test.describe("Lesson Plan Rows API @api", () => {
     // Other rows remain untouched
     expect(rows[0].label).toBe("");
   });
+
+  test("PUT /api/v1/lesson-plan-rows returns 403 for a non-admin (teacher) reorder attempt", async ({ request }) => {
+    const cookies = await loginAsTeacher(request);
+    const res = await apiPut(
+      request,
+      "/api/v1/lesson-plan-rows",
+      {
+        centerId: fixture.center.id,
+        classRoomId: fixture.classRoom.id,
+        order: [1, 0, 2, 3, 4, 5, 6, 7, 8, 9],
+      },
+      cookies,
+    );
+    expect(res.status()).toBe(403);
+  });
+
+  test("PUT /api/v1/lesson-plan-rows returns 400 for a reorder with duplicate or invalid row indexes", async ({ request }) => {
+    const cookies = await loginAsAdmin(request);
+
+    const dupRes = await apiPut(
+      request,
+      "/api/v1/lesson-plan-rows",
+      { centerId: fixture.center.id, classRoomId: fixture.classRoom.id, order: [0, 0, 1] },
+      cookies,
+    );
+    expect(dupRes.status()).toBe(400);
+
+    const negativeRes = await apiPut(
+      request,
+      "/api/v1/lesson-plan-rows",
+      { centerId: fixture.center.id, classRoomId: fixture.classRoom.id, order: [-1, 0, 1] },
+      cookies,
+    );
+    expect(negativeRes.status()).toBe(400);
+  });
+
+  test("PUT /api/v1/lesson-plan-rows reorders rows by position while keeping rowIndex (and its lesson data) stable", async ({ request }) => {
+    const cookies = await loginAsAdmin(request);
+
+    // Label two rows so we can tell them apart after reordering.
+    await apiPut(
+      request,
+      "/api/v1/lesson-plan-rows",
+      { centerId: fixture.center.id, classRoomId: fixture.classRoom.id, rowIndex: 0, label: "Hymn" },
+      cookies,
+    );
+    await apiPut(
+      request,
+      "/api/v1/lesson-plan-rows",
+      { centerId: fixture.center.id, classRoomId: fixture.classRoom.id, rowIndex: 1, label: "Large Group 1" },
+      cookies,
+    );
+
+    // Move rowIndex 1 ("Large Group 1") ahead of rowIndex 0 ("Hymn").
+    const newOrder = [1, 0, 2, 3, 4, 5, 6, 7, 8, 9];
+    const reorderRes = await apiPut(
+      request,
+      "/api/v1/lesson-plan-rows",
+      { centerId: fixture.center.id, classRoomId: fixture.classRoom.id, order: newOrder },
+      cookies,
+    );
+    expect(reorderRes.status()).toBe(200);
+    const reordered = await reorderRes.json();
+    expect(reordered.map((r) => r.rowIndex)).toEqual(newOrder);
+    expect(reordered[0]).toMatchObject({ rowIndex: 1, label: "Large Group 1" });
+    expect(reordered[1]).toMatchObject({ rowIndex: 0, label: "Hymn" });
+
+    // The GET endpoint reflects the same order on a fresh fetch, and each
+    // row's identity (rowIndex, and thus any lesson cells keyed by it) is unchanged.
+    const listRes = await apiGet(
+      request,
+      `/api/v1/lesson-plan-rows?centerId=${fixture.center.id}&classRoomId=${fixture.classRoom.id}`,
+      cookies,
+    );
+    const rows = await listRes.json();
+    expect(rows.map((r) => r.rowIndex)).toEqual(newOrder);
+  });
 });

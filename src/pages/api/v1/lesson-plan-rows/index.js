@@ -13,12 +13,20 @@ function buildActiveRows(dbRows) {
     const dbRow = byIndex[i];
     if (dbRow) {
       if (dbRow.active) {
-        result.push({ id: dbRow.id, rowIndex: i, label: dbRow.label || "" });
+        result.push({
+          id: dbRow.id,
+          rowIndex: i,
+          label: dbRow.label || "",
+          position: Number.isInteger(dbRow.position) ? dbRow.position : i,
+        });
       }
     } else if (i < DEFAULT_ROW_COUNT) {
-      result.push({ id: null, rowIndex: i, label: "" });
+      result.push({ id: null, rowIndex: i, label: "", position: i });
     }
   }
+  // Rows keep their identity (rowIndex, which lesson-plan cells reference) even
+  // when dragged to a new spot — only their display `position` changes.
+  result.sort((a, b) => a.position - b.position || a.rowIndex - b.rowIndex);
   return result;
 }
 
@@ -53,7 +61,54 @@ export default async function handler(req, res) {
     if (role !== "ADMIN") {
       return res.status(403).json({ error: "Only admins can update lesson plan rows" });
     }
-    const { centerId, classRoomId, rowIndex, label } = req.body || {};
+    const { centerId, classRoomId, order } = req.body || {};
+
+    if (Array.isArray(order)) {
+      // Drag-to-reorder: `order` is the full list of rowIndex values in their
+      // new display order. rowIndex itself never changes here, so every cell
+      // and lesson already attached to a category (keyed by rowIndex) stays
+      // attached — only the row's `position` (display order) is updated.
+      if (!centerId || !classRoomId) {
+        return res.status(400).json({ error: "centerId and classRoomId are required" });
+      }
+      const rowIndexes = order.map(Number);
+      if (
+        rowIndexes.length === 0 ||
+        rowIndexes.some((n) => !Number.isInteger(n) || n < 0) ||
+        new Set(rowIndexes).size !== rowIndexes.length
+      ) {
+        return res.status(400).json({ error: "order must be a list of unique, non-negative row indexes" });
+      }
+      const ok = await hasAccessToCenter(session.user.id, centerId);
+      if (!ok) return res.status(403).json({ error: "Forbidden" });
+
+      const existing = await prisma.lessonPlanRow.findMany({ where: { centerId, classRoomId } });
+      const existingByIndex = Object.fromEntries(existing.map((r) => [r.rowIndex, r]));
+
+      await prisma.$transaction(
+        rowIndexes.map((rowIndex, position) =>
+          prisma.lessonPlanRow.upsert({
+            where: { classRoomId_rowIndex: { classRoomId, rowIndex } },
+            update: { position },
+            create: {
+              centerId,
+              classRoomId,
+              rowIndex,
+              label: existingByIndex[rowIndex]?.label || "",
+              position,
+            },
+          }),
+        ),
+      );
+
+      const rows = await prisma.lessonPlanRow.findMany({
+        where: { centerId, classRoomId },
+        orderBy: { rowIndex: "asc" },
+      });
+      return res.status(200).json(buildActiveRows(rows));
+    }
+
+    const { rowIndex, label } = req.body || {};
     if (!centerId || !classRoomId || rowIndex === undefined || rowIndex === null) {
       return res.status(400).json({ error: "centerId, classRoomId, and rowIndex are required" });
     }

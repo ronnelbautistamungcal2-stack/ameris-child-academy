@@ -29,6 +29,7 @@ enum ActivityType {
   ACCOMPLISHMENT
   INCIDENT
   TOILETING
+  CHARACTER_HIGHLIGHT
   OTHER
 }
 
@@ -194,6 +195,13 @@ enum EvaluationStatus {
   ACKNOWLEDGED
 }
 
+enum SupplyRequestStatus {
+  PENDING
+  APPROVED
+  FULFILLED
+  DENIED
+}
+
 model User {
   id                 String              @id @default(uuid())
   email              String              @unique
@@ -270,6 +278,7 @@ model User {
   staffCitationsCreated        StaffCitation[]            @relation("StaffCitationsCreated")
   coachTeamMembers             CoachTeamMember[]          @relation("CoachTeamMembers")
   coachTeamOf                  CoachTeamMember[]          @relation("CoachTeamStaff")
+  supplyRequests                SupplyRequest[]           @relation("SupplyRequestsRequestedBy")
 }
 
 model Center {
@@ -320,6 +329,7 @@ model Center {
   otherStaffGradeConfig OtherStaffGradeConfig?
   evaluationCategoryConfig EvaluationCategoryConfig?
   permissionPolicyConfigs PermissionPolicyConfig[]
+  supplyRequests   SupplyRequest[]
   createdAt        DateTime         @default(now())
 }
 
@@ -350,6 +360,7 @@ model ClassRoom {
   dailyChecklistAssignments DailyChecklistClassroom[]
   milestoneChecklistPlans MilestoneChecklistPlan[]
   lessonPlanRows   LessonPlanRow[]
+  supplyRequests   SupplyRequest[]
 }
 
 model TeacherClass {
@@ -466,6 +477,7 @@ model Lesson {
   behaviorPlanGoals BehaviorPlanGoal[]
   supplies         LessonSupply[]
   dailyChecklistItems DailyChecklistItem[]
+  supplyRequests   SupplyRequest[]
 
   @@index([policyDocumentId])
   @@index([linkedLessonId])
@@ -696,6 +708,7 @@ model LessonPlanRow {
   classRoomId String
   rowIndex    Int
   label       String    @default("")
+  position    Int?
   active      Boolean   @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -1331,6 +1344,29 @@ model LessonSupply {
   @@index([category])
 }
 
+model SupplyRequest {
+  id            String              @id @default(uuid())
+  center        Center              @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId      String
+  classRoom     ClassRoom?          @relation(fields: [classRoomId], references: [id], onDelete: SetNull)
+  classRoomId   String?
+  item          String
+  quantity      Int                 @default(1)
+  purpose       String?
+  notes         String?
+  status        SupplyRequestStatus @default(PENDING)
+  requestedBy   User                @relation("SupplyRequestsRequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
+  requestedById String
+  lesson        Lesson?             @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  lessonId      String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([centerId, status])
+  @@index([classRoomId])
+  @@index([requestedById])
+}
+
 enum EventType {
   HOLIDAY
   FIELD_TRIP
@@ -1447,6 +1483,18 @@ model CoachFollowUp {
   @@index([createdById, status])
   @@index([assignedToId, status])
   @@index([dueDate])
+}
+
+model CoachTeamMember {
+  id        String   @id @default(uuid())
+  coach     User     @relation("CoachTeamMembers", fields: [coachId], references: [id], onDelete: Cascade)
+  coachId   String
+  staff     User     @relation("CoachTeamStaff", fields: [staffId], references: [id], onDelete: Cascade)
+  staffId   String
+  createdAt DateTime @default(now())
+
+  @@unique([coachId, staffId])
+  @@index([staffId])
 }
 
 enum ChecklistCategory {

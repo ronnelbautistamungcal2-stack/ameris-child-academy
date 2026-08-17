@@ -1,5 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { emitNotification } from "@/lib/socket";
 import { teacherCanAccessChild } from "@/lib/teacherScope";
 import { isChildLinkedToParent } from "@/lib/child-parent-links";
 
@@ -83,6 +84,31 @@ export default async function handler(req, res) {
       data,
       include: { child: true, recordedBy: true },
     });
+
+    const effectiveType = data.type || activity.type;
+    const wasIpp = !!(activity.details && activity.details.ipp);
+    const isIpp = !!(updated.details && updated.details.ipp);
+    if (effectiveType === "BEHAVIOR" && isIpp && !wasIpp) {
+      const childName = `${updated.child.firstName || ""} ${updated.child.lastName || ""}`.trim() || "A child";
+      const admins = await prisma.centerUser.findMany({
+        where: { centerId: updated.child.centerId, user: { role: "ADMIN" } },
+        select: { userId: true },
+      }).catch(() => []);
+
+      if (admins.length > 0) {
+        const adminNotifications = admins.map(({ userId }) => ({
+          recipientId: userId,
+          type: "COMPLIANCE_ALERT",
+          title: "IPP Flagged on Course Correction Log",
+          body: `${childName}'s Course Correction log was flagged for an Individual Progress Plan (IPP) by ${session.user.name || session.user.email || "a teacher"}.`,
+          link: `/admin/activity-overrides?childId=${updated.childId}`,
+          metadata: { activityId: updated.id, childId: updated.childId },
+        }));
+        await prisma.notification.createMany({ data: adminNotifications, skipDuplicates: true }).catch(() => {});
+        adminNotifications.forEach((n) => emitNotification(n.recipientId, n));
+      }
+    }
+
     return res.status(200).json(updated);
   }
 

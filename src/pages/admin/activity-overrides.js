@@ -86,61 +86,6 @@ const CHARACTER_HIGHLIGHT_TYPE_OPTIONS = [
   { value: "OTHER", label: "Other" },
 ];
 
-const ASSESSMENT_DOMAINS = [
-  {
-    key: "cognitive",
-    label: "Cognitive Development",
-    description: "Problem-solving, curiosity, focus & memory",
-    badge: "CG",
-    tint: "#dbeafe",
-    color: "#1d4ed8",
-    borderColor: "#bfdbfe",
-  },
-  {
-    key: "social",
-    label: "Social-Emotional",
-    description: "Sharing, empathy, self-regulation & cooperation",
-    badge: "SE",
-    tint: "#e0f2fe",
-    color: "#0369a1",
-    borderColor: "#bae6fd",
-  },
-  {
-    key: "physical",
-    label: "Physical Development",
-    description: "Motor skills, coordination & physical activity",
-    badge: "PD",
-    tint: "#dcfce7",
-    color: "#15803d",
-    borderColor: "#bbf7d0",
-  },
-  {
-    key: "language",
-    label: "Language & Communication",
-    description: "Vocabulary, expression, listening & comprehension",
-    badge: "LC",
-    tint: "#fef3c7",
-    color: "#b45309",
-    borderColor: "#fde68a",
-  },
-  {
-    key: "creative",
-    label: "Creative Expression",
-    description: "Art, music, imaginative play & self-expression",
-    badge: "CE",
-    tint: "#ffe4e6",
-    color: "#be123c",
-    borderColor: "#fecdd3",
-  },
-];
-
-const RUBRIC_LEVELS = [
-  { value: 1, label: "Emerging", background: "#fef3c7", color: "#92400e", borderColor: "#fcd34d" },
-  { value: 2, label: "Developing", background: "#e0f2fe", color: "#0c4a6e", borderColor: "#7dd3fc" },
-  { value: 3, label: "Proficient", background: "#dcfce7", color: "#166534", borderColor: "#86efac" },
-  { value: 4, label: "Advanced", background: "#dbeafe", color: "#1e3a8a", borderColor: "#93c5fd" },
-];
-
 const MANAGED_DETAIL_KEYS = new Set([
   "kind",
   "grade",
@@ -690,20 +635,6 @@ function composerDescriptionPlaceholder(type) {
   return "Add a short note about the activity";
 }
 
-function getAssessmentOverall(domainScores) {
-  const entries = Object.entries(asObject(domainScores)).filter(([, value]) => Number(value) > 0);
-  if (!entries.length) return null;
-
-  const average = entries.reduce((sum, [, value]) => sum + Number(value), 0) / entries.length;
-  const level = RUBRIC_LEVELS.find((item) => item.value === Math.round(average));
-
-  return {
-    label: level ? level.label : `${average.toFixed(1)}/4`,
-    count: entries.length,
-    average,
-  };
-}
-
 function fileToBase64(file, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1091,19 +1022,6 @@ export default function AdminActivityOverrides() {
     }));
   }
 
-  function toggleDomain(setter, domainKey, value) {
-    setter((current) => {
-      const nextScores = { ...asObject(current.domainScores) };
-      if (nextScores[domainKey] === value) delete nextScores[domainKey];
-      else nextScores[domainKey] = value;
-      return { ...current, domainScores: nextScores };
-    });
-  }
-
-  function clearDomains(setter) {
-    setter((current) => ({ ...current, domainScores: {} }));
-  }
-
   function removeMedia(setter, index) {
     setter((current) => ({
       ...current,
@@ -1373,8 +1291,6 @@ export default function AdminActivityOverrides() {
             onTypeChange={(nextType) => setCreateForm((current) => applyTypeChange(current, nextType))}
             onFormFieldChange={(key, value) => setFormField(setCreateForm, key, value)}
             onNestedFieldChange={(field, value) => setNestedField(setCreateForm, field, value)}
-            onDomainToggle={(domainKey, value) => toggleDomain(setCreateForm, domainKey, value)}
-            onClearDomains={() => clearDomains(setCreateForm)}
             onUploadPhotos={(files) => handlePhotoUpload(files, "create")}
             onRemoveMedia={(index) => removeMedia(setCreateForm, index)}
             photoInputRef={createPhotoInputRef}
@@ -1688,8 +1604,6 @@ export default function AdminActivityOverrides() {
                               onTypeChange={(nextType) => setEditForm((current) => applyTypeChange(current, nextType))}
                               onFormFieldChange={(key, value) => setFormField(setEditForm, key, value)}
                               onNestedFieldChange={(field, value) => setNestedField(setEditForm, field, value)}
-                              onDomainToggle={(domainKey, value) => toggleDomain(setEditForm, domainKey, value)}
-                              onClearDomains={() => clearDomains(setEditForm)}
                               onUploadPhotos={(files) => handlePhotoUpload(files, "edit")}
                               onRemoveMedia={(index) => removeMedia(setEditForm, index)}
                               photoInputRef={editPhotoInputRef}
@@ -1725,8 +1639,6 @@ function ActivityComposer({
   onTypeChange,
   onFormFieldChange,
   onNestedFieldChange,
-  onDomainToggle,
-  onClearDomains,
   onUploadPhotos,
   onRemoveMedia,
   photoInputRef,
@@ -1744,20 +1656,8 @@ function ActivityComposer({
   }, [form.type]);
   const helperText = useMemo(() => composerHelperText(form.type), [form.type]);
   const descriptionPlaceholder = useMemo(() => composerDescriptionPlaceholder(form.type), [form.type]);
-  const domainScores = useMemo(() => asObject(form.domainScores), [form.domainScores]);
-  const domainScoreCount = useMemo(
-    () => Object.values(domainScores).filter((value) => Number(value) > 0).length,
-    [domainScores],
-  );
-  const overallAssessment = useMemo(() => getAssessmentOverall(domainScores), [domainScores]);
-  const hasAssessmentValue = domainScoreCount > 0;
   const validationMessage = useMemo(() => getFormValidationMessage(form), [form]);
   const interactionDisabled = busy || uploadingPhotos;
-  const [assessmentOpen, setAssessmentOpen] = useState(hasAssessmentValue);
-
-  useEffect(() => {
-    if (hasAssessmentValue) setAssessmentOpen(true);
-  }, [hasAssessmentValue]);
 
   return (
     <form onSubmit={onSubmit}>
@@ -2072,101 +1972,8 @@ function ActivityComposer({
         </div>
 
         <div style={{ ...sectionCardStyle, gridColumn: "1 / -1" }}>
-          <button
-            type="button"
-            onClick={() => setAssessmentOpen((current) => !current)}
-            style={assessmentToggleButtonStyle}
-            disabled={interactionDisabled}
-          >
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 800, color: "var(--admin-text)" }}>
-                Step 3 - Developmental Assessment (optional)
-              </div>
-              <div style={sectionSummaryStyle}>
-                {domainScoreCount > 0
-                  ? `${domainScoreCount} domain(s) rated`
-                  : "Rate child across developmental domains"}
-              </div>
-            </div>
-            <span style={assessmentToggleTextStyle}>{assessmentOpen ? "Collapse" : "Expand"}</span>
-          </button>
-
-          {assessmentOpen ? (
-            <div style={assessmentPanelBodyStyle}>
-              <div style={domainGridStyle}>
-                {ASSESSMENT_DOMAINS.map((domain) => {
-                  const current = Number(domainScores[domain.key] || 0);
-                  return (
-                    <div key={domain.key} style={domainCardStyle}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span
-                          style={{
-                            ...domainBadgeStyle,
-                            background: domain.tint,
-                            color: domain.color,
-                            borderColor: domain.borderColor,
-                          }}
-                        >
-                          {domain.badge}
-                        </span>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>{domain.label}</div>
-                          <div style={{ marginTop: 2, fontSize: 12, lineHeight: 1.45, color: "var(--admin-text-muted)" }}>
-                            {domain.description}
-                          </div>
-                        </div>
-                      </div>
-                      <div style={rubricButtonRowStyle}>
-                        {RUBRIC_LEVELS.map((level) => {
-                          const active = current === level.value;
-                          return (
-                            <button
-                              key={level.value}
-                              type="button"
-                              onClick={() => onDomainToggle(domain.key, level.value)}
-                              style={{
-                                ...rubricButtonStyle,
-                                background: active ? level.background : "var(--admin-bg)",
-                                borderColor: active ? level.borderColor : "var(--admin-border)",
-                                color: active ? level.color : "var(--admin-text-muted)",
-                              }}
-                              disabled={interactionDisabled}
-                            >
-                              {level.value} {level.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {overallAssessment ? (
-                <div style={assessmentSummaryCardStyle}>
-                  <div style={{ fontSize: 12, color: "#0f3b66" }}>
-                    <strong>Overall:</strong> {overallAssessment.label}
-                    <span style={{ marginLeft: 8, color: "#2563eb" }}>
-                      ({overallAssessment.count}/{ASSESSMENT_DOMAINS.length} domains)
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={onClearDomains}
-                    style={clearDomainsButtonStyle}
-                    disabled={interactionDisabled}
-                  >
-                    Clear all
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-
-        <div style={{ ...sectionCardStyle, gridColumn: "1 / -1" }}>
           <SectionHeading
-            title="4. Photos"
+            title="3. Photos"
             description="Upload optional activity photos. Files are uploaded immediately and can be removed before saving."
           />
           <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -2214,7 +2021,7 @@ function ActivityComposer({
 
         <div style={{ ...sectionCardStyle, gridColumn: "1 / -1" }}>
           <SectionHeading
-            title="5. Advanced Details"
+            title="4. Advanced Details"
             description="Only use extra JSON when you need to preserve custom detail beyond the structured fields above."
           />
           <Field label="Extra Details JSON" style={{ gridColumn: "1 / -1" }}>
@@ -2536,13 +2343,6 @@ const toolbarInputStyle = {
   fontSize: 13,
 };
 
-const domainGridStyle = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-  gap: 12,
-  marginTop: 12,
-};
-
 const inputStyle = {
   width: "100%",
   padding: "10px 14px",
@@ -2628,46 +2428,6 @@ const formErrorStyle = {
   color: "#b91c1c",
 };
 
-const domainCardStyle = {
-  padding: 12,
-  borderRadius: 12,
-  border: "1px solid #e5e7eb",
-  background: "#ffffff",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.65)",
-};
-
-const domainBadgeStyle = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  minWidth: 38,
-  height: 38,
-  padding: "0 8px",
-  borderRadius: 10,
-  border: "1px solid transparent",
-  fontWeight: 800,
-  fontSize: 11,
-  letterSpacing: "0.04em",
-};
-
-const rubricButtonRowStyle = {
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: 8,
-  marginTop: 12,
-};
-
-const rubricButtonStyle = {
-  padding: "8px 10px",
-  borderRadius: 999,
-  border: "1px solid var(--admin-border)",
-  background: "var(--admin-bg)",
-  cursor: "pointer",
-  fontWeight: 700,
-  fontSize: 12,
-  textAlign: "center",
-};
-
 const inlineNoteStyle = {
   marginTop: 10,
   fontSize: 12,
@@ -2690,42 +2450,6 @@ const subSectionEyebrowStyle = {
   color: "var(--admin-text-muted)",
 };
 
-const assessmentToggleButtonStyle = {
-  width: "100%",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 12,
-  padding: 0,
-  background: "transparent",
-  border: "none",
-  cursor: "pointer",
-  textAlign: "left",
-};
-
-const sectionSummaryStyle = {
-  marginTop: 4,
-  fontSize: 12,
-  lineHeight: 1.5,
-  color: "var(--admin-text-muted)",
-};
-
-const assessmentToggleTextStyle = {
-  fontSize: 12,
-  fontWeight: 700,
-  color: "#334155",
-  padding: "6px 10px",
-  borderRadius: 999,
-  border: "1px solid #e5e7eb",
-  background: "#f8fafc",
-};
-
-const assessmentPanelBodyStyle = {
-  display: "grid",
-  gap: 12,
-  marginTop: 12,
-};
-
 const assessmentQuickGradeCardStyle = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
@@ -2742,28 +2466,6 @@ const assessmentQuickGradeTextStyle = {
   fontSize: 12,
   lineHeight: 1.6,
   color: "var(--admin-text-muted)",
-};
-
-const assessmentSummaryCardStyle = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 12,
-  flexWrap: "wrap",
-  padding: "12px 14px",
-  borderRadius: 10,
-  border: "1px solid #dbeafe",
-  background: "#f8fbff",
-};
-
-const clearDomainsButtonStyle = {
-  padding: 0,
-  border: "none",
-  background: "transparent",
-  color: "#1d4ed8",
-  cursor: "pointer",
-  fontWeight: 700,
-  fontSize: 12,
 };
 
 const chipStyle = {

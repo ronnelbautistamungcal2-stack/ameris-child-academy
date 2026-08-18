@@ -313,28 +313,16 @@ export default function WeeklyLessonPlanner({
       const plan = await ensurePlan(dayKey);
       if (!plan) return;
 
-      const existingItems = Array.isArray(plan.items) ? plan.items : [];
-      // build new items array: replace/add the item at this rowIndex, keep others
-      const others = existingItems.filter((it) => it.sortOrder !== rowIndex);
-      const nextItems = [
-        ...others.map((it) => ({
-          title: it.title || "",
-          sortOrder: it.sortOrder,
-          lessonId: it.lessonId || null,
-          lessonGoalId: it.lessonGoalId || null,
-          policyDocumentId: it.policyDocumentId || null,
-          url: it.url || null,
-          notes: it.notes || null,
-        })),
-      ];
-      if (text.trim() || lessonId) {
-        nextItems.push({ title: text.trim(), sortOrder: rowIndex, lessonId: lessonId || null });
-      }
-      nextItems.sort((a, b) => a.sortOrder - b.sortOrder);
-
+      // Send just this one cell — the server upserts/deletes only that row,
+      // so rapid edits across cells can't race and clobber each other.
       const updated = await apiJson(
         `/api/v1/milestone-checklists/${encodeURIComponent(plan.id)}`,
-        { method: "PUT", body: JSON.stringify({ items: nextItems }) },
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            cell: { sortOrder: rowIndex, title: text.trim(), lessonId: lessonId || null },
+          }),
+        },
       );
       setPlanByDayKey((cur) => ({ ...cur, [dayKey]: updated }));
     } catch (e) {

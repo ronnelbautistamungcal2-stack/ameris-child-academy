@@ -56,9 +56,103 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Only admins can edit plans" });
     }
 
-    const { title, description, period, periodStart, active, items } = req.body || {};
+    const { title, description, period, periodStart, active, items, cell } = req.body || {};
     const nextPeriodStart = periodStart ? parseDateOnly(periodStart) : null;
     if (periodStart && !nextPeriodStart) return res.status(400).json({ error: "Invalid periodStart" });
+
+    if (cell && typeof cell === "object") {
+      const sortOrder = Number(cell.sortOrder);
+      if (!Number.isFinite(sortOrder)) {
+        return res.status(400).json({ error: "cell.sortOrder is required" });
+      }
+
+      let lessonId = cell.lessonId || null;
+      const lessonGoalId = cell.lessonGoalId || null;
+      const policyDocumentId = cell.policyDocumentId || null;
+      const url = cell.url || null;
+      const explicitTitle = String(cell.title || "").trim();
+
+      let goal = null;
+      if (lessonGoalId) {
+        goal = await prisma.lessonGoal.findUnique({
+          where: { id: lessonGoalId },
+          select: { lessonId: true, goalIndex: true },
+        });
+        if (goal && !lessonId) lessonId = goal.lessonId;
+      }
+
+      let resolvedTitle = explicitTitle;
+      if (!resolvedTitle) {
+        if (goal) {
+          const lesson = await prisma.lesson.findUnique({ where: { id: goal.lessonId }, select: { title: true } });
+          resolvedTitle = `${lesson?.title || "Lesson"} - Step ${goal.goalIndex}`;
+        } else if (lessonId) {
+          const lesson = await prisma.lesson.findUnique({ where: { id: lessonId }, select: { title: true } });
+          resolvedTitle = lesson?.title || "";
+        } else if (policyDocumentId) {
+          const policy = await prisma.policyDocument.findUnique({ where: { id: policyDocumentId }, select: { title: true } });
+          resolvedTitle = policy?.title || "";
+        } else if (url) {
+          resolvedTitle = url;
+        }
+      }
+
+      const kind =
+        cell.kind || (lessonGoalId || lessonId ? "LESSON" : policyDocumentId ? "POLICY" : url ? "VIDEO" : "OTHER");
+      const isEmpty = !resolvedTitle && !lessonId && !policyDocumentId && !url;
+
+      await prisma.$transaction(async (tx) => {
+        await tx.milestoneChecklistPlan.update({
+          where: { id },
+          data: {
+            title: title !== undefined ? title : undefined,
+            description: description !== undefined ? description : undefined,
+            period: period !== undefined ? period : undefined,
+            periodStart: nextPeriodStart || undefined,
+            active: active !== undefined ? !!active : undefined,
+          },
+        });
+
+        // Only touch the row for this cell — never the whole day's item set —
+        // so concurrent edits to other cells in the same plan can't clobber
+        // each other, and untouched items (and their completions) survive.
+        const existing = await tx.milestoneChecklistItem.findFirst({ where: { planId: id, sortOrder } });
+
+        if (isEmpty) {
+          if (existing) await tx.milestoneChecklistItem.delete({ where: { id: existing.id } });
+        } else {
+          const data = {
+            title: resolvedTitle,
+            kind,
+            url,
+            notes: cell.notes || null,
+            policyDocumentId,
+            lessonId,
+            lessonGoalId,
+          };
+          if (existing) {
+            await tx.milestoneChecklistItem.update({ where: { id: existing.id }, data });
+          } else {
+            await tx.milestoneChecklistItem.create({ data: { ...data, planId: id, sortOrder } });
+          }
+        }
+      });
+
+      const full = await prisma.milestoneChecklistPlan.findUnique({
+        where: { id },
+        include: {
+          items: {
+            orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+            include: {
+              policyDocument: true,
+              lesson: { include: { category: true } },
+              lessonGoal: true,
+            },
+          },
+        },
+      });
+      return res.status(200).json(full);
+    }
 
     const incomingItems = Array.isArray(items) ? items : null;
     const lessonGoalIds = incomingItems

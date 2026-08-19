@@ -4,6 +4,9 @@ export default function Document() {
   return (
     <Html lang="en">
       <Head>
+        {/* Ensures mobile/tablet browsers use actual device width instead of desktop-simulation scaling */}
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+
         {/* PWA manifest */}
         <link rel="manifest" href="/manifest.json" />
 

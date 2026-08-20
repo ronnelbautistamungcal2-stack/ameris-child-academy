@@ -24,6 +24,9 @@ coverage/
 cookies.txt
 admin_cookies.txt
 ameris_backup.sql
+backups/
+*.dump
+planner-fix-ledger*.json
 .tmp-homepage*.png
 .prisma/
 test-results/

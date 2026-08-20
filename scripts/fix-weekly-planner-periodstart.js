@@ -30,7 +30,20 @@
  * Test against one classroom first before running center-wide:
  *   node scripts/fix-weekly-planner-periodstart.js --class=<classRoomId>
  *   node scripts/fix-weekly-planner-periodstart.js --center=<centerId> --apply
+ *
+ * SAFE TO RE-RUN: candidates are matched by createdAt < cutoff, which never
+ * changes - so without something else tracking "already handled", a second
+ * run would reselect every row (including ones already fixed) and shift
+ * them again by another day whenever the new target happens to be free.
+ * To prevent that, every row this script actually shifts gets its id
+ * recorded in a local ledger file (default ./planner-fix-ledger.json, see
+ * --ledger below) and is permanently skipped on any future run using that
+ * same ledger. Keep the ledger file alongside repeated runs; a fresh/empty
+ * ledger makes the script forget what it already fixed.
+ *   node scripts/fix-weekly-planner-periodstart.js --ledger=/path/to/ledger.json
  */
+const fs = require("fs");
+const path = require("path");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
@@ -46,11 +59,28 @@ function argValue(flag) {
 
 const CENTER_ID = argValue("center");
 const CLASS_ROOM_ID = argValue("class");
+const LEDGER_PATH = path.resolve(argValue("ledger") || "./planner-fix-ledger.json");
 
 function addOneUtcDay(date) {
   const d = new Date(date);
   d.setUTCDate(d.getUTCDate() + 1);
   return d;
+}
+
+function loadLedger() {
+  try {
+    const raw = fs.readFileSync(LEDGER_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    return new Map(Object.entries(parsed));
+  } catch {
+    return new Map();
+  }
+}
+
+function saveLedgerEntry(ledger, planId, entry) {
+  ledger.set(planId, entry);
+  const obj = Object.fromEntries(ledger);
+  fs.writeFileSync(LEDGER_PATH, JSON.stringify(obj, null, 2));
 }
 
 async function main() {
@@ -61,9 +91,15 @@ async function main() {
 
   console.log(`Mode: ${APPLY ? "APPLY (writing changes)" : "DRY RUN (no changes will be made)"}`);
   console.log(`Cutoff: rows created before ${cutoff.toISOString()} are in scope`);
+  console.log(`Ledger: ${LEDGER_PATH}`);
   if (CENTER_ID) console.log(`Filtered to center: ${CENTER_ID}`);
   if (CLASS_ROOM_ID) console.log(`Filtered to class: ${CLASS_ROOM_ID}`);
   console.log("");
+
+  const ledger = loadLedger();
+  if (ledger.size > 0) {
+    console.log(`Loaded ${ledger.size} previously-shifted plan id(s) from the ledger - these are permanently skipped.\n`);
+  }
 
   const candidates = await prisma.milestoneChecklistPlan.findMany({
     where: {
@@ -81,8 +117,14 @@ async function main() {
 
   let shifted = 0;
   let collisions = 0;
+  let alreadyLedgered = 0;
 
   for (const plan of candidates) {
+    if (ledger.has(plan.id)) {
+      alreadyLedgered += 1;
+      continue;
+    }
+
     const newPeriodStart = addOneUtcDay(plan.periodStart);
 
     const clash = await prisma.milestoneChecklistPlan.findFirst({
@@ -117,10 +159,18 @@ async function main() {
         where: { id: plan.id },
         data: { periodStart: newPeriodStart },
       });
+      saveLedgerEntry(ledger, plan.id, {
+        oldPeriodStart: plan.periodStart.toISOString(),
+        newPeriodStart: newPeriodStart.toISOString(),
+        shiftedAt: new Date().toISOString(),
+      });
     }
   }
 
-  console.log(`\nDone. ${shifted} ${APPLY ? "shifted" : "would be shifted"}, ${collisions} skipped due to collision.`);
+  console.log(
+    `\nDone. ${shifted} ${APPLY ? "shifted" : "would be shifted"}, ${collisions} skipped due to collision, ` +
+      `${alreadyLedgered} already handled by a prior run.`,
+  );
   if (!APPLY) {
     console.log("This was a dry run - re-run with --apply to write changes.");
   }

@@ -19,6 +19,7 @@ import {
   threadTypeLabel,
   workflowStatusLabel,
 } from "@/lib/messageWorkflows";
+import { roleLabel } from "@/lib/roles";
 
 const ADMIN_FILTERS = [
   { id: "all", label: "All" },
@@ -74,12 +75,14 @@ function timeAgo(date) {
 }
 
 function participantLabel(participants, myId) {
-  const others = (participants || [])
-    .filter((p) => p.userId !== myId)
-    .map((p) => p.user?.name || p.user?.email || "User");
+  const others = (participants || []).filter((p) => p.userId !== myId);
   if (others.length === 0) return "Conversation";
-  if (others.length <= 2) return others.join(", ");
-  return `${others.slice(0, 2).join(", ")} +${others.length - 2}`;
+  const names = others.map((p) => {
+    const base = p.user?.name || p.user?.email || "User";
+    return p.asRole && p.asRole !== p.user?.role ? `${base} (as ${roleLabel(p.asRole)})` : base;
+  });
+  if (names.length <= 2) return names.join(", ");
+  return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
 }
 
 function initialsFromLabel(value) {
@@ -90,6 +93,17 @@ function initialsFromLabel(value) {
     .slice(0, 2);
   if (parts.length === 0) return "CV";
   return parts.map((part) => part[0]?.toUpperCase() || "").join("");
+}
+
+function userRolesOf(u) {
+  return Array.isArray(u?.roles) && u.roles.length ? u.roles : [u?.role].filter(Boolean);
+}
+
+function eligibleRolesFor(u, newThreadType) {
+  const roles = userRolesOf(u);
+  return isAccommodationThread(newThreadType)
+    ? roles.filter((role) => canReceiveAccommodation(role))
+    : roles;
 }
 
 function roleBadgeColor(role) {
@@ -394,8 +408,16 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
 
   useEffect(() => {
     if (!isAccommodationThread(newThreadType)) return;
-    setSelectedUsers((prev) => prev.filter((user) => canReceiveAccommodation(user.role)));
-    setSearchResults((prev) => prev.filter((user) => canReceiveAccommodation(user.role)));
+    setSelectedUsers((prev) =>
+      prev
+        .filter((u) => eligibleRolesFor(u, newThreadType).length > 0)
+        .map((u) =>
+          canReceiveAccommodation(u.role)
+            ? u
+            : { ...u, role: eligibleRolesFor(u, newThreadType)[0] || u.role },
+        ),
+    );
+    setSearchResults((prev) => prev.filter((u) => eligibleRolesFor(u, newThreadType).length > 0));
   }, [newThreadType]);
 
   useEffect(() => {
@@ -567,9 +589,7 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
         );
         const nextResults = Array.isArray(data) ? data.filter((u) => u.id !== userId) : [];
         setSearchResults(
-          isAccommodationThread(newThreadType)
-            ? nextResults.filter((user) => canReceiveAccommodation(user.role))
-            : nextResults,
+          nextResults.filter((u) => eligibleRolesFor(u, newThreadType).length > 0),
         );
       } catch {
         setSearchResults([]);
@@ -579,6 +599,14 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
     }, 300);
     return () => clearTimeout(timer);
   }, [newThreadType, searchQuery, userId]);
+
+  function addSelectedUser(entry) {
+    setSelectedUsers((prev) =>
+      prev.some((item) => item.id === entry.id) ? prev : [...prev, entry],
+    );
+    setSearchQuery("");
+    setSearchResults([]);
+  }
 
   async function createThread(e) {
     e.preventDefault();
@@ -591,10 +619,10 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
     setCreating(true);
     setError("");
     try {
-      const thread = await apiJson("/api/v1/messages/threads", {
+      const response = await apiJson("/api/v1/messages/threads", {
         method: "POST",
         body: JSON.stringify({
-          participantIds: selectedUsers.map((u) => u.id),
+          participants: selectedUsers.map((u) => ({ id: u.id, role: u.role || undefined })),
           audienceKeys: selectedAudiences.map((audience) => audience.key),
           centerId: centerId || undefined,
           threadType: newThreadType,
@@ -604,14 +632,18 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
           firstMessage: newMessage,
         }),
       });
+      const createdThreads = Array.isArray(response?.threads) ? response.threads : [];
       closeCompose();
       await refreshThreads();
-      setActiveThreadId(thread.id);
-      replaceThreadQuery(thread.id);
-      setMobilePanel("thread");
+      const primaryThread = createdThreads[0];
+      if (primaryThread) {
+        setActiveThreadId(primaryThread.id);
+        replaceThreadQuery(primaryThread.id);
+        setMobilePanel("thread");
+      }
       toast.success(
-        selectedUsers.length + selectedAudiences.length > 1
-          ? "Conversation created."
+        createdThreads.length > 1
+          ? `Sent privately to ${createdThreads.length} people — each got their own conversation.`
           : "Conversation started.",
       );
     } catch (e2) {
@@ -1365,7 +1397,7 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
                     <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                       {isAccommodationThread(newThreadType)
                         ? "Accommodation threads can only go to teachers or staff."
-                        : "Use a role-based audience to start one conversation with everyone in that group."}
+                        : "Each person in a role-based audience gets their own private conversation — no one sees anyone else's replies."}
                     </div>
                   </>
                 ) : (
@@ -1407,6 +1439,16 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
                       className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-1 text-xs font-semibold text-sky-800 dark:bg-sky-900/40 dark:text-sky-300"
                     >
                       <span className="max-w-[14rem] break-words">{u.name || u.email}</span>
+                      {u.role ? (
+                        <span
+                          className={[
+                            "rounded-full px-1.5 py-0.5 text-[9px] font-extrabold uppercase",
+                            roleBadgeColor(u.role),
+                          ].join(" ")}
+                        >
+                          as {roleLabel(u.role)}
+                        </span>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() =>
@@ -1454,42 +1496,64 @@ export default function MessageInbox({ centerId, isAdmin, embedded = false, tool
                         className="flex w-full items-center gap-2 border-b border-gray-200 px-3 py-2 text-left text-sm hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-600"
                       >
                         <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-extrabold uppercase text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
-                          Group
+                          Broadcast
                         </span>
                         <span className="font-semibold text-gray-900 dark:text-gray-100">
                           {option.label}
                         </span>
                         <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {option.count} recipient{option.count === 1 ? "" : "s"}
+                          {option.count} private conversation{option.count === 1 ? "" : "s"}
                         </span>
                       </button>
                     ))}
-                    {searchResults.map((u) => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => {
-                          if (!selectedUsers.some((item) => item.id === u.id)) {
-                            setSelectedUsers((prev) => [...prev, u]);
-                          }
-                          setSearchQuery("");
-                          setSearchResults([]);
-                        }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-600"
-                      >
-                        <span className="font-semibold text-gray-900 dark:text-gray-100">
-                          {u.name || u.email}
-                        </span>
-                        <span
-                          className={[
-                            "rounded-full px-2 py-0.5 text-[10px] font-extrabold",
-                            roleBadgeColor(u.role),
-                          ].join(" ")}
-                        >
-                          {u.role}
-                        </span>
-                      </button>
-                    ))}
+                    {searchResults.map((u) => {
+                      const roles = eligibleRolesFor(u, newThreadType);
+                      if (roles.length <= 1) {
+                        const role = roles[0] || u.role;
+                        return (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onClick={() => addSelectedUser({ ...u, role })}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-600"
+                          >
+                            <span className="font-semibold text-gray-900 dark:text-gray-100">
+                              {u.name || u.email}
+                            </span>
+                            <span
+                              className={[
+                                "rounded-full px-2 py-0.5 text-[10px] font-extrabold",
+                                roleBadgeColor(role),
+                              ].join(" ")}
+                            >
+                              {role}
+                            </span>
+                          </button>
+                        );
+                      }
+                      return (
+                        <div key={u.id} className="border-b border-gray-200 px-3 py-2 dark:border-gray-600">
+                          <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                            {u.name || u.email}
+                          </div>
+                          <div className="mt-1 flex flex-wrap gap-1.5">
+                            {roles.map((role) => (
+                              <button
+                                key={role}
+                                type="button"
+                                onClick={() => addSelectedUser({ ...u, role })}
+                                className={[
+                                  "rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase transition hover:opacity-80",
+                                  roleBadgeColor(role),
+                                ].join(" ")}
+                              >
+                                Message as {roleLabel(role)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>

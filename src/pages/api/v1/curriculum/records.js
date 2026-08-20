@@ -54,20 +54,21 @@ async function getOrCreateLesson({ centerId, title, categoryId }) {
   const normalizedTitle = normalizeSpaces(title);
   if (!normalizedTitle) return null;
 
+  // Match on categoryId too, not just title: categories carry the age range
+  // (see getOrCreateCategory), so a lesson with the same name entered under a
+  // different age group must land on its own Lesson row instead of merging
+  // into whichever age group happened to be created first.
   const matches = await prisma.lesson.findMany({
-    where: { centerId, title: { equals: normalizedTitle, mode: "insensitive" } },
+    where: {
+      centerId,
+      title: { equals: normalizedTitle, mode: "insensitive" },
+      categoryId: categoryId || null,
+    },
     orderBy: { id: "asc" },
   });
 
   if (matches.length) {
-    const preferred = matches.find((l) => l.title === normalizedTitle) || matches[0];
-    if (!preferred.categoryId && categoryId) {
-      return prisma.lesson.update({
-        where: { id: preferred.id },
-        data: { categoryId },
-      });
-    }
-    return preferred;
+    return matches.find((l) => l.title === normalizedTitle) || matches[0];
   }
 
   return prisma.lesson.create({

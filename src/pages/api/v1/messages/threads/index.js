@@ -12,9 +12,35 @@ import {
   isAccommodationThread,
   normalizePriorityLevel,
   normalizeThreadType,
+  resolveMessageRecipientRole,
   supportsDueDate,
   supportsPriority,
 } from "@/lib/messageWorkflows";
+
+const THREAD_INCLUDE = {
+  createdBy: {
+    select: { id: true, name: true, email: true, role: true, pictureUrl: true },
+  },
+  completedBy: {
+    select: { id: true, name: true, email: true, role: true, pictureUrl: true },
+  },
+  reviewRequestedBy: {
+    select: { id: true, name: true, email: true, role: true, pictureUrl: true },
+  },
+  participants: {
+    include: {
+      user: { select: { id: true, name: true, email: true, role: true, pictureUrl: true } },
+    },
+  },
+  center: true,
+  messages: {
+    take: 1,
+    orderBy: { createdAt: "desc" },
+    include: {
+      sender: { select: { id: true, name: true, email: true, role: true, pictureUrl: true } },
+    },
+  },
+};
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -37,28 +63,7 @@ export default async function handler(req, res) {
         ...(normalizedStatus ? { status: normalizedStatus } : {}),
       },
       include: {
-        createdBy: {
-          select: { id: true, name: true, email: true, role: true, pictureUrl: true },
-        },
-        completedBy: {
-          select: { id: true, name: true, email: true, role: true, pictureUrl: true },
-        },
-        reviewRequestedBy: {
-          select: { id: true, name: true, email: true, role: true, pictureUrl: true },
-        },
-        participants: {
-          include: {
-            user: { select: { id: true, name: true, email: true, role: true, pictureUrl: true } },
-          },
-        },
-        center: true,
-        messages: {
-          take: 1,
-          orderBy: { createdAt: "desc" },
-          include: {
-            sender: { select: { id: true, name: true, email: true, role: true, pictureUrl: true } },
-          },
-        },
+        ...THREAD_INCLUDE,
         _count: { select: { messages: true } },
       },
       orderBy: { updatedAt: "desc" },
@@ -91,6 +96,7 @@ export default async function handler(req, res) {
 
   if (req.method === "POST") {
     const {
+      participants,
       participantIds,
       centerId,
       title,
@@ -100,9 +106,15 @@ export default async function handler(req, res) {
       priority,
       dueDate,
     } = req.body || {};
-    const ids = Array.isArray(participantIds)
-      ? participantIds.filter(Boolean)
-      : [];
+
+    // Accept either `participants` (with an optional per-person role) or the
+    // legacy flat `participantIds` array.
+    const manualEntries = Array.isArray(participants)
+      ? participants
+      : Array.isArray(participantIds)
+        ? participantIds.map((id) => ({ id }))
+        : [];
+
     const normalizedAudienceKeys = Array.isArray(audienceKeys)
       ? [...new Set(audienceKeys.map((key) => String(key || "").trim()).filter(Boolean))]
       : [];
@@ -146,9 +158,24 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Invalid dueDate" });
     }
 
-    const unique = [...new Set([user.id, ...ids, ...audienceUsers.map((recipient) => recipient.id)])];
-    if (unique.length < 2) {
-      return res.status(400).json({ error: "At least one participant is required" });
+    // Every selected recipient gets their own private thread with the sender
+    // — recipients never see each other's replies. Explicit picks win over an
+    // inferred audience role for the same person.
+    const requestedRoleById = new Map();
+    for (const entry of manualEntries) {
+      const id = entry?.id;
+      if (!id || id === user.id) continue;
+      if (!requestedRoleById.has(id)) requestedRoleById.set(id, entry.role || null);
+    }
+    for (const audienceUser of audienceUsers) {
+      if (!audienceUser?.id || audienceUser.id === user.id) continue;
+      if (!requestedRoleById.has(audienceUser.id)) {
+        requestedRoleById.set(audienceUser.id, audienceUser.asRole || null);
+      }
+    }
+
+    if (requestedRoleById.size === 0) {
+      return res.status(400).json({ error: "At least one recipient is required" });
     }
 
     if (centerId) {
@@ -164,90 +191,80 @@ export default async function handler(req, res) {
       }
     }
 
-    // Validate participants exist.
-    const users = await prisma.user.findMany({
-      where: { id: { in: unique } },
-      select: { id: true, role: true },
+    // Validate recipients exist.
+    const recipientIds = [...requestedRoleById.keys()];
+    const recipientUsers = await prisma.user.findMany({
+      where: { id: { in: recipientIds } },
+      select: { id: true, role: true, roles: true },
     });
-    if (users.length !== unique.length) {
-      return res.status(400).json({ error: "Invalid participantIds" });
+    if (recipientUsers.length !== recipientIds.length) {
+      return res.status(400).json({ error: "Invalid recipients" });
     }
+
+    const resolvedRecipients = recipientUsers.map((recipientUser) => ({
+      id: recipientUser.id,
+      asRole: resolveMessageRecipientRole({
+        user: recipientUser,
+        requestedRole: requestedRoleById.get(recipientUser.id),
+        threadType: normalizedThreadType,
+      }),
+    }));
+
     if (
       isAccommodationThread(normalizedThreadType) &&
-      users.some(
-        (participant) =>
-          participant.id !== user.id &&
-          !canReceiveAccommodation(participant.role),
-      )
+      resolvedRecipients.some((recipient) => !canReceiveAccommodation(recipient.asRole))
     ) {
       return res.status(400).json({
         error: "Accommodations can only be sent to teachers or staff.",
       });
     }
 
-    const thread = await prisma.messageThread.create({
-      data: {
-        centerId: centerId || null,
-        title: title || null,
-        type: normalizedThreadType,
-        status: "OPEN",
-        priority: normalizedPriority,
-        dueDate: normalizedDueDate,
-        createdById: user.id,
-        participants: {
-          create: unique.map((uid) => ({
-            userId: uid,
-            lastReadAt: uid === user.id ? new Date() : null,
-          })),
-        },
-        messages: firstMessage
-          ? {
-              create: {
-                senderId: user.id,
-                body: String(firstMessage).slice(0, 5000),
-              },
-            }
-          : undefined,
-      },
-      include: {
-        createdBy: {
-          select: { id: true, name: true, email: true, role: true, pictureUrl: true },
-        },
-        completedBy: {
-          select: { id: true, name: true, email: true, role: true, pictureUrl: true },
-        },
-        reviewRequestedBy: {
-          select: { id: true, name: true, email: true, role: true, pictureUrl: true },
-        },
-        participants: {
-          include: {
-            user: { select: { id: true, name: true, email: true, role: true, pictureUrl: true } },
+    const createdThreads = await Promise.all(
+      resolvedRecipients.map(async (recipient) => {
+        const thread = await prisma.messageThread.create({
+          data: {
+            centerId: centerId || null,
+            title: title || null,
+            type: normalizedThreadType,
+            status: "OPEN",
+            priority: normalizedPriority,
+            dueDate: normalizedDueDate,
+            createdById: user.id,
+            participants: {
+              create: [
+                { userId: user.id, lastReadAt: new Date() },
+                { userId: recipient.id, asRole: recipient.asRole || undefined },
+              ],
+            },
+            messages: firstMessage
+              ? {
+                  create: {
+                    senderId: user.id,
+                    body: String(firstMessage).slice(0, 5000),
+                  },
+                }
+              : undefined,
           },
-        },
-        center: true,
-        messages: {
-          take: 1,
-          orderBy: { createdAt: "desc" },
-          include: {
-            sender: { select: { id: true, name: true, email: true, role: true, pictureUrl: true } },
-          },
-        },
-      },
-    });
+          include: THREAD_INCLUDE,
+        });
 
-    const firstThreadMessage = thread.messages?.[0] || null;
-    if (firstThreadMessage) {
-      emitNewMessage(unique, { ...firstThreadMessage, threadId: thread.id });
+        const firstThreadMessage = thread.messages?.[0] || null;
+        if (firstThreadMessage) {
+          emitNewMessage([user.id, recipient.id], { ...firstThreadMessage, threadId: thread.id });
 
-      await notifyMessageRecipients({
-        sender: user,
-        recipientIds: unique.filter((participantId) => participantId !== user.id),
-        threadId: thread.id,
-        body: firstThreadMessage.body,
-      });
-    }
+          await notifyMessageRecipients({
+            sender: user,
+            recipientIds: [recipient.id],
+            threadId: thread.id,
+            body: firstThreadMessage.body,
+          });
+        }
 
-    return res.status(201).json(thread);
+        return thread;
+      }),
+    );
+
+    return res.status(201).json({ threads: createdThreads });
   }
 
   res.setHeader("Allow", ["GET", "POST"]);

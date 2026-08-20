@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { userRoles } from "@/lib/roles";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -30,11 +31,14 @@ export default async function handler(req, res) {
       name: true,
       email: true,
       role: true,
+      roles: true,
       pictureUrl: true,
     },
     take: limit,
     orderBy: { name: "asc" },
   });
 
-  return res.status(200).json(users);
+  return res.status(200).json(
+    users.map((user) => ({ ...user, roles: userRoles(user) })),
+  );
 }

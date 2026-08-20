@@ -146,6 +146,7 @@ export default function TeacherChildDetailPage() {
   const [stepsAgeFilter, setStepsAgeFilter] = useState("");
   const [stepsSearch, setStepsSearch] = useState("");
   const [stepsView, setStepsView] = useState("active");
+  const [stepsExpanded, setStepsExpanded] = useState(false);
   const [lessonsForGoals, setLessonsForGoals] = useState([]);
   const [logTypeFilter, setLogTypeFilter] = useState("");
 
@@ -862,27 +863,41 @@ export default function TeacherChildDetailPage() {
 
         <div className="rounded-2xl border border-gray-200 bg-white p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Steps of progression</div>
-              <div className="mt-1 text-sm text-gray-600">Current steps, overdue alerts, catchup plan, upcoming steps.</div>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                <span
-                  className="rounded-full px-2 py-0.5 font-semibold"
-                  style={{ backgroundColor: childVisual.soft, color: childVisual.accentDark }}
-                >
-                  {childVisual.name} theme
-                </span>
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 font-semibold text-gray-700">
-                  Focus: {childVisual.dominantDomain}
-                </span>
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 font-semibold text-gray-700">
-                  Stage: {childVisual.stage}
-                </span>
+            <button
+              type="button"
+              onClick={() => setStepsExpanded((v) => !v)}
+              className="flex flex-1 items-start gap-2 text-left"
+              aria-expanded={stepsExpanded}
+            >
+              <span className="mt-1 text-gray-400">{stepsExpanded ? "▾" : "▸"}</span>
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Steps of progression</div>
+                <div className="mt-1 text-sm text-gray-600">
+                  {stepsExpanded
+                    ? "Current steps, overdue alerts, catchup plan, upcoming steps."
+                    : "Click to view current steps, overdue alerts, catchup plan, and upcoming steps."}
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                  <span
+                    className="rounded-full px-2 py-0.5 font-semibold"
+                    style={{ backgroundColor: childVisual.soft, color: childVisual.accentDark }}
+                  >
+                    {childVisual.name} theme
+                  </span>
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 font-semibold text-gray-700">
+                    Focus: {childVisual.dominantDomain}
+                  </span>
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 font-semibold text-gray-700">
+                    Stage: {childVisual.stage}
+                  </span>
+                </div>
               </div>
-            </div>
+            </button>
             <Link href="/teacher/progress" className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-extrabold text-gray-800 hover:bg-gray-50">Open full progress manager</Link>
           </div>
 
+          {stepsExpanded ? (
+          <>
           <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4">
             <input value={stepsSearch} onChange={(e) => setStepsSearch(e.target.value)} placeholder="Search step..." className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm" />
             <select value={stepsDomain} onChange={(e) => setStepsDomain(e.target.value)} className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"><option value="">All domains</option>{stepDomains.map((d) => <option key={d} value={d}>{d}</option>)}</select>
@@ -1101,13 +1116,15 @@ export default function TeacherChildDetailPage() {
               )}
             </div>
           </div>
+          </>
+          ) : null}
         </div>
 
         <div className="rounded-2xl border border-gray-200 bg-white p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Daily logging (Procare-style)
+                Daily logging
               </div>
               <div className="mt-1 text-sm text-gray-600">
                 Use the activity logger and review recent entries.

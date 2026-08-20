@@ -113,7 +113,7 @@ async function resolveUsersForRoles(prismaClient, roles, centerIds, excludeUserI
   const where = buildRoleMembershipWhere(roles, centerIds);
   if (!where) return [];
 
-  return prismaClient.user.findMany({
+  const users = await prismaClient.user.findMany({
     where: {
       id: { not: excludeUserId },
       ...where,
@@ -123,9 +123,20 @@ async function resolveUsersForRoles(prismaClient, roles, centerIds, excludeUserI
       name: true,
       email: true,
       role: true,
+      roles: true,
       pictureUrl: true,
     },
     orderBy: [{ name: "asc" }, { email: "asc" }],
+  });
+
+  const normalizedRoles = Array.isArray(roles)
+    ? roles.map((role) => String(role || "").trim().toUpperCase())
+    : [];
+
+  return users.map((user) => {
+    const heldRoles = userRoles(user);
+    const asRole = normalizedRoles.find((role) => heldRoles.includes(role)) || null;
+    return { ...user, asRole };
   });
 }
 
@@ -139,7 +150,7 @@ async function resolveParents(prismaClient, centerIds, excludeUserId) {
       }
     : {};
 
-  return prismaClient.user.findMany({
+  const users = await prismaClient.user.findMany({
     where: {
       id: { not: excludeUserId },
       OR: [{ role: "PARENT" }, { roles: { has: "PARENT" } }],
@@ -150,10 +161,13 @@ async function resolveParents(prismaClient, centerIds, excludeUserId) {
       name: true,
       email: true,
       role: true,
+      roles: true,
       pictureUrl: true,
     },
     orderBy: [{ name: "asc" }, { email: "asc" }],
   });
+
+  return users.map((user) => ({ ...user, asRole: "PARENT" }));
 }
 
 export async function resolveMessageAudienceUsers({

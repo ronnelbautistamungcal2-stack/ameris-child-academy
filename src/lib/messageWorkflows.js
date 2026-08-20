@@ -1,3 +1,5 @@
+import { userRoles } from "@/lib/roles";
+
 export const MESSAGE_THREAD_TYPES = [
   { value: "MESSAGE", label: "Message" },
   { value: "OPEN_POINT", label: "Open Point" },
@@ -59,6 +61,24 @@ export function canSendAccommodation(role) {
 
 export function canReceiveAccommodation(role) {
   return ["TEACHER", "OTHER_STAFF"].includes(String(role || "").toUpperCase());
+}
+
+/**
+ * Picks the role a multi-role recipient is being addressed as in a given thread.
+ * Honors an explicit, valid requestedRole; otherwise falls back to a role that
+ * qualifies for the thread type (accommodations must land on teacher/staff), or
+ * the recipient's first held role.
+ */
+export function resolveMessageRecipientRole({ user, requestedRole, threadType }) {
+  const heldRoles = userRoles(user);
+  const normalizedRequested = requestedRole ? String(requestedRole).trim().toUpperCase() : null;
+  if (normalizedRequested && heldRoles.includes(normalizedRequested)) {
+    return normalizedRequested;
+  }
+  if (isAccommodationThread(threadType)) {
+    return heldRoles.find((role) => canReceiveAccommodation(role)) || heldRoles[0] || null;
+  }
+  return heldRoles[0] || null;
 }
 
 export function getAvailableThreadTypesForRole(role) {

@@ -818,6 +818,7 @@ model ThreadParticipant {
   threadId  String
   user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId     String
+  asRole     Role?
   lastReadAt DateTime?
   createdAt  DateTime      @default(now())
 

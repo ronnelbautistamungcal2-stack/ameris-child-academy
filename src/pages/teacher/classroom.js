@@ -9,6 +9,129 @@ function byString(a, b) {
   return String(a || "").localeCompare(String(b || ""));
 }
 
+const ACTIVITY_TYPES = [
+  "DIAPER_CHANGE",
+  "NAP",
+  "BOTTLE",
+  "MEAL",
+  "SNACK",
+  "ACTIVITY",
+  "TASK_CHECKLIST",
+  "BEHAVIOR",
+  "INCIDENT",
+  "TOILETING",
+  "CHARACTER_HIGHLIGHT",
+  "OTHER",
+];
+
+const ACTIVITY_TYPE_META = {
+  DIAPER_CHANGE: { label: "Diaper Change", icon: "💧", tint: "bg-violet-50 text-violet-700 border-violet-200" },
+  NAP: { label: "Nap", icon: "😴", tint: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+  BOTTLE: { label: "Bottle", icon: "🍼", tint: "bg-sky-50 text-sky-700 border-sky-200" },
+  MEAL: { label: "Meal", icon: "🍽️", tint: "bg-amber-50 text-amber-700 border-amber-200" },
+  SNACK: { label: "Snack", icon: "🍎", tint: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  ACTIVITY: { label: "Activity", icon: "🎨", tint: "bg-pink-50 text-pink-700 border-pink-200" },
+  TASK_CHECKLIST: { label: "Task/Checklist", icon: "✅", tint: "bg-teal-50 text-teal-700 border-teal-200" },
+  BEHAVIOR: { label: "Course Correction", icon: "🤝", tint: "bg-orange-50 text-orange-700 border-orange-200" },
+  INCIDENT: { label: "Incident", icon: "⚠️", tint: "bg-red-50 text-red-700 border-red-200" },
+  TOILETING: { label: "Toileting", icon: "🚽", tint: "bg-cyan-50 text-cyan-700 border-cyan-200" },
+  CHARACTER_HIGHLIGHT: { label: "Character Highlight", icon: "🌟", tint: "bg-yellow-50 text-yellow-700 border-yellow-200" },
+  OTHER: { label: "Other", icon: "📝", tint: "bg-gray-50 text-gray-700 border-gray-200" },
+};
+
+const TOILETING_TYPE_LABELS = {
+  SUCCESS: "Success",
+  TRIED: "Tried",
+  ACCIDENT: "Accident",
+};
+
+const CHARACTER_HIGHLIGHT_TYPE_LABELS = {
+  BROTHERS_KEEPER: "Brother's Keeper",
+  CHAMPION_OF_VIRTUE: "Champion of Virtue",
+  FULL_REPENTANCE: "Full Repentance",
+  CHAMPION_OF_OBEDIENCE: "Champion of Obedience",
+  CHAMPION_OF_RESPECT: "Champion of Respect",
+  CHAMPION_OF_HONESTY: "Champion of Honesty",
+  OTHER: "Other",
+};
+
+function dayLabel(dateKey) {
+  if (!dateKey) return "Unknown date";
+  const date = new Date(dateKey);
+  if (Number.isNaN(date.getTime())) return "Unknown date";
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return "Today";
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" });
+}
+
+function groupActivitiesByDay(activities) {
+  const groups = new Map();
+  for (const activity of activities) {
+    const date = new Date(activity.createdAt);
+    const key = Number.isNaN(date.getTime()) ? "unknown" : date.toDateString();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(activity);
+  }
+  return [...groups.entries()].map(([key, items]) => ({ key, label: dayLabel(key === "unknown" ? "" : key), items }));
+}
+
+function relativeTime(dateStr) {
+  const now = new Date();
+  const value = new Date(dateStr);
+  if (Number.isNaN(value.getTime())) return "-";
+  const diffMs = now - value;
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return value.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: value.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+  });
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString();
+}
+
+function describeActivity(activity) {
+  const details = activity?.details && typeof activity.details === "object" ? activity.details : {};
+  if (activity.type === "NAP") {
+    const start = details.start ? new Date(details.start).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : null;
+    const end = details.end ? new Date(details.end).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : null;
+    if (start && end) return `Slept from ${start} to ${end}`;
+    if (start) return `Nap started at ${start}`;
+  }
+  if (activity.type === "BOTTLE") {
+    const parts = [];
+    if (details.amount) parts.push(`Served ${details.amount}`);
+    if (details.consumed) parts.push(`Consumed ${details.consumed}`);
+    if (parts.length) return parts.join(" • ");
+  }
+  if (activity.type === "MEAL" || activity.type === "SNACK") {
+    const parts = [];
+    if (details.food) parts.push(details.food);
+    if (details.amount) parts.push(details.amount);
+    if (parts.length) return parts.join(" | ");
+  }
+  if (activity.type === "TOILETING" && details.toiletingType) {
+    return TOILETING_TYPE_LABELS[details.toiletingType] || details.toiletingType;
+  }
+  if (activity.type === "CHARACTER_HIGHLIGHT" && details.characterHighlightType) {
+    return CHARACTER_HIGHLIGHT_TYPE_LABELS[details.characterHighlightType] || details.characterHighlightType;
+  }
+  return activity.notes || null;
+}
+
 function fullName(child) {
   if (!child) return "";
   return `${child.firstName || ""}${child.lastName ? ` ${child.lastName}` : ""}`.trim();
@@ -165,6 +288,10 @@ export default function TeacherClassroom() {
   const [attendanceHistory, setAttendanceHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  const [activities, setActivities] = useState([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [detailChildId, setDetailChildId] = useState("");
+
   const [busyChildId, setBusyChildId] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
   const [transferChild, setTransferChild] = useState(null);
@@ -270,6 +397,18 @@ export default function TeacherClassroom() {
         setAttendanceHistory(Array.isArray(res) ? res : []);
       } catch { setAttendanceHistory([]); }
       finally { setHistoryLoading(false); }
+    })();
+  }, [centerId]);
+
+  useEffect(() => {
+    (async () => {
+      if (!centerId) { setActivities([]); return; }
+      setActivitiesLoading(true);
+      try {
+        const res = await apiJson(`/api/v1/activities?centerId=${encodeURIComponent(centerId)}`);
+        setActivities(Array.isArray(res) ? res : []);
+      } catch { setActivities([]); }
+      finally { setActivitiesLoading(false); }
     })();
   }, [centerId]);
 
@@ -839,6 +978,17 @@ export default function TeacherClassroom() {
                   attendanceByChildId={attendanceByChildId}
                   classNameById={classNameById}
                 />
+
+                {/* Activity Log Summary */}
+                <ActivityLogSummaryPanel
+                  activities={activities}
+                  loading={activitiesLoading}
+                  children={filteredChildren}
+                  classNameById={classNameById}
+                  detailChildId={detailChildId}
+                  onOpenDetail={setDetailChildId}
+                  onCloseDetail={() => setDetailChildId("")}
+                />
               </div>
 
               {/* Sidebar */}
@@ -1189,6 +1339,194 @@ function AttendanceSummaryPanel({ history, loading, children, attendanceByChildI
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+function ActivityLogSummaryPanel({ activities, loading, children, classNameById, detailChildId, onOpenDetail, onCloseDetail }) {
+  const childSummaries = useMemo(() => {
+    const byId = new Map();
+    for (const ch of children || []) {
+      byId.set(ch.id, { child: ch, counts: {}, total: 0, latestAt: null, activities: [] });
+    }
+    for (const activity of activities || []) {
+      const cid = activity?.child?.id;
+      if (!cid || !byId.has(cid)) continue;
+      const entry = byId.get(cid);
+      entry.counts[activity.type] = (entry.counts[activity.type] || 0) + 1;
+      entry.total += 1;
+      entry.activities.push(activity);
+      if (!entry.latestAt || new Date(activity.createdAt) > new Date(entry.latestAt)) {
+        entry.latestAt = activity.createdAt;
+      }
+    }
+    const list = [...byId.values()];
+    for (const entry of list) {
+      entry.activities.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+    list.sort((a, b) => byString(a.child.firstName, b.child.firstName));
+    return list;
+  }, [activities, children]);
+
+  const detailSummary = useMemo(
+    () => childSummaries.find((s) => s.child.id === detailChildId) || null,
+    [childSummaries, detailChildId],
+  );
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+              <IconClipboard className="h-4 w-4" />
+            </span>
+            <h3 className="text-sm font-extrabold text-gray-900">Activity Log Summary</h3>
+          </div>
+          <p className="mt-0.5 text-xs text-gray-500">Logs recorded per child, by activity type. Click a child to view details.</p>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="mt-3 text-sm text-gray-600">Loading activity logs...</div>
+      ) : childSummaries.length === 0 ? (
+        <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+          No children found.
+        </div>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {childSummaries.map((summary) => (
+            <button
+              key={summary.child.id}
+              type="button"
+              onClick={() => onOpenDetail(summary.child.id)}
+              className="flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition hover:border-blue-200 hover:bg-blue-50/30 hover:shadow-md"
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-extrabold text-gray-600">
+                {initials(summary.child)}
+              </div>
+              <div className="w-40 shrink-0">
+                <div className="truncate text-sm font-extrabold text-gray-900">{fullName(summary.child)}</div>
+                <div className="truncate text-xs text-gray-500">
+                  {classNameById?.[summary.child.classRoomId] || "Unassigned"}
+                </div>
+              </div>
+              <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+                {ACTIVITY_TYPES.map((type) => {
+                  const meta = ACTIVITY_TYPE_META[type];
+                  const count = summary.counts[type] || 0;
+                  return (
+                    <span
+                      key={type}
+                      title={`${meta.label}: ${count}`}
+                      className={[
+                        "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-semibold",
+                        count ? meta.tint : "border-gray-200 bg-gray-50 text-gray-400",
+                      ].join(" ")}
+                    >
+                      <span aria-hidden="true">{meta.icon}</span>
+                      {count}
+                    </span>
+                  );
+                })}
+              </div>
+              <div className="w-28 shrink-0 text-right">
+                <div className="text-xs font-semibold text-gray-700">
+                  {summary.latestAt ? relativeTime(summary.latestAt) : "No logs"}
+                </div>
+                <div className="text-[11px] text-gray-400">
+                  {summary.total} log{summary.total === 1 ? "" : "s"}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {detailSummary ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) onCloseDetail();
+          }}
+        >
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-sm font-extrabold text-gray-600">
+                  {initials(detailSummary.child)}
+                </div>
+                <div>
+                  <div className="text-base font-extrabold text-gray-900">{fullName(detailSummary.child)}</div>
+                  <div className="mt-0.5 text-xs text-gray-500">
+                    {classNameById?.[detailSummary.child.classRoomId] || "Unassigned"} &middot; {detailSummary.total} log{detailSummary.total === 1 ? "" : "s"}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onCloseDetail}
+                aria-label="Close activity details"
+                className="rounded-lg border border-gray-200 bg-white p-2 text-gray-500 hover:bg-gray-50"
+              >
+                <IconX className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {ACTIVITY_TYPES.filter((type) => detailSummary.counts[type]).map((type) => {
+                const meta = ACTIVITY_TYPE_META[type];
+                return (
+                  <span key={type} className={["inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold", meta.tint].join(" ")}>
+                    <span aria-hidden="true">{meta.icon}</span> {meta.label} &middot; {detailSummary.counts[type]}
+                  </span>
+                );
+              })}
+            </div>
+
+            <div className="mt-4">
+              {detailSummary.activities.length === 0 ? (
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-center text-sm text-gray-600">
+                  No activity logs recorded for this child yet.
+                </div>
+              ) : (
+                groupActivitiesByDay(detailSummary.activities).map((group) => (
+                  <div key={group.key} className="mb-4">
+                    <div className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-400">{group.label}</div>
+                    <div className="space-y-2">
+                      {group.items.map((activity) => {
+                        const meta = ACTIVITY_TYPE_META[activity.type] || ACTIVITY_TYPE_META.OTHER;
+                        const detail = describeActivity(activity);
+                        return (
+                          <div key={activity.id} className="flex gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+                            <div className="flex-shrink-0">
+                              <span className={["flex h-7 w-7 items-center justify-center rounded-full border text-xs", meta.tint].join(" ")}>
+                                <span aria-hidden="true">{meta.icon}</span>
+                              </span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold text-gray-900">{meta.label}</span>
+                                <span className="text-xs text-gray-500">{formatDateTime(activity.createdAt)}</span>
+                              </div>
+                              {detail ? <div className="mt-0.5 text-xs text-gray-600">{detail}</div> : null}
+                              {activity.recordedBy?.name || activity.recordedBy?.email ? (
+                                <div className="mt-0.5 text-[11px] text-gray-400">
+                                  Logged by {activity.recordedBy?.name || activity.recordedBy?.email}
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

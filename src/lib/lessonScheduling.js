@@ -57,6 +57,16 @@ export function normalizeLessonSlot(value) {
   return normalized || null;
 }
 
+// Lessons in different age-group categories can share the same title, so any
+// list/dropdown that lets someone pick a specific lesson needs the age group
+// (or category name as a fallback) in the visible label — otherwise two
+// distinct lessons render as indistinguishable duplicate entries.
+export function lessonOptionLabel(lesson) {
+  const title = normalizeText(lesson?.title) || "Untitled lesson";
+  const qualifier = normalizeText(lesson?.category?.ageRange) || normalizeText(lesson?.category?.name);
+  return qualifier ? `${title} (${qualifier})` : title;
+}
+
 export function normalizeTermDaySelections(value) {
   const source = Array.isArray(value) ? value : value == null ? [] : [value];
   const seen = new Set();

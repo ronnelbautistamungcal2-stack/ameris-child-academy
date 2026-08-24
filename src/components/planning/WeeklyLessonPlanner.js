@@ -2,6 +2,8 @@ import { apiJson } from "@/lib/api";
 import { formatTermDaysLabel, normalizeTermDaySelections } from "@/lib/lessonScheduling";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+const SUGGESTION_LIMIT = 30;
+
 const ROW_COUNT = 10;
 const DEFAULT_PLAN_TITLE = "Lesson Planner";
 
@@ -260,12 +262,15 @@ export default function WeeklyLessonPlanner({
     return item?.lessonId || null;
   }
 
-  function suggestionsFor(cellKey) {
+  function matchingLessonsFor(cellKey) {
     const q = String(cellDrafts[cellKey] ?? "").trim().toLowerCase();
-    const pool = q
+    return q
       ? lessons.filter((l) => (l.title || "").toLowerCase().includes(q))
       : lessons;
-    return pool.slice(0, 8);
+  }
+
+  function suggestionsFor(cellKey) {
+    return matchingLessonsFor(cellKey).slice(0, SUGGESTION_LIMIT);
   }
 
   const pendingPlanCreates = useRef({});
@@ -744,10 +749,30 @@ export default function WeeklyLessonPlanner({
                                 }
                               }}
                               placeholder="Type a note or pick a lesson…"
-                              className="w-full rounded border border-transparent bg-transparent px-1.5 py-0.5 text-xs text-gray-800 placeholder-gray-300 outline-none transition focus:border-sky-300 focus:bg-white focus:ring-1 focus:ring-sky-100"
+                              title={
+                                cellLessonId
+                                  ? "Linked to a lesson bank entry — teachers can open it"
+                                  : cellText
+                                    ? "Plain text only — pick a suggestion below to link it to the lesson bank so teachers can open it"
+                                    : ""
+                              }
+                              className={`w-full rounded border border-transparent bg-transparent py-0.5 pl-1.5 text-xs text-gray-800 placeholder-gray-300 outline-none transition focus:border-sky-300 focus:bg-white focus:ring-1 focus:ring-sky-100 ${
+                                cellLessonId ? "pr-5" : "pr-1.5"
+                              }`}
                             />
+                            {cellLessonId ? (
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 20 20"
+                                fill="currentColor"
+                                className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-sky-500"
+                              >
+                                <path d="M12.232 4.232a2.5 2.5 0 013.536 3.536l-1.225 1.224a.75.75 0 001.061 1.06l1.224-1.224a4 4 0 00-5.656-5.656l-3 3a4 4 0 00.225 5.865.75.75 0 00.977-1.138 2.5 2.5 0 01-.142-3.667l3-3z" />
+                                <path d="M11.603 7.963a.75.75 0 00-.977 1.138 2.5 2.5 0 01.142 3.667l-3 3a2.5 2.5 0 01-3.536-3.536l1.225-1.224a.75.75 0 00-1.061-1.06l-1.224 1.224a4 4 0 105.656 5.656l3-3a4 4 0 00-.225-5.865z" />
+                              </svg>
+                            ) : null}
                             {openComboKey === cellKey && suggestionsFor(cellKey).length > 0 ? (
-                              <ul className="absolute left-0 top-full z-20 mt-1 max-h-52 w-56 overflow-auto rounded-lg border border-gray-200 bg-white py-1 text-xs shadow-lg">
+                              <ul className="absolute left-0 top-full z-20 mt-1 max-h-52 w-64 overflow-auto rounded-lg border border-gray-200 bg-white py-1 text-xs shadow-lg">
                                 {suggestionsFor(cellKey).map((l) => (
                                   <li
                                     key={l.id}
@@ -756,11 +781,18 @@ export default function WeeklyLessonPlanner({
                                     className="cursor-pointer px-2.5 py-1.5 hover:bg-sky-50"
                                   >
                                     <div className="font-semibold text-gray-800">{l.title}</div>
-                                    {l.category?.ageRange ? (
-                                      <div className="text-[10px] text-gray-400">{l.category.ageRange}</div>
+                                    {l.category?.ageRange || l.category?.name ? (
+                                      <div className="text-[10px] text-gray-400">
+                                        {l.category?.ageRange || l.category?.name}
+                                      </div>
                                     ) : null}
                                   </li>
                                 ))}
+                                {matchingLessonsFor(cellKey).length > SUGGESTION_LIMIT ? (
+                                  <li className="border-t border-gray-100 px-2.5 py-1.5 text-[10px] italic text-gray-400">
+                                    {matchingLessonsFor(cellKey).length - SUGGESTION_LIMIT} more match — keep typing to narrow
+                                  </li>
+                                ) : null}
                               </ul>
                             ) : null}
                           </div>
@@ -809,8 +841,9 @@ export default function WeeklyLessonPlanner({
       {mode === "admin" && (
         <div className="border-t border-gray-100 px-4 py-2 text-xs text-gray-400">
           Click any category name to rename it, drag the grip to reorder it, or hover a row to
-          remove it. Click any cell to type a note, or start typing a lesson title to attach it
-          from the curriculum.
+          remove it. Click any cell to type a note, or start typing a lesson title and pick it
+          from the suggestions to attach it — only cells picked from the list (shown with a link
+          icon) become clickable lesson details for teachers; plain typed text will not.
         </div>
       )}
 

@@ -1,7 +1,7 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
-import { formatTermDaysLabel, normalizeTermDaySelections, TERM_DAY_OPTIONS } from "@/lib/lessonScheduling";
+import { formatTermDaysLabel, lessonOptionLabel, normalizeTermDaySelections, TERM_DAY_OPTIONS } from "@/lib/lessonScheduling";
 import { useEffect, useMemo, useState } from "react";
 
 const TABS = [
@@ -766,7 +766,7 @@ function LessonsTab({ centerId }) {
                 <FormField label="Linked Lesson">
                   <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={form.linkedLessonId} onChange={(e) => setForm({ ...form, linkedLessonId: e.target.value })}>
                     <option value="">None</option>
-                    {lessons.filter((lesson) => lesson.id !== editing).map((lesson) => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}
+                    {lessons.filter((lesson) => lesson.id !== editing).map((lesson) => <option key={lesson.id} value={lesson.id}>{lessonOptionLabel(lesson)}</option>)}
                   </select>
                 </FormField>
                 <FormField label="Term Days" className="md:col-span-2">
@@ -1352,13 +1352,13 @@ function RemediationsTab({ centerId }) {
                 <FormField label="When this lesson fails">
                   <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={fromId} onChange={(e) => setFromId(e.target.value)}>
                     <option value="">Select lesson...</option>
-                    {lessons.map((l) => <option key={l.id} value={l.id}>{l.title}</option>)}
+                    {lessons.map((l) => <option key={l.id} value={l.id}>{lessonOptionLabel(l)}</option>)}
                   </select>
                 </FormField>
                 <FormField label="Recommend this corrective lesson">
                   <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={toId} onChange={(e) => setToId(e.target.value)}>
                     <option value="">Select lesson...</option>
-                    {lessons.filter((l) => l.id !== fromId).map((l) => <option key={l.id} value={l.id}>{l.title}</option>)}
+                    {lessons.filter((l) => l.id !== fromId).map((l) => <option key={l.id} value={l.id}>{lessonOptionLabel(l)}</option>)}
                   </select>
                 </FormField>
               </div>

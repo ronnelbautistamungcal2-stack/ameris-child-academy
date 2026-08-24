@@ -22,6 +22,7 @@ import {
 } from "@/lib/checklistSchedule";
 import {
   LESSON_SOURCE_OPTIONS,
+  lessonOptionLabel,
   normalizeLessonSource,
 } from "@/lib/lessonScheduling";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -1100,7 +1101,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
                             <option value="">Select a lesson</option>
                             {lessons.map((lesson) => (
                               <option key={lesson.id} value={lesson.id}>
-                                {lesson.title}
+                                {lessonOptionLabel(lesson)}
                               </option>
                             ))}
                           </select>

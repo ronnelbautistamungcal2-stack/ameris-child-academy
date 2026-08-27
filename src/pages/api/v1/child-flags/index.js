@@ -9,6 +9,10 @@ import {
 import prisma from "@/lib/prisma";
 import { buildTeacherChildWhere, teacherCanAccessChild } from "@/lib/teacherScope";
 
+// Outdated document and missed-step flags are for admins (and parents, via
+// their own document views) only — teachers should not see these categories.
+const TEACHER_HIDDEN_FLAG_TYPES = new Set(["OUTDATED_DOCUMENT", "BEHIND_STEPS"]);
+
 function normalizeStatus(value) {
   const status = String(value || "open").toLowerCase();
   if (status === "closed" || status === "all") return status;
@@ -54,7 +58,7 @@ async function loadFlagData({ centerId = "", childId = "", teacherWhere = null }
       ? prisma.activityLog.findMany({
           where: {
             childId: { in: childIds },
-            type: { in: ["INCIDENT", "BEHAVIOR"] },
+            type: "BEHAVIOR",
           },
           orderBy: { createdAt: "desc" },
           select: {
@@ -199,7 +203,10 @@ export default async function handler(req, res) {
       teacherWhere,
     });
 
-    const activeFlags = buildActiveChildFlags(data);
+    let activeFlags = buildActiveChildFlags(data);
+    if (isTeacher) {
+      activeFlags = activeFlags.filter((flag) => !TEACHER_HIDDEN_FLAG_TYPES.has(flag.flagType));
+    }
     const activeByKey = new Map(activeFlags.map((flag) => [flag.flagKey, flag]));
     const reviewByKey = new Map(
       data.reviews.map((review) => [review.flagKey, review]),
@@ -219,6 +226,7 @@ export default async function handler(req, res) {
     for (const review of data.reviews) {
       if (!review.closedAt || activeByKey.has(review.flagKey)) continue;
       const historicalFlag = hydrateChildFlagFromSnapshot(review);
+      if (isTeacher && TEACHER_HIDDEN_FLAG_TYPES.has(historicalFlag.flagType)) continue;
       closedItems.push({
         ...historicalFlag,
         status: "CLOSED",
@@ -293,6 +301,9 @@ export default async function handler(req, res) {
       if (!targetFlag) {
         return res.status(404).json({ error: "Flag not found or no longer active" });
       }
+      if (isTeacher && TEACHER_HIDDEN_FLAG_TYPES.has(targetFlag.flagType)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
 
       const review = await prisma.childFlagReview.upsert({
         where: { flagKey },
@@ -340,6 +351,9 @@ export default async function handler(req, res) {
       const targetFlag = activeFlags.find((flag) => flag.flagKey === flagKey);
       if (!targetFlag) {
         return res.status(400).json({ error: "Flag is no longer active and cannot be reopened" });
+      }
+      if (isTeacher && TEACHER_HIDDEN_FLAG_TYPES.has(targetFlag.flagType)) {
+        return res.status(403).json({ error: "Forbidden" });
       }
 
       await prisma.childFlagReview.update({

@@ -55,6 +55,45 @@ const CHARACTER_HIGHLIGHT_TYPE_LABELS = {
   OTHER: "Other",
 };
 
+const DIAPER_TYPE_LABELS = {
+  BM: "BM",
+  W: "Wet",
+  D: "Dry",
+};
+
+const BEHAVIOR_TYPE_LABELS = {
+  PHYSICAL_VIOLENCE: "Physical violence",
+  VIRTUE: "Virtue",
+  RESPECT: "Respect",
+  OBEDIENCE: "Obedience",
+  HONESTY: "Honesty",
+  OTHER: "Other",
+};
+
+const QUANTITY_LABELS = {
+  ALL: "All",
+  MOST: "Most",
+  SOME: "Some",
+  NONE: "None",
+};
+
+function formatClockTimeString(value) {
+  if (!value) return null;
+  const [hoursRaw, minutesRaw] = String(value).split(":");
+  const hours = Number(hoursRaw);
+  const minutes = Number(minutesRaw);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  const date = new Date();
+  date.setHours(hours, minutes, 0, 0);
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function isToday(dateStr) {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return false;
+  return d.toDateString() === new Date().toDateString();
+}
+
 function dayLabel(dateKey) {
   if (!dateKey) return "Unknown date";
   const date = new Date(dateKey);
@@ -106,10 +145,15 @@ function formatDateTime(value) {
 function describeActivity(activity) {
   const details = activity?.details && typeof activity.details === "object" ? activity.details : {};
   if (activity.type === "NAP") {
-    const start = details.start ? new Date(details.start).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : null;
-    const end = details.end ? new Date(details.end).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : null;
+    const start =
+      formatClockTimeString(details.startTime) ||
+      (details.start ? new Date(details.start).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : null);
+    const end =
+      formatClockTimeString(details.endTime) ||
+      (details.end ? new Date(details.end).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : null);
     if (start && end) return `Slept from ${start} to ${end}`;
     if (start) return `Nap started at ${start}`;
+    if (end) return `Nap ended at ${end}`;
   }
   if (activity.type === "BOTTLE") {
     const parts = [];
@@ -119,9 +163,21 @@ function describeActivity(activity) {
   }
   if (activity.type === "MEAL" || activity.type === "SNACK") {
     const parts = [];
-    if (details.food) parts.push(details.food);
-    if (details.amount) parts.push(details.amount);
-    if (parts.length) return parts.join(" | ");
+    if (details.meal) parts.push(details.meal);
+    else if (details.food) parts.push(details.food);
+    if (details.quantity) parts.push(QUANTITY_LABELS[details.quantity] || details.quantity);
+    else if (details.amount) parts.push(details.amount);
+    if (parts.length) return parts.join(" • ");
+  }
+  if (activity.type === "DIAPER_CHANGE" && details.diaperType) {
+    return DIAPER_TYPE_LABELS[details.diaperType] || details.diaperType;
+  }
+  if (activity.type === "BEHAVIOR") {
+    const parts = [];
+    if (details.behaviorType) parts.push(BEHAVIOR_TYPE_LABELS[details.behaviorType] || details.behaviorType);
+    if (details.behaviorLevel) parts.push(`Level ${details.behaviorLevel}`);
+    if (details.ipp) parts.push("Flagged for IPP");
+    if (parts.length) return parts.join(" • ");
   }
   if (activity.type === "TOILETING" && details.toiletingType) {
     return TOILETING_TYPE_LABELS[details.toiletingType] || details.toiletingType;
@@ -1347,17 +1403,29 @@ function ActivityLogSummaryPanel({ activities, loading, children, classNameById,
   const childSummaries = useMemo(() => {
     const byId = new Map();
     for (const ch of children || []) {
-      byId.set(ch.id, { child: ch, counts: {}, total: 0, latestAt: null, activities: [] });
+      byId.set(ch.id, {
+        child: ch,
+        todayCounts: {},
+        todayTotal: 0,
+        todayLatestAt: null,
+        allCounts: {},
+        allTotal: 0,
+        activities: [],
+      });
     }
     for (const activity of activities || []) {
       const cid = activity?.child?.id;
       if (!cid || !byId.has(cid)) continue;
       const entry = byId.get(cid);
-      entry.counts[activity.type] = (entry.counts[activity.type] || 0) + 1;
-      entry.total += 1;
+      entry.allCounts[activity.type] = (entry.allCounts[activity.type] || 0) + 1;
+      entry.allTotal += 1;
       entry.activities.push(activity);
-      if (!entry.latestAt || new Date(activity.createdAt) > new Date(entry.latestAt)) {
-        entry.latestAt = activity.createdAt;
+      if (isToday(activity.createdAt)) {
+        entry.todayCounts[activity.type] = (entry.todayCounts[activity.type] || 0) + 1;
+        entry.todayTotal += 1;
+        if (!entry.todayLatestAt || new Date(activity.createdAt) > new Date(entry.todayLatestAt)) {
+          entry.todayLatestAt = activity.createdAt;
+        }
       }
     }
     const list = [...byId.values()];
@@ -1383,7 +1451,7 @@ function ActivityLogSummaryPanel({ activities, loading, children, classNameById,
             </span>
             <h3 className="text-sm font-extrabold text-gray-900">Activity Log Summary</h3>
           </div>
-          <p className="mt-0.5 text-xs text-gray-500">Logs recorded per child, by activity type. Click a child to view details.</p>
+          <p className="mt-0.5 text-xs text-gray-500">Today's logs per child, by activity type. Click a child to view past logs.</p>
         </div>
       </div>
 
@@ -1414,7 +1482,7 @@ function ActivityLogSummaryPanel({ activities, loading, children, classNameById,
               <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
                 {ACTIVITY_TYPES.map((type) => {
                   const meta = ACTIVITY_TYPE_META[type];
-                  const count = summary.counts[type] || 0;
+                  const count = summary.todayCounts[type] || 0;
                   return (
                     <span
                       key={type}
@@ -1432,10 +1500,10 @@ function ActivityLogSummaryPanel({ activities, loading, children, classNameById,
               </div>
               <div className="w-28 shrink-0 text-right">
                 <div className="text-xs font-semibold text-gray-700">
-                  {summary.latestAt ? relativeTime(summary.latestAt) : "No logs"}
+                  {summary.todayLatestAt ? relativeTime(summary.todayLatestAt) : "No logs today"}
                 </div>
                 <div className="text-[11px] text-gray-400">
-                  {summary.total} log{summary.total === 1 ? "" : "s"}
+                  {summary.todayTotal} log{summary.todayTotal === 1 ? "" : "s"} today
                 </div>
               </div>
             </button>
@@ -1459,7 +1527,7 @@ function ActivityLogSummaryPanel({ activities, loading, children, classNameById,
                 <div>
                   <div className="text-base font-extrabold text-gray-900">{fullName(detailSummary.child)}</div>
                   <div className="mt-0.5 text-xs text-gray-500">
-                    {classNameById?.[detailSummary.child.classRoomId] || "Unassigned"} &middot; {detailSummary.total} log{detailSummary.total === 1 ? "" : "s"}
+                    {classNameById?.[detailSummary.child.classRoomId] || "Unassigned"} &middot; {detailSummary.allTotal} log{detailSummary.allTotal === 1 ? "" : "s"} total
                   </div>
                 </div>
               </div>
@@ -1474,11 +1542,11 @@ function ActivityLogSummaryPanel({ activities, loading, children, classNameById,
             </div>
 
             <div className="mt-3 flex flex-wrap gap-1.5">
-              {ACTIVITY_TYPES.filter((type) => detailSummary.counts[type]).map((type) => {
+              {ACTIVITY_TYPES.filter((type) => detailSummary.allCounts[type]).map((type) => {
                 const meta = ACTIVITY_TYPE_META[type];
                 return (
                   <span key={type} className={["inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold", meta.tint].join(" ")}>
-                    <span aria-hidden="true">{meta.icon}</span> {meta.label} &middot; {detailSummary.counts[type]}
+                    <span aria-hidden="true">{meta.icon}</span> {meta.label} &middot; {detailSummary.allCounts[type]}
                   </span>
                 );
               })}

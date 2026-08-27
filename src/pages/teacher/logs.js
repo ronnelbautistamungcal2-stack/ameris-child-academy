@@ -104,7 +104,7 @@ function buildCreatedAtForToday(timeValue) {
 function defaultActivityFields(nextType) {
   return {
     activityTime: toTimeInputValue(new Date()),
-    napStartTime: nextType === "NAP" ? toTimeInputValue(new Date()) : "",
+    napStartTime: "",
     napEndTime: "",
     mealType: nextType === "SNACK" ? "AM_SNACK" : "BREAKFAST",
     quantity: "ALL",
@@ -399,7 +399,7 @@ export default function TeacherLogs() {
       return {
         ...defaults,
         activityTime: current.activityTime || defaults.activityTime,
-        napStartTime: nextType === "NAP" ? current.napStartTime || defaults.napStartTime : "",
+        napStartTime: nextType === "NAP" ? current.napStartTime || "" : "",
         napEndTime: nextType === "NAP" ? current.napEndTime : "",
         diaperType: nextType === "DIAPER_CHANGE" ? current.diaperType || defaults.diaperType : defaults.diaperType,
         behaviorType: supportsBehaviorDetails(nextType) ? current.behaviorType || defaults.behaviorType : defaults.behaviorType,

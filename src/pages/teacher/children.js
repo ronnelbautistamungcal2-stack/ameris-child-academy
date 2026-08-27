@@ -7,6 +7,12 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 
+// Teachers no longer see document or progress-plan flags (admin/parent only),
+// so those categories are hidden from the teacher's flag-type filter.
+const TEACHER_FLAG_CATEGORY_OPTIONS = FLAG_CATEGORY_OPTIONS.filter(
+  (option) => option.value !== "DOCUMENTS" && option.value !== "PROGRESS_PLAN",
+);
+
 const ACTIVITY_TYPES = [
   "DIAPER_CHANGE",
   "NAP",
@@ -396,7 +402,7 @@ export default function TeacherChildren() {
                 disabled={!centerId}
               >
                 <option value="">All flag types</option>
-                {FLAG_CATEGORY_OPTIONS.map((option) => (
+                {TEACHER_FLAG_CATEGORY_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>

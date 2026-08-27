@@ -21,7 +21,7 @@ const FLAG_CATEGORY_BY_TYPE = {
 export const FLAG_CATEGORY_OPTIONS = [
   { value: "DOCUMENTS", label: "Documents" },
   { value: "PROGRESS_PLAN", label: "Individual Progress Plan" },
-  { value: "CITIZENSHIP", label: "Citizenship" },
+  { value: "CITIZENSHIP", label: "Course Correction" },
   { value: "ALLERGY", label: "Allergies" },
   { value: "OTHER", label: "Other" },
 ];
@@ -383,32 +383,6 @@ export function buildActiveChildFlags({
   for (const activity of activities) {
     const child = childById.get(activity?.childId);
     if (!child) continue;
-
-    if (activity.type === "INCIDENT") {
-      flags.push(
-        buildFlag({
-          flagKey: `incident:${activity.id}`,
-          flagType: "INCIDENT",
-          child,
-          title: "Incident logged",
-          summary: activity.notes || "An incident was logged for this child.",
-          triggeredAt: activity.createdAt,
-          details: {
-            fields: [
-              { label: "Child", value: childFullName(child) },
-              { label: "Classroom", value: child.classRoom?.name || "Unassigned" },
-              {
-                label: "Recorded By",
-                value: activity.recordedBy?.name || activity.recordedBy?.email || "Unknown",
-              },
-              { label: "Logged", value: new Date(activity.createdAt).toLocaleString() },
-            ],
-            notes: activity.notes || "",
-          },
-        }),
-      );
-      continue;
-    }
 
     if (activity.type !== "BEHAVIOR") continue;
 

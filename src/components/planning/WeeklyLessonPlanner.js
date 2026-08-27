@@ -983,30 +983,122 @@ export default function WeeklyLessonPlanner({
                 ) : null}
 
                 {Array.isArray(viewLesson.goals) && viewLesson.goals.length ? (
-                  <div className="mt-4">
+                  <div className="mt-4 space-y-3">
                     <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      Steps
+                      Curriculum Details
                     </div>
-                    <div className="mt-2 space-y-2">
-                      {viewLesson.goals
-                        .slice()
-                        .sort((a, b) => Number(a.goalIndex || 0) - Number(b.goalIndex || 0))
-                        .map((g) => (
+                    {viewLesson.goals
+                      .slice()
+                      .sort((a, b) => Number(a.goalIndex || 0) - Number(b.goalIndex || 0))
+                      .map((g) => {
+                        const pc = g?.passingCriteria || {};
+                        const resources = String(pc.lessonAttachment || "")
+                          .split(/\r?\n/)
+                          .map((r) => r.trim())
+                          .filter(Boolean);
+                        return (
                           <div
                             key={g.id || g.goalIndex}
-                            className="rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-sm"
+                            className="rounded-lg border border-gray-200 bg-gray-50 p-3"
                           >
-                            <div className="font-semibold text-gray-900">
-                              Step {g.goalIndex}: {g.title}
+                            <div className="flex flex-wrap items-center gap-2">
+                              {pc.reference ? (
+                                <span className="inline-flex items-center rounded-lg bg-gray-100 px-2 py-0.5 font-mono text-[11px] font-semibold text-gray-700">
+                                  {pc.reference}
+                                </span>
+                              ) : null}
+                              <span className="text-sm font-bold text-gray-900">
+                                {pc.stepOfProgression || g.title}
+                              </span>
                             </div>
-                            {g.description ? (
-                              <div className="mt-1 whitespace-pre-wrap text-xs text-gray-700">
-                                {g.description}
+
+                            <div className="mt-2 grid grid-cols-1 gap-1.5 text-xs sm:grid-cols-2">
+                              {[
+                                { label: "Subject", value: pc.subject },
+                                { label: "Term", value: pc.term },
+                                { label: "Sheet", value: pc.sheet },
+                                { label: "Time Required", value: pc.timeRequired },
+                                { label: "Setting", value: pc.instructionalSetting },
+                              ].map(({ label, value }) => (
+                                <div key={label} className="flex items-baseline gap-1.5">
+                                  <span className="flex-shrink-0 font-semibold text-gray-500">
+                                    {label}:
+                                  </span>
+                                  <span className="text-gray-800">{value || "—"}</span>
+                                </div>
+                              ))}
+                            </div>
+
+                            {pc.link ? (
+                              <div className="mt-1.5 text-xs">
+                                <a
+                                  href={pc.link}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-blue-600 hover:text-blue-700"
+                                >
+                                  {pc.link}
+                                </a>
+                              </div>
+                            ) : null}
+
+                            {pc.notes ? (
+                              <div className="mt-2 whitespace-pre-wrap text-xs text-gray-700">
+                                <span className="font-semibold text-gray-500">Notes: </span>
+                                {pc.notes}
+                              </div>
+                            ) : null}
+
+                            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                              {[
+                                { label: "Introduction", value: pc.introduction },
+                                { label: "Essential Questions", value: pc.essentialQuestions },
+                                { label: "Key Vocabulary", value: pc.keyVocabulary },
+                                { label: "Learning Activities", value: pc.learningActivities },
+                                { label: "Accommodations/Modifications", value: pc.accommodations },
+                                { label: "Notes to Teacher", value: pc.notesToTeacher },
+                              ].map(({ label, value }) =>
+                                value ? (
+                                  <div key={label}>
+                                    <div className="text-xs font-semibold text-gray-700">
+                                      {label}
+                                    </div>
+                                    <div className="mt-0.5 whitespace-pre-wrap text-xs text-gray-800">
+                                      {value}
+                                    </div>
+                                  </div>
+                                ) : null,
+                              )}
+                            </div>
+
+                            {resources.length ? (
+                              <div className="mt-3">
+                                <div className="text-xs font-semibold text-gray-700">
+                                  Additional Resources
+                                </div>
+                                <ul className="mt-1 list-disc space-y-1 pl-4 text-xs">
+                                  {resources.map((r) => (
+                                    <li key={r}>
+                                      {/^https?:\/\//i.test(r) ? (
+                                        <a
+                                          href={r}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="text-blue-600 hover:text-blue-700"
+                                        >
+                                          {r}
+                                        </a>
+                                      ) : (
+                                        <span className="text-gray-800">{r}</span>
+                                      )}
+                                    </li>
+                                  ))}
+                                </ul>
                               </div>
                             ) : null}
                           </div>
-                        ))}
-                    </div>
+                        );
+                      })}
                   </div>
                 ) : null}
               </>

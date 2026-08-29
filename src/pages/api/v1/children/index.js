@@ -58,6 +58,40 @@ function normalizeFeedingPlan(value) {
   };
 }
 
+async function attachTodayCitizenshipGrade(children) {
+  const list = Array.isArray(children) ? children : [];
+  if (!list.length) return list;
+
+  const dayStart = startOfDay();
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+
+  const todayGradeLogs = await prisma.activityLog.findMany({
+    where: {
+      childId: { in: list.map((child) => child.id) },
+      type: "OTHER",
+      createdAt: { gte: dayStart, lt: dayEnd },
+    },
+    select: { childId: true, details: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const gradeByChildId = new Map();
+  for (const log of todayGradeLogs) {
+    if (gradeByChildId.has(log.childId)) continue;
+    if (log.details?.kind !== "DAILY_GRADE") continue;
+    const grade = Number(log.details?.grade);
+    if (Number.isFinite(grade)) gradeByChildId.set(log.childId, grade);
+  }
+
+  return list.map((child) => ({
+    ...child,
+    todayCitizenshipGrade: gradeByChildId.has(child.id)
+      ? gradeByChildId.get(child.id)
+      : null,
+  }));
+}
+
 async function attachTodayClassroom(children, role, centerId) {
   const list = Array.isArray(children) ? children : [];
   if (!list.length) return [];
@@ -105,7 +139,11 @@ export default async function handler(req, res) {
         });
         return res
           .status(200)
-          .json(await attachTodayClassroom(children, session.user.role, centerId));
+          .json(
+            await attachTodayCitizenshipGrade(
+              await attachTodayClassroom(children, session.user.role, centerId),
+            ),
+          );
       }
       // Subscribers: only if active subscription + membership
       if (session.user.role === "SUBSCRIBER") {

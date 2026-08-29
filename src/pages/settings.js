@@ -63,18 +63,6 @@ export default function SettingsPage() {
     }
   }, [mustChangePassword]);
 
-  const profileCompletion = useMemo(() => {
-    const signals = [
-      Boolean(name.trim()),
-      Boolean(dob),
-      Boolean(aboutMe.trim()),
-      Boolean(livePictureUrl),
-    ];
-    if (isStaffRole) signals.push(Boolean(doh));
-    const completeCount = signals.filter(Boolean).length;
-    return Math.round((completeCount / signals.length) * 100);
-  }, [aboutMe, dob, doh, isStaffRole, livePictureUrl, name]);
-
   useEffect(() => {
     if (status !== "authenticated") return;
 
@@ -293,53 +281,6 @@ export default function SettingsPage() {
       showBack={false}
     >
       <div className="space-y-6">
-        <section className="relative overflow-hidden rounded-[32px] border border-white/70 bg-gradient-to-br from-amber-50 via-white to-sky-50 p-6 shadow-[0_24px_80px_-48px_rgba(14,116,144,0.45)]">
-          <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-amber-500 via-orange-500 to-sky-500" />
-          <div className="absolute -right-16 top-0 h-40 w-40 rounded-full bg-sky-100/70 blur-3xl" />
-          <div className="absolute -bottom-16 left-0 h-36 w-36 rounded-full bg-amber-100/70 blur-3xl" />
-
-          <div className="relative grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white/90 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.22em] text-amber-700">
-                Account Settings
-              </div>
-              <h1 className="mt-3 text-3xl font-black tracking-tight text-gray-900">
-                Make your profile easy to recognize
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
-                Keep your profile details current, upload a real profile photo, and manage your password without digging through separate pages.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <StatCard
-                label="Completion"
-                value={`${profileCompletion}%`}
-                hint="Profile readiness"
-                tone={profileCompletion >= 75 ? "emerald" : "amber"}
-              />
-              <StatCard
-                label="Photo"
-                value={livePictureUrl ? "Ready" : "Add"}
-                hint={livePictureUrl ? "Uploaded" : "Missing"}
-                tone={livePictureUrl ? "sky" : "gray"}
-              />
-              <StatCard
-                label="Access"
-                value={formatRoleLabel(role)}
-                hint="Current role"
-                tone="sky"
-              />
-              <StatCard
-                label="Security"
-                value={showPasswordForm ? "Editing" : "Ready"}
-                hint="Password tools"
-                tone={showPasswordForm ? "amber" : "gray"}
-              />
-            </div>
-          </div>
-        </section>
-
         {error ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
             {error}
@@ -594,28 +535,30 @@ export default function SettingsPage() {
               )}
             </SettingsCard>
 
-            <SettingsCard
-              title="Danger zone"
-              description="Delete access is intentionally restricted."
-              className="border-red-200"
-            >
-              <div className="rounded-2xl border border-red-200 bg-red-50/80 p-4">
-                <div className="text-base font-extrabold text-red-800">
-                  Account deletion is not self-service
+            {role !== "PARENT" ? (
+              <SettingsCard
+                title="Danger zone"
+                description="Delete access is intentionally restricted."
+                className="border-red-200"
+              >
+                <div className="rounded-2xl border border-red-200 bg-red-50/80 p-4">
+                  <div className="text-base font-extrabold text-red-800">
+                    Account deletion is not self-service
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-red-700">
+                    Contact an administrator if you need this account permanently removed. This prevents accidental data loss across messages, child records, and reporting history.
+                  </p>
+                  <button
+                    type="button"
+                    className="mt-4 rounded-2xl bg-red-500 px-4 py-2 text-sm font-extrabold text-white opacity-70"
+                    disabled
+                    title="Contact an administrator to delete your account"
+                  >
+                    Delete account
+                  </button>
                 </div>
-                <p className="mt-2 text-sm leading-6 text-red-700">
-                  Contact an administrator if you need this account permanently removed. This prevents accidental data loss across messages, child records, and reporting history.
-                </p>
-                <button
-                  type="button"
-                  className="mt-4 rounded-2xl bg-red-500 px-4 py-2 text-sm font-extrabold text-white opacity-70"
-                  disabled
-                  title="Contact an administrator to delete your account"
-                >
-                  Delete account
-                </button>
-              </div>
-            </SettingsCard>
+              </SettingsCard>
+            ) : null}
           </section>
         </div>
       </div>
@@ -790,25 +733,6 @@ function SnapshotRow({ label, value }) {
         {label}
       </div>
       <div className="mt-1 text-sm font-semibold text-gray-900">{value}</div>
-    </div>
-  );
-}
-
-function StatCard({ label, value, hint, tone = "sky" }) {
-  const tones = {
-    sky: "border-sky-200 bg-sky-50/90 text-sky-900",
-    emerald: "border-emerald-200 bg-emerald-50/90 text-emerald-900",
-    amber: "border-amber-200 bg-amber-50/90 text-amber-900",
-    gray: "border-gray-200 bg-white/90 text-gray-900",
-  };
-
-  return (
-    <div className={`rounded-2xl border p-4 ${tones[tone] || tones.sky}`}>
-      <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-gray-500">
-        {label}
-      </div>
-      <div className="mt-2 text-2xl font-black tracking-tight">{value}</div>
-      <div className="mt-1 text-sm text-gray-600">{hint}</div>
     </div>
   );
 }

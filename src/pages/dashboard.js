@@ -1205,7 +1205,6 @@ function ParentDashboard({
   }, [submissions]);
 
   const recentActivities = (activities || []).slice(0, 3);
-  const childrenWithProgress = visibleChildren.filter((child) => childGWAs[child.id]).length;
   const urgentReminderCount = reminders.filter((item) => item.tone !== "emerald").length;
   const billingTone = subscriptionSummary?.active ? "emerald" : subscriptionSummary ? "amber" : "rose";
 
@@ -1313,19 +1312,6 @@ function ParentDashboard({
               icon={
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-1.052 4.5 4.5 0 00-7.482-3.09m.259 3.008A8.958 8.958 0 0112 18c-2.21 0-4.233-.798-5.797-2.121m8.056 1.129A8.966 8.966 0 0112 18c-2.21 0-4.233-.798-5.797-2.121m0 0A5.969 5.969 0 016 12.75a5.969 5.969 0 01.203-1.543m0 0a3.75 3.75 0 117.594 0m-7.594 0a5.969 5.969 0 00-.203 1.543m7.797-1.543a3.75 3.75 0 117.594 0m-7.594 0a5.969 5.969 0 01.203 1.543" />
-                </svg>
-              }
-            />
-            <ParentDashboardActionCard
-              href="/parent/progress"
-              eyebrow="Growth"
-              title="Progress & goals"
-              description="Check completed steps and see where support is still needed across your family."
-              meta={`${childrenWithProgress} summaries ready`}
-              tone="amber"
-              icon={
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18M7.5 14.25l3-3 2.25 2.25L16.5 9" />
                 </svg>
               }
             />

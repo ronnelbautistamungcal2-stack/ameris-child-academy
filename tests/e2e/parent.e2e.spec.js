@@ -10,47 +10,15 @@ test.describe("Parent Workflows", () => {
     await page.goto("/parent/children");
     await waitForLoadingDone(page);
     await expect(page).toHaveURL(/\/parent\/children/);
-    await expect(page.getByText("Switch child", { exact: true })).toBeVisible();
+    await expect(page.getByText("Select child", { exact: true })).toBeVisible();
   });
 
-  test("children page renders the parent report workspace", async ({ page }) => {
+  test("children page renders the student performance report", async ({ page }) => {
     await page.goto("/parent/children");
     await waitForLoadingDone(page);
 
-    await expect(page.getByRole("heading", { name: "Switch child" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
-  });
-
-  test("tab navigation shows correct roles", async ({ page }) => {
-    await page.goto("/parent/children");
-    await waitForLoadingDone(page);
-
-    // Check for tab list with proper ARIA role
-    const tablist = page.locator('[role="tablist"]');
-    if (await tablist.isVisible()) {
-      const tabs = await tablist.locator('[role="tab"]').all();
-      expect(tabs.length).toBeGreaterThan(0);
-
-      // First tab should be selected
-      const firstTab = tabs[0];
-      await expect(firstTab).toHaveAttribute("aria-selected", "true");
-    }
-  });
-
-  test("can switch tabs", async ({ page }) => {
-    await page.goto("/parent/children");
-    await waitForLoadingDone(page);
-
-    const tablist = page.locator('[role="tablist"]');
-    if (await tablist.isVisible()) {
-      const tabs = await tablist.locator('[role="tab"]').all();
-      if (tabs.length >= 2) {
-        // Click second tab
-        await tabs[1].click();
-        await expect(tabs[1]).toHaveAttribute("aria-selected", "true");
-        await expect(tabs[0]).toHaveAttribute("aria-selected", "false");
-      }
-    }
+    await expect(page.getByRole("heading", { name: "Select child" })).toBeVisible();
+    await expect(page.getByText("Student Performance Report", { exact: true })).toBeVisible();
   });
 
   test("can navigate to permissions page", async ({ page }) => {

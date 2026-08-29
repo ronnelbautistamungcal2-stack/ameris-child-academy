@@ -853,7 +853,7 @@ export default function WeeklyLessonPlanner({
           onClick={closeLessonDetail}
         >
           <div
-            className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-5 shadow-xl"
+            className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             {viewLessonLoading ? (
@@ -1012,11 +1012,10 @@ export default function WeeklyLessonPlanner({
                               </span>
                             </div>
 
-                            <div className="mt-2 grid grid-cols-1 gap-1.5 text-xs sm:grid-cols-2">
+                            <div className="mt-2 grid grid-cols-1 gap-1.5 text-xs">
                               {[
                                 { label: "Subject", value: pc.subject },
                                 { label: "Term", value: pc.term },
-                                { label: "Sheet", value: pc.sheet },
                                 { label: "Time Required", value: pc.timeRequired },
                                 { label: "Setting", value: pc.instructionalSetting },
                               ].map(({ label, value }) => (
@@ -1049,14 +1048,14 @@ export default function WeeklyLessonPlanner({
                               </div>
                             ) : null}
 
-                            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div className="mt-3 grid grid-cols-1 gap-3">
                               {[
-                                { label: "Introduction", value: pc.introduction },
+                                { label: "Notes to Teacher", value: pc.notesToTeacher },
                                 { label: "Essential Questions", value: pc.essentialQuestions },
                                 { label: "Key Vocabulary", value: pc.keyVocabulary },
+                                { label: "Introduction", value: pc.introduction },
                                 { label: "Learning Activities", value: pc.learningActivities },
                                 { label: "Accommodations/Modifications", value: pc.accommodations },
-                                { label: "Notes to Teacher", value: pc.notesToTeacher },
                               ].map(({ label, value }) =>
                                 value ? (
                                   <div key={label}>

@@ -36,7 +36,6 @@ Legend:
 ## Parent
 
 - ✅ My children: `/parent/children` → `/api/v1/children` (parent-owned)
-- ✅ Progress/goals: `/parent/progress` → `/api/v1/progress` (read-only)
 - ✅ Messaging (threads + send): `/parent/messages` → `/api/v1/messages/*`
 - ✅ Online forms submit: `/parent/forms` → `/api/v1/forms/*` (templates created in `/admin/forms`)
 - ✅ Policies handbook: `/parent/policies` → `/api/v1/policies`

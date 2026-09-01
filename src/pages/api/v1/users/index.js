@@ -16,6 +16,21 @@ function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function parseWeeklySchedules(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const raw of value) {
+    const days = Array.isArray(raw?.daysOfWeek)
+      ? [...new Set(raw.daysOfWeek.map((d) => Number(d)).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))]
+      : [];
+    const startTime = String(raw?.startTime || "");
+    const endTime = String(raw?.endTime || "");
+    if (!days.length || !/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime)) continue;
+    out.push({ daysOfWeek: days, startTime, endTime });
+  }
+  return out;
+}
+
 function sanitizeUser(user) {
   if (!user) return user;
   const { password, ...safeUser } = user;
@@ -58,7 +73,7 @@ export default async function handler(req, res) {
 
     const users = await prisma.user.findMany({
       where,
-      include: { centers: true, children: true },
+      include: { centers: true, children: true, weeklySchedules: true },
       orderBy: [{ name: "asc" }, { email: "asc" }],
     });
     return res.status(200).json(users.map(sanitizeUser));
@@ -66,7 +81,7 @@ export default async function handler(req, res) {
 
   if (req.method === "POST") {
     // Create new user
-    const { email, name, password, role, roles, centerId, dob, hireDate, aboutMe, pictureUrl } = req.body;
+    const { email, name, password, role, roles, centerId, dob, hireDate, aboutMe, pictureUrl, weeklySchedules } = req.body;
     const normalizedEmail = normalizeEmail(email);
     const normalizedCenterId = centerId ? String(centerId).trim() : "";
 
@@ -100,6 +115,7 @@ export default async function handler(req, res) {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
+    const weeklyScheduleData = isEmployee ? parseWeeklySchedules(weeklySchedules) : [];
     try {
       const user = await prisma.user.create({
         data: {
@@ -121,8 +137,9 @@ export default async function handler(req, res) {
                 },
               }
             : undefined,
+          weeklySchedules: weeklyScheduleData.length ? { create: weeklyScheduleData } : undefined,
         },
-        include: { centers: true },
+        include: { centers: true, weeklySchedules: true },
       });
 
       return res.status(201).json(sanitizeUser(user));

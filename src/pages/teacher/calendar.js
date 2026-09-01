@@ -40,6 +40,7 @@ const SOURCE_BADGE = {
   event: "bg-indigo-100 text-indigo-700",
   shift: "bg-blue-100 text-blue-700",
   timeoff: "bg-emerald-100 text-emerald-700",
+  birthday: "bg-pink-100 text-pink-700",
 };
 
 const LEGEND = [
@@ -47,6 +48,7 @@ const LEGEND = [
   { label: "My Shifts", cls: "bg-blue-100" },
   { label: "Paid", cls: "bg-emerald-100" },
   { label: "Unpaid", cls: "bg-gray-200" },
+  { label: "Birthdays", cls: "bg-pink-100" },
 ];
 
 export default function TeacherCalendarPage() {
@@ -54,8 +56,8 @@ export default function TeacherCalendarPage() {
   const [centerId, setCenterId] = useState("");
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
-  const [calData, setCalData] = useState({ events: [], shifts: [], timeOff: [] });
-  const [filters, setFilters] = useState({ events: true, shifts: true, timeOff: true });
+  const [calData, setCalData] = useState({ events: [], shifts: [], timeOff: [], birthdays: [] });
+  const [filters, setFilters] = useState({ events: true, shifts: true, timeOff: true, birthdays: true });
   const [selectedDay, setSelectedDay] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -132,6 +134,22 @@ export default function TeacherCalendarPage() {
         });
       }
     }
+    if (filters.birthdays && calData.birthdays) {
+      for (const b of calData.birthdays) {
+        items.push({
+          id: b.id,
+          _source: "birthday",
+          type: "Birthday",
+          status: "ACTIVE",
+          startDate: b.date,
+          endDate: b.date,
+          allDay: true,
+          user: b.user,
+          label: `${b.user?.name || "—"}'s Birthday`,
+          _raw: { ...b, allDay: true },
+        });
+      }
+    }
     return items;
   })();
 
@@ -168,6 +186,7 @@ function getDayItems(day) {
             { key: "events", label: "Events", color: "#e0e7ff" },
             { key: "shifts", label: "My Shifts", color: "#dbeafe" },
             { key: "timeOff", label: "My Time Off", color: "#d1fae5" },
+            { key: "birthdays", label: "Birthdays", color: "#fce7f3" },
           ].map(f => (
             <label key={f.key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
               <input
@@ -209,7 +228,7 @@ function getDayItems(day) {
                     <div>
                       <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 4, marginRight: 6 }}
                         className={SOURCE_BADGE[item._source] || "bg-gray-100 text-gray-600"}>
-                        {item._source === "event" ? "Event" : item._source === "shift" ? "Shift" : "Time Off"}
+                        {item._source === "event" ? "Event" : item._source === "shift" ? "Shift" : item._source === "birthday" ? "Birthday" : "Time Off"}
                       </span>
                       <span style={{ fontSize: 13, fontWeight: 600 }}>{item.label}</span>
                     </div>
@@ -218,6 +237,9 @@ function getDayItems(day) {
                     )}
                     {item._source === "shift" && (
                       <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Position: {item._raw.position}{item._raw.notes ? ` • ${item._raw.notes}` : ""}</div>
+                    )}
+                    {item._source === "birthday" && Number.isFinite(item._raw?.age) && (
+                      <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Turning: {item._raw.age}</div>
                     )}
                     {item._source === "timeoff" && (
                       <>

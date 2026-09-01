@@ -1059,7 +1059,7 @@ export default function WeeklyLessonPlanner({
                               ].map(({ label, value }) =>
                                 value ? (
                                   <div key={label}>
-                                    <div className="text-xs font-semibold text-gray-700">
+                                    <div className="text-xs font-bold text-gray-800">
                                       {label}
                                     </div>
                                     <div className="mt-0.5 whitespace-pre-wrap text-xs text-gray-800">

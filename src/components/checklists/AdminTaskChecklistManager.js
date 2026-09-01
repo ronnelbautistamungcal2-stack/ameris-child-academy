@@ -1319,6 +1319,16 @@ export default function AdminTaskChecklistManager({ centerId }) {
                   </div>
                 ))}
               </div>
+
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={addItemRow}
+                  className="rounded-lg px-3 py-1.5 text-xs font-semibold text-sky-600 hover:bg-sky-50"
+                >
+                  + Add Item
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center gap-2">

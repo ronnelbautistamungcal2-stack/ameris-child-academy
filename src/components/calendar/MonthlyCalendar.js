@@ -25,15 +25,27 @@ const SOURCE_COLORS = {
   event: "bg-indigo-100 text-indigo-700 border-indigo-200",
   shift: "bg-blue-100 text-blue-700 border-blue-200",
   timeoff: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  birthday: "bg-pink-100 text-pink-700 border-pink-200",
 };
 
 const SOURCE_DOT = {
   event: "#6366f1",
   shift: "#3b82f6",
   timeoff: "#10b981",
+  "timeoff-unexcused": "#ef4444",
+  birthday: "#ec4899",
 };
 
+function isUnexcusedTimeOff(event) {
+  return event._source === "timeoff" && !!event.isUnexcused;
+}
+
+function getDotKey(event) {
+  return isUnexcusedTimeOff(event) ? "timeoff-unexcused" : event._source;
+}
+
 function getEventColor(event) {
+  if (isUnexcusedTimeOff(event)) return "bg-red-100 text-red-700 border-red-200";
   if (event._source && SOURCE_COLORS[event._source]) return SOURCE_COLORS[event._source];
   return TYPE_COLORS[event.type] || STATUS_COLORS[event.status] || "bg-gray-100 text-gray-600";
 }
@@ -206,7 +218,7 @@ export default function MonthlyCalendar({ year, month, events = [], onMonthChang
           const isWeekend = new Date(year, month, cell.day).getDay() % 6 === 0;
 
           // Get unique source types for dot indicators
-          const sourceDots = [...new Set(dayEvents.map(e => e._source).filter(Boolean))];
+          const sourceDots = [...new Set(dayEvents.map(getDotKey).filter(Boolean))];
 
           return (
             <div
@@ -279,7 +291,9 @@ export default function MonthlyCalendar({ year, month, events = [], onMonthChang
                         ? `${evt.type || "Event"} - ${evt.label}`
                         : evt._source === "shift"
                           ? `Shift - ${evt.label}`
-                          : `${evt.type || "Time Off"} - ${evt.user?.name || "Unknown"} (${evt.status})`}
+                          : evt._source === "birthday"
+                            ? `Birthday - ${evt.label}`
+                            : `${evt.type || "Time Off"} - ${evt.user?.name || "Unknown"} (${evt.status})`}
                     >
                       {evt.label || evt.user?.name || "\u2014"}
                     </div>

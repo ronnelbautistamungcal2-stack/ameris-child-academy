@@ -1,6 +1,36 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { isEmployeeRole, isNonAdminEmployeeRole } from "@/lib/roles";
+import { EMPLOYEE_ROLES, isEmployeeRole, isNonAdminEmployeeRole } from "@/lib/roles";
+
+function isLeapYear(year) {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+}
+
+function getBirthdayOccurrences(user, from, to) {
+  if (!user.dob || !from || !to) return [];
+  const dob = new Date(user.dob);
+  if (Number.isNaN(dob.getTime())) return [];
+
+  const month = dob.getUTCMonth();
+  const day = dob.getUTCDate();
+  const dobYear = dob.getUTCFullYear();
+  const occurrences = [];
+
+  for (let year = from.getUTCFullYear() - 1; year <= to.getUTCFullYear() + 1; year++) {
+    if (year < dobYear) continue;
+    const occDay = month === 1 && day === 29 && !isLeapYear(year) ? 28 : day;
+    const occDate = new Date(Date.UTC(year, month, occDay, 12, 0, 0, 0));
+    if (occDate >= from && occDate <= to) {
+      occurrences.push({
+        id: `birthday-${user.id}-${year}`,
+        user: { id: user.id, name: user.name },
+        date: occDate.toISOString(),
+        age: year - dobYear,
+      });
+    }
+  }
+  return occurrences;
+}
 
 function buildRangeFilter(startField, endField, from, to) {
   if (from && to) {
@@ -78,7 +108,7 @@ async function handleGet(req, res, session) {
     ...timeOffRangeFilter,
   };
 
-  const [events, shifts, timeOff, pendingTimeOff] = await Promise.all([
+  const [events, shifts, timeOff, pendingTimeOff, staffWithBirthdays] = await Promise.all([
     prisma.event.findMany({
       where: {
         centerId,
@@ -118,7 +148,22 @@ async function handleGet(req, res, session) {
           take: 500,
         })
       : Promise.resolve([]),
+    prisma.user.findMany({
+      where: {
+        centers: { some: { centerId } },
+        dob: { not: null },
+        OR: [
+          { role: { in: EMPLOYEE_ROLES } },
+          { roles: { hasSome: EMPLOYEE_ROLES } },
+        ],
+      },
+      select: { id: true, name: true, dob: true },
+    }),
   ]);
 
-  return res.status(200).json({ events, shifts, timeOff, pendingTimeOff });
+  const birthdays = parsedFrom && parsedTo
+    ? staffWithBirthdays.flatMap((user) => getBirthdayOccurrences(user, parsedFrom, parsedTo))
+    : [];
+
+  return res.status(200).json({ events, shifts, timeOff, pendingTimeOff, birthdays });
 }

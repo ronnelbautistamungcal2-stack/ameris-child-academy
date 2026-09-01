@@ -3,7 +3,7 @@ import { SkeletonTable } from "@/components/ui/Skeleton";
 import MonthlyCalendar from "@/components/calendar/MonthlyCalendar";
 import { apiJson } from "@/lib/api";
 import { toCalendarDay } from "@/lib/calendar";
-import { TIME_OFF_TYPE_OPTIONS } from "@/lib/time-off";
+import { TIME_OFF_TYPE_OPTIONS, groupTimeOffRequests } from "@/lib/time-off";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -82,6 +82,7 @@ const CALENDAR_LEGEND = [
   { label: "Events", cls: "bg-indigo-100" },
   { label: "Pending Requests", cls: "bg-amber-200" },
   { label: "Approved Time Off", cls: "bg-emerald-100" },
+  { label: "Unexcused Time Off", cls: "bg-red-100" },
 ];
 
 function formatHours(value) {
@@ -117,6 +118,7 @@ export default function EmployeeTimeOffPage({
   const [reason, setReason] = useState("");
   const [cancelTarget, setCancelTarget] = useState(null);
   const [warningState, setWarningState] = useState(null);
+  const [expandedGroups, setExpandedGroups] = useState({});
 
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
@@ -230,7 +232,7 @@ export default function EmployeeTimeOffPage({
       if (!start || !end) throw new Error("Invalid date or time.");
       if (end < start) throw new Error("End date cannot be before start date.");
 
-      await apiJson("/api/v1/time-off", {
+      const result = await apiJson("/api/v1/time-off", {
         method: "POST",
         body: JSON.stringify({
           centerId,
@@ -244,7 +246,11 @@ export default function EmployeeTimeOffPage({
 
       setReason("");
       setWarningState(null);
-      setSuccess("Time-off request submitted.");
+      setSuccess(
+        Array.isArray(result?.requests) && result.requests.length > 1
+          ? `Time-off request submitted for ${result.requests.length} weekdays.`
+          : "Time-off request submitted.",
+      );
       await loadRequests();
       await loadCalendarEvents();
     } catch (nextError) {
@@ -271,12 +277,16 @@ export default function EmployeeTimeOffPage({
     await submitRequest();
   }
 
-  async function cancelRequest(id) {
+  async function cancelRequests(ids) {
     try {
-      await apiJson(`/api/v1/time-off/${id}`, {
-        method: "PUT",
-        body: JSON.stringify({ status: "CANCELLED" }),
-      });
+      await Promise.all(
+        ids.map((id) =>
+          apiJson(`/api/v1/time-off/${id}`, {
+            method: "PUT",
+            body: JSON.stringify({ status: "CANCELLED" }),
+          }),
+        ),
+      );
       setCancelTarget(null);
       await loadRequests();
       await loadCalendarEvents();
@@ -286,23 +296,64 @@ export default function EmployeeTimeOffPage({
     }
   }
 
+  const monthCalEvents = useMemo(
+    () =>
+      calEvents.map((evt) =>
+        evt._source === "timeoff" ? { ...evt, label: evt.user?.name || "Unknown" } : evt,
+      ),
+    [calEvents],
+  );
+
   const dayItems = useMemo(() => {
     if (!selectedDay) return [];
     const day = new Date(calYear, calMonth, selectedDay);
-    return calEvents.filter((evt) => {
+    return monthCalEvents.filter((evt) => {
       const start = toCalendarDay(evt.startDate, { allDay: !!evt.allDay });
       const end = toCalendarDay(evt.endDate, { allDay: !!evt.allDay });
       if (!start || !end) return false;
       return day >= start && day <= end;
     });
-  }, [calEvents, calYear, calMonth, selectedDay]);
+  }, [monthCalEvents, calYear, calMonth, selectedDay]);
 
   const pending = useMemo(() => requests.filter((row) => row.status === "PENDING"), [requests]);
-  const approved = useMemo(() => requests.filter((row) => row.status === "APPROVED"), [requests]);
+  const approved = useMemo(
+    () => requests.filter((row) => row.status === "APPROVED" && !row.isUnexcused),
+    [requests],
+  );
+  const unexcused = useMemo(
+    () => requests.filter((row) => row.status === "APPROVED" && row.isUnexcused),
+    [requests],
+  );
   const other = useMemo(
     () => requests.filter((row) => row.status !== "PENDING" && row.status !== "APPROVED"),
     [requests],
   );
+
+  const fullGroupSizeByKey = useMemo(() => {
+    const map = new Map();
+    for (const request of requests) {
+      const key = request.requestGroupId || request.id;
+      map.set(key, (map.get(key) || 0) + 1);
+    }
+    return map;
+  }, [requests]);
+
+  const pendingGroups = useMemo(
+    () => groupTimeOffRequests(pending, fullGroupSizeByKey),
+    [pending, fullGroupSizeByKey],
+  );
+  const approvedGroups = useMemo(
+    () => groupTimeOffRequests(approved, fullGroupSizeByKey),
+    [approved, fullGroupSizeByKey],
+  );
+  const otherGroups = useMemo(
+    () => groupTimeOffRequests(other, fullGroupSizeByKey),
+    [other, fullGroupSizeByKey],
+  );
+
+  const toggleGroupExpanded = useCallback((key) => {
+    setExpandedGroups((current) => ({ ...current, [key]: !current[key] }));
+  }, []);
 
   return (
     <LayoutComponent title={title}>
@@ -453,55 +504,137 @@ export default function EmployeeTimeOffPage({
                     </div>
                   ) : (
                     <div className="mt-3 space-y-2">
-                      {approved.length > 0 ? (
+                      {approvedGroups.length > 0 ? (
                         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                           <div className="mb-1 text-xs font-semibold text-emerald-700">Approved time off</div>
-                          {approved.map((request) => (
-                            <div key={request.id} className="text-sm text-emerald-800">
-                              {request.typeLabel || request.type} - {fmtRange(request.startDate, request.endDate)}
-                              {request.reason ? <span className="ml-1 text-emerald-700">({request.reason})</span> : null}
+                          {approvedGroups.map((group) => {
+                            const request = group.items[0];
+                            return (
+                              <div key={group.key} className="text-sm text-emerald-800">
+                                {request.typeLabel || request.type} - {fmtRange(group.rangeStart, group.rangeEnd)}
+                                {group.isGrouped ? (
+                                  <span className="ml-1 text-emerald-700">
+                                    ({group.items.length} of {group.fullGroupSize} day
+                                    {group.fullGroupSize === 1 ? "" : "s"} approved)
+                                  </span>
+                                ) : null}
+                                {request.reason ? <span className="ml-1 text-emerald-700">({request.reason})</span> : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+
+                      {unexcused.length > 0 ? (
+                        <div className="rounded-xl border border-red-200 bg-red-50 p-3">
+                          <div className="mb-1 text-xs font-semibold text-red-700">Unexcused time off</div>
+                          {unexcused.map((request) => (
+                            <div key={request.id} className="text-sm text-red-800">
+                              {fmtRange(request.startDate, request.endDate)}
+                              {request.coverageName ? (
+                                <span className="ml-1 text-red-700">(Cover: {request.coverageName})</span>
+                              ) : null}
                             </div>
                           ))}
                         </div>
                       ) : null}
 
-                      {pending.map((request) => (
-                        <div key={request.id} className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <div className="text-sm font-extrabold text-gray-900">{request.typeLabel || request.type || "Time off"}</div>
-                              <div className="mt-1 text-sm text-gray-700">{fmtRange(request.startDate, request.endDate)}</div>
-                              {request.reason ? <div className="mt-1 text-xs text-gray-600">{request.reason}</div> : null}
+                      {pendingGroups.map((group) => {
+                        const request = group.items[0];
+                        const expanded = !!expandedGroups[group.key];
+                        return (
+                          <div key={group.key} className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="text-sm font-extrabold text-gray-900">{request.typeLabel || request.type || "Time off"}</div>
+                                <div className="mt-1 text-sm text-gray-700">
+                                  {fmtRange(group.rangeStart, group.rangeEnd)}
+                                  {group.isGrouped ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleGroupExpanded(group.key)}
+                                      className="ml-2 text-xs font-semibold text-amber-700 underline decoration-dotted"
+                                    >
+                                      {group.items.length} of {group.fullGroupSize} day
+                                      {group.fullGroupSize === 1 ? "" : "s"} pending
+                                      {expanded ? " (hide days)" : " (show days)"}
+                                    </button>
+                                  ) : null}
+                                </div>
+                                {request.reason ? <div className="mt-1 text-xs text-gray-600">{request.reason}</div> : null}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="rounded-full border border-amber-200 bg-white px-2 py-1 text-[11px] font-extrabold text-amber-700">
+                                  PENDING
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setCancelTarget(group.items.map((item) => item.id))}
+                                  className="rounded-lg border border-red-200 px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50"
+                                >
+                                  {group.isGrouped ? "Cancel all" : "Cancel"}
+                                </button>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="rounded-full border border-amber-200 bg-white px-2 py-1 text-[11px] font-extrabold text-amber-700">
-                                PENDING
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setCancelTarget(request.id)}
-                                className="rounded-lg border border-red-200 px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50"
-                              >
-                                Cancel
-                              </button>
-                            </div>
+                            {group.isGrouped && expanded ? (
+                              <div className="mt-2 space-y-1 border-t border-amber-200 pt-2">
+                                {group.items.map((item) => (
+                                  <div key={item.id} className="flex items-center justify-between gap-2 text-xs text-gray-700">
+                                    <span>{fmtRange(item.startDate, item.endDate)}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setCancelTarget([item.id])}
+                                      className="font-semibold text-red-600 hover:underline"
+                                    >
+                                      Cancel this day
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
 
-                      {other.map((request) => (
-                        <div key={request.id} className={`rounded-xl border p-3 ${STATUS_BADGE[request.status] || STATUS_BADGE.CANCELLED}`}>
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="text-sm font-extrabold text-gray-900">{request.typeLabel || request.type || "Time off"}</div>
-                            <span className="rounded-full border border-gray-200 bg-white px-2 py-1 text-[11px] font-extrabold text-gray-700">
-                              {request.status}
-                            </span>
+                      {otherGroups.map((group) => {
+                        const request = group.items[0];
+                        const expanded = !!expandedGroups[group.key];
+                        return (
+                          <div key={group.key} className={`rounded-xl border p-3 ${STATUS_BADGE[request.status] || STATUS_BADGE.CANCELLED}`}>
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-sm font-extrabold text-gray-900">{request.typeLabel || request.type || "Time off"}</div>
+                              <span className="rounded-full border border-gray-200 bg-white px-2 py-1 text-[11px] font-extrabold text-gray-700">
+                                {request.status}
+                              </span>
+                            </div>
+                            <div className="mt-1 text-sm text-gray-700">
+                              {fmtRange(group.rangeStart, group.rangeEnd)}
+                              {group.isGrouped ? (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleGroupExpanded(group.key)}
+                                  className="ml-2 text-xs font-semibold text-gray-600 underline decoration-dotted"
+                                >
+                                  {group.items.length} of {group.fullGroupSize} day
+                                  {group.fullGroupSize === 1 ? "" : "s"} {request.status.toLowerCase()}
+                                  {expanded ? " (hide days)" : " (show days)"}
+                                </button>
+                              ) : null}
+                            </div>
+                            {request.reason ? <div className="mt-1 text-xs text-gray-600">{request.reason}</div> : null}
+                            {request.reviewNotes ? <div className="mt-1 text-xs italic text-gray-500">Review: {request.reviewNotes}</div> : null}
+                            {group.isGrouped && expanded ? (
+                              <div className="mt-2 space-y-1 border-t border-gray-200 pt-2">
+                                {group.items.map((item) => (
+                                  <div key={item.id} className="text-xs text-gray-600">
+                                    {fmtRange(item.startDate, item.endDate)}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
                           </div>
-                          <div className="mt-1 text-sm text-gray-700">{fmtRange(request.startDate, request.endDate)}</div>
-                          {request.reason ? <div className="mt-1 text-xs text-gray-600">{request.reason}</div> : null}
-                          {request.reviewNotes ? <div className="mt-1 text-xs italic text-gray-500">Review: {request.reviewNotes}</div> : null}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -516,7 +649,7 @@ export default function EmployeeTimeOffPage({
                   <MonthlyCalendar
                     year={calYear}
                     month={calMonth}
-                    events={calEvents}
+                    events={monthCalEvents}
                     legendItems={CALENDAR_LEGEND}
                     selectedDay={selectedDay}
                     onDayClick={setSelectedDay}
@@ -558,10 +691,16 @@ export default function EmployeeTimeOffPage({
                                   className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
                                     item._source === "event"
                                       ? "bg-indigo-100 text-indigo-700"
-                                      : "bg-emerald-100 text-emerald-700"
+                                      : item.isUnexcused
+                                        ? "bg-red-100 text-red-700"
+                                        : "bg-emerald-100 text-emerald-700"
                                   }`}
                                 >
-                                  {item._source === "event" ? "EVENT" : "TIME OFF"}
+                                  {item._source === "event"
+                                    ? "EVENT"
+                                    : item.isUnexcused
+                                      ? "UNEXCUSED"
+                                      : "TIME OFF"}
                                 </span>
                                 <span className="text-sm font-semibold text-gray-900">{item.label}</span>
                               </div>
@@ -570,12 +709,12 @@ export default function EmployeeTimeOffPage({
                               ) : null}
                               {item._source === "timeoff" ? (
                                 <>
-                                  <div className="mt-1 text-xs text-gray-600">
-                                    Status: {item.status}
-                                    {item.reason ? ` • ${item.reason}` : ""}
-                                  </div>
+                                  <div className="mt-1 text-xs text-gray-600">Status: {item.status}</div>
                                   <div className="mt-1 text-xs text-gray-600">
                                     {fmtRange(item.startDate, item.endDate)}
+                                  </div>
+                                  <div className="mt-1 text-xs text-gray-600">
+                                    Cover: {item.coverageName || "Unassigned"}
                                   </div>
                                 </>
                               ) : null}
@@ -594,10 +733,14 @@ export default function EmployeeTimeOffPage({
       <ConfirmDialog
         open={!!cancelTarget}
         title="Cancel Request"
-        message="Are you sure you want to cancel this time-off request?"
+        message={
+          cancelTarget?.length > 1
+            ? `Are you sure you want to cancel these ${cancelTarget.length} pending days?`
+            : "Are you sure you want to cancel this time-off request?"
+        }
         confirmLabel="Cancel Request"
         variant="danger"
-        onConfirm={() => cancelRequest(cancelTarget)}
+        onConfirm={() => cancelRequests(cancelTarget)}
         onCancel={() => setCancelTarget(null)}
       />
       <ConfirmDialog

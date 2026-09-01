@@ -111,8 +111,7 @@ export default function StudentPerformanceReportPanel({ childId, onPlanApproved 
   const [accomplishmentTo, setAccomplishmentTo] = useState(defaultDateTo());
   const [citizenshipLogFrom, setCitizenshipLogFrom] = useState(defaultDateFrom());
   const [citizenshipLogTo, setCitizenshipLogTo] = useState(defaultDateTo());
-  const [activityLogFrom, setActivityLogFrom] = useState(defaultDateFrom());
-  const [activityLogTo, setActivityLogTo] = useState(defaultDateTo());
+  const [activityLogDate, setActivityLogDate] = useState("");
 
   const fetchReport = useCallback(
     (targetChildId, { silent } = {}) => {
@@ -196,8 +195,15 @@ export default function StudentPerformanceReportPanel({ childId, onPlanApproved 
 
   const filteredActivityLogs = useMemo(() => {
     const all = report?.activityLogs || [];
-    return filterByDateRange(all, activityLogFrom, activityLogTo);
-  }, [report, activityLogFrom, activityLogTo]);
+    if (!activityLogDate) return all;
+    const [y, m, day] = activityLogDate.split("-").map(Number);
+    return all.filter((item) => {
+      if (!item.createdAt) return false;
+      const d = new Date(item.createdAt);
+      if (Number.isNaN(d.getTime())) return false;
+      return d.getFullYear() === y && d.getMonth() + 1 === m && d.getDate() === day;
+    });
+  }, [report, activityLogDate]);
 
   const behaviorPlans = useMemo(() => report?.behaviorPlans || [], [report]);
 
@@ -364,9 +370,19 @@ export default function StudentPerformanceReportPanel({ childId, onPlanApproved 
       <div className="rounded-[22px] border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-slate-900">
         <div className="text-base font-black tracking-tight text-gray-900 dark:text-gray-100">Student Activity Log</div>
         <p className="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">Daily activity log.</p>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <DateField label="Start Date" value={activityLogFrom} onChange={setActivityLogFrom} />
-          <DateField label="End Date" value={activityLogTo} onChange={setActivityLogTo} />
+        <div className="mt-3 flex items-end gap-2">
+          <div className="max-w-[220px] flex-1">
+            <DateField label="Jump to Date" value={activityLogDate} onChange={setActivityLogDate} />
+          </div>
+          {activityLogDate && (
+            <button
+              type="button"
+              onClick={() => setActivityLogDate("")}
+              className="mb-0.5 shrink-0 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-slate-800"
+            >
+              Show All
+            </button>
+          )}
         </div>
         {filteredActivityLogs.length > 0 ? (
           <div className="mt-3 space-y-2">
@@ -380,7 +396,9 @@ export default function StudentPerformanceReportPanel({ childId, onPlanApproved 
             )}
           </div>
         ) : (
-          <div className="mt-3 rounded-[16px] border border-gray-200 bg-gray-50/70 p-3 text-sm text-gray-500 dark:border-gray-800 dark:bg-slate-800/80 dark:text-gray-400">No activity logs found.</div>
+          <div className="mt-3 rounded-[16px] border border-gray-200 bg-gray-50/70 p-3 text-sm text-gray-500 dark:border-gray-800 dark:bg-slate-800/80 dark:text-gray-400">
+            {activityLogDate ? "No activity logs found for that date." : "No activity logs found."}
+          </div>
         )}
       </div>
     </div>
@@ -531,9 +549,7 @@ function PlanDetail({ label, value }) {
 
 function ActivityLogEntry({ activity: a }) {
   const typeLabel = ACTIVITY_TYPE_LABELS[a.type] || a.type;
-  const time = a.createdAt
-    ? new Date(a.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
-    : "";
+  const time = a.createdAt ? new Date(a.createdAt).toLocaleString() : "";
   const details = a.details && typeof a.details === "object" ? a.details : {};
 
   function renderDetails() {

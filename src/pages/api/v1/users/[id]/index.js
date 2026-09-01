@@ -14,6 +14,21 @@ function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function parseWeeklySchedules(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const raw of value) {
+    const days = Array.isArray(raw?.daysOfWeek)
+      ? [...new Set(raw.daysOfWeek.map((d) => Number(d)).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))]
+      : [];
+    const startTime = String(raw?.startTime || "");
+    const endTime = String(raw?.endTime || "");
+    if (!days.length || !/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime)) continue;
+    out.push({ daysOfWeek: days, startTime, endTime });
+  }
+  return out;
+}
+
 function sanitizeUser(user) {
   if (!user) return user;
   const { password, ...safeUser } = user;
@@ -35,7 +50,7 @@ export default async function handler(req, res) {
 
     const user = await prisma.user.findUnique({
       where: { id },
-      include: { centers: true, children: true },
+      include: { centers: true, children: true, weeklySchedules: true },
     });
     if (!user) return res.status(404).json({ error: "User not found" });
 
@@ -49,7 +64,7 @@ export default async function handler(req, res) {
     }
 
     const body = req.body || {};
-    const { email, name, role, roles, dob, hireDate, aboutMe, pictureUrl, password } = body;
+    const { email, name, role, roles, dob, hireDate, aboutMe, pictureUrl, password, weeklySchedules } = body;
     const updateData = {};
     const assignedRoles = "roles" in body || "role" in body
       ? normalizeRoles(roles || role, role || "PARENT")
@@ -80,6 +95,7 @@ export default async function handler(req, res) {
         updateData.hireDate = null;
         updateData.aboutMe = null;
         updateData.pictureUrl = null;
+        updateData.weeklySchedules = { deleteMany: {} };
       }
     }
 
@@ -102,6 +118,13 @@ export default async function handler(req, res) {
     if ("pictureUrl" in body)
       updateData.pictureUrl = isEmployee && pictureUrl ? String(pictureUrl).slice(0, 2000) : null;
 
+    if ("weeklySchedules" in body && !updateData.weeklySchedules) {
+      updateData.weeklySchedules = {
+        deleteMany: {},
+        create: isEmployee ? parseWeeklySchedules(weeklySchedules) : [],
+      };
+    }
+
     if ("password" in body && password) {
       if (session.user.role !== "ADMIN") {
         return res.status(403).json({ error: "Only admins can reset passwords" });
@@ -118,7 +141,7 @@ export default async function handler(req, res) {
       user = await prisma.user.update({
         where: { id },
         data: updateData,
-        include: { centers: true },
+        include: { centers: true, weeklySchedules: true },
       });
     } catch (error) {
       if (error?.code === "P2002") {

@@ -11,6 +11,7 @@ import {
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
 import { hasChecklistClassroomScope } from "@/lib/dailyChecklistClassrooms";
+import { groupTimeOffRequests } from "@/lib/time-off";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -60,7 +61,7 @@ export default function StaffDashboardPage() {
   const [metrics, setMetrics] = useState(null);
   const [threads, setThreads] = useState([]);
   const [checklists, setChecklists] = useState([]);
-  const [calendarData, setCalendarData] = useState({ events: [], shifts: [], timeOff: [] });
+  const [calendarData, setCalendarData] = useState({ events: [], shifts: [], timeOff: [], birthdays: [] });
   const [timeOffRequests, setTimeOffRequests] = useState([]);
   const [trainingSummary, setTrainingSummary] = useState(null);
   const [evaluations, setEvaluations] = useState([]);
@@ -114,7 +115,7 @@ export default function StaffDashboardPage() {
           ).catch(() => []),
           apiJson(
             `/api/v1/calendar?centerId=${encodeURIComponent(centerId)}&from=${encodeURIComponent(range.start.toISOString())}&to=${encodeURIComponent(range.end.toISOString())}`,
-          ).catch(() => ({ events: [], shifts: [], timeOff: [] })),
+          ).catch(() => ({ events: [], shifts: [], timeOff: [], birthdays: [] })),
           apiJson(`/api/v1/time-off?centerId=${encodeURIComponent(centerId)}`).catch(() => []),
           apiJson(`/api/v1/training-logs/summary?centerId=${encodeURIComponent(centerId)}`).catch(
             () => null,
@@ -131,6 +132,7 @@ export default function StaffDashboardPage() {
         events: Array.isArray(calendarRows?.events) ? calendarRows.events : [],
         shifts: Array.isArray(calendarRows?.shifts) ? calendarRows.shifts : [],
         timeOff: Array.isArray(calendarRows?.timeOff) ? calendarRows.timeOff : [],
+        birthdays: Array.isArray(calendarRows?.birthdays) ? calendarRows.birthdays : [],
       });
       setTimeOffRequests(Array.isArray(requestRows) ? requestRows : []);
       setTrainingSummary(trainingRows);
@@ -226,15 +228,29 @@ export default function StaffDashboardPage() {
         detail: request.reason || "",
         tone: "emerald",
       })),
+      ...(calendarData.birthdays || []).map((birthday) => ({
+        id: `birthday-${birthday.id}`,
+        type: "Birthday",
+        label: `${birthday.user?.name || "—"}'s Birthday`,
+        date: new Date(birthday.date),
+        detail: Number.isFinite(birthday.age) ? `Turning ${birthday.age}` : "",
+        tone: "rose",
+      })),
     ]
       .filter((item) => !Number.isNaN(item.date.getTime()) && item.date >= today)
       .sort((left, right) => left.date - right.date)
       .slice(0, 6);
-  }, [calendarData.events, calendarData.shifts, calendarData.timeOff]);
+  }, [calendarData.events, calendarData.shifts, calendarData.timeOff, calendarData.birthdays]);
 
   const pendingTimeOff = useMemo(
     () => timeOffRequests.filter((request) => request.status === "PENDING"),
     [timeOffRequests],
+  );
+
+  const timeOffGroups = useMemo(() => groupTimeOffRequests(timeOffRequests), [timeOffRequests]);
+  const pendingTimeOffGroups = useMemo(
+    () => groupTimeOffRequests(pendingTimeOff),
+    [pendingTimeOff],
   );
 
   const latestEvaluation = evaluations[0] || metrics?.evaluations?.latest || null;
@@ -315,7 +331,7 @@ export default function StaffDashboardPage() {
               />
               <WorkspaceStat
                 label="Pending Time Off"
-                value={pendingTimeOff.length}
+                value={pendingTimeOffGroups.length}
                 description="Requests awaiting approval in the selected center."
                 href="/staff/time-off"
                 tone="slate"
@@ -449,7 +465,9 @@ export default function StaffDashboardPage() {
                                 ? "bg-sky-100 text-sky-700"
                                 : item.tone === "amber"
                                   ? "bg-amber-100 text-amber-700"
-                                  : "bg-emerald-100 text-emerald-700"
+                                  : item.tone === "rose"
+                                    ? "bg-pink-100 text-pink-700"
+                                    : "bg-emerald-100 text-emerald-700"
                             }`}
                           >
                             {item.type}
@@ -590,29 +608,34 @@ export default function StaffDashboardPage() {
                   </Link>
                 }
               >
-                {timeOffRequests.length ? (
+                {timeOffGroups.length ? (
                   <div className="space-y-3">
-                    {timeOffRequests.slice(0, 4).map((request) => (
-                      <div
-                        key={request.id}
-                        className="rounded-2xl border border-gray-200 bg-white px-4 py-3"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="text-sm font-extrabold text-gray-900">
-                            {request.type || "Time Off"}
+                    {timeOffGroups.slice(0, 4).map((group) => {
+                      const request = group.items[0];
+                      return (
+                        <div
+                          key={group.key}
+                          className="rounded-2xl border border-gray-200 bg-white px-4 py-3"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-sm font-extrabold text-gray-900">
+                              {request.type || "Time Off"}
+                            </div>
+                            <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-bold text-gray-700">
+                              {group.isGrouped
+                                ? `${group.items.length}/${group.fullGroupSize} ${formatStatus(request.status)}`
+                                : formatStatus(request.status)}
+                            </span>
                           </div>
-                          <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-bold text-gray-700">
-                            {formatStatus(request.status)}
-                          </span>
+                          <div className="mt-1 text-sm text-gray-600">
+                            {formatRoleDate(group.rangeStart)} to {formatRoleDate(group.rangeEnd)}
+                          </div>
+                          {request.reason ? (
+                            <div className="mt-1 text-xs text-gray-500">{request.reason}</div>
+                          ) : null}
                         </div>
-                        <div className="mt-1 text-sm text-gray-600">
-                          {formatRoleDate(request.startDate)} to {formatRoleDate(request.endDate)}
-                        </div>
-                        {request.reason ? (
-                          <div className="mt-1 text-xs text-gray-500">{request.reason}</div>
-                        ) : null}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">

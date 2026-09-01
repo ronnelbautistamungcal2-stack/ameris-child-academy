@@ -18,6 +18,29 @@ const ROLE_CONFIG = {
 
 const PAGE_SIZE = 15;
 
+const DAY_OPTIONS = [
+  { value: 1, label: "Mon" },
+  { value: 2, label: "Tue" },
+  { value: 3, label: "Wed" },
+  { value: 4, label: "Thu" },
+  { value: 5, label: "Fri" },
+  { value: 6, label: "Sat" },
+  { value: 0, label: "Sun" },
+];
+
+function emptyScheduleBlock() {
+  return { daysOfWeek: [], startTime: "08:00", endTime: "16:00" };
+}
+
+function normalizeWeeklySchedules(user) {
+  const schedules = Array.isArray(user?.weeklySchedules) ? user.weeklySchedules : [];
+  return schedules.map((s) => ({
+    daysOfWeek: Array.isArray(s.daysOfWeek) ? [...s.daysOfWeek] : [],
+    startTime: s.startTime || "08:00",
+    endTime: s.endTime || "16:00",
+  }));
+}
+
 export default function AdminUsers() {
   const [users, setUsers] = useState([]);
   const [centers, setCenters] = useState([]);
@@ -37,6 +60,7 @@ export default function AdminUsers() {
   const [hireDate, setHireDate] = useState("");
   const [aboutMe, setAboutMe] = useState("");
   const [pictureUrl, setPictureUrl] = useState("");
+  const [weeklySchedules, setWeeklySchedules] = useState([]);
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
@@ -104,6 +128,11 @@ export default function AdminUsers() {
 
   const employeeProfileNeeded = useMemo(() => hasEmployeeRole(roles), [roles]);
 
+  const validScheduleBlocks = useMemo(
+    () => weeklySchedules.filter((b) => b.daysOfWeek.length > 0 && b.startTime && b.endTime),
+    [weeklySchedules],
+  );
+
   function toggleRole(roleKey, checked) {
     setRoles((current) => {
       const existing = Array.isArray(current) ? current : [];
@@ -125,6 +154,7 @@ export default function AdminUsers() {
     setHireDate("");
     setAboutMe("");
     setPictureUrl("");
+    setWeeklySchedules([]);
   }, []);
 
   const startEdit = useCallback((user) => {
@@ -138,7 +168,35 @@ export default function AdminUsers() {
     setHireDate(user.hireDate ? String(user.hireDate).slice(0, 10) : "");
     setAboutMe(user.aboutMe || "");
     setPictureUrl(user.pictureUrl || "");
+    setWeeklySchedules(normalizeWeeklySchedules(user));
   }, []);
+
+  function addScheduleBlock() {
+    setWeeklySchedules((current) => [...current, emptyScheduleBlock()]);
+  }
+
+  function removeScheduleBlock(index) {
+    setWeeklySchedules((current) => current.filter((_, i) => i !== index));
+  }
+
+  function toggleScheduleDay(index, day) {
+    setWeeklySchedules((current) =>
+      current.map((block, i) => {
+        if (i !== index) return block;
+        const has = block.daysOfWeek.includes(day);
+        return {
+          ...block,
+          daysOfWeek: has ? block.daysOfWeek.filter((d) => d !== day) : [...block.daysOfWeek, day],
+        };
+      }),
+    );
+  }
+
+  function updateScheduleTime(index, field, value) {
+    setWeeklySchedules((current) =>
+      current.map((block, i) => (i === index ? { ...block, [field]: value } : block)),
+    );
+  }
 
   const openCreate = useCallback(() => {
     setError("");
@@ -195,6 +253,7 @@ export default function AdminUsers() {
           hireDate: employeeProfileNeeded ? hireDate || null : null,
           aboutMe: employeeProfileNeeded ? aboutMe || null : null,
           pictureUrl: employeeProfileNeeded ? pictureUrl || null : null,
+          weeklySchedules: employeeProfileNeeded ? validScheduleBlocks : [],
         }),
       });
       resetForm();
@@ -225,6 +284,7 @@ export default function AdminUsers() {
           hireDate: employeeProfileNeeded ? hireDate || null : null,
           aboutMe: employeeProfileNeeded ? aboutMe || null : null,
           pictureUrl: employeeProfileNeeded ? pictureUrl || null : null,
+          weeklySchedules: employeeProfileNeeded ? validScheduleBlocks : [],
         }),
       });
       resetForm();
@@ -408,6 +468,67 @@ export default function AdminUsers() {
                     />
                   </Field>
                 </div>
+              </FormSection>
+              ) : null}
+
+              {employeeProfileNeeded ? (
+              <FormSection title="Weekly Schedule">
+                <div style={{ marginBottom: 10, fontSize: 12, color: "var(--admin-text-muted)" }}>
+                  Set the days and hours this person typically works. This will automatically populate the weekly Shift Schedule, and can still be adjusted there.
+                </div>
+                {weeklySchedules.length === 0 ? (
+                  <div style={helperBoxStyle}>No weekly schedule set yet.</div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {weeklySchedules.map((block, index) => (
+                      <div key={index} style={scheduleBlockStyle}>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                          {DAY_OPTIONS.map((d) => {
+                            const active = block.daysOfWeek.includes(d.value);
+                            return (
+                              <button
+                                key={d.value}
+                                type="button"
+                                onClick={() => toggleScheduleDay(index, d.value)}
+                                style={active ? dayPillActiveStyle : dayPillStyle}
+                              >
+                                {d.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+                          <Field label="Start Time">
+                            <input
+                              type="time"
+                              value={block.startTime}
+                              onChange={(e) => updateScheduleTime(index, "startTime", e.target.value)}
+                              style={inputStyle}
+                            />
+                          </Field>
+                          <Field label="End Time">
+                            <input
+                              type="time"
+                              value={block.endTime}
+                              onChange={(e) => updateScheduleTime(index, "endTime", e.target.value)}
+                              style={inputStyle}
+                            />
+                          </Field>
+                          <button
+                            type="button"
+                            onClick={() => removeScheduleBlock(index)}
+                            style={{ ...secondaryButton, color: "#ef4444", borderColor: "#fecaca" }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button type="button" onClick={addScheduleBlock} style={{ ...secondaryButton, marginTop: 10 }}>
+                  + Add another schedule
+                </button>
               </FormSection>
               ) : (
                 <FormSection title="Parent Profile">
@@ -1047,6 +1168,31 @@ const roleCheckActiveStyle = {
   borderColor: "#2563eb",
   background: "#eff6ff",
   color: "#1d4ed8",
+};
+
+const scheduleBlockStyle = {
+  border: "1px solid var(--admin-border)",
+  borderRadius: 10,
+  background: "var(--admin-bg-secondary)",
+  padding: 12,
+};
+
+const dayPillStyle = {
+  padding: "6px 12px",
+  borderRadius: 999,
+  border: "1px solid var(--admin-border)",
+  background: "var(--admin-bg)",
+  color: "var(--admin-text-secondary)",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const dayPillActiveStyle = {
+  ...dayPillStyle,
+  borderColor: "#2563eb",
+  background: "#2563eb",
+  color: "white",
 };
 
 const helperBoxStyle = {

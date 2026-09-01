@@ -35,12 +35,14 @@ const SOURCE_BADGE = {
   event: { bg: "#eef2ff", text: "#4338ca", border: "#c7d2fe", label: "Event", icon: "\ud83d\udcc5" },
   shift: { bg: "#eff6ff", text: "#1d4ed8", border: "#bfdbfe", label: "Shift", icon: "\u23f0" },
   timeoff: { bg: "#ecfdf5", text: "#047857", border: "#a7f3d0", label: "Time Off", icon: "\ud83c\udfd6\ufe0f" },
+  birthday: { bg: "#fdf2f8", text: "#be185d", border: "#fbcfe8", label: "Birthday", icon: "\ud83c\udf82" },
 };
 
 const FILTER_ITEMS = [
   { key: "events", label: "Events", color: "#6366f1", lightBg: "#eef2ff", icon: "\ud83d\udcc5" },
   { key: "shifts", label: "Shifts", color: "#3b82f6", lightBg: "#eff6ff", icon: "\u23f0" },
   { key: "timeOff", label: "Time Off", color: "#10b981", lightBg: "#ecfdf5", icon: "\ud83c\udfd6\ufe0f" },
+  { key: "birthdays", label: "Birthdays", color: "#db2777", lightBg: "#fdf2f8", icon: "\ud83c\udf82" },
 ];
 
 function toDateInput(value, options = {}) {
@@ -93,8 +95,7 @@ function hoursBetween(start, end) {
 const LEGEND = [
   { label: "Events", cls: "bg-indigo-100" },
   { label: "Shifts", cls: "bg-blue-100" },
-  { label: "Paid", cls: "bg-emerald-100" },
-  { label: "Unpaid", cls: "bg-gray-200" },
+  { label: "Birthdays", cls: "bg-pink-100" },
 ];
 
 export default function CalendarPage() {
@@ -107,8 +108,8 @@ export default function CalendarPage() {
   const [staffSummary, setStaffSummary] = useState(null);
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
-  const [calData, setCalData] = useState({ events: [], shifts: [], timeOff: [], pendingTimeOff: [] });
-  const [filters, setFilters] = useState({ events: true, shifts: true, timeOff: true });
+  const [calData, setCalData] = useState({ events: [], shifts: [], timeOff: [], pendingTimeOff: [], birthdays: [] });
+  const [filters, setFilters] = useState({ events: true, shifts: true, timeOff: true, birthdays: true });
   const [selectedDay, setSelectedDay] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
@@ -234,6 +235,17 @@ export default function CalendarPage() {
         });
       }
     }
+    if (filters.birthdays && calData.birthdays) {
+      for (const b of calData.birthdays) {
+        items.push({
+          id: b.id, _source: "birthday", type: "Birthday", status: "ACTIVE",
+          startDate: b.date, endDate: b.date, allDay: true,
+          user: b.user,
+          label: `${b.user?.name || "\u2014"}'s Birthday`,
+          _raw: { ...b, allDay: true },
+        });
+      }
+    }
     return items;
   })();
 
@@ -321,6 +333,7 @@ export default function CalendarPage() {
     shifts: (calData.shifts || []).length,
     timeOff: (calData.timeOff || []).length,
     pendingTimeOff: (calData.pendingTimeOff || []).length,
+    birthdays: (calData.birthdays || []).length,
   };
 
   function jumpToToday() {
@@ -457,6 +470,17 @@ export default function CalendarPage() {
                 }}>
                   {counts.timeOff} time off
                 </span>
+                <span style={{
+                  padding: "6px 10px",
+                  borderRadius: 999,
+                  background: "var(--admin-bg)",
+                  border: "1px solid var(--admin-border)",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "var(--admin-text-secondary)",
+                }}>
+                  {counts.birthdays} birthdays
+                </span>
                 {counts.pendingTimeOff > 0 && (
                   <span style={{
                     padding: "6px 10px",
@@ -556,7 +580,7 @@ export default function CalendarPage() {
           </span>
           {FILTER_ITEMS.map(f => {
             const active = filters[f.key];
-            const count = f.key === "events" ? counts.events : f.key === "shifts" ? counts.shifts : counts.timeOff;
+            const count = counts[f.key];
             return (
               <button
                 key={f.key}
@@ -1061,6 +1085,11 @@ export default function CalendarPage() {
                         {item._source === "timeoff" && item._raw.reason && (
                           <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginTop: 6, lineHeight: 1.4 }}>
                             {item._raw.reason}
+                          </div>
+                        )}
+                        {item._source === "birthday" && Number.isFinite(item._raw?.age) && (
+                          <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginTop: 6, display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ fontWeight: 600 }}>Turning:</span> {item._raw.age}
                           </div>
                         )}
                         {item._source === "timeoff" && item._raw.coverageName && (

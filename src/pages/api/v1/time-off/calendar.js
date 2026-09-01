@@ -95,11 +95,17 @@ export default async function handler(req, res) {
       createdBy: event.createdBy,
     }));
 
-    const requestRows = decoratedRequests.map((request) => ({
-      ...request,
-      _source: "timeoff",
-      label: `${request.user?.name || "Unknown"} (${request.typeLabel || getTimeOffTypeLabel(request.type)})`,
-    }));
+    const requestRows = decoratedRequests.map((request) => {
+      const baseLabel = `${request.user?.name || "Unknown"} (${request.typeLabel || getTimeOffTypeLabel(request.type)})`;
+      return {
+        ...request,
+        _source: "timeoff",
+        label:
+          request.isUnexcused && request.coverageName
+            ? `${baseLabel} · Cover: ${request.coverageName}`
+            : baseLabel,
+      };
+    });
 
     return res.status(200).json(
       [...eventRows, ...requestRows].sort(

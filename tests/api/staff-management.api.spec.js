@@ -272,12 +272,13 @@ test.describe("Staff Management API @api", () => {
         return;
       }
       const created = await createRes.json();
+      const createdId = created.id || created.requests?.[0]?.id;
 
       // Approve as admin
       const adminCookies = await loginAsAdmin(request);
       const approveRes = await apiPut(
         request,
-        `/api/v1/time-off/${created.id}`,
+        `/api/v1/time-off/${createdId}`,
         {
           status: "APPROVED",
           coverageName: "QA Coverage Staff",
@@ -289,6 +290,57 @@ test.describe("Staff Management API @api", () => {
       const approved = await approveRes.json();
       expect(approved.status).toBe("APPROVED");
       expect(approved.coverageName).toBe("QA Coverage Staff");
+    });
+
+    test("multi-day request splits into separate, individually approvable weekday rows", async ({ request }) => {
+      if (!centerId || !teacherUserId) test.skip();
+      const teacherCookies = await loginAsTeacher(request);
+
+      // 2026-05-04 (Mon) through 2026-05-09 (Sat): expect only the 5 weekdays.
+      const res = await apiPost(
+        request,
+        "/api/v1/time-off",
+        {
+          centerId,
+          type: "PTO",
+          startDate: "2026-05-04T08:00:00.000Z",
+          endDate: "2026-05-09T17:00:00.000Z",
+          reason: "Multi-day split test",
+          overrideBalanceWarning: true,
+        },
+        teacherCookies,
+      );
+      expect(res.status()).toBe(201);
+      const body = await res.json();
+      expect(Array.isArray(body.requests)).toBe(true);
+      expect(body.requests.length).toBe(5);
+      expect(body.requestGroupId).toBeTruthy();
+      for (const r of body.requests) {
+        expect(r.requestGroupId).toBe(body.requestGroupId);
+        expect(r.status).toBe("PENDING");
+      }
+
+      // Admin approves only the first day, leaving the rest pending.
+      const adminCookies = await loginAsAdmin(request);
+      const approveRes = await apiPut(
+        request,
+        `/api/v1/time-off/${body.requests[0].id}`,
+        { status: "APPROVED", reviewNotes: "Approve just this day" },
+        adminCookies,
+      );
+      expect(approveRes.status()).toBe(200);
+
+      const listRes = await apiGet(
+        request,
+        `/api/v1/time-off?centerId=${centerId}&userId=${teacherUserId}`,
+        adminCookies,
+      );
+      expect(listRes.status()).toBe(200);
+      const list = await listRes.json();
+      const groupRows = list.filter((r) => r.requestGroupId === body.requestGroupId);
+      expect(groupRows.length).toBe(5);
+      expect(groupRows.filter((r) => r.status === "APPROVED").length).toBe(1);
+      expect(groupRows.filter((r) => r.status === "PENDING").length).toBe(4);
     });
 
     test("approved paid requests reduce paid hours available", async ({ request }) => {

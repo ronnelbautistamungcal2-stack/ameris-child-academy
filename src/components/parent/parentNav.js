@@ -20,18 +20,6 @@ export const PARENT_NAV_ITEMS = [
     ],
   },
   {
-    label: "Account Center",
-    icon: (
-      <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
-        <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-      </svg>
-    ),
-    children: [
-      { href: "/parent/permissions", label: "Permissions" },
-      { href: "/parent/involvement", label: "Parent Involvement" },
-    ],
-  },
-  {
     label: "Family Management",
     icon: (
       <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
@@ -43,6 +31,8 @@ export const PARENT_NAV_ITEMS = [
       { href: "/parent/billing", label: "Billing" },
       { href: "/parent/notification-settings", label: "Notification Settings" },
       { href: "/settings", label: "Account Settings" },
+      { href: "/parent/permissions", label: "Permissions" },
+      { href: "/parent/involvement", label: "Parent Involvement" },
     ],
   },
   {

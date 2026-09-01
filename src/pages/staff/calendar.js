@@ -17,12 +17,14 @@ const SOURCE_BADGE = {
   event: "bg-indigo-100 text-indigo-700",
   shift: "bg-blue-100 text-blue-700",
   timeoff: "bg-emerald-100 text-emerald-700",
+  birthday: "bg-pink-100 text-pink-700",
 };
 
 const LEGEND = [
   { label: "Events", cls: "bg-indigo-100" },
   { label: "My Shifts", cls: "bg-blue-100" },
   { label: "My Time Off", cls: "bg-emerald-100" },
+  { label: "Birthdays", cls: "bg-pink-100" },
 ];
 
 function buildShiftDate(date, time) {
@@ -45,8 +47,8 @@ export default function StaffCalendarPage() {
   const [centerId, setCenterId] = useState("");
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
-  const [calData, setCalData] = useState({ events: [], shifts: [], timeOff: [] });
-  const [filters, setFilters] = useState({ events: true, shifts: true, timeOff: true });
+  const [calData, setCalData] = useState({ events: [], shifts: [], timeOff: [], birthdays: [] });
+  const [filters, setFilters] = useState({ events: true, shifts: true, timeOff: true, birthdays: true });
   const [selectedDay, setSelectedDay] = useState(null);
   const [loadingCenters, setLoadingCenters] = useState(true);
   const [loadingCalendar, setLoadingCalendar] = useState(false);
@@ -71,7 +73,7 @@ export default function StaffCalendarPage() {
 
   const loadCalendar = useCallback(async () => {
     if (!centerId) {
-      setCalData({ events: [], shifts: [], timeOff: [] });
+      setCalData({ events: [], shifts: [], timeOff: [], birthdays: [] });
       return;
     }
 
@@ -87,10 +89,11 @@ export default function StaffCalendarPage() {
         events: Array.isArray(data?.events) ? data.events : [],
         shifts: Array.isArray(data?.shifts) ? data.shifts : [],
         timeOff: Array.isArray(data?.timeOff) ? data.timeOff : [],
+        birthdays: Array.isArray(data?.birthdays) ? data.birthdays : [],
       });
     } catch (nextError) {
       setError(nextError.message || "Failed to load calendar data");
-      setCalData({ events: [], shifts: [], timeOff: [] });
+      setCalData({ events: [], shifts: [], timeOff: [], birthdays: [] });
     } finally {
       setLoadingCalendar(false);
     }
@@ -152,8 +155,25 @@ export default function StaffCalendarPage() {
       }
     }
 
+    if (filters.birthdays) {
+      for (const birthday of calData.birthdays || []) {
+        rows.push({
+          id: birthday.id,
+          _source: "birthday",
+          type: "Birthday",
+          status: "ACTIVE",
+          startDate: birthday.date,
+          endDate: birthday.date,
+          allDay: true,
+          user: birthday.user,
+          label: `${birthday.user?.name || "—"}'s Birthday`,
+          _raw: { ...birthday, allDay: true },
+        });
+      }
+    }
+
     return rows;
-  }, [calData.events, calData.shifts, calData.timeOff, filters.events, filters.shifts, filters.timeOff]);
+  }, [calData.events, calData.shifts, calData.timeOff, calData.birthdays, filters.events, filters.shifts, filters.timeOff, filters.birthdays]);
 
   const dayItems = useMemo(() => {
     if (!selectedDay) return [];
@@ -258,6 +278,12 @@ export default function StaffCalendarPage() {
                 tone="emerald"
               />
               <WorkspaceStat
+                label="Birthdays"
+                value={calData.birthdays.length}
+                description="Staff birthdays this month."
+                tone="rose"
+              />
+              <WorkspaceStat
                 label="Upcoming"
                 value={upcomingItems.length}
                 description="Next scheduled items starting from today."
@@ -289,6 +315,7 @@ export default function StaffCalendarPage() {
                 { key: "events", label: "Events", activeClass: "border-indigo-200 bg-indigo-50 text-indigo-700" },
                 { key: "shifts", label: "My Shifts", activeClass: "border-blue-200 bg-blue-50 text-blue-700" },
                 { key: "timeOff", label: "My Time Off", activeClass: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+                { key: "birthdays", label: "Birthdays", activeClass: "border-pink-200 bg-pink-50 text-pink-700" },
               ].map((filter) => (
                 <button
                   key={filter.key}
@@ -382,7 +409,9 @@ export default function StaffCalendarPage() {
                                   ? "Event"
                                   : item._source === "shift"
                                     ? "Shift"
-                                    : "Time Off"}
+                                    : item._source === "birthday"
+                                      ? "Birthday"
+                                      : "Time Off"}
                               </span>
                               <div className="text-sm font-extrabold text-gray-900">
                                 {item.label}
@@ -398,6 +427,9 @@ export default function StaffCalendarPage() {
                             ) : null}
                             {item._source === "shift" && item._raw?.notes ? (
                               <div className="mt-2 text-xs text-gray-500">{item._raw.notes}</div>
+                            ) : null}
+                            {item._source === "birthday" && Number.isFinite(item._raw?.age) ? (
+                              <div className="mt-2 text-xs text-gray-500">Turning {item._raw.age}</div>
                             ) : null}
                             {item._source === "timeoff" && item._raw?.reason ? (
                               <div className="mt-2 text-xs text-gray-500">{item._raw.reason}</div>

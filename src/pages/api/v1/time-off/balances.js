@@ -81,7 +81,77 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Only admins can manage time-off balances" });
     }
 
-    const { centerId, userId, earnedDate, paidHours, unpaidHours, note } = req.body || {};
+    const { centerId, earnedDate, note, entries } = req.body || {};
+
+    if (Array.isArray(entries)) {
+      if (!centerId || !earnedDate) {
+        return res.status(400).json({ error: "centerId and earnedDate are required" });
+      }
+
+      const parsedEarnedDate = parseDateOrNull(earnedDate);
+      if (!parsedEarnedDate) {
+        return res.status(400).json({ error: "Invalid earnedDate" });
+      }
+
+      const sharedNote = note ? String(note).trim() : null;
+      const rows = [];
+      for (const entry of entries) {
+        const rowUserId = entry?.userId;
+        if (!rowUserId) continue;
+        const parsedPaidHours = parsePositiveHours(entry.paidHours);
+        const parsedUnpaidHours = parsePositiveHours(entry.unpaidHours);
+        if (Number.isNaN(parsedPaidHours) || Number.isNaN(parsedUnpaidHours)) {
+          return res.status(400).json({ error: "Hours must be zero or greater" });
+        }
+        if (parsedPaidHours <= 0 && parsedUnpaidHours <= 0) continue;
+        rows.push({ userId: rowUserId, paidHours: parsedPaidHours, unpaidHours: parsedUnpaidHours });
+      }
+
+      if (!rows.length) {
+        return res.status(400).json({
+          error: "Enter paid hours, unpaid hours, or both for at least one employee",
+        });
+      }
+
+      await prisma.$transaction(async (tx) => {
+        for (const row of rows) {
+          if (row.paidHours > 0) {
+            await tx.timeOffBalanceEntry.create({
+              data: {
+                userId: row.userId,
+                centerId,
+                balanceType: "PAID",
+                hours: row.paidHours,
+                earnedDate: parsedEarnedDate,
+                note: sharedNote,
+                createdById: session.user.id,
+              },
+            });
+          }
+          if (row.unpaidHours > 0) {
+            await tx.timeOffBalanceEntry.create({
+              data: {
+                userId: row.userId,
+                centerId,
+                balanceType: "UNPAID",
+                hours: row.unpaidHours,
+                earnedDate: parsedEarnedDate,
+                note: sharedNote,
+                createdById: session.user.id,
+              },
+            });
+          }
+        }
+      });
+
+      return res.status(201).json({
+        centerId,
+        earnedDate,
+        updatedUserIds: rows.map((row) => row.userId),
+      });
+    }
+
+    const { userId, paidHours, unpaidHours } = req.body || {};
     if (!centerId || !userId || !earnedDate) {
       return res.status(400).json({
         error: "centerId, userId, and earnedDate are required",
@@ -134,7 +204,7 @@ export default async function handler(req, res) {
       }
     });
 
-    const [summary, entries] = await Promise.all([
+    const [summary, entries2] = await Promise.all([
       getTimeOffBalanceSummary(prisma, {
         userId,
         centerId,
@@ -146,7 +216,7 @@ export default async function handler(req, res) {
       userId,
       centerId,
       summary,
-      entries,
+      entries: entries2,
     });
   }
 

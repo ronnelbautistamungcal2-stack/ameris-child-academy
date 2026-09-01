@@ -1349,17 +1349,6 @@ export default function AdminChildren() {
     return (f + l).toUpperCase() || "?";
   }
 
-  const AGE_COLORS = {
-    "0-1": { bg: "#FEF3C7", text: "#92400E", border: "#FDE68A" },
-    "2": { bg: "#DBEAFE", text: "#1E40AF", border: "#BFDBFE" },
-    "3": { bg: "#D1FAE5", text: "#065F46", border: "#A7F3D0" },
-    "4-5": { bg: "#EDE9FE", text: "#5B21B6", border: "#DDD6FE" },
-    "6-7": { bg: "#FCE7F3", text: "#9D174D", border: "#FBCFE8" },
-    "8-12": { bg: "#FEE2E2", text: "#991B1B", border: "#FECACA" },
-    "12+": { bg: "#F3F4F6", text: "#374151", border: "#E5E7EB" },
-    "Unknown": { bg: "#F3F4F6", text: "#6B7280", border: "#E5E7EB" },
-  };
-
   return (
     <AdminLayout title="Children">
       {/* Stats Row */}
@@ -1965,8 +1954,6 @@ export default function AdminChildren() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8 }}>
               {filteredSorted.map((ch) => {
                 const fullName = `${ch.firstName || ""} ${ch.lastName || ""}`.trim();
-                const age = childAgeGroup(ch);
-                const ageColor = AGE_COLORS[age] || AGE_COLORS["Unknown"];
                 const centerName = centerById[ch.centerId]?.name || "—";
                 const defaultClassRoomId = getDefaultClassRoomId(ch);
                 const effectiveClassRoomId = getEffectiveClassRoomId(ch);
@@ -2003,9 +1990,6 @@ export default function AdminChildren() {
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                         <span style={{ fontWeight: 700, fontSize: 14, color: "var(--admin-text)" }}>
                           {fullName || "Unnamed"}
-                        </span>
-                        <span style={{ ...ageBadgeStyle, background: ageColor.bg, color: ageColor.text, borderColor: ageColor.border }}>
-                          {age === "Unknown" ? "Age unknown" : `${age} yr`}
                         </span>
                         {ch.allergies && (
                           <span style={{ ...tagStyle, background: "#FEE2E2", color: "#991B1B", borderColor: "#FECACA" }}>
@@ -3228,16 +3212,6 @@ const avatarStyle = {
   fontWeight: 700,
   fontSize: 14,
   flexShrink: 0,
-};
-
-const ageBadgeStyle = {
-  fontSize: 10,
-  fontWeight: 700,
-  padding: "2px 8px",
-  borderRadius: 999,
-  border: "1px solid",
-  textTransform: "uppercase",
-  letterSpacing: "0.04em",
 };
 
 const tagStyle = {

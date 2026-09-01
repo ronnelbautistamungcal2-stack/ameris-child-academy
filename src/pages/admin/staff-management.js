@@ -1,16 +1,45 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import { SkeletonTable } from "@/components/ui/Skeleton";
+import MonthlyCalendar from "@/components/calendar/MonthlyCalendar";
 import { apiJson } from "@/lib/api";
-import { getTimeOffTypeLabel } from "@/lib/time-off";
+import { toCalendarDay } from "@/lib/calendar";
+import { getTimeOffTypeLabel, groupTimeOffRequests } from "@/lib/time-off";
+import { getChecklistAssignedUserIds } from "@/lib/dailyChecklistAssignees";
 import { useEffect, useState, useCallback, useMemo } from "react";
 
+const TIMEOFF_CALENDAR_LEGEND = [
+  { label: "Events", cls: "bg-indigo-100" },
+  { label: "Pending Requests", cls: "bg-amber-200" },
+  { label: "Approved Time Off", cls: "bg-emerald-100" },
+  { label: "Unexcused Time Off", cls: "bg-red-100" },
+];
+
 const TABS = [
+  { key: "checklists", label: "Checklists", icon: "✅" },
   { key: "attendance", label: "Attendance", icon: "📋" },
   { key: "time-off", label: "Time Off", icon: "🏖️" },
   { key: "training", label: "Training", icon: "📚" },
   { key: "budgets", label: "Budgets", icon: "💰" },
   { key: "evaluations", label: "Evaluations", icon: "⭐" },
 ];
+
+const CHECKLIST_CATEGORY_LABELS = {
+  OPENING: "Opening",
+  CLOSING: "Closing",
+  HEALTH_SAFETY: "Health & Safety",
+  CLEANING: "Cleaning",
+  MEALS: "Meals",
+  CLASSROOM: "Classroom",
+  OTHER: "Other",
+};
+
+function checklistGradeColor(pct) {
+  if (pct == null) return "bg-gray-100 text-gray-500";
+  if (pct >= 90) return "bg-emerald-100 text-emerald-800";
+  if (pct >= 75) return "bg-sky-100 text-sky-800";
+  if (pct >= 50) return "bg-amber-100 text-amber-800";
+  return "bg-red-100 text-red-800";
+}
 
 const ATT_STATUS_BADGE = {
   PRESENT: { bg: "bg-emerald-100 text-emerald-800", icon: "✓" },
@@ -323,6 +352,9 @@ export default function StaffManagement() {
           />
         ) : (
           <>
+            {activeTab === "checklists" && (
+              <ChecklistsTab centerId={centerId} teachers={evaluationTeachers} />
+            )}
             {activeTab === "attendance" && (
               <AttendanceTab centerId={centerId} teachers={staffUsers} />
             )}
@@ -351,6 +383,271 @@ export default function StaffManagement() {
   );
 }
 
+// ─── Checklists Tab ──────────────────────────────────────────
+
+function ChecklistsTab({ centerId, teachers }) {
+  const [rangeFrom, setRangeFrom] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  });
+  const [rangeTo, setRangeTo] = useState(today());
+  const [overview, setOverview] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedStaffId, setSelectedStaffId] = useState("");
+  const [detailDate, setDetailDate] = useState(today());
+  const [detailChecklists, setDetailChecklists] = useState([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
+
+  const loadOverview = useCallback(async () => {
+    if (!centerId) {
+      setOverview([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams({ centerId, from: rangeFrom, to: rangeTo });
+      const data = await apiJson(
+        `/api/v1/analytics/staff-checklist-overview?${qs.toString()}`,
+      );
+      setOverview(Array.isArray(data?.staff) ? data.staff : []);
+    } catch {
+      setOverview([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [centerId, rangeFrom, rangeTo]);
+
+  useEffect(() => {
+    loadOverview();
+  }, [loadOverview]);
+
+  const loadDetail = useCallback(async () => {
+    if (!centerId || !selectedStaffId || !detailDate) {
+      setDetailChecklists([]);
+      return;
+    }
+    setDetailLoading(true);
+    setDetailError("");
+    try {
+      const qs = new URLSearchParams({ centerId, date: detailDate });
+      const data = await apiJson(`/api/v1/daily-checklists?${qs.toString()}`);
+      const lists = Array.isArray(data) ? data : [];
+      const forStaff = lists.filter((checklist) =>
+        getChecklistAssignedUserIds(checklist).includes(selectedStaffId),
+      );
+      setDetailChecklists(forStaff);
+    } catch (error) {
+      setDetailError(error?.message || "Failed to load checklist");
+      setDetailChecklists([]);
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [centerId, selectedStaffId, detailDate]);
+
+  useEffect(() => {
+    loadDetail();
+  }, [loadDetail]);
+
+  const rosterRows = useMemo(() => {
+    const byId = new Map(overview.map((s) => [s.id, s]));
+    return teachers.map((teacher) => {
+      const stats = byId.get(teacher.id);
+      return (
+        stats || {
+          id: teacher.id,
+          name: teacher.name,
+          email: teacher.email,
+          role: teacher.role,
+          assignedCount: 0,
+          completedCount: 0,
+          pct: null,
+        }
+      );
+    });
+  }, [teachers, overview]);
+
+  const selectedStaff = rosterRows.find((row) => row.id === selectedStaffId) || null;
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <SectionTitle icon="✅" title="Checklist Grades" />
+          <div className="flex flex-wrap items-end gap-3">
+            <FilterInput label="From" type="date" value={rangeFrom} onChange={setRangeFrom} />
+            <FilterInput label="To" type="date" value={rangeTo} onChange={setRangeTo} />
+          </div>
+        </div>
+        <p className="mt-1 text-sm text-gray-500">
+          Percentage of assigned daily checklist items each staff member has completed
+          in the selected range. Click a row to see exactly what they checked off on a
+          given day.
+        </p>
+
+        {loading ? (
+          <Loading />
+        ) : rosterRows.length === 0 ? (
+          <div className="mt-6 py-8 text-center text-sm text-gray-500">
+            No staff found for this center.
+          </div>
+        ) : (
+          <div className="mt-4 overflow-x-auto rounded-xl border border-gray-100">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50/80 text-left text-xs font-bold uppercase tracking-wider text-gray-400">
+                  <th className="px-4 py-3">Employee</th>
+                  <th className="px-4 py-3">Role</th>
+                  <th className="px-4 py-3">Completed</th>
+                  <th className="px-4 py-3">Assigned Items/Day</th>
+                  <th className="px-4 py-3">Checklist Grade</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {rosterRows.map((row) => (
+                  <tr
+                    key={row.id}
+                    onClick={() =>
+                      setSelectedStaffId((current) => (current === row.id ? "" : row.id))
+                    }
+                    className={[
+                      "cursor-pointer border-b border-gray-50 transition hover:bg-blue-50/30",
+                      selectedStaffId === row.id ? "bg-blue-50/60" : "",
+                    ].join(" ")}
+                  >
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-800 to-sky-600 text-[10px] font-bold text-white">
+                          {getInitials(row.name)}
+                        </div>
+                        <span className="font-semibold text-gray-900">
+                          {row.name || row.email}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">{formatRole(row.role)}</td>
+                    <td className="px-4 py-3 text-gray-600">{row.completedCount}</td>
+                    <td className="px-4 py-3 text-gray-600">{row.assignedCount}</td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ${checklistGradeColor(row.pct)}`}
+                      >
+                        {row.pct == null ? "No data" : `${row.pct}%`}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right text-xs font-semibold text-blue-700">
+                      {selectedStaffId === row.id ? "Hide ↑" : "View →"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {selectedStaffId && (
+        <Card>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <SectionTitle
+              icon="🗓️"
+              title={`${selectedStaff?.name || selectedStaff?.email || "Staff member"}'s Checklist`}
+            />
+            <div className="flex items-end gap-3">
+              <FilterInput
+                label="Date"
+                type="date"
+                value={detailDate}
+                onChange={setDetailDate}
+              />
+              <button
+                type="button"
+                onClick={() => setSelectedStaffId("")}
+                className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+
+          {detailError ? (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {detailError}
+            </div>
+          ) : null}
+
+          {detailLoading ? (
+            <Loading />
+          ) : detailChecklists.length === 0 ? (
+            <div className="mt-6 py-8 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-xl">
+                📋
+              </div>
+              <p className="mt-3 text-sm font-semibold text-gray-600">
+                No checklist items assigned to {selectedStaff?.name || "this employee"}{" "}
+                for {fmtDate(detailDate)}.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-4 space-y-4">
+              {detailChecklists.map((checklist) => (
+                <div key={checklist.id} className="rounded-xl border border-gray-100 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-600">
+                      {CHECKLIST_CATEGORY_LABELS[checklist.category] || checklist.category}
+                    </span>
+                    <span className="text-sm font-extrabold text-gray-900">
+                      {checklist.title}
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {(checklist.items || []).map((item) => {
+                      const completion = (item.completions || []).find(
+                        (c) => c.completedById === selectedStaffId,
+                      );
+                      return (
+                        <div
+                          key={item.id}
+                          className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 ${
+                            completion
+                              ? "border-emerald-200 bg-emerald-50/50"
+                              : "border-gray-100 bg-gray-50/50"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                                completion
+                                  ? "bg-emerald-500 text-white"
+                                  : "border border-gray-300 bg-white text-transparent"
+                              }`}
+                            >
+                              ✓
+                            </span>
+                            <span className="text-sm font-medium text-gray-800">
+                              {item.title}
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-500">
+                            {completion
+                              ? `Checked ${fmtDateTime(completion.completedAt)}`
+                              : "Not checked off"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+    </div>
+  );
+}
+
 // ─── Attendance Tab ──────────────────────────────────────────
 
 function AttendanceTab({ centerId, teachers }) {
@@ -364,6 +661,13 @@ function AttendanceTab({ centerId, teachers }) {
   });
   const [summaryTo, setSummaryTo] = useState(today());
   const [summaryRecords, setSummaryRecords] = useState([]);
+  const [hoursFrom, setHoursFrom] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  });
+  const [hoursTo, setHoursTo] = useState(today());
+  const [hoursReport, setHoursReport] = useState([]);
+  const [hoursLoading, setHoursLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -418,6 +722,62 @@ function AttendanceTab({ centerId, teachers }) {
   useEffect(() => {
     loadSummary();
   }, [loadSummary]);
+
+  const loadHoursReport = useCallback(async () => {
+    setHoursLoading(true);
+    try {
+      const qs = new URLSearchParams({ centerId, from: hoursFrom, to: hoursTo });
+      const data = await apiJson(`/api/v1/staff-attendance/summary?${qs.toString()}`);
+      setHoursReport(Array.isArray(data?.reportByUser) ? data.reportByUser : []);
+    } catch {
+    } finally {
+      setHoursLoading(false);
+    }
+  }, [centerId, hoursFrom, hoursTo]);
+
+  useEffect(() => {
+    loadHoursReport();
+  }, [loadHoursReport]);
+
+  const handlePrintHoursReport = useCallback(() => {
+    const rows = hoursReport;
+    const html = `
+      <html>
+        <head>
+          <title>Staff Hours Worked Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; color: #111827; }
+            h1 { font-size: 20px; margin: 0 0 4px; }
+            .meta { color: #4b5563; font-size: 12px; margin-bottom: 16px; }
+            table { border-collapse: collapse; width: 100%; font-size: 12px; }
+            th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; vertical-align: top; }
+            th { background: #f3f4f6; }
+          </style>
+        </head>
+        <body>
+          <h1>Staff Hours Worked Report</h1>
+          <div class="meta">Period: ${escapeHtml(hoursFrom)} to ${escapeHtml(hoursTo)} | Employees: ${rows.length}</div>
+          <table>
+            <thead><tr><th>#</th><th>Employee</th><th>Total Hours</th><th>Present</th><th>Late</th><th>Absent</th><th>Half Day</th></tr></thead>
+            <tbody>
+              ${rows
+                .map(
+                  (r, i) =>
+                    `<tr><td>${i + 1}</td><td>${escapeHtml(r.name)}</td><td>${r.totalHours.toFixed(2)}</td><td>${r.present}</td><td>${r.late}</td><td>${r.absent}</td><td>${r.halfDay}</td></tr>`,
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+    const win = window.open("", "_blank", "width=1000,height=800");
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    win.print();
+  }, [hoursReport, hoursFrom, hoursTo]);
 
   const closeForm = useCallback(() => {
     setShowForm(false);
@@ -758,6 +1118,90 @@ function AttendanceTab({ centerId, teachers }) {
           </div>
         )}
       </Card>
+
+      {/* Hours Worked Report */}
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <SectionTitle icon="⏱️" title="Hours Worked Report" />
+          <SecondaryButton
+            onClick={handlePrintHoursReport}
+            disabled={!hoursReport.length}
+          >
+            Print Report
+          </SecondaryButton>
+        </div>
+        <p className="mt-1 text-sm text-gray-500">
+          Total hours worked per employee for the selected date range, ranked
+          highest to lowest.
+        </p>
+        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <FilterInput
+            label="From"
+            type="date"
+            value={hoursFrom}
+            onChange={setHoursFrom}
+          />
+          <FilterInput
+            label="To"
+            type="date"
+            value={hoursTo}
+            onChange={setHoursTo}
+          />
+        </div>
+        {hoursLoading ? (
+          <Loading />
+        ) : (
+          <div className="mt-4 overflow-x-auto rounded-xl border border-gray-100">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50/80 text-left text-xs font-bold uppercase tracking-wider text-gray-400">
+                  <th className="px-4 py-3">#</th>
+                  <th className="px-4 py-3">Employee</th>
+                  <th className="px-4 py-3">Total Hours</th>
+                  <th className="px-4 py-3">Present</th>
+                  <th className="px-4 py-3">Late</th>
+                  <th className="px-4 py-3">Absent</th>
+                  <th className="px-4 py-3">Half Day</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hoursReport.length ? (
+                  hoursReport.map((row, idx) => (
+                    <tr key={row.userId} className="border-b border-gray-50">
+                      <td className="px-4 py-3 text-gray-500">{idx + 1}</td>
+                      <td className="px-4 py-3 font-semibold text-gray-900">
+                        {row.name}
+                      </td>
+                      <td className="px-4 py-3 font-bold text-gray-900">
+                        {row.totalHours.toFixed(2)}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {row.present}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">{row.late}</td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {row.absent}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {row.halfDay}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      className="px-4 py-6 text-center text-sm text-gray-500"
+                    >
+                      No attendance records in this range.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
       {showForm && (
         <ModalShell
           title="Record Attendance"
@@ -932,10 +1376,7 @@ function AttendanceTab({ centerId, teachers }) {
 function TimeOffTab({ centerId, teachers }) {
   const [requests, setRequests] = useState([]);
   const [statusFilter, setStatusFilter] = useState("");
-  const [requestFrom, setRequestFrom] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  });
+  const [requestFrom, setRequestFrom] = useState(() => today());
   const [requestTo, setRequestTo] = useState(() => addDays(today(), 60));
   const [loading, setLoading] = useState(false);
   const [reviewTarget, setReviewTarget] = useState(null);
@@ -948,13 +1389,32 @@ function TimeOffTab({ centerId, teachers }) {
   const [balanceData, setBalanceData] = useState(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [balanceError, setBalanceError] = useState("");
-  const [balanceSaving, setBalanceSaving] = useState(false);
-  const [balanceForm, setBalanceForm] = useState({
-    earnedDate: today(),
-    paidHours: "",
-    unpaidHours: "",
-    note: "",
+  const [bulkEarnedDate, setBulkEarnedDate] = useState(() => today());
+  const [bulkNote, setBulkNote] = useState("");
+  const [bulkHours, setBulkHours] = useState({});
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkError, setBulkError] = useState("");
+  const [bulkSuccess, setBulkSuccess] = useState("");
+  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
+  const [calEvents, setCalEvents] = useState([]);
+  const [selectedDay, setSelectedDay] = useState(null);
+  const [unexcusedOpen, setUnexcusedOpen] = useState(false);
+  const [unexcusedForm, setUnexcusedForm] = useState({
+    userId: "",
+    date: today(),
+    startTime: "08:00",
+    endTime: "17:00",
+    coverageName: "",
+    notes: "",
   });
+  const [unexcusedSaving, setUnexcusedSaving] = useState(false);
+  const [unexcusedError, setUnexcusedError] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState({});
+
+  const toggleGroupExpanded = useCallback((key) => {
+    setExpandedGroups((current) => ({ ...current, [key]: !current[key] }));
+  }, []);
 
   useEffect(() => {
     if (!teachers.length) {
@@ -967,6 +1427,39 @@ function TimeOffTab({ centerId, teachers }) {
         : teachers[0].id,
     );
   }, [teachers]);
+
+  const loadCalendarEvents = useCallback(async () => {
+    if (!centerId) {
+      setCalEvents([]);
+      return;
+    }
+    try {
+      const from = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-01`;
+      const lastDay = new Date(calYear, calMonth + 1, 0).getDate();
+      const to = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      const data = await apiJson(
+        `/api/v1/time-off/calendar?centerId=${encodeURIComponent(centerId)}&from=${from}&to=${to}&includeEvents=1&includePending=1`,
+      );
+      setCalEvents(Array.isArray(data) ? data : []);
+    } catch {
+      setCalEvents([]);
+    }
+  }, [calMonth, calYear, centerId]);
+
+  useEffect(() => {
+    loadCalendarEvents();
+  }, [loadCalendarEvents]);
+
+  const calDayItems = useMemo(() => {
+    if (!selectedDay) return [];
+    const day = new Date(calYear, calMonth, selectedDay);
+    return calEvents.filter((evt) => {
+      const start = toCalendarDay(evt.startDate, { allDay: !!evt.allDay });
+      const end = toCalendarDay(evt.endDate, { allDay: !!evt.allDay });
+      if (!start || !end) return false;
+      return day >= start && day <= end;
+    });
+  }, [calEvents, calYear, calMonth, selectedDay]);
 
   const loadRequests = useCallback(async () => {
     if (!centerId) {
@@ -1024,7 +1517,11 @@ function TimeOffTab({ centerId, teachers }) {
     setReviewTarget(request);
     setReviewStatus(status);
     setReviewNotes(status === "APPROVED" ? request?.reviewNotes || "" : "");
-    setCoverageName(status === "APPROVED" ? request?.coverageName || "" : "");
+    setCoverageName(
+      status === "APPROVED" || status === "EDIT_COVERAGE"
+        ? request?.coverageName || ""
+        : "",
+    );
     setReviewError("");
   }, []);
 
@@ -1042,13 +1539,17 @@ function TimeOffTab({ centerId, teachers }) {
     setReviewSaving(true);
     setReviewError("");
     try {
+      const body =
+        reviewStatus === "EDIT_COVERAGE"
+          ? { coverageName }
+          : {
+              status: reviewStatus,
+              reviewNotes,
+              coverageName: reviewStatus === "APPROVED" ? coverageName : "",
+            };
       await apiJson(`/api/v1/time-off/${reviewTarget.id}`, {
         method: "PUT",
-        body: JSON.stringify({
-          status: reviewStatus,
-          reviewNotes,
-          coverageName: reviewStatus === "APPROVED" ? coverageName : "",
-        }),
+        body: JSON.stringify(body),
       });
       const reviewedUserId = reviewTarget?.user?.id || "";
       closeReview();
@@ -1062,40 +1563,154 @@ function TimeOffTab({ centerId, teachers }) {
     }
   };
 
-  const handleBalanceSave = async (event) => {
-    event.preventDefault();
-    if (!centerId || !balanceUserId) return;
-    setBalanceSaving(true);
-    setBalanceError("");
+  const updateBulkHour = useCallback((userId, field, value) => {
+    setBulkHours((current) => ({
+      ...current,
+      [userId]: { ...current[userId], [field]: value },
+    }));
+  }, []);
+
+  const handleBulkSave = async () => {
+    if (!centerId) return;
+    const entries = teachers
+      .map((teacher) => ({
+        userId: teacher.id,
+        paidHours: bulkHours[teacher.id]?.paid || "",
+        unpaidHours: bulkHours[teacher.id]?.unpaid || "",
+      }))
+      .filter((entry) => Number(entry.paidHours) > 0 || Number(entry.unpaidHours) > 0);
+
+    if (!entries.length) {
+      setBulkError("Enter paid hours, unpaid hours, or both for at least one employee.");
+      setBulkSuccess("");
+      return;
+    }
+
+    setBulkSaving(true);
+    setBulkError("");
+    setBulkSuccess("");
     try {
-      const data = await apiJson("/api/v1/time-off/balances", {
+      await apiJson("/api/v1/time-off/balances", {
         method: "POST",
         body: JSON.stringify({
           centerId,
-          userId: balanceUserId,
-          earnedDate: balanceForm.earnedDate,
-          paidHours: balanceForm.paidHours,
-          unpaidHours: balanceForm.unpaidHours,
-          note: balanceForm.note || null,
+          earnedDate: bulkEarnedDate,
+          note: bulkNote || null,
+          entries,
         }),
       });
-      setBalanceData(data);
-      setBalanceForm({
-        earnedDate: today(),
-        paidHours: "",
-        unpaidHours: "",
-        note: "",
-      });
+      setBulkHours({});
+      setBulkNote("");
+      setBulkSuccess(
+        `Added balance hours for ${entries.length} employee${entries.length === 1 ? "" : "s"}.`,
+      );
+      if (balanceUserId) {
+        await loadBalanceData();
+      }
     } catch (error) {
-      setBalanceError(error?.message || "Failed to save time-off balance");
+      setBulkError(error?.message || "Failed to save time-off balances");
     } finally {
-      setBalanceSaving(false);
+      setBulkSaving(false);
+    }
+  };
+
+  const openUnexcusedForm = useCallback(() => {
+    setUnexcusedForm({
+      userId: teachers[0]?.id || "",
+      date: today(),
+      startTime: "08:00",
+      endTime: "17:00",
+      coverageName: "",
+      notes: "",
+    });
+    setUnexcusedError("");
+    setUnexcusedOpen(true);
+  }, [teachers]);
+
+  const closeUnexcusedForm = useCallback(() => {
+    setUnexcusedOpen(false);
+    setUnexcusedSaving(false);
+    setUnexcusedError("");
+  }, []);
+
+  const handleUnexcusedSave = async () => {
+    if (!centerId || !unexcusedForm.userId) {
+      setUnexcusedError("Select an employee.");
+      return;
+    }
+    const start = new Date(`${unexcusedForm.date}T${unexcusedForm.startTime}`);
+    const end = new Date(`${unexcusedForm.date}T${unexcusedForm.endTime}`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      setUnexcusedError("Enter a valid date and time range.");
+      return;
+    }
+    if (end <= start) {
+      setUnexcusedError("End time must be after start time.");
+      return;
+    }
+
+    setUnexcusedSaving(true);
+    setUnexcusedError("");
+    try {
+      await apiJson("/api/v1/time-off", {
+        method: "POST",
+        body: JSON.stringify({
+          centerId,
+          userId: unexcusedForm.userId,
+          type: "UNEXCUSED",
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+          coverageName: unexcusedForm.coverageName || null,
+          reason: unexcusedForm.notes || null,
+        }),
+      });
+      const savedUserId = unexcusedForm.userId;
+      closeUnexcusedForm();
+      await loadRequests();
+      await loadCalendarEvents();
+      if (savedUserId === balanceUserId) {
+        await loadBalanceData();
+      }
+    } catch (error) {
+      setUnexcusedError(error?.message || "Failed to save unexcused time off");
+      setUnexcusedSaving(false);
     }
   };
 
   const pending = requests.filter((r) => r.status === "PENDING");
   const rest = requests.filter((r) => r.status !== "PENDING");
   const tableRows = statusFilter ? requests : rest;
+  const fullGroupSizeByKey = useMemo(() => {
+    const map = new Map();
+    for (const r of requests) {
+      const key = r.requestGroupId || r.id;
+      map.set(key, (map.get(key) || 0) + 1);
+    }
+    return map;
+  }, [requests]);
+  const pendingGroups = useMemo(
+    () => groupTimeOffRequests(pending, fullGroupSizeByKey),
+    [pending, fullGroupSizeByKey],
+  );
+  const groupDayLabelById = useMemo(() => {
+    const byKey = new Map();
+    for (const r of requests) {
+      const key = r.requestGroupId || r.id;
+      if (!byKey.has(key)) byKey.set(key, []);
+      byKey.get(key).push(r);
+    }
+    const labels = new Map();
+    for (const items of byKey.values()) {
+      if (items.length < 2) continue;
+      const sorted = [...items].sort(
+        (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),
+      );
+      sorted.forEach((item, idx) => {
+        labels.set(item.id, `Day ${idx + 1} of ${sorted.length}`);
+      });
+    }
+    return labels;
+  }, [requests]);
   const selectedBalanceUser =
     teachers.find((teacher) => teacher.id === balanceUserId) || null;
   const balanceSummary = balanceData?.summary || null;
@@ -1105,150 +1720,281 @@ function TimeOffTab({ centerId, teachers }) {
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={openUnexcusedForm}
+          disabled={!teachers.length}
+          className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-700 disabled:opacity-50"
+        >
+          + Enter Unexcused Time Off
+        </button>
+      </div>
       <Card>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <SectionTitle icon="Hours" title="Time-Off Balances" />
-          <div className="grid w-full gap-3 md:max-w-3xl md:grid-cols-4">
-            <FilterSelect
-              label="Employee"
-              value={balanceUserId}
-              onChange={setBalanceUserId}
-              disabled={!teachers.length}
-            >
-              <option value="">Select employee</option>
-              {teachers.map((teacher) => (
-                <option key={teacher.id} value={teacher.id}>
-                  {teacher.name || teacher.email}
-                </option>
-              ))}
-            </FilterSelect>
-            <FilterInput
-              label="Earned Date"
-              type="date"
-              value={balanceForm.earnedDate}
-              onChange={(value) =>
-                setBalanceForm((current) => ({ ...current, earnedDate: value }))
-              }
-            />
-            <FilterInput
-              label="Paid Hours"
-              type="number"
-              value={balanceForm.paidHours}
-              onChange={(value) =>
-                setBalanceForm((current) => ({ ...current, paidHours: value }))
-              }
-            />
-            <FilterInput
-              label="Unpaid Hours"
-              type="number"
-              value={balanceForm.unpaidHours}
-              onChange={(value) =>
-                setBalanceForm((current) => ({ ...current, unpaidHours: value }))
-              }
-            />
-          </div>
+        <SectionTitle icon="🗓️" title="Calendar" />
+        <p className="mt-1 text-sm text-gray-500">
+          Center events plus pending and approved time-off requests for all staff.
+        </p>
+        <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_minmax(0,280px)]">
+          <MonthlyCalendar
+            year={calYear}
+            month={calMonth}
+            events={calEvents}
+            legendItems={TIMEOFF_CALENDAR_LEGEND}
+            selectedDay={selectedDay}
+            onDayClick={setSelectedDay}
+            onMonthChange={(nextYear, nextMonth) => {
+              setCalYear(nextYear);
+              setCalMonth(nextMonth);
+              setSelectedDay(null);
+            }}
+          />
+
+          {selectedDay ? (
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-extrabold text-gray-900">
+                  {new Date(calYear, calMonth, selectedDay).toLocaleDateString(undefined, {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDay(null)}
+                  aria-label="Close day detail"
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  &#10005;
+                </button>
+              </div>
+
+              {calDayItems.length === 0 ? (
+                <div className="mt-3 text-sm text-gray-500">No items this day.</div>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  {calDayItems.map((item) => (
+                    <div key={item.id} className="rounded-xl border border-gray-200 bg-white p-3">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+                            item._source === "event"
+                              ? "bg-indigo-100 text-indigo-700"
+                              : item.isUnexcused
+                                ? "bg-red-100 text-red-700"
+                                : "bg-emerald-100 text-emerald-700"
+                          }`}
+                        >
+                          {item._source === "event"
+                            ? "EVENT"
+                            : item.isUnexcused
+                              ? "UNEXCUSED"
+                              : "TIME OFF"}
+                        </span>
+                        <span className="text-sm font-semibold text-gray-900">{item.label}</span>
+                      </div>
+                      {item._source === "event" && item.description ? (
+                        <div className="mt-1 text-xs text-gray-600">{item.description}</div>
+                      ) : null}
+                      {item._source === "timeoff" ? (
+                        <>
+                          <div className="mt-1 text-xs text-gray-600">
+                            Status: {item.status}
+                            {!item.isUnexcused && item.reason ? ` • ${item.reason}` : ""}
+                          </div>
+                          <div className="mt-1 text-xs text-gray-600">
+                            {fmtTimeOffRange(item.startDate, item.endDate)}
+                          </div>
+                          {item.isUnexcused ? (
+                            <div className="mt-1 text-xs text-gray-600">
+                              Cover: {item.coverageName || "Unassigned"}
+                            </div>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+      </Card>
+
+      <Card>
+        <SectionTitle icon="Hours" title="Time-Off Balances" />
+        <p className="mt-1 text-sm text-gray-500">
+          Enter the earned date once, then fill in paid and/or unpaid hours for anyone who earned time this round. Leave an employee's fields blank to skip them.
+        </p>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 md:max-w-lg">
+          <FilterInput label="Earned Date" type="date" value={bulkEarnedDate} onChange={setBulkEarnedDate} />
+          <FilterInput label="Admin Note (optional)" type="text" value={bulkNote} onChange={setBulkNote} />
         </div>
 
-        {balanceError ? (
+        {bulkError ? (
           <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {balanceError}
+            {bulkError}
+          </div>
+        ) : null}
+        {bulkSuccess ? (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {bulkSuccess}
           </div>
         ) : null}
 
-        {!selectedBalanceUser ? (
-          <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-            Select an employee to manage paid and unpaid time-off balances.
-          </div>
-        ) : (
-          <>
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
-              <KpiCard
-                label="Paid Available"
-                value={balanceLoading ? "..." : balanceSummary?.paidAvailable ?? 0}
-                color="emerald"
-              />
-              <KpiCard
-                label="Unpaid Available"
-                value={balanceLoading ? "..." : balanceSummary?.unpaidAvailable ?? 0}
-                color="sky"
-              />
-              <KpiCard
-                label="Paid Earned"
-                value={balanceLoading ? "..." : balanceSummary?.paidEarned ?? 0}
-                color="gray"
-              />
-              <KpiCard
-                label="Unpaid Earned"
-                value={balanceLoading ? "..." : balanceSummary?.unpaidEarned ?? 0}
-                color="gray"
-              />
-            </div>
-
-            <form
-              onSubmit={handleBalanceSave}
-              className="mt-4 space-y-4 rounded-xl border border-blue-100 bg-blue-50/30 p-5"
-            >
-              <TextArea
-                label="Admin Note"
-                value={balanceForm.note}
-                onChange={(value) =>
-                  setBalanceForm((current) => ({ ...current, note: value }))
-                }
-              />
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={balanceSaving}
-                  className="rounded-xl bg-gradient-to-r from-blue-800 to-sky-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:from-blue-900 hover:to-sky-700 disabled:opacity-50"
-                >
-                  {balanceSaving ? "Saving..." : "Add Balance Hours"}
-                </button>
-              </div>
-            </form>
-
-            <div className="mt-4 overflow-x-auto rounded-xl border border-gray-100">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200 bg-gray-50/80 text-left text-xs font-bold uppercase tracking-wider text-gray-400">
-                    <th className="px-4 py-3">Type</th>
-                    <th className="px-4 py-3">Hours</th>
-                    <th className="px-4 py-3">Earned Date</th>
-                    <th className="px-4 py-3">Added By</th>
-                    <th className="px-4 py-3">Note</th>
+        <div className="mt-4 max-h-[480px] overflow-y-auto overflow-x-auto rounded-xl border border-gray-100">
+          <table className="min-w-full text-sm">
+            <thead className="sticky top-0">
+              <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs font-bold uppercase tracking-wider text-gray-400">
+                <th className="px-4 py-3">Employee</th>
+                <th className="px-4 py-3">Paid Hours</th>
+                <th className="px-4 py-3">Unpaid Hours</th>
+              </tr>
+            </thead>
+            <tbody>
+              {teachers.length ? (
+                teachers.map((teacher) => (
+                  <tr key={teacher.id} className="border-b border-gray-50">
+                    <td className="px-4 py-2 font-semibold text-gray-900">
+                      {teacher.name || teacher.email}
+                    </td>
+                    <td className="px-4 py-2">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.25"
+                        placeholder="—"
+                        value={bulkHours[teacher.id]?.paid || ""}
+                        onChange={(e) => updateBulkHour(teacher.id, "paid", e.target.value)}
+                        className="w-28 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm font-medium text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      />
+                    </td>
+                    <td className="px-4 py-2">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.25"
+                        placeholder="—"
+                        value={bulkHours[teacher.id]?.unpaid || ""}
+                        onChange={(e) => updateBulkHour(teacher.id, "unpaid", e.target.value)}
+                        className="w-28 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm font-medium text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      />
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {balanceEntries.length ? (
-                    balanceEntries.map((entry) => (
-                      <tr
-                        key={entry.id}
-                        className="border-b border-gray-50 transition hover:bg-blue-50/30"
-                      >
-                        <td className="px-4 py-3 font-semibold text-gray-900">
-                          {getTimeOffTypeLabel(entry.balanceType)}
-                        </td>
-                        <td className="px-4 py-3 text-gray-600">{entry.hours}</td>
-                        <td className="px-4 py-3 text-gray-600">
-                          {fmtDate(entry.earnedDate)}
-                        </td>
-                        <td className="px-4 py-3 text-gray-500">
-                          {entry.createdBy?.name || entry.createdBy?.email || ""}
-                        </td>
-                        <td className="px-4 py-3 text-gray-500">{entry.note || ""}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td className="px-4 py-6 text-sm text-gray-500" colSpan={5}>
-                        No balance entries have been added for {selectedBalanceUser.name || selectedBalanceUser.email}.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                ))
+              ) : (
+                <tr>
+                  <td className="px-4 py-6 text-sm text-gray-500" colSpan={3}>
+                    No employees found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={handleBulkSave}
+            disabled={bulkSaving || !teachers.length}
+            className="rounded-xl bg-gradient-to-r from-blue-800 to-sky-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:from-blue-900 hover:to-sky-700 disabled:opacity-50"
+          >
+            {bulkSaving ? "Saving..." : "Save Balance Hours"}
+          </button>
+        </div>
+
+        <div className="mt-6 border-t border-gray-100 pt-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm font-extrabold text-gray-900">Employee History</div>
+            <div className="w-full max-w-xs">
+              <FilterSelect
+                label="Employee"
+                value={balanceUserId}
+                onChange={setBalanceUserId}
+                disabled={!teachers.length}
+              >
+                <option value="">Select employee</option>
+                {teachers.map((teacher) => (
+                  <option key={teacher.id} value={teacher.id}>
+                    {teacher.name || teacher.email}
+                  </option>
+                ))}
+              </FilterSelect>
             </div>
-          </>
-        )}
+          </div>
+
+          {balanceError ? (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {balanceError}
+            </div>
+          ) : null}
+
+          {!selectedBalanceUser ? (
+            <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+              Select an employee to view their paid and unpaid time-off balances.
+            </div>
+          ) : (
+            <>
+              <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <KpiCard
+                  label="Paid Available"
+                  value={balanceLoading ? "..." : balanceSummary?.paidAvailable ?? 0}
+                  color="emerald"
+                />
+                <KpiCard
+                  label="Unpaid Available"
+                  value={balanceLoading ? "..." : balanceSummary?.unpaidAvailable ?? 0}
+                  color="sky"
+                />
+              </div>
+
+              <div className="mt-4 overflow-x-auto rounded-xl border border-gray-100">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50/80 text-left text-xs font-bold uppercase tracking-wider text-gray-400">
+                      <th className="px-4 py-3">Type</th>
+                      <th className="px-4 py-3">Hours</th>
+                      <th className="px-4 py-3">Earned Date</th>
+                      <th className="px-4 py-3">Added By</th>
+                      <th className="px-4 py-3">Note</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {balanceEntries.length ? (
+                      balanceEntries.map((entry) => (
+                        <tr
+                          key={entry.id}
+                          className="border-b border-gray-50 transition hover:bg-blue-50/30"
+                        >
+                          <td className="px-4 py-3 font-semibold text-gray-900">
+                            {getTimeOffTypeLabel(entry.balanceType)}
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">{entry.hours}</td>
+                          <td className="px-4 py-3 text-gray-600">
+                            {fmtDate(entry.earnedDate)}
+                          </td>
+                          <td className="px-4 py-3 text-gray-500">
+                            {entry.createdBy?.name || entry.createdBy?.email || ""}
+                          </td>
+                          <td className="px-4 py-3 text-gray-500">{entry.note || ""}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td className="px-4 py-6 text-sm text-gray-500" colSpan={5}>
+                          No balance entries have been added for {selectedBalanceUser.name || selectedBalanceUser.email}.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
       </Card>
 
       {/* Pending Requests */}
@@ -1264,50 +2010,97 @@ function TimeOffTab({ centerId, teachers }) {
             </span>
           </div>
           <div className="mt-4 space-y-3">
-            {pending.map((r) => (
-              <div
-                key={r.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-white p-4 shadow-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-800 to-sky-600 text-xs font-bold text-white">
-                    {getInitials(r.user?.name)}
+            {pendingGroups.map((group) => {
+              const r = group.items[0];
+              const expanded = !!expandedGroups[group.key];
+              return (
+                <div
+                  key={group.key}
+                  className="rounded-xl border border-amber-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-800 to-sky-600 text-xs font-bold text-white">
+                        {getInitials(r.user?.name)}
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-gray-900">
+                          {r.user?.name}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          <span className="font-semibold text-gray-700">
+                            {r.typeLabel || getTimeOffTypeLabel(r.type)}
+                          </span>
+                          {" · "}
+                          {fmtTimeOffRange(group.rangeStart, group.rangeEnd)}
+                          {r.reason && (
+                            <span className="ml-2 text-gray-400">({r.reason})</span>
+                          )}
+                          {group.isGrouped && (
+                            <button
+                              type="button"
+                              onClick={() => toggleGroupExpanded(group.key)}
+                              className="ml-2 font-semibold text-amber-700 underline decoration-dotted"
+                            >
+                              {group.items.length} of {group.fullGroupSize} day
+                              {group.fullGroupSize === 1 ? "" : "s"} pending
+                              {expanded ? " (hide days)" : " (review by day)"}
+                            </button>
+                          )}
+                        </div>
+                        <div className="mt-1 text-[11px] text-gray-400">
+                          Submitted {fmtDateTime(r.createdAt)}
+                        </div>
+                      </div>
+                    </div>
+                    {!group.isGrouped && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => openReview(r, "APPROVED")}
+                          className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition"
+                        >
+                          ✓ Approve
+                        </button>
+                        <button
+                          onClick={() => openReview(r, "DENIED")}
+                          className="rounded-lg bg-red-500 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-red-600 transition"
+                        >
+                          ✕ Deny
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <div className="text-sm font-bold text-gray-900">
-                      {r.user?.name}
+                  {group.isGrouped && expanded && (
+                    <div className="mt-3 space-y-2 border-t border-amber-100 pt-3">
+                      {group.items.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50/60 px-3 py-2"
+                        >
+                          <span className="text-xs font-semibold text-gray-700">
+                            {fmtTimeOffRange(item.startDate, item.endDate)}
+                          </span>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => openReview(item, "APPROVED")}
+                              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition"
+                            >
+                              ✓ Approve
+                            </button>
+                            <button
+                              onClick={() => openReview(item, "DENIED")}
+                              className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-red-600 transition"
+                            >
+                              ✕ Deny
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      <span className="font-semibold text-gray-700">
-                        {r.typeLabel || getTimeOffTypeLabel(r.type)}
-                      </span>
-                      {" · "}
-                      {fmtTimeOffRange(r.startDate, r.endDate)}
-                      {r.reason && (
-                        <span className="ml-2 text-gray-400">({r.reason})</span>
-                      )}
-                    </div>
-                    <div className="mt-1 text-[11px] text-gray-400">
-                      Submitted {fmtDateTime(r.createdAt)}
-                    </div>
-                  </div>
+                  )}
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => openReview(r, "APPROVED")}
-                    className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition"
-                  >
-                    ✓ Approve
-                  </button>
-                  <button
-                    onClick={() => openReview(r, "DENIED")}
-                    className="rounded-lg bg-red-500 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-red-600 transition"
-                  >
-                    ✕ Deny
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -1354,6 +2147,7 @@ function TimeOffTab({ centerId, teachers }) {
                   <th className="px-4 py-3">Coverage</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Reviewed By</th>
+                  <th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1366,10 +2160,21 @@ function TimeOffTab({ centerId, teachers }) {
                       {r.user?.name || "—"}
                     </td>
                     <td className="px-4 py-3">
-                      {r.typeLabel || getTimeOffTypeLabel(r.type)}
+                      {r.isUnexcused ? (
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">
+                          {r.typeLabel || getTimeOffTypeLabel(r.type)}
+                        </span>
+                      ) : (
+                        r.typeLabel || getTimeOffTypeLabel(r.type)
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-600">
                       {fmtTimeOffRange(r.startDate, r.endDate)}
+                      {groupDayLabelById.has(r.id) && (
+                        <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
+                          {groupDayLabelById.get(r.id)}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-500">
                       {fmtDateTime(r.createdAt)}
@@ -1386,6 +2191,26 @@ function TimeOffTab({ centerId, teachers }) {
                     <td className="px-4 py-3 text-gray-500">
                       {r.reviewedBy?.name || ""}
                     </td>
+                    <td className="px-4 py-3">
+                      {r.status === "APPROVED" ? (
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => openReview(r, "EDIT_COVERAGE")}
+                            className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 shadow-sm transition hover:bg-blue-100"
+                          >
+                            Edit Coverage
+                          </button>
+                          <button
+                            onClick={() => openReview(r, "CANCELLED")}
+                            className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700 shadow-sm transition hover:bg-amber-100"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        ""
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1395,7 +2220,15 @@ function TimeOffTab({ centerId, teachers }) {
       </Card>
       {reviewTarget ? (
         <ModalShell
-          title={reviewStatus === "APPROVED" ? "Approve Time-Off Request" : "Deny Time-Off Request"}
+          title={
+            reviewStatus === "APPROVED"
+              ? "Approve Time-Off Request"
+              : reviewStatus === "DENIED"
+                ? "Deny Time-Off Request"
+                : reviewStatus === "CANCELLED"
+                  ? "Cancel Approved Time-Off"
+                  : "Edit Coverage"
+          }
           subtitle={`${reviewTarget.user?.name || "Employee"} · ${fmtTimeOffRange(reviewTarget.startDate, reviewTarget.endDate)}`}
           onClose={closeReview}
         >
@@ -1406,7 +2239,17 @@ function TimeOffTab({ centerId, teachers }) {
               </div>
             ) : null}
 
-            {reviewStatus === "APPROVED" ? (
+            {reviewStatus === "CANCELLED" ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                Cancelling this approved request will return{" "}
+                <strong>{reviewTarget.hoursRequested || 0} hours</strong> to{" "}
+                {reviewTarget.user?.name || "this employee"}&apos;s{" "}
+                {(reviewTarget.typeLabel || getTimeOffTypeLabel(reviewTarget.type)).toLowerCase()}{" "}
+                balance.
+              </div>
+            ) : null}
+
+            {reviewStatus === "APPROVED" || reviewStatus === "EDIT_COVERAGE" ? (
               <label className="block">
                 <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">
                   Coverage Name
@@ -1428,19 +2271,27 @@ function TimeOffTab({ centerId, teachers }) {
               </label>
             ) : null}
 
-            <label className="block">
-              <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                Review Notes
-              </div>
-              <textarea
-                value={reviewNotes}
-                onChange={(event) => setReviewNotes(event.target.value)}
-                rows={4}
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-medium text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
-                placeholder={reviewStatus === "APPROVED" ? "Optional notes for the approval" : "Optional reason for denying this request"}
-                disabled={reviewSaving}
-              />
-            </label>
+            {reviewStatus !== "EDIT_COVERAGE" ? (
+              <label className="block">
+                <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                  Review Notes
+                </div>
+                <textarea
+                  value={reviewNotes}
+                  onChange={(event) => setReviewNotes(event.target.value)}
+                  rows={4}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-medium text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  placeholder={
+                    reviewStatus === "APPROVED"
+                      ? "Optional notes for the approval"
+                      : reviewStatus === "CANCELLED"
+                        ? "Optional reason for cancelling this approved time off"
+                        : "Optional reason for denying this request"
+                  }
+                  disabled={reviewSaving}
+                />
+              </label>
+            ) : null}
 
             <div className="flex flex-wrap justify-end gap-3 border-t border-gray-100 pt-4">
               <button
@@ -1449,7 +2300,7 @@ function TimeOffTab({ centerId, teachers }) {
                 className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
                 disabled={reviewSaving}
               >
-                Cancel
+                Close
               </button>
               <button
                 type="button"
@@ -1457,17 +2308,140 @@ function TimeOffTab({ centerId, teachers }) {
                 className={`rounded-xl px-5 py-2.5 text-sm font-bold text-white shadow-sm transition disabled:opacity-50 ${
                   reviewStatus === "APPROVED"
                     ? "bg-emerald-600 hover:bg-emerald-700"
-                    : "bg-red-600 hover:bg-red-700"
+                    : reviewStatus === "EDIT_COVERAGE"
+                      ? "bg-blue-600 hover:bg-blue-700"
+                      : reviewStatus === "CANCELLED"
+                        ? "bg-amber-600 hover:bg-amber-700"
+                        : "bg-red-600 hover:bg-red-700"
                 }`}
                 disabled={reviewSaving}
               >
                 {reviewSaving
                   ? reviewStatus === "APPROVED"
                     ? "Approving..."
-                    : "Denying..."
+                    : reviewStatus === "EDIT_COVERAGE"
+                      ? "Saving..."
+                      : reviewStatus === "CANCELLED"
+                        ? "Cancelling..."
+                        : "Denying..."
                   : reviewStatus === "APPROVED"
                     ? "Approve Request"
-                    : "Deny Request"}
+                    : reviewStatus === "EDIT_COVERAGE"
+                      ? "Save Coverage"
+                      : reviewStatus === "CANCELLED"
+                        ? "Cancel Time Off"
+                        : "Deny Request"}
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      ) : null}
+      {unexcusedOpen ? (
+        <ModalShell
+          title="Enter Unexcused Time Off"
+          subtitle="Records an absence directly and immediately reduces the employee's unpaid hours balance — even below zero."
+          onClose={closeUnexcusedForm}
+        >
+          <div className="space-y-5">
+            {unexcusedError ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {unexcusedError}
+              </div>
+            ) : null}
+
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              This will immediately reduce the employee&apos;s unpaid hours balance, even into the negative.
+            </div>
+
+            <FilterSelect
+              label="Employee Name"
+              value={unexcusedForm.userId}
+              onChange={(value) =>
+                setUnexcusedForm((current) => ({ ...current, userId: value }))
+              }
+              disabled={!teachers.length}
+            >
+              <option value="">Select employee</option>
+              {teachers.map((teacher) => (
+                <option key={teacher.id} value={teacher.id}>
+                  {teacher.name || teacher.email}
+                </option>
+              ))}
+            </FilterSelect>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <FilterInput
+                label="Date"
+                type="date"
+                value={unexcusedForm.date}
+                onChange={(value) =>
+                  setUnexcusedForm((current) => ({ ...current, date: value }))
+                }
+              />
+              <FilterInput
+                label="Start Time"
+                type="time"
+                value={unexcusedForm.startTime}
+                onChange={(value) =>
+                  setUnexcusedForm((current) => ({ ...current, startTime: value }))
+                }
+              />
+              <FilterInput
+                label="End Time"
+                type="time"
+                value={unexcusedForm.endTime}
+                onChange={(value) =>
+                  setUnexcusedForm((current) => ({ ...current, endTime: value }))
+                }
+              />
+            </div>
+
+            <label className="block">
+              <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                Cover
+              </div>
+              <input
+                type="text"
+                value={unexcusedForm.coverageName}
+                onChange={(event) =>
+                  setUnexcusedForm((current) => ({ ...current, coverageName: event.target.value }))
+                }
+                list="timeoff-coverage-options"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-medium text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                placeholder="Who is covering this shift?"
+                disabled={unexcusedSaving}
+              />
+              <datalist id="timeoff-coverage-options">
+                {teachers.map((teacher) => (
+                  <option key={teacher.id} value={teacher.name || teacher.email || ""} />
+                ))}
+              </datalist>
+            </label>
+
+            <TextArea
+              label="Notes"
+              value={unexcusedForm.notes}
+              onChange={(value) =>
+                setUnexcusedForm((current) => ({ ...current, notes: value }))
+              }
+            />
+
+            <div className="flex flex-wrap justify-end gap-3 border-t border-gray-100 pt-4">
+              <button
+                type="button"
+                onClick={closeUnexcusedForm}
+                className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+                disabled={unexcusedSaving}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={handleUnexcusedSave}
+                className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-700 disabled:opacity-50"
+                disabled={unexcusedSaving}
+              >
+                {unexcusedSaving ? "Saving..." : "Save Unexcused Time Off"}
               </button>
             </div>
           </div>

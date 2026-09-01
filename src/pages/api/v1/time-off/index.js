@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { isEmployeeRole, isNonAdminEmployeeRole } from "@/lib/roles";
@@ -5,6 +6,9 @@ import {
   getTimeOffAvailabilityWarning,
   decorateTimeOffRequest,
   normalizeTimeOffType,
+  isUnexcusedType,
+  calculateTimeOffHours,
+  splitTimeOffRangeIntoWorkdays,
 } from "@/lib/time-off";
 
 function applyRequestDateRange(where, from, to) {
@@ -88,7 +92,16 @@ async function handleGet(req, res, session) {
 }
 
 async function handlePost(req, res, session) {
-  const { centerId, type, startDate, endDate, reason, overrideBalanceWarning } = req.body || {};
+  const {
+    centerId,
+    type,
+    startDate,
+    endDate,
+    reason,
+    coverageName,
+    userId,
+    overrideBalanceWarning,
+  } = req.body || {};
   if (!centerId || !startDate || !endDate) {
     return res.status(400).json({ error: "centerId, startDate, and endDate are required" });
   }
@@ -101,31 +114,96 @@ async function handlePost(req, res, session) {
   const end = new Date(endDate);
   if (end < start) return res.status(400).json({ error: "endDate must be after startDate" });
 
-  const normalizedType = normalizeTimeOffType(type);
-  const warning = await getTimeOffAvailabilityWarning(prisma, {
-    userId: session.user.id,
+  const unexcused = isUnexcusedType(type);
+  if (unexcused && session.user.role !== "ADMIN") {
+    return res.status(403).json({ error: "Only admins can record unexcused time off" });
+  }
+  if (unexcused && !userId) {
+    return res.status(400).json({ error: "userId is required for unexcused time off" });
+  }
+
+  const targetUserId = unexcused ? userId : session.user.id;
+
+  // A request spanning multiple calendar days is split into one row per
+  // weekday (sharing a requestGroupId) so admins can approve or deny
+  // individual days, while the employee still only fills out one form.
+  // Unexcused entries are single administrative records, so they're never
+  // split even if they span multiple days.
+  const workdaySplit = unexcused ? null : splitTimeOffRangeIntoWorkdays(start, end);
+  if (workdaySplit && workdaySplit.length === 0) {
+    return res.status(400).json({ error: "Selected range doesn't include any weekdays" });
+  }
+  const days = workdaySplit && workdaySplit.length > 1 ? workdaySplit : null;
+
+  // Unexcused time off is an administrative record of what already happened,
+  // so it skips the balance-overage warning and reduces unpaid hours directly,
+  // even below zero.
+  if (!unexcused) {
+    const normalizedType = normalizeTimeOffType(type);
+    const totalHours = days
+      ? days.reduce((sum, day) => sum + calculateTimeOffHours(day.startDate, day.endDate), 0)
+      : undefined;
+    const warning = await getTimeOffAvailabilityWarning(prisma, {
+      userId: targetUserId,
+      centerId,
+      type: normalizedType,
+      startDate: start,
+      endDate: end,
+      precomputedHours: totalHours,
+    });
+    if (warning.overLimit && !overrideBalanceWarning) {
+      return res.status(409).json({
+        error: `This request exceeds the employee's ${warning.balanceType.toLowerCase()} hours available`,
+        code: "TIME_OFF_BALANCE_WARNING",
+        canProceed: true,
+        warning,
+      });
+    }
+  }
+
+  const baseData = {
+    userId: targetUserId,
     centerId,
-    type: normalizedType,
-    startDate: start,
-    endDate: end,
-  });
-  if (warning.overLimit && !overrideBalanceWarning) {
-    return res.status(409).json({
-      error: `This request exceeds the employee's ${warning.balanceType.toLowerCase()} hours available`,
-      code: "TIME_OFF_BALANCE_WARNING",
-      canProceed: true,
-      warning,
+    type: unexcused ? "UNEXCUSED" : normalizeTimeOffType(type),
+    reason: reason || null,
+    ...(unexcused
+      ? {
+          status: "APPROVED",
+          coverageName: String(coverageName || "").trim() || null,
+          reviewedById: session.user.id,
+          reviewedAt: new Date(),
+        }
+      : {}),
+  };
+
+  if (days) {
+    const requestGroupId = crypto.randomUUID();
+    const created = await prisma.$transaction(
+      days.map((day) =>
+        prisma.timeOffRequest.create({
+          data: {
+            ...baseData,
+            requestGroupId,
+            startDate: day.startDate,
+            endDate: day.endDate,
+          },
+          include: {
+            user: { select: { id: true, name: true, email: true } },
+          },
+        }),
+      ),
+    );
+    return res.status(201).json({
+      requestGroupId,
+      requests: created.map(decorateTimeOffRequest),
     });
   }
 
   const request = await prisma.timeOffRequest.create({
     data: {
-      userId: session.user.id,
-      centerId,
-      type: normalizedType,
-      startDate: start,
-      endDate: end,
-      reason: reason || null,
+      ...baseData,
+      startDate: workdaySplit ? workdaySplit[0].startDate : start,
+      endDate: workdaySplit ? workdaySplit[0].endDate : end,
     },
     include: {
       user: { select: { id: true, name: true, email: true } },

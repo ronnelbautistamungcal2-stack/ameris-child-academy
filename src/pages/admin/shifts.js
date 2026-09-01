@@ -76,7 +76,24 @@ export default function ShiftsPage() {
     } catch (err) { setError(err.message || "Failed to load shifts"); }
   }, [centerId, weekStart]);
 
-  useEffect(() => { loadShifts(); }, [loadShifts]);
+  const autoFillFromSchedules = useCallback(async () => {
+    if (!centerId) return;
+    try {
+      await apiJson("/api/v1/shifts/generate", {
+        method: "POST",
+        body: JSON.stringify({ centerId, weekStart: toDateInput(weekStart) }),
+      });
+    } catch (err) {
+      // non-fatal: staff may not have weekly schedules set up yet
+    }
+  }, [centerId, weekStart]);
+
+  useEffect(() => {
+    (async () => {
+      await autoFillFromSchedules();
+      await loadShifts();
+    })();
+  }, [autoFillFromSchedules, loadShifts]);
 
   const weekDays = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -237,6 +254,20 @@ export default function ShiftsPage() {
 
   function jumpToCurrentWeek() {
     setWeekStart(getMonday(new Date()));
+  }
+
+  async function applySchedulesNow() {
+    setError(""); setSuccess("");
+    try {
+      const result = await apiJson("/api/v1/shifts/generate", {
+        method: "POST",
+        body: JSON.stringify({ centerId, weekStart: toDateInput(weekStart) }),
+      });
+      setSuccess(result?.generated ? `Added ${result.generated} shifts from weekly schedules` : "No new shifts to add from weekly schedules");
+      await loadShifts();
+    } catch (err) {
+      setError(err.message || "Failed to apply weekly schedules");
+    }
   }
 
   return (
@@ -468,6 +499,10 @@ export default function ShiftsPage() {
                 <button type="button" onClick={copyPreviousWeek}
                   style={{ padding: "8px 14px", border: "1px solid var(--admin-border)", borderRadius: 10, background: selectedStaffIds.length ? "var(--admin-accent-bg)" : "var(--admin-bg-secondary)", fontWeight: 700, fontSize: 13, cursor: "pointer", color: "var(--admin-text)" }}>
                   {selectedStaffIds.length ? `Copy selected staff (${selectedStaffIds.length})` : "Copy all from previous week"}
+                </button>
+                <button type="button" onClick={applySchedulesNow} title="Fill in any missing shifts from staff weekly schedules (set on the user's profile)"
+                  style={{ padding: "8px 14px", border: "1px solid var(--admin-border)", borderRadius: 10, background: "var(--admin-bg-secondary)", fontWeight: 700, fontSize: 13, cursor: "pointer", color: "var(--admin-text)" }}>
+                  Apply weekly schedules
                 </button>
               </div>
             </div>

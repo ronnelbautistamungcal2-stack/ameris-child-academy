@@ -1,7 +1,13 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { hasEmployeeRole, normalizeRoles, primaryRoleFromRoles, userRoles } from "@/lib/roles";
+import {
+  hasEmployeeRole,
+  normalizeRoles,
+  normalizeStaffDepartment,
+  primaryRoleFromRoles,
+  userRoles,
+} from "@/lib/roles";
 
 const STAFF_ROLES = ["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"];
 
@@ -81,7 +87,20 @@ export default async function handler(req, res) {
 
   if (req.method === "POST") {
     // Create new user
-    const { email, name, password, role, roles, centerId, dob, hireDate, aboutMe, pictureUrl, weeklySchedules } = req.body;
+    const {
+      email,
+      name,
+      password,
+      role,
+      roles,
+      centerId,
+      dob,
+      hireDate,
+      aboutMe,
+      staffDepartment,
+      pictureUrl,
+      weeklySchedules,
+    } = req.body;
     const normalizedEmail = normalizeEmail(email);
     const normalizedCenterId = centerId ? String(centerId).trim() : "";
 
@@ -126,6 +145,7 @@ export default async function handler(req, res) {
           dob: isEmployee ? parseOptionalDate(dob) : null,
           hireDate: isEmployee ? parseOptionalDate(hireDate) : null,
           aboutMe: isEmployee && aboutMe ? String(aboutMe).slice(0, 5000) : null,
+          staffDepartment: isEmployee ? normalizeStaffDepartment(staffDepartment) || null : null,
           pictureUrl: isEmployee && pictureUrl ? String(pictureUrl).slice(0, 2000) : null,
           role: primaryRole,
           roles: assignedRoles,

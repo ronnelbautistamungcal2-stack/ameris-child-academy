@@ -394,7 +394,7 @@ export default function ParentBilling() {
                   tone="sky"
                 />
                 <ParentQuickAction
-                  href="/parent/notification-settings"
+                  href="/settings"
                   title="Keep reminders on"
                   description="Make sure billing and form-renewal alerts stay visible in your portal."
                   tone="amber"

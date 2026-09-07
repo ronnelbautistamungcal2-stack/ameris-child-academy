@@ -12,6 +12,83 @@ const nextConfig = {
     return config;
   },
 
+  async redirects() {
+    return [
+      // Retired parent pages: notification settings moved into Account Settings and
+      // permissions moved into a tab on Forms & Renewals.
+      {
+        source: "/parent/notification-settings",
+        destination: "/settings",
+        permanent: false,
+      },
+      {
+        source: "/parent/permissions",
+        destination: "/parent/forms",
+        permanent: false,
+      },
+      // Admin pages that moved to the coach section during the navigation
+      // rework. Kept so existing links, bookmarks, and notification
+      // deep-links keep working.
+      { source: "/admin/teachers", destination: "/coach/teachers", permanent: false },
+      {
+        source: "/admin/teachers/:id",
+        destination: "/coach/teachers/:id",
+        permanent: false,
+      },
+      {
+        source: "/admin/staff-management",
+        destination: "/coach/staff-management",
+        permanent: false,
+      },
+      {
+        source: "/admin/classes",
+        destination: "/coach/classes",
+        permanent: false,
+      },
+      {
+        source: "/admin/progress",
+        destination: "/coach/progress",
+        permanent: false,
+      },
+      {
+        source: "/admin/activity-overrides",
+        destination: "/coach/activity-overrides",
+        permanent: false,
+      },
+      {
+        source: "/admin/supply-lists",
+        destination: "/coach/supply-lists",
+        permanent: false,
+      },
+      {
+        source: "/admin/shifts",
+        destination: "/coach/shifts",
+        permanent: false,
+      },
+      {
+        source: "/admin/permission-policies",
+        destination: "/coach/permission-policies",
+        permanent: false,
+      },
+      {
+        source: "/admin/feeding-plans-report",
+        destination: "/coach/feeding-plans-report",
+        permanent: false,
+      },
+      {
+        source: "/admin/carpool-report",
+        destination: "/coach/carpool-report",
+        permanent: false,
+      },
+      // Progress Archive was retired; send stale links to Data Archive.
+      {
+        source: "/admin/progress-archive",
+        destination: "/admin/data-archive",
+        permanent: false,
+      },
+    ];
+  },
+
   async headers() {
     return [
       {

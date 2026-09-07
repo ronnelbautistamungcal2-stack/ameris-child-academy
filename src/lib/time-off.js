@@ -204,6 +204,7 @@ export async function getTimeOffBalanceSummary(prisma, options = {}) {
     return {
       paidEarned: 0,
       unpaidEarned: 0,
+      unpaidEarnedDate: null,
       paidUsed: 0,
       unpaidUsed: 0,
       paidAvailable: 0,
@@ -252,15 +253,24 @@ export async function getTimeOffBalanceSummary(prisma, options = {}) {
   // newest-earned first above).
   let paidEarned = 0;
   let unpaidEarned = 0;
+  let unpaidEarnedDate = null;
   let unpaidEarnedSet = false;
   for (const entry of entries) {
     if (entry.balanceType === "PAID") {
       paidEarned += Number(entry.hours || 0);
     } else if (entry.balanceType === "UNPAID" && !unpaidEarnedSet) {
       unpaidEarned = Number(entry.hours || 0);
+      unpaidEarnedDate = entry.earnedDate || null;
       unpaidEarnedSet = true;
     }
   }
+
+  // The replacing entry is the balance as of its earned date, so unpaid time
+  // taken before that date is already reflected in the figure the admin
+  // entered. Only usage on or after the earned date is deducted from it --
+  // otherwise old deductions would carry over and the entered hours would
+  // never show up as-is.
+  const unpaidUsedFrom = unpaidEarnedDate ? toUTCDateOnly(unpaidEarnedDate) : null;
 
   let paidUsed = 0;
   let unpaidUsed = 0;
@@ -268,12 +278,19 @@ export async function getTimeOffBalanceSummary(prisma, options = {}) {
     const hours = calculateTimeOffHours(request.startDate, request.endDate);
     const bucket = resolveTimeOffBalanceType(request.type);
     if (bucket === "PAID") paidUsed += hours;
-    if (bucket === "UNPAID") unpaidUsed += hours;
+    if (bucket === "UNPAID") {
+      if (unpaidUsedFrom) {
+        const requestDay = toUTCDateOnly(request.startDate);
+        if (!requestDay || requestDay.getTime() < unpaidUsedFrom.getTime()) continue;
+      }
+      unpaidUsed += hours;
+    }
   }
 
   return {
     paidEarned: roundHours(paidEarned),
     unpaidEarned: roundHours(unpaidEarned),
+    unpaidEarnedDate,
     paidUsed: roundHours(paidUsed),
     unpaidUsed: roundHours(unpaidUsed),
     paidAvailable: roundHours(paidEarned - paidUsed),

@@ -5,7 +5,7 @@ const { loginAsAdmin, waitForLoadingDone } = require("../helpers/e2e");
 const PHOTO_PATH = path.resolve(__dirname, "../../public/icons/icon-192.png");
 
 async function selectScope(page) {
-  await page.goto("/admin/activity-overrides");
+  await page.goto("/coach/activity-overrides");
   await waitForLoadingDone(page);
   await expect(page.getByText("Admin Activity Log")).toBeVisible();
   const centerSelect = page.getByRole("combobox", { name: "Center", exact: true });

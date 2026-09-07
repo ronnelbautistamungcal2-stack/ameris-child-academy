@@ -447,7 +447,7 @@ export default function Dashboard() {
                   </Link>
                 ) : role === "ADMIN" && childId ? (
                   <Link
-                    href={`/admin/activity-overrides?centerId=${encodeURIComponent(centerId || "")}&childId=${encodeURIComponent(childId)}`}
+                    href={`/coach/activity-overrides?centerId=${encodeURIComponent(centerId || "")}&childId=${encodeURIComponent(childId)}`}
                     className="mt-4 inline-flex w-full items-center justify-center rounded-2xl bg-blue-600 px-3 py-2.5 text-sm font-extrabold text-white hover:bg-blue-700"
                   >
                     Override Activity
@@ -511,9 +511,9 @@ export default function Dashboard() {
                   </h3>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                     <Shortcut href="/admin/users" label="RBAC" />
-                    <Shortcut href="/admin/teachers" label="Staff" />
+                    <Shortcut href="/coach/teachers" label="Staff" />
                     <Shortcut href="/admin/children" label="Students" />
-                    <Shortcut href="/admin/classes" label="Classrooms" />
+                    <Shortcut href="/coach/classes" label="Classrooms" />
                     <Shortcut href="/admin/lessons" label="Lessons" />
                     <Shortcut href="/admin/subscriptions" label="Subscriptions" />
                   </div>

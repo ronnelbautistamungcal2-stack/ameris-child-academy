@@ -1350,7 +1350,7 @@ export default function AdminChildren() {
   }
 
   return (
-    <AdminLayout title="Children">
+    <AdminLayout title="Students">
       {/* Stats Row */}
       {!loading && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>

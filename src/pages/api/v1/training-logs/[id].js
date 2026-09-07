@@ -1,6 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { isEmployeeRole, isNonAdminEmployeeRole } from "@/lib/roles";
+import { isEmployeeRole, isSelfServiceEmployeeRole } from "@/lib/roles";
 
 export default async function handler(req, res) {
   try {
@@ -25,7 +25,7 @@ async function handlePut(req, res, session) {
   const log = await prisma.trainingLog.findUnique({ where: { id } });
   if (!log) return res.status(404).json({ error: "Training log not found" });
 
-  if (isNonAdminEmployeeRole(session.user.role) && log.userId !== session.user.id) {
+  if (isSelfServiceEmployeeRole(session.user.role) && log.userId !== session.user.id) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -56,7 +56,7 @@ async function handleDelete(req, res, session) {
   const log = await prisma.trainingLog.findUnique({ where: { id } });
   if (!log) return res.status(404).json({ error: "Training log not found" });
 
-  if (isNonAdminEmployeeRole(session.user.role) && log.userId !== session.user.id) {
+  if (isSelfServiceEmployeeRole(session.user.role) && log.userId !== session.user.id) {
     return res.status(403).json({ error: "Forbidden" });
   }
   if (!["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"].includes(session.user.role)) {

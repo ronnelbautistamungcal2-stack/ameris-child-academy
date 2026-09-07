@@ -1,7 +1,7 @@
 export const PARENT_NAV_ITEMS = [
   {
     href: "/dashboard",
-    label: "Overview",
+    label: "Dashboard",
     icon: (
       <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
         <path fillRule="evenodd" d="M9.293 2.293a1 1 0 011.414 0l7 7A1 1 0 0117 11h-1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-3a1 1 0 00-1-1H9a1 1 0 00-1 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-6H3a1 1 0 01-.707-1.707l7-7z" clipRule="evenodd" />
@@ -17,22 +17,31 @@ export const PARENT_NAV_ITEMS = [
     ),
     children: [
       { href: "/parent/children", label: "My Children" },
+      { href: "/parent/forms", label: "Forms & Renewals" },
+      { href: "/parent/billing", label: "Billing" },
+      { href: "/parent/involvement", label: "Parent Involvement" },
     ],
   },
   {
-    label: "Family Management",
+    href: "/settings",
+    label: "Account Settings",
     icon: (
       <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
         <path fillRule="evenodd" d="M7.84 1.804A1 1 0 018.82 1h2.36a1 1 0 01.98.804l.331 1.652a6.993 6.993 0 011.929 1.115l1.598-.54a1 1 0 011.186.447l1.18 2.044a1 1 0 01-.205 1.251l-1.267 1.113a7.047 7.047 0 010 2.228l1.267 1.113a1 1 0 01.206 1.25l-1.18 2.045a1 1 0 01-1.187.447l-1.598-.54a6.993 6.993 0 01-1.929 1.115l-.33 1.652a1 1 0 01-.98.804H8.82a1 1 0 01-.98-.804l-.331-1.652a6.993 6.993 0 01-1.929-1.115l-1.598.54a1 1 0 01-1.186-.447l-1.18-2.044a1 1 0 01.205-1.251l1.267-1.114a7.05 7.05 0 010-2.227L1.821 7.773a1 1 0 01-.206-1.25l1.18-2.045a1 1 0 011.187-.447l1.598.54A6.993 6.993 0 017.51 3.456l.33-1.652zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
       </svg>
     ),
+  },
+  {
+    label: "Resources",
+    icon: (
+      <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
+        <path d="M10.75 16.82A7.462 7.462 0 0115.5 15.5c.71 0 1.396.098 2.046.282A.75.75 0 0018.5 15.05V4.836a.75.75 0 00-.53-.716A9.006 9.006 0 0015.5 3.75a8.963 8.963 0 00-4.75 1.351v11.718zM9.25 5.101A8.963 8.963 0 004.5 3.75c-.85 0-1.673.118-2.454.339a.75.75 0 00-.546.721V15.05a.75.75 0 00.954.721A7.506 7.506 0 014.5 15.5c1.76 0 3.4.485 4.75 1.328V5.101z" />
+      </svg>
+    ),
     children: [
-      { href: "/parent/forms", label: "Forms & Renewals" },
-      { href: "/parent/billing", label: "Billing" },
-      { href: "/parent/notification-settings", label: "Notification Settings" },
-      { href: "/settings", label: "Account Settings" },
-      { href: "/parent/permissions", label: "Permissions" },
-      { href: "/parent/involvement", label: "Parent Involvement" },
+      { href: "/parent/menus", label: "Menus" },
+      { href: "/parent/policies", label: "Policies & Procedures" },
+      { href: "/parent/resources", label: "Additional Resources" },
     ],
   },
   {
@@ -41,15 +50,6 @@ export const PARENT_NAV_ITEMS = [
     icon: (
       <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
         <path fillRule="evenodd" d="M10 2c-2.236 0-4.43.18-6.57.524C1.993 2.755 1 4.014 1 5.426v5.148c0 1.413.993 2.67 2.43 2.902.848.137 1.705.248 2.57.331v3.443a.75.75 0 001.28.53l3.58-3.579a.78.78 0 01.527-.224 41.202 41.202 0 005.183-.5c1.437-.232 2.43-1.49 2.43-2.903V5.426c0-1.413-.993-2.67-2.43-2.902A41.289 41.289 0 0010 2zm0 7a1 1 0 100-2 1 1 0 000 2zM8 8a1 1 0 11-2 0 1 1 0 012 0zm5 1a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-      </svg>
-    ),
-  },
-  {
-    href: "/parent/policies",
-    label: "Policies",
-    icon: (
-      <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
-        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
       </svg>
     ),
   },

@@ -1,6 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { isNonAdminEmployeeRole } from "@/lib/roles";
+import { isSelfServiceEmployeeRole } from "@/lib/roles";
 
 export default async function handler(req, res) {
   try {
@@ -19,7 +19,7 @@ export default async function handler(req, res) {
       const allowed = await hasAccessToCenter(session.user.id, centerId);
       if (!allowed) return res.status(403).json({ error: "Forbidden" });
     }
-    const resolvedUserId = isNonAdminEmployeeRole(session.user.role)
+    const resolvedUserId = isSelfServiceEmployeeRole(session.user.role)
       ? session.user.id
       : userId;
 

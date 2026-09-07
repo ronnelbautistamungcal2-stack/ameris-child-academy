@@ -111,7 +111,7 @@ export default function AdminParentInvolvement() {
   };
 
   return (
-    <AdminLayout title="Parent Involvement Activities">
+    <AdminLayout title="Parent Involvement">
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 16px" }}>
         <div style={{ marginBottom: 24 }}>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111827", margin: 0 }}>Parent Involvement</h1>

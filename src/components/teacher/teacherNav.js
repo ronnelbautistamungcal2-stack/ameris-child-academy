@@ -9,7 +9,20 @@ export const TEACHER_NAV_ITEMS = [
     ),
   },
   {
-    label: "Classroom",
+    label: "My Performance",
+    icon: (
+      <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
+        <path fillRule="evenodd" d="M10 1a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0V1.75A.75.75 0 0110 1zM5.05 3.05a.75.75 0 011.06 0l1.062 1.06A.75.75 0 116.11 5.173L5.05 4.11a.75.75 0 010-1.06zm9.9 0a.75.75 0 010 1.06l-1.06 1.062a.75.75 0 01-1.062-1.061l1.061-1.06a.75.75 0 011.06 0zM3 8a.75.75 0 01.75-.75h1.5a.75.75 0 010 1.5h-1.5A.75.75 0 013 8zm11 0a.75.75 0 01.75-.75h1.5a.75.75 0 010 1.5h-1.5A.75.75 0 0114 8zm-6.828 2.172a.75.75 0 010 1.06l-1.061 1.062a.75.75 0 01-1.06-1.061l1.06-1.062a.75.75 0 011.061 0zm4.596 0a.75.75 0 011.06 0l1.062 1.06a.75.75 0 01-1.061 1.062l-1.06-1.061a.75.75 0 010-1.061zM10 14a4 4 0 100-8 4 4 0 000 8z" clipRule="evenodd" />
+      </svg>
+    ),
+    children: [
+      { href: "/teacher/checklists", label: "Checklists" },
+      { href: "/teacher/training", label: "Performance" },
+      { href: "/teacher/time-off", label: "Time Off Request" },
+    ],
+  },
+  {
+    label: "Classroom Management",
     icon: (
       <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
         <path fillRule="evenodd" d="M1 2.75A.75.75 0 011.75 2h10.5a.75.75 0 010 1.5H12v13.75a.75.75 0 01-.75.75h-1.5a.75.75 0 01-.75-.75v-2.5a.75.75 0 00-.75-.75h-2.5a.75.75 0 00-.75.75v2.5a.75.75 0 01-.75.75h-2.5a.75.75 0 010-1.5H2V3.5h-.25A.75.75 0 011 2.75zM4 5.5a.5.5 0 01.5-.5h1a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-1a.5.5 0 01-.5-.5v-1zM4.5 9a.5.5 0 00-.5.5v1a.5.5 0 00.5.5h1a.5.5 0 00.5-.5v-1a.5.5 0 00-.5-.5h-1zM8 5.5a.5.5 0 01.5-.5h1a.5.5 0 01.5.5v1a.5.5 0 01-.5.5h-1a.5.5 0 01-.5-.5v-1zM8.5 9a.5.5 0 00-.5.5v1a.5.5 0 00.5.5h1a.5.5 0 00.5-.5v-1a.5.5 0 00-.5-.5h-1z" clipRule="evenodd" />
@@ -17,12 +30,12 @@ export const TEACHER_NAV_ITEMS = [
     ),
     children: [
       { href: "/teacher/classroom", label: "My Classroom" },
-      { href: "/teacher/logs", label: "Log Activity" },
-      { href: "/teacher/messages", label: "Messages" },
+      { href: "/teacher/logs", label: "Daily Log" },
+      { href: "/teacher/class-performance-report", label: "Class Performance Report" },
     ],
   },
   {
-    label: "Child Progress",
+    label: "Student Management",
     icon: (
       <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
         <path d="M15.98 1.804a1 1 0 00-1.96 0l-.24 1.192a1 1 0 01-.784.785l-1.192.238a1 1 0 000 1.962l1.192.238a1 1 0 01.785.785l.238 1.192a1 1 0 001.962 0l.238-1.192a1 1 0 01.785-.785l1.192-.238a1 1 0 000-1.962l-1.192-.238a1 1 0 01-.785-.785l-.238-1.192zM6.949 5.684a1 1 0 00-1.898 0l-.683 2.051a1 1 0 01-.633.633l-2.051.683a1 1 0 000 1.898l2.051.684a1 1 0 01.633.632l.683 2.051a1 1 0 001.898 0l.683-2.051a1 1 0 01.633-.633l2.051-.683a1 1 0 000-1.898l-2.051-.683a1 1 0 01-.633-.633L6.95 5.684zM13.949 13.684a1 1 0 00-1.898 0l-.184.551a1 1 0 01-.632.633l-.551.183a1 1 0 000 1.898l.551.184a1 1 0 01.633.632l.183.551a1 1 0 001.898 0l.184-.551a1 1 0 01.632-.632l.551-.184a1 1 0 000-1.898l-.551-.183a1 1 0 01-.633-.633l-.183-.551z" />
@@ -30,32 +43,7 @@ export const TEACHER_NAV_ITEMS = [
     ),
     children: [
       { href: "/teacher/progress", label: "Progression Tracking" },
-      { href: "/teacher/children", label: "Children" },
-    ],
-  },
-  {
-    label: "Planning",
-    icon: (
-      <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
-        <path fillRule="evenodd" d="M5.75 2a.75.75 0 01.75.75V4h7V2.75a.75.75 0 011.5 0V4h.25A2.75 2.75 0 0118 6.75v8.5A2.75 2.75 0 0115.25 18H4.75A2.75 2.75 0 012 15.25v-8.5A2.75 2.75 0 014.75 4H5V2.75A.75.75 0 015.75 2zm-1 5.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-6.5c0-.69-.56-1.25-1.25-1.25H4.75z" clipRule="evenodd" />
-      </svg>
-    ),
-    children: [
-      { href: "/teacher/checklists", label: "Checklists" },
-      { href: "/teacher/calendar", label: "Calendar" },
-    ],
-  },
-  {
-    label: "Performance & Training",
-    icon: (
-      <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
-        <path fillRule="evenodd" d="M10 1a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0V1.75A.75.75 0 0110 1zM5.05 3.05a.75.75 0 011.06 0l1.062 1.06A.75.75 0 116.11 5.173L5.05 4.11a.75.75 0 010-1.06zm9.9 0a.75.75 0 010 1.06l-1.06 1.062a.75.75 0 01-1.062-1.061l1.061-1.06a.75.75 0 011.06 0zM3 8a.75.75 0 01.75-.75h1.5a.75.75 0 010 1.5h-1.5A.75.75 0 013 8zm11 0a.75.75 0 01.75-.75h1.5a.75.75 0 010 1.5h-1.5A.75.75 0 0114 8zm-6.828 2.172a.75.75 0 010 1.06l-1.061 1.062a.75.75 0 01-1.06-1.061l1.06-1.062a.75.75 0 011.061 0zm4.596 0a.75.75 0 011.06 0l1.062 1.06a.75.75 0 01-1.061 1.062l-1.06-1.061a.75.75 0 010-1.061zM10 14a4 4 0 100-8 4 4 0 000 8z" clipRule="evenodd" />
-      </svg>
-    ),
-    children: [
-      { href: "/teacher/training", label: "My Performance & Training" },
-      { href: "/teacher/staff-advancement", label: "Staff Advancement Steps" },
-      { href: "/teacher/time-off", label: "Time Off Request" },
+      { href: "/teacher/student-performance-report", label: "Student Performance Report" },
     ],
   },
   {
@@ -67,7 +55,16 @@ export const TEACHER_NAV_ITEMS = [
     ),
     children: [
       { href: "/teacher/policies", label: "Policies & Procedures" },
-      { href: "/teacher/reports", label: "Reports" },
+      { href: "/teacher/resources", label: "Additional Resources" },
     ],
+  },
+  {
+    href: "/teacher/messages",
+    label: "Messages",
+    icon: (
+      <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
+        <path fillRule="evenodd" d="M10 2c-2.236 0-4.43.18-6.57.524C1.993 2.755 1 4.014 1 5.426v5.148c0 1.413.993 2.67 2.43 2.902.848.137 1.705.248 2.57.331v3.443a.75.75 0 001.28.53l3.58-3.579a.78.78 0 01.527-.224 41.202 41.202 0 005.183-.5c1.437-.232 2.43-1.49 2.43-2.903V5.426c0-1.413-.993-2.67-2.43-2.902A41.289 41.289 0 0010 2zm0 7a1 1 0 100-2 1 1 0 000 2zM8 8a1 1 0 11-2 0 1 1 0 012 0zm5 1a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+      </svg>
+    ),
   },
 ];

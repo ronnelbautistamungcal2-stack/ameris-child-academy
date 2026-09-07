@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { normalizePolicyCategory } from "@/lib/policy-categories";
 
 export default async function handler(req, res) {
   try {
@@ -33,7 +34,7 @@ async function handlePut(req, res, session) {
   const existing = await prisma.policyDocument.findUnique({ where: { id } });
   if (!existing) return res.status(404).json({ error: "Policy not found" });
 
-  const { title, description, url, roles, centerId } = req.body;
+  const { title, description, url, roles, category, centerId } = req.body;
 
   const data = {};
   if (title !== undefined) data.title = title;
@@ -45,6 +46,7 @@ async function handlePut(req, res, session) {
     }
     data.roles = roles;
   }
+  if (category !== undefined) data.category = normalizePolicyCategory(category);
   if (centerId !== undefined) data.centerId = centerId || null;
 
   const updated = await prisma.policyDocument.update({ where: { id }, data });

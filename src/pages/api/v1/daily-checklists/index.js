@@ -1,13 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
-import {
-  canTeacherAccessChecklist,
-  hasChecklistClassroomScope,
-  normalizeChecklistClassRoomIds,
-} from "@/lib/dailyChecklistClassrooms";
-import {
-  canUserBeAssignedChecklist,
-  normalizeChecklistAssignedUserIds,
-} from "@/lib/dailyChecklistAssignees";
+import { normalizeChecklistClassRoomIds } from "@/lib/dailyChecklistClassrooms";
+import { normalizeChecklistAssignedUserIds } from "@/lib/dailyChecklistAssignees";
 import {
   normalizeLessonSlot,
   normalizeLessonSource,
@@ -29,6 +22,11 @@ import {
   buildDailyChecklistInclude,
   serializeDailyChecklist,
 } from "@/lib/dailyChecklistInclude";
+import {
+  checklistVisibleToRole,
+  checklistVisibleToStaff,
+  getUserChecklistRoles,
+} from "@/lib/dailyChecklistVisibility";
 
 const LESSON_SELECT = {
   id: true,
@@ -178,6 +176,7 @@ function scheduledPlanToChecklist(plan) {
       ? item.staffCompletions.map((completion) => ({
           id: completion.id,
           completedAt: completion.completedAt,
+          completedById: completion.completedById || completion.completedBy?.id || null,
           completedBy: completion.completedBy,
         }))
       : [],
@@ -467,10 +466,31 @@ export default async function handler(req, res) {
 
   if (req.method === "GET") {
     const { centerId, category, classRoomId, date } = req.query;
+    const staffUserId = String(req.query.staffUserId || "").trim();
 
     if (centerId && role !== "ADMIN") {
       const ok = await hasAccessToCenter(session.user.id, centerId);
       if (!ok) return res.status(403).json({ error: "Forbidden" });
+    }
+
+    // Admins can preview another employee's checklist exactly as that employee sees it.
+    if (staffUserId && role !== "ADMIN") {
+      return res.status(403).json({ error: "Only admins can view another employee's checklist" });
+    }
+
+    let staffScope = null;
+    if (staffUserId) {
+      const staffUser = await prisma.user.findUnique({
+        where: { id: staffUserId },
+        select: { id: true, role: true, roles: true },
+      });
+      if (!staffUser) return res.status(404).json({ error: "Employee not found" });
+
+      staffScope = {
+        userId: staffUser.id,
+        roles: getUserChecklistRoles(staffUser),
+        teacherClassIds: await getTeacherClassIds(staffUser.id, centerId),
+      };
     }
 
     let where = role === "ADMIN" && !date ? {} : { active: true };
@@ -516,23 +536,15 @@ export default async function handler(req, res) {
       .filter((list) => {
         if (date && (!Array.isArray(list.items) || list.items.length === 0)) return false;
 
-        if (role === "OTHER_STAFF") {
-          if (hasChecklistClassroomScope(list) || list.category === "CLASSROOM") return false;
+        if (staffScope) {
+          return checklistVisibleToStaff(list, staffScope);
         }
 
-        if (role === "TEACHER") {
-          if (!canTeacherAccessChecklist(list, teacherClassIds)) {
-            return false;
-          }
-        }
-
-        if (["TEACHER", "OTHER_STAFF"].includes(role)) {
-          if (!canUserBeAssignedChecklist(list, session.user.id)) {
-            return false;
-          }
-        }
-
-        return true;
+        return checklistVisibleToRole(list, {
+          role,
+          userId: session.user.id,
+          teacherClassIds,
+        });
       });
 
     const hasAutoSlotItems =
@@ -581,7 +593,15 @@ export default async function handler(req, res) {
 
     const scheduledLessonLists =
       date && !classRoomId && (!category || category === "CLASSROOM")
-        ? await loadScheduledLessonChecklists({ centerId, date, role })
+        ? await loadScheduledLessonChecklists({
+            centerId,
+            date,
+            role: staffScope
+              ? staffScope.roles.includes("TEACHER")
+                ? "TEACHER"
+                : "OTHER_STAFF"
+              : role,
+          })
         : [];
 
     return res.status(200).json([...routineLists, ...scheduledLessonLists]);

@@ -2,6 +2,11 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
+import {
+  DEFAULT_POLICY_CATEGORY,
+  normalizePolicyCategory,
+  POLICY_CATEGORIES,
+} from "@/lib/policy-categories";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const ROLES = ["ADMIN", "TEACHER", "OTHER_STAFF", "PARENT", "COACH", "SUBSCRIBER"];
@@ -50,6 +55,7 @@ export default function AdminPolicies() {
   const [url, setUrl] = useState("");
   const [centerId, setCenterId] = useState("");
   const [roles, setRoles] = useState(["TEACHER"]);
+  const [category, setCategory] = useState(DEFAULT_POLICY_CATEGORY);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
@@ -111,6 +117,7 @@ export default function AdminPolicies() {
 
   function resetForm() {
     setTitle(""); setDescription(""); setUrl(""); setCenterId(""); setRoles(["TEACHER"]);
+    setCategory(DEFAULT_POLICY_CATEGORY);
     setEditingId(null); setPdfFile(null);
   }
 
@@ -121,6 +128,7 @@ export default function AdminPolicies() {
     setUrl(d.url);
     setCenterId(d.centerId || "");
     setRoles(d.roles || ["TEACHER"]);
+    setCategory(normalizePolicyCategory(d.category));
     setPdfFile(null);
     setShowForm(true);
   }
@@ -198,13 +206,13 @@ export default function AdminPolicies() {
       if (editingId) {
         await apiJson(`/api/v1/policies/${editingId}`, {
           method: "PUT",
-          body: JSON.stringify({ title, description: description || null, url: finalUrl, roles, centerId: centerId || null }),
+          body: JSON.stringify({ title, description: description || null, url: finalUrl, roles, category, centerId: centerId || null }),
         });
         setSuccess("Policy updated successfully.");
       } else {
         await apiJson("/api/v1/policies", {
           method: "POST",
-          body: JSON.stringify({ title, description: description || null, url: finalUrl, roles, centerId: centerId || null }),
+          body: JSON.stringify({ title, description: description || null, url: finalUrl, roles, category, centerId: centerId || null }),
         });
         setSuccess("Policy published successfully.");
       }
@@ -390,6 +398,23 @@ export default function AdminPolicies() {
               <label style={{ display: "block" }}>
                 <div style={fieldLabelStyle}>Description</div>
                 <input value={description} onChange={(e) => setDescription(e.target.value)} style={inputStyle} placeholder="Brief description (optional)" />
+              </label>
+            </div>
+
+            {/* Category */}
+            <div style={{ marginTop: 12 }}>
+              <label style={{ display: "block" }}>
+                <div style={fieldLabelStyle}>Category</div>
+                <select value={category} onChange={(e) => setCategory(e.target.value)} style={inputStyle}>
+                  {POLICY_CATEGORIES.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <div style={{ marginTop: 4, fontSize: 11, color: "var(--admin-text-muted)" }}>
+                  Controls which staff Resources page this document appears on.
+                </div>
               </label>
             </div>
 

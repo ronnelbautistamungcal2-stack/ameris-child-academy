@@ -1,10 +1,13 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { isEmployeeRole, isNonAdminEmployeeRole } from "@/lib/roles";
+import { isEmployeeRole, isManagerRole, isSelfServiceEmployeeRole } from "@/lib/roles";
 import { getTimeOffBalanceSummary, roundHours } from "@/lib/time-off";
 
-function parsePositiveHours(value) {
-  if (value === "" || value === null || value === undefined) return 0;
+// Returns null for a blank field (meaning "leave this balance alone"), NaN for
+// an invalid value, and the rounded hours otherwise. Zero is a valid unpaid
+// entry: unpaid hours replace the prior balance, so entering 0 clears it.
+function parseHoursInput(value) {
+  if (value === "" || value === null || value === undefined) return null;
   const hours = Number(value);
   if (!Number.isFinite(hours) || hours < 0) return NaN;
   return roundHours(hours);
@@ -48,7 +51,7 @@ export default async function handler(req, res) {
     const { centerId, userId } = req.query || {};
     if (!centerId) return res.status(400).json({ error: "centerId is required" });
 
-    const resolvedUserId = isNonAdminEmployeeRole(session.user.role)
+    const resolvedUserId = isSelfServiceEmployeeRole(session.user.role)
       ? session.user.id
       : userId;
     if (!resolvedUserId) {
@@ -77,8 +80,8 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    if (session.user.role !== "ADMIN") {
-      return res.status(403).json({ error: "Only admins can manage time-off balances" });
+    if (!isManagerRole(session.user.role)) {
+      return res.status(403).json({ error: "Only admins and coaches can manage time-off balances" });
     }
 
     const { centerId, earnedDate, note, entries } = req.body || {};
@@ -98,13 +101,14 @@ export default async function handler(req, res) {
       for (const entry of entries) {
         const rowUserId = entry?.userId;
         if (!rowUserId) continue;
-        const parsedPaidHours = parsePositiveHours(entry.paidHours);
-        const parsedUnpaidHours = parsePositiveHours(entry.unpaidHours);
+        const parsedPaidHours = parseHoursInput(entry.paidHours);
+        const parsedUnpaidHours = parseHoursInput(entry.unpaidHours);
         if (Number.isNaN(parsedPaidHours) || Number.isNaN(parsedUnpaidHours)) {
           return res.status(400).json({ error: "Hours must be zero or greater" });
         }
-        if (parsedPaidHours <= 0 && parsedUnpaidHours <= 0) continue;
-        rows.push({ userId: rowUserId, paidHours: parsedPaidHours, unpaidHours: parsedUnpaidHours });
+        const paidHours = parsedPaidHours && parsedPaidHours > 0 ? parsedPaidHours : 0;
+        if (paidHours <= 0 && parsedUnpaidHours === null) continue;
+        rows.push({ userId: rowUserId, paidHours, unpaidHours: parsedUnpaidHours });
       }
 
       if (!rows.length) {
@@ -128,7 +132,7 @@ export default async function handler(req, res) {
               },
             });
           }
-          if (row.unpaidHours > 0) {
+          if (row.unpaidHours !== null) {
             await tx.timeOffBalanceEntry.create({
               data: {
                 userId: row.userId,
@@ -163,25 +167,26 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Invalid earnedDate" });
     }
 
-    const parsedPaidHours = parsePositiveHours(paidHours);
-    const parsedUnpaidHours = parsePositiveHours(unpaidHours);
+    const parsedPaidHours = parseHoursInput(paidHours);
+    const parsedUnpaidHours = parseHoursInput(unpaidHours);
     if (Number.isNaN(parsedPaidHours) || Number.isNaN(parsedUnpaidHours)) {
       return res.status(400).json({ error: "Hours must be zero or greater" });
     }
-    if (parsedPaidHours <= 0 && parsedUnpaidHours <= 0) {
+    const resolvedPaidHours = parsedPaidHours && parsedPaidHours > 0 ? parsedPaidHours : 0;
+    if (resolvedPaidHours <= 0 && parsedUnpaidHours === null) {
       return res.status(400).json({
         error: "Enter paid hours, unpaid hours, or both",
       });
     }
 
     await prisma.$transaction(async (tx) => {
-      if (parsedPaidHours > 0) {
+      if (resolvedPaidHours > 0) {
         await tx.timeOffBalanceEntry.create({
           data: {
             userId,
             centerId,
             balanceType: "PAID",
-            hours: parsedPaidHours,
+            hours: resolvedPaidHours,
             earnedDate: parsedEarnedDate,
             note: note ? String(note).trim() : null,
             createdById: session.user.id,
@@ -189,7 +194,7 @@ export default async function handler(req, res) {
         });
       }
 
-      if (parsedUnpaidHours > 0) {
+      if (parsedUnpaidHours !== null) {
         await tx.timeOffBalanceEntry.create({
           data: {
             userId,

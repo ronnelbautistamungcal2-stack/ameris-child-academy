@@ -106,7 +106,7 @@ test.describe("Progress page filter behavior", () => {
 
   test("admin resets class and child selections when switching centers", async ({ page, request }) => {
     await loginAsAdmin(page, request);
-    await page.goto("/admin/progress");
+    await page.goto("/coach/progress");
     await waitForLoadingDone(page);
     await expect(page.getByRole("heading", { name: "Progression Tracking" })).toBeVisible();
 

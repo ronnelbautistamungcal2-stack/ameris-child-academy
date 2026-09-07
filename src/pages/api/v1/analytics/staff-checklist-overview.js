@@ -1,5 +1,9 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import {
+  checklistVisibleToStaff,
+  getUserChecklistRoles,
+} from "@/lib/dailyChecklistVisibility";
 
 const CHECKLIST_STAFF_ROLES = ["TEACHER", "OTHER_STAFF", "COACH"];
 
@@ -36,29 +40,53 @@ export default async function handler(req, res) {
           { roles: { hasSome: CHECKLIST_STAFF_ROLES } },
         ],
       },
-      select: { id: true, name: true, email: true, role: true },
+      select: { id: true, name: true, email: true, role: true, roles: true },
       orderBy: { name: "asc" },
     });
 
     const checklists = await prisma.dailyChecklist.findMany({
       where: { centerId: String(centerId), active: true },
       select: {
+        category: true,
+        classRoomId: true,
+        classrooms: { select: { classRoomId: true } },
         assignedUserId: true,
         assignees: { select: { userId: true } },
         _count: { select: { items: true } },
       },
     });
 
+    // Teacher class assignments drive classroom-scoped checklist visibility.
+    const teacherClasses = await prisma.teacherClass.findMany({
+      where: {
+        teacherId: { in: staff.map((user) => user.id) },
+        classRoom: { centerId: String(centerId) },
+      },
+      select: { teacherId: true, classId: true },
+    });
+    const classIdsByTeacher = new Map();
+    for (const row of teacherClasses) {
+      const list = classIdsByTeacher.get(row.teacherId) || [];
+      list.push(row.classId);
+      classIdsByTeacher.set(row.teacherId, list);
+    }
+
+    // A checklist with no named assignee is shared with every eligible staff
+    // member, exactly as the daily-checklists endpoint serves it to them.
     const assignedCountByUser = new Map();
-    for (const checklist of checklists) {
-      const itemCount = checklist._count.items;
-      if (!itemCount) continue;
-      const userIds = new Set();
-      if (checklist.assignedUserId) userIds.add(checklist.assignedUserId);
-      for (const assignee of checklist.assignees) userIds.add(assignee.userId);
-      for (const userId of userIds) {
-        assignedCountByUser.set(userId, (assignedCountByUser.get(userId) || 0) + itemCount);
+    for (const user of staff) {
+      const scope = {
+        userId: user.id,
+        roles: getUserChecklistRoles(user),
+        teacherClassIds: classIdsByTeacher.get(user.id) || [],
+      };
+      let assigned = 0;
+      for (const checklist of checklists) {
+        const itemCount = checklist._count.items;
+        if (!itemCount) continue;
+        if (checklistVisibleToStaff(checklist, scope)) assigned += itemCount;
       }
+      assignedCountByUser.set(user.id, assigned);
     }
 
     const completions = await prisma.dailyChecklistCompletion.findMany({

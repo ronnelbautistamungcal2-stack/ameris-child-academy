@@ -1,3 +1,4 @@
+import StaffCalendarPanel from "@/components/staff/StaffCalendarPanel";
 import StaffLayout from "@/components/staff/StaffLayout";
 import Skeleton, { SkeletonCard } from "@/components/ui/Skeleton";
 import {
@@ -14,22 +15,6 @@ import { hasChecklistClassroomScope } from "@/lib/dailyChecklistClassrooms";
 import { groupTimeOffRequests } from "@/lib/time-off";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-
-function todayRange(daysAhead = 21) {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + daysAhead);
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
-}
-
-function buildShiftStart(date, time) {
-  const day = String(date || "").slice(0, 10);
-  const clock = String(time || "00:00").padEnd(5, "0");
-  const parsed = new Date(`${day}T${clock}`);
-  return Number.isNaN(parsed.getTime()) ? new Date(date) : parsed;
-}
 
 function formatRoleDate(value) {
   if (!value) return "-";
@@ -61,7 +46,6 @@ export default function StaffDashboardPage() {
   const [metrics, setMetrics] = useState(null);
   const [threads, setThreads] = useState([]);
   const [checklists, setChecklists] = useState([]);
-  const [calendarData, setCalendarData] = useState({ events: [], shifts: [], timeOff: [], birthdays: [] });
   const [timeOffRequests, setTimeOffRequests] = useState([]);
   const [trainingSummary, setTrainingSummary] = useState(null);
   const [evaluations, setEvaluations] = useState([]);
@@ -95,7 +79,6 @@ export default function StaffDashboardPage() {
   const loadWorkspace = useCallback(async () => {
     if (!centerId) {
       setChecklists([]);
-      setCalendarData({ events: [], shifts: [], timeOff: [] });
       setTimeOffRequests([]);
       setTrainingSummary(null);
       setEvaluations([]);
@@ -107,15 +90,11 @@ export default function StaffDashboardPage() {
     try {
       const today = new Date();
       const dateKey = today.toISOString().slice(0, 10);
-      const range = todayRange();
-      const [checklistRows, calendarRows, requestRows, trainingRows, evaluationRows] =
+      const [checklistRows, requestRows, trainingRows, evaluationRows] =
         await Promise.all([
           apiJson(
             `/api/v1/daily-checklists?centerId=${encodeURIComponent(centerId)}&date=${encodeURIComponent(dateKey)}`,
           ).catch(() => []),
-          apiJson(
-            `/api/v1/calendar?centerId=${encodeURIComponent(centerId)}&from=${encodeURIComponent(range.start.toISOString())}&to=${encodeURIComponent(range.end.toISOString())}`,
-          ).catch(() => ({ events: [], shifts: [], timeOff: [], birthdays: [] })),
           apiJson(`/api/v1/time-off?centerId=${encodeURIComponent(centerId)}`).catch(() => []),
           apiJson(`/api/v1/training-logs/summary?centerId=${encodeURIComponent(centerId)}`).catch(
             () => null,
@@ -128,12 +107,6 @@ export default function StaffDashboardPage() {
           (checklist) => !hasChecklistClassroomScope(checklist) && checklist?.category !== "CLASSROOM",
         ),
       );
-      setCalendarData({
-        events: Array.isArray(calendarRows?.events) ? calendarRows.events : [],
-        shifts: Array.isArray(calendarRows?.shifts) ? calendarRows.shifts : [],
-        timeOff: Array.isArray(calendarRows?.timeOff) ? calendarRows.timeOff : [],
-        birthdays: Array.isArray(calendarRows?.birthdays) ? calendarRows.birthdays : [],
-      });
       setTimeOffRequests(Array.isArray(requestRows) ? requestRows : []);
       setTrainingSummary(trainingRows);
       setEvaluations(Array.isArray(evaluationRows) ? evaluationRows : []);
@@ -200,47 +173,6 @@ export default function StaffDashboardPage() {
 
     return { totalItems, completedItems, openItems, percent, nextOpenItems };
   }, [checklists]);
-
-  const upcomingCalendarItems = useMemo(() => {
-    const today = new Date();
-    return [
-      ...(calendarData.events || []).map((event) => ({
-        id: `event-${event.id}`,
-        type: "Event",
-        label: event.title,
-        date: new Date(event.startDate),
-        detail: event.description || "",
-        tone: "sky",
-      })),
-      ...(calendarData.shifts || []).map((shift) => ({
-        id: `shift-${shift.id}`,
-        type: "Shift",
-        label: `${shift.startTime}-${shift.endTime}${shift.position ? ` (${shift.position})` : ""}`,
-        date: buildShiftStart(shift.date, shift.startTime),
-        detail: shift.notes || "",
-        tone: "amber",
-      })),
-      ...(calendarData.timeOff || []).map((request) => ({
-        id: `timeoff-${request.id}`,
-        type: "Time Off",
-        label: `${request.type} (${request.status})`,
-        date: new Date(request.startDate),
-        detail: request.reason || "",
-        tone: "emerald",
-      })),
-      ...(calendarData.birthdays || []).map((birthday) => ({
-        id: `birthday-${birthday.id}`,
-        type: "Birthday",
-        label: `${birthday.user?.name || "—"}'s Birthday`,
-        date: new Date(birthday.date),
-        detail: Number.isFinite(birthday.age) ? `Turning ${birthday.age}` : "",
-        tone: "rose",
-      })),
-    ]
-      .filter((item) => !Number.isNaN(item.date.getTime()) && item.date >= today)
-      .sort((left, right) => left.date - right.date)
-      .slice(0, 6);
-  }, [calendarData.events, calendarData.shifts, calendarData.timeOff, calendarData.birthdays]);
 
   const pendingTimeOff = useMemo(
     () => timeOffRequests.filter((request) => request.status === "PENDING"),
@@ -370,12 +302,11 @@ export default function StaffDashboardPage() {
               >
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                   <QuickLink href="/staff/messages" title="Messages" detail="Inbox and conversations" />
-                  <QuickLink href="/staff/alerts" title="Alerts" detail="Unread activity and urgent updates" />
-                  <QuickLink href="/staff/checklists" title="Checklists" detail="Daily operations and safety tasks" />
-                  <QuickLink href="/staff/calendar" title="Calendar" detail="Events, shifts, and time off" />
-                  <QuickLink href="/staff/training" title="Performance & Training" detail="Evaluations and training logs" />
+                  <QuickLink href="/staff/checklist" title="Checklist" detail="Daily tasks and supply requests" />
+                  <QuickLink href="/staff/performance" title="Performance" detail="Evaluations and training hours" />
                   <QuickLink href="/staff/time-off" title="Time Off" detail="Submit and track requests" />
-                  <QuickLink href="/staff/resources" title="Resources" detail="Policies and reference documents" />
+                  <QuickLink href="/staff/resources/policies" title="Policies & Procedures" detail="Published policy documents" />
+                  <QuickLink href="/staff/resources/additional" title="Additional Resources" detail="Reference material and links" />
                 </div>
               </WorkspaceSection>
 
@@ -384,10 +315,10 @@ export default function StaffDashboardPage() {
                 description="The next incomplete checklist items for this center."
                 action={
                   <Link
-                    href="/staff/checklists"
+                    href="/staff/checklist"
                     className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
                   >
-                    Open Checklists
+                    Open Checklist
                   </Link>
                 }
               >
@@ -439,56 +370,6 @@ export default function StaffDashboardPage() {
                 )}
               </WorkspaceSection>
 
-              <WorkspaceSection
-                title="Upcoming Calendar"
-                description="The next visible events, shifts, and approved time off."
-                action={
-                  <Link
-                    href="/staff/calendar"
-                    className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
-                  >
-                    Open Calendar
-                  </Link>
-                }
-              >
-                {upcomingCalendarItems.length ? (
-                  <div className="space-y-3">
-                    {upcomingCalendarItems.map((item) => (
-                      <div
-                        key={item.id}
-                        className="rounded-2xl border border-gray-200 bg-white px-4 py-3"
-                      >
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span
-                            className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
-                              item.tone === "sky"
-                                ? "bg-sky-100 text-sky-700"
-                                : item.tone === "amber"
-                                  ? "bg-amber-100 text-amber-700"
-                                  : item.tone === "rose"
-                                    ? "bg-pink-100 text-pink-700"
-                                    : "bg-emerald-100 text-emerald-700"
-                            }`}
-                          >
-                            {item.type}
-                          </span>
-                          <div className="text-sm font-extrabold text-gray-900">{item.label}</div>
-                        </div>
-                        <div className="mt-1 text-sm text-gray-600">
-                          {item.date.toLocaleString()}
-                        </div>
-                        {item.detail ? (
-                          <div className="mt-1 text-xs text-gray-500">{item.detail}</div>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
-                    No upcoming items are scheduled inside the current date window.
-                  </div>
-                )}
-              </WorkspaceSection>
             </div>
 
             <div className="space-y-4">
@@ -497,10 +378,10 @@ export default function StaffDashboardPage() {
                 description="Recent conversation activity and unread items."
                 action={
                   <Link
-                    href="/staff/alerts"
+                    href="/staff/messages"
                     className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
                   >
-                    View Alerts
+                    View Messages
                   </Link>
                 }
               >
@@ -642,6 +523,15 @@ export default function StaffDashboardPage() {
                     No time-off requests are on file for this center yet.
                   </div>
                 )}
+              </WorkspaceSection>
+            </div>
+
+            <div className="xl:col-span-2">
+              <WorkspaceSection
+                title="Calendar"
+                description="Your month at a glance: center events, your shifts, approved time off, and staff birthdays."
+              >
+                <StaffCalendarPanel centerId={centerId} />
               </WorkspaceSection>
             </div>
           </div>

@@ -296,7 +296,7 @@ export default function AdminDashboard() {
                   <QuickLink href="/admin/time-off" label="Time Off" />
                   <QuickLink href="/admin/calendar" label="Calendar" />
                   <QuickLink
-                    href={`/admin/classes?centerId=${encodeURIComponent(centerId)}`}
+                    href={`/coach/classes?centerId=${encodeURIComponent(centerId)}`}
                     label="Classrooms"
                   />
                   <QuickLink

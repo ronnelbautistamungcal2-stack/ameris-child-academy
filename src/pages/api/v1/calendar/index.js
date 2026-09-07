@@ -1,6 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { EMPLOYEE_ROLES, isEmployeeRole, isNonAdminEmployeeRole } from "@/lib/roles";
+import { EMPLOYEE_ROLES, isEmployeeRole, isSelfServiceEmployeeRole } from "@/lib/roles";
 
 function isLeapYear(year) {
   return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
@@ -86,10 +86,10 @@ async function handleGet(req, res, session) {
     if (isNaN(parsedTo.getTime())) return res.status(400).json({ error: "Invalid 'to' date format" });
   }
 
-  const shiftUserFilter = isNonAdminEmployeeRole(session.user.role)
+  const shiftUserFilter = isSelfServiceEmployeeRole(session.user.role)
     ? { userId: session.user.id }
     : {};
-  const timeOffUserFilter = isNonAdminEmployeeRole(session.user.role)
+  const timeOffUserFilter = isSelfServiceEmployeeRole(session.user.role)
     ? { userId: session.user.id }
     : {};
   const eventRangeFilter = buildRangeFilter("startDate", "endDate", parsedFrom, parsedTo);

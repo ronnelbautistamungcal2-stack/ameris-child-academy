@@ -1,3 +1,4 @@
+import TeacherCalendarPanel from "@/components/teacher/TeacherCalendarPanel";
 import TeacherLayout from "@/components/teacher/TeacherLayout";
 import { SkeletonCard } from "@/components/ui/Skeleton";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -288,6 +289,12 @@ export default function TeacherDashboard() {
         )}
 
         {centerId ? (
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <TeacherCalendarPanel centerId={centerId} title="My Calendar" />
+          </div>
+        ) : null}
+
+        {centerId ? (
           <div className="grid auto-rows-fr grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
             <div className="lg:col-span-2 xl:col-span-2">
               <Card
@@ -357,7 +364,7 @@ export default function TeacherDashboard() {
                 />
                 <QuickLink
                   href="/teacher/logs"
-                  label="Log Activity"
+                  label="Daily Log"
                   icon={
                     <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
                       <path fillRule="evenodd" d="M5.75 2a.75.75 0 01.75.75V4h7V2.75a.75.75 0 011.5 0V4h.25A2.75 2.75 0 0118 6.75v8.5A2.75 2.75 0 0115.25 18H4.75A2.75 2.75 0 012 15.25v-8.5A2.75 2.75 0 014.75 4H5V2.75A.75.75 0 015.75 2zm-1 5.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-6.5c0-.69-.56-1.25-1.25-1.25H4.75z" clipRule="evenodd" />
@@ -383,17 +390,8 @@ export default function TeacherDashboard() {
                   }
                 />
                 <QuickLink
-                  href="/teacher/calendar"
-                  label="Calendar"
-                  icon={
-                    <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                      <path fillRule="evenodd" d="M5.75 2a.75.75 0 01.75.75V4h7V2.75a.75.75 0 011.5 0V4h.25A2.75 2.75 0 0118 6.75v8.5A2.75 2.75 0 0115.25 18H4.75A2.75 2.75 0 012 15.25v-8.5A2.75 2.75 0 014.75 4H5V2.75A.75.75 0 015.75 2zm-1 5.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-6.5c0-.69-.56-1.25-1.25-1.25H4.75z" clipRule="evenodd" />
-                    </svg>
-                  }
-                />
-                <QuickLink
-                  href="/teacher/reports"
-                  label="Reports"
+                  href="/teacher/student-performance-report"
+                  label="Student Performance Report"
                   icon={
                     <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
                       <path d="M10.75 16.82A7.462 7.462 0 0115 15.5c.71 0 1.396.098 2.046.282A.75.75 0 0018 15.06v-11a.75.75 0 00-.546-.721A9.006 9.006 0 0015 3a8.963 8.963 0 00-4.25 1.065V16.82zM9.25 4.065A8.963 8.963 0 005 3c-.85 0-1.673.118-2.454.339A.75.75 0 002 4.06v11a.75.75 0 00.954.721A7.506 7.506 0 015 15.5c1.579 0 3.042.487 4.25 1.32V4.065z" />

@@ -1,6 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { isEmployeeRole, isNonAdminEmployeeRole } from "@/lib/roles";
+import { isEmployeeRole, isManagerRole, isSelfServiceEmployeeRole } from "@/lib/roles";
 
 const VALID_STATUSES = ["PENDING", "APPROVED", "FULFILLED", "DENIED"];
 
@@ -40,7 +40,7 @@ async function handleGet(req, res, session) {
   if (classRoomId) where.classRoomId = classRoomId;
   if (status) where.status = status;
 
-  if (isNonAdminEmployeeRole(session.user.role)) {
+  if (isSelfServiceEmployeeRole(session.user.role)) {
     where.requestedById = session.user.id;
   }
 
@@ -55,8 +55,8 @@ async function handleGet(req, res, session) {
 }
 
 async function handlePost(req, res, session) {
-  if (!["ADMIN", "TEACHER"].includes(session.user.role)) {
-    return res.status(403).json({ error: "Only admins and teachers can request supplies" });
+  if (!["ADMIN", "COACH", "TEACHER", "OTHER_STAFF"].includes(session.user.role)) {
+    return res.status(403).json({ error: "Only admins, coaches, teachers, and staff can request supplies" });
   }
 
   const { centerId, classRoomId, item, quantity, purpose, notes, lessonId, status } = req.body || {};
@@ -79,8 +79,11 @@ async function handlePost(req, res, session) {
       notes: notes || null,
       lessonId: lessonId || null,
       requestedById: session.user.id,
-      // Admins manually logging a supply can mark it already approved/fulfilled.
-      status: session.user.role === "ADMIN" && VALID_STATUSES.includes(status) ? status : "PENDING",
+      // Managers logging a supply can mark it already approved/fulfilled.
+      status:
+        isManagerRole(session.user.role) && VALID_STATUSES.includes(status)
+          ? status
+          : "PENDING",
     },
     include: SUPPLY_REQUEST_INCLUDE,
   });

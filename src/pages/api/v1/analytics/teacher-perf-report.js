@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { getTimeOffBalanceSummary } from "@/lib/time-off";
 
 export default async function handler(req, res) {
   try {
@@ -195,30 +196,15 @@ export default async function handler(req, res) {
     }
     hoursWorked = Math.round(hoursWorked * 10) / 10;
 
-    // PTO / UTO balances
-    const timeOffEntries = await prisma.timeOffBalanceEntry.findMany({
-      where: { userId: resolvedTeacherId, centerId },
-      select: { balanceType: true, hours: true },
+    // PTO / UTO available -- shared balance math so these match the Staff
+    // Management time-off panel: paid hours roll over, unpaid hours are
+    // replaced by the most recently earned entry.
+    const timeOffSummary = await getTimeOffBalanceSummary(prisma, {
+      userId: resolvedTeacherId,
+      centerId,
     });
-    let ptoHours = 0;
-    let utoHours = 0;
-    for (const e of timeOffEntries) {
-      if (e.balanceType === "PAID") ptoHours += e.hours;
-      else if (e.balanceType === "UNPAID") utoHours += e.hours;
-    }
-    // Subtract approved used time off
-    const usedTimeOff = await prisma.timeOffRequest.findMany({
-      where: { userId: resolvedTeacherId, centerId, status: "APPROVED" },
-      select: { type: true, startDate: true, endDate: true },
-    });
-    for (const t of usedTimeOff) {
-      const days = Math.max(1, Math.round((new Date(t.endDate) - new Date(t.startDate)) / (1000 * 60 * 60 * 24)) + 1);
-      const hrs = days * 8;
-      if (t.type === "PTO") ptoHours -= hrs;
-      else utoHours -= hrs;
-    }
-    ptoHours = Math.max(0, Math.round(ptoHours * 10) / 10);
-    utoHours = Math.max(0, Math.round(utoHours * 10) / 10);
+    const ptoHours = Math.max(0, timeOffSummary.paidAvailable);
+    const utoHours = Math.max(0, timeOffSummary.unpaidAvailable);
 
     // ── Training Hours ──
     const trainingLogs = await prisma.trainingLog.findMany({

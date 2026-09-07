@@ -221,7 +221,11 @@ export default function WeeklyLessonPlanner({
         for (const [dayKey, plan] of Object.entries(map)) {
           for (const item of Array.isArray(plan.items) ? plan.items : []) {
             const cellKey = `${dayKey}:${item.sortOrder}`;
-            if (!(cellKey in next)) next[cellKey] = item.title || "";
+            const liveTitle =
+              item.lessonId && !item.lessonGoalId && item.lesson?.title
+                ? item.lesson.title
+                : item.title || "";
+            if (!(cellKey in next)) next[cellKey] = liveTitle;
           }
         }
         return next;
@@ -251,6 +255,21 @@ export default function WeeklyLessonPlanner({
     if (cellKey in cellDrafts) return cellDrafts[cellKey];
     const plan = planByDayKey[dayKey];
     const item = (plan?.items || []).find((it) => it.sortOrder === rowIndex);
+    // The stored title is a snapshot taken when the lesson was attached; the
+    // joined lesson is the live one, so a curriculum rename shows up here even
+    // on rows saved before the rename.
+    if (item?.lessonId && !item?.lessonGoalId && item?.lesson?.title) {
+      return item.lesson.title;
+    }
+    return item?.title || "";
+  }
+
+  function getCellTextFromPlan(dayKey, rowIndex) {
+    const plan = planByDayKey[dayKey];
+    const item = (plan?.items || []).find((it) => it.sortOrder === rowIndex);
+    if (item?.lessonId && !item?.lessonGoalId && item?.lesson?.title) {
+      return item.lesson.title;
+    }
     return item?.title || "";
   }
 
@@ -739,9 +758,9 @@ export default function WeeklyLessonPlanner({
                                 setTimeout(() => {
                                   setOpenComboKey((k) => (k === cellKey ? "" : k));
                                 }, 120);
+                                const storedText = getCellTextFromPlan(dayKey, rowIndex);
                                 const plan = planByDayKey[dayKey];
                                 const item = (plan?.items || []).find((it) => it.sortOrder === rowIndex);
-                                const storedText = item?.title || "";
                                 const storedLessonId = item?.lessonId || null;
                                 const nextLessonId = cellLessonIds[cellKey] ?? null;
                                 if (val !== storedText || nextLessonId !== storedLessonId) {

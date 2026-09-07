@@ -12,7 +12,7 @@ import {
   requiredString,
   optionalNumber,
 } from "@/lib/validation";
-import { isEmployeeRole, isNonAdminEmployeeRole } from "@/lib/roles";
+import { isEmployeeRole, isSelfServiceEmployeeRole } from "@/lib/roles";
 
 export default createApiHandler(async function handler(req, res) {
   const session = await getSession(req, res);
@@ -37,7 +37,7 @@ export default createApiHandler(async function handler(req, res) {
     if (centerId) where.centerId = centerId;
     if (category) where.category = category;
 
-    if (isNonAdminEmployeeRole(session.user.role)) {
+    if (isSelfServiceEmployeeRole(session.user.role)) {
       where.userId = session.user.id;
     } else if (userId) {
       where.userId = userId;
@@ -94,7 +94,7 @@ export default createApiHandler(async function handler(req, res) {
     .filter(Boolean);
   const fallbackUserId = optionalString(body, "userId", { nullable: true });
   const targetUserIds =
-    isNonAdminEmployeeRole(session.user.role)
+    isSelfServiceEmployeeRole(session.user.role)
       ? [session.user.id]
       : normalizedUserIds.length
         ? [...new Set(normalizedUserIds)]

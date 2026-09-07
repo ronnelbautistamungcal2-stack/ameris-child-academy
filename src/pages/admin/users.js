@@ -1,7 +1,7 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
-import { hasEmployeeRole, ROLE_OPTIONS, userRoles } from "@/lib/roles";
+import { hasEmployeeRole, ROLE_OPTIONS, STAFF_DEPARTMENTS, userRoles } from "@/lib/roles";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -59,6 +59,7 @@ export default function AdminUsers() {
   const [dob, setDob] = useState("");
   const [hireDate, setHireDate] = useState("");
   const [aboutMe, setAboutMe] = useState("");
+  const [staffDepartment, setStaffDepartment] = useState("");
   const [pictureUrl, setPictureUrl] = useState("");
   const [weeklySchedules, setWeeklySchedules] = useState([]);
 
@@ -153,6 +154,7 @@ export default function AdminUsers() {
     setDob("");
     setHireDate("");
     setAboutMe("");
+    setStaffDepartment("");
     setPictureUrl("");
     setWeeklySchedules([]);
   }, []);
@@ -167,6 +169,7 @@ export default function AdminUsers() {
     setDob(user.dob ? String(user.dob).slice(0, 10) : "");
     setHireDate(user.hireDate ? String(user.hireDate).slice(0, 10) : "");
     setAboutMe(user.aboutMe || "");
+    setStaffDepartment(user.staffDepartment || "");
     setPictureUrl(user.pictureUrl || "");
     setWeeklySchedules(normalizeWeeklySchedules(user));
   }, []);
@@ -252,6 +255,7 @@ export default function AdminUsers() {
           dob: employeeProfileNeeded ? dob || null : null,
           hireDate: employeeProfileNeeded ? hireDate || null : null,
           aboutMe: employeeProfileNeeded ? aboutMe || null : null,
+          staffDepartment: employeeProfileNeeded ? staffDepartment || null : null,
           pictureUrl: employeeProfileNeeded ? pictureUrl || null : null,
           weeklySchedules: employeeProfileNeeded ? validScheduleBlocks : [],
         }),
@@ -283,6 +287,7 @@ export default function AdminUsers() {
           dob: employeeProfileNeeded ? dob || null : null,
           hireDate: employeeProfileNeeded ? hireDate || null : null,
           aboutMe: employeeProfileNeeded ? aboutMe || null : null,
+          staffDepartment: employeeProfileNeeded ? staffDepartment || null : null,
           pictureUrl: employeeProfileNeeded ? pictureUrl || null : null,
           weeklySchedules: employeeProfileNeeded ? validScheduleBlocks : [],
         }),
@@ -453,6 +458,20 @@ export default function AdminUsers() {
                       style={inputStyle}
                       type="date"
                     />
+                  </Field>
+                  <Field label="Department">
+                    <select
+                      value={staffDepartment}
+                      onChange={(e) => setStaffDepartment(e.target.value)}
+                      style={inputStyle}
+                    >
+                      <option value="">Not assigned</option>
+                      {STAFF_DEPARTMENTS.map((dept) => (
+                        <option key={dept} value={dept}>
+                          {dept}
+                        </option>
+                      ))}
+                    </select>
                   </Field>
                   <Field label="Profile Picture">
                     <PictureUpload value={pictureUrl} onChange={setPictureUrl} />
@@ -723,7 +742,7 @@ function UserRow({ user, onEdit, onDelete }) {
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {roles.includes("TEACHER") ? (
-                <Link href={`/admin/teachers/${encodeURIComponent(user.id)}`} style={teacherLink}>
+                <Link href={`/coach/teachers/${encodeURIComponent(user.id)}`} style={teacherLink}>
                   {user.name || "Unnamed"}
                 </Link>
               ) : (

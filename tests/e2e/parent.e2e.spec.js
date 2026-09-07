@@ -21,10 +21,12 @@ test.describe("Parent Workflows", () => {
     await expect(page.getByText("Student Performance Report", { exact: true })).toBeVisible();
   });
 
-  test("can navigate to permissions page", async ({ page }) => {
-    await page.goto("/parent/permissions");
+  test("permissions live under the forms & renewals tabs", async ({ page }) => {
+    await page.goto("/parent/forms");
     await waitForLoadingDone(page);
-    await expect(page.locator("main")).toBeVisible();
+
+    await page.getByRole("button", { name: "Permissions", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Family permissions" })).toBeVisible();
   });
 
   test("can navigate to messages page", async ({ page }) => {

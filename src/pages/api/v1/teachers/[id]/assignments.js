@@ -1,11 +1,11 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { isEmployeeRole, userRoles } from "@/lib/roles";
+import { isEmployeeRole, isManagerRole, userRoles } from "@/lib/roles";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
-  if (session.user.role !== "ADMIN") {
+  if (!isManagerRole(session.user.role)) {
     return res.status(403).json({ error: "Only admins can manage staff" });
   }
 

@@ -1139,7 +1139,7 @@ export default function TeacherClassroom() {
                       <IconChevronRight className="h-4 w-4 text-gray-400 group-hover:text-emerald-600" />
                     </Link>
                     <Link
-                      href="/teacher/reports"
+                      href="/teacher/class-performance-report"
                       className="group flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gradient-to-r from-white via-white to-slate-50 px-3 py-2.5 text-sm font-semibold text-gray-800 hover:border-indigo-200 hover:bg-indigo-50/40"
                     >
                       <div className="flex items-center gap-3">
@@ -1147,7 +1147,7 @@ export default function TeacherClassroom() {
                           <IconChart className="h-4 w-4" />
                         </span>
                         <div className="leading-tight">
-                          <div className="text-sm font-semibold text-gray-900">Reports</div>
+                          <div className="text-sm font-semibold text-gray-900">Class Performance Report</div>
                           <div className="text-xs font-medium text-gray-500">Attendance and progress</div>
                         </div>
                       </div>

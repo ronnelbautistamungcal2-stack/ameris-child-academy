@@ -1,0 +1,279 @@
+import MonthlyCalendar from "@/components/calendar/MonthlyCalendar";
+import { apiJson } from "@/lib/api";
+import { toCalendarDay } from "@/lib/calendar";
+import { getTimeOffTypeLabel } from "@/lib/time-off";
+import { useCallback, useEffect, useState } from "react";
+
+function formatDateTimeRange(start, end) {
+  if (!start || !end) return "";
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return "";
+
+  const sameDay =
+    startDate.getFullYear() === endDate.getFullYear() &&
+    startDate.getMonth() === endDate.getMonth() &&
+    startDate.getDate() === endDate.getDate();
+
+  if (sameDay) {
+    return `${startDate.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    })} - ${endDate.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    })}`;
+  }
+
+  const dateTimeOptions = {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  };
+
+  return `${startDate.toLocaleString(undefined, dateTimeOptions)} - ${endDate.toLocaleString(undefined, dateTimeOptions)}`;
+}
+
+const SOURCE_BADGE = {
+  event: "bg-indigo-100 text-indigo-700",
+  shift: "bg-blue-100 text-blue-700",
+  timeoff: "bg-emerald-100 text-emerald-700",
+  birthday: "bg-pink-100 text-pink-700",
+};
+
+const LEGEND = [
+  { label: "Events", cls: "bg-indigo-100" },
+  { label: "My Shifts", cls: "bg-blue-100" },
+  { label: "Paid", cls: "bg-emerald-100" },
+  { label: "Unpaid", cls: "bg-gray-200" },
+  { label: "Birthdays", cls: "bg-pink-100" },
+];
+
+export default function TeacherCalendarPanel({
+  centerId: controlledCenterId,
+  showCenterSelect = true,
+  title = "My Calendar",
+  className,
+}) {
+  const controlled = typeof controlledCenterId === "string";
+  const [centers, setCenters] = useState([]);
+  const [ownCenterId, setOwnCenterId] = useState("");
+  const centerId = controlled ? controlledCenterId : ownCenterId;
+  const [calYear, setCalYear] = useState(new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(new Date().getMonth());
+  const [calData, setCalData] = useState({ events: [], shifts: [], timeOff: [], birthdays: [] });
+  const [filters, setFilters] = useState({ events: true, shifts: true, timeOff: true, birthdays: true });
+  const [selectedDay, setSelectedDay] = useState(null);
+
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (controlled) return;
+    (async () => {
+      try {
+        const c = await apiJson("/api/v1/centers");
+        const arr = Array.isArray(c) ? c : [];
+        setCenters(arr);
+        if (arr.length === 1) setOwnCenterId(arr[0].id);
+      } catch (err) { setError(err.message || "Failed to load centers"); }
+    })();
+  }, [controlled]);
+
+  // Reset the day detail when the caller switches centers
+  useEffect(() => { setSelectedDay(null); }, [centerId]);
+
+  const loadCalendar = useCallback(async () => {
+    if (!centerId) return;
+    try {
+      const from = new Date(calYear, calMonth, 1).toISOString();
+      const to = new Date(calYear, calMonth + 1, 0, 23, 59, 59, 999).toISOString();
+      const data = await apiJson(`/api/v1/calendar?centerId=${centerId}&from=${from}&to=${to}`);
+      setCalData(data);
+    } catch (err) { setError(err.message || "Failed to load calendar data"); }
+  }, [centerId, calYear, calMonth]);
+
+  useEffect(() => { loadCalendar(); }, [loadCalendar]);
+
+  const normalizedEvents = (() => {
+    const items = [];
+    if (filters.events && calData.events) {
+      for (const evt of calData.events) {
+        items.push({
+          id: evt.id,
+          _source: "event",
+          type: evt.type,
+          status: "ACTIVE",
+          startDate: evt.startDate,
+          endDate: evt.endDate,
+          allDay: evt.allDay,
+          user: evt.createdBy,
+          label: evt.title,
+          _raw: evt,
+        });
+      }
+    }
+    if (filters.shifts && calData.shifts) {
+      for (const s of calData.shifts) {
+        items.push({
+          id: s.id,
+          _source: "shift",
+          type: "Shift",
+          status: "ACTIVE",
+          startDate: s.date,
+          endDate: s.date,
+          user: s.user,
+          label: `${s.startTime}–${s.endTime} (${s.position})`,
+          _raw: s,
+        });
+      }
+    }
+    if (filters.timeOff && calData.timeOff) {
+      for (const t of calData.timeOff) {
+        items.push({
+          id: t.id,
+          _source: "timeoff",
+          type: t.type,
+          status: t.status,
+          startDate: t.startDate,
+          endDate: t.endDate,
+          user: t.user,
+          label: `${t.typeLabel || getTimeOffTypeLabel(t.type)} (${t.status})`,
+          _raw: t,
+        });
+      }
+    }
+    if (filters.birthdays && calData.birthdays) {
+      for (const b of calData.birthdays) {
+        items.push({
+          id: b.id,
+          _source: "birthday",
+          type: "Birthday",
+          status: "ACTIVE",
+          startDate: b.date,
+          endDate: b.date,
+          allDay: true,
+          user: b.user,
+          label: `${b.user?.name || "—"}'s Birthday`,
+          _raw: { ...b, allDay: true },
+        });
+      }
+    }
+    return items;
+  })();
+
+function getDayItems(day) {
+    if (!day) return [];
+    const d = new Date(calYear, calMonth, day);
+    return normalizedEvents.filter(evt => {
+      const s = toCalendarDay(evt.startDate, { allDay: !!evt._raw?.allDay });
+      const e = toCalendarDay(evt.endDate, { allDay: !!evt._raw?.allDay });
+      if (!s || !e) return false;
+      return d >= s && d <= e;
+    });
+  }
+
+  const dayItems = getDayItems(selectedDay);
+
+  return (
+    <div className={className}>
+      <div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: "#111827" }}>{title}</h2>
+          {showCenterSelect && !controlled ? (
+            <select value={centerId} onChange={e => { setOwnCenterId(e.target.value); setSelectedDay(null); }}
+              style={{ padding: "6px 10px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13 }}>
+              <option value="">Select center…</option>
+              {centers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          ) : null}
+        </div>
+
+        {error && <div style={{ padding: 10, background: "#fef2f2", color: "#991b1b", borderRadius: 8, marginBottom: 12, fontSize: 13, border: "1px solid #fecaca" }}>{error}</div>}
+
+        {/* Filter toggles */}
+        <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+          {[
+            { key: "events", label: "Events", color: "#e0e7ff" },
+            { key: "shifts", label: "My Shifts", color: "#dbeafe" },
+            { key: "timeOff", label: "My Time Off", color: "#d1fae5" },
+            { key: "birthdays", label: "Birthdays", color: "#fce7f3" },
+          ].map(f => (
+            <label key={f.key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={filters[f.key]}
+                onChange={() => setFilters(prev => ({ ...prev, [f.key]: !prev[f.key] }))}
+              />
+              <span style={{ background: f.color, padding: "2px 8px", borderRadius: 6, fontWeight: 600, fontSize: 12 }}>{f.label}</span>
+            </label>
+          ))}
+        </div>
+
+        {centerId ? (
+          <div style={{ display: "grid", gridTemplateColumns: selectedDay ? "1fr minmax(0, 300px)" : "1fr", gap: 16 }}>
+            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, padding: 16 }}>
+              <MonthlyCalendar
+                year={calYear}
+                month={calMonth}
+                events={normalizedEvents}
+                onMonthChange={(y, m) => { setCalYear(y); setCalMonth(m); setSelectedDay(null); }}
+                onDayClick={setSelectedDay}
+                legendItems={LEGEND}
+              />
+            </div>
+
+            {/* Day detail panel */}
+            {selectedDay && (
+              <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, padding: 16, alignSelf: "start" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>
+                    {new Date(calYear, calMonth, selectedDay).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                  </div>
+                  <button type="button" onClick={() => setSelectedDay(null)} aria-label="Close day detail"
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "#9ca3af" }}>✕</button>
+                </div>
+                {dayItems.length === 0 && <div style={{ fontSize: 13, color: "#9ca3af" }}>No items this day</div>}
+                {dayItems.map(item => (
+                  <div key={item.id} style={{ padding: 8, borderRadius: 8, marginBottom: 8, border: "1px solid #f3f4f6", background: "#fafafa" }}>
+                    <div>
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 4, marginRight: 6 }}
+                        className={SOURCE_BADGE[item._source] || "bg-gray-100 text-gray-600"}>
+                        {item._source === "event" ? "Event" : item._source === "shift" ? "Shift" : item._source === "birthday" ? "Birthday" : "Time Off"}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>{item.label}</span>
+                    </div>
+                    {item._raw?.description && (
+                      <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>{item._raw.description}</div>
+                    )}
+                    {item._source === "shift" && (
+                      <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Position: {item._raw.position}{item._raw.notes ? ` • ${item._raw.notes}` : ""}</div>
+                    )}
+                    {item._source === "birthday" && Number.isFinite(item._raw?.age) && (
+                      <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Turning: {item._raw.age}</div>
+                    )}
+                    {item._source === "timeoff" && (
+                      <>
+                        <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Status: {item._raw.status}{item._raw.reason ? ` • ${item._raw.reason}` : ""}</div>
+                        {formatDateTimeRange(item._raw.startDate, item._raw.endDate) && (
+                          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Time: {formatDateTimeRange(item._raw.startDate, item._raw.endDate)}</div>
+                        )}
+                        {item._raw.coverageName && (
+                          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>Coverage: {item._raw.coverageName}</div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ textAlign: "center", padding: 40, color: "#9ca3af", fontSize: 14 }}>
+            Select a center to view your calendar
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,15 +1,22 @@
 import ParentLayout from "@/components/parent/ParentLayout";
+import PermissionsPanel from "@/components/parent/PermissionsPanel";
 import {
   ParentButton,
   ParentEmpty,
   ParentField,
   ParentPageHeader,
+  ParentPill,
   ParentSection,
   ParentSurface,
 } from "@/components/parent/ParentUI";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useRef, useState } from "react";
+
+const FORM_TABS = [
+  { id: "forms", label: "Forms & Renewals" },
+  { id: "permissions", label: "Permissions" },
+];
 
 function formatDateTime(value) {
   if (!value) return "-";
@@ -26,6 +33,7 @@ function formatDate(value) {
 }
 
 export default function ParentForms() {
+  const [activeTab, setActiveTab] = useState("forms");
   const [templates, setTemplates] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [children, setChildren] = useState([]);
@@ -233,6 +241,22 @@ export default function ParentForms() {
   return (
     <ParentLayout title="Forms & Renewals">
       <div className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {FORM_TABS.map((tab) => (
+            <ParentPill
+              key={tab.id}
+              active={activeTab === tab.id}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </ParentPill>
+          ))}
+        </div>
+
+        {activeTab === "permissions" ? (
+          <PermissionsPanel />
+        ) : (
+        <>
         <ParentPageHeader
           eyebrow="Forms center"
           title="Complete and track family paperwork"
@@ -592,6 +616,8 @@ export default function ParentForms() {
             </ParentSection>
           </div>
         </div>
+        </>
+        )}
       </div>
     </ParentLayout>
   );

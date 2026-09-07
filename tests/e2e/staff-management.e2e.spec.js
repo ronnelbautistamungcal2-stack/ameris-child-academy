@@ -112,7 +112,7 @@ test.describe("Staff management browser QA", () => {
     });
 
     await loginAsAdmin(page, request);
-    await page.goto("/admin/staff-management");
+    await page.goto("/coach/staff-management");
     await waitForLoadingDone(page);
     await page.locator("select").first().selectOption({ label: demo.center.name });
     await page.getByRole("button", { name: "Training" }).click();
@@ -200,7 +200,7 @@ test.describe("Staff management browser QA", () => {
     });
 
     await loginAsAdmin(page, request);
-    await page.goto("/admin/shifts");
+    await page.goto("/coach/shifts");
     await waitForLoadingDone(page);
     await page.locator("select").first().selectOption({ label: demo.center.name });
 

@@ -1,6 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { isNonAdminEmployeeRole } from "@/lib/roles";
+import { isSelfServiceEmployeeRole } from "@/lib/roles";
 
 export default async function handler(req, res) {
   try {
@@ -51,7 +51,7 @@ async function handleGet(req, res, session) {
   const where = {};
   if (centerId) where.centerId = centerId;
   if (userId) where.userId = userId;
-  if (isNonAdminEmployeeRole(session.user.role)) where.userId = session.user.id;
+  if (isSelfServiceEmployeeRole(session.user.role)) where.userId = session.user.id;
 
   if (date) {
     const d = new Date(date);

@@ -211,6 +211,7 @@ model User {
   dob                                DateTime?
   hireDate                           DateTime?
   aboutMe                            String?
+  staffDepartment                    String?
   pictureUrl                         String?
   role                               Role                                @default(PARENT)
   roles                              Role[]                              @default([])
@@ -883,6 +884,7 @@ model PolicyDocument {
   description             String?
   url                     String
   roles                   Role[]
+  category                String                   @default("POLICY")
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @default(now()) @updatedAt
   milestoneChecklistItems MilestoneChecklistItem[]

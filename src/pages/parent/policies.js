@@ -99,7 +99,7 @@ export default function ParentPolicies() {
   );
 
   return (
-    <ParentLayout title="Policies">
+    <ParentLayout title="Policies & Procedures">
       <div className="space-y-4">
         <ParentPageHeader
           eyebrow="Family handbook"

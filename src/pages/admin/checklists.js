@@ -136,7 +136,7 @@ export default function AdminChecklists() {
   }, [centerId]);
 
   return (
-    <AdminLayout title="Checklists">
+    <AdminLayout title="Checklist Manager">
       {/* ── Page Header ── */}
       <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-white via-white to-sky-50/40 p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

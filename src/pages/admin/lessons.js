@@ -805,7 +805,7 @@ function SupplyRowsEditor({ rows, setRows, disabled }) {
       </button>
       <p className="mt-1 text-xs text-gray-500">
         Supplies added here automatically appear on the center&apos;s{" "}
-        <a href="/admin/supply-lists" className="font-semibold text-sky-700 hover:text-sky-800">
+        <a href="/coach/supply-lists" className="font-semibold text-sky-700 hover:text-sky-800">
           Supply List
         </a>
         .
@@ -1546,7 +1546,7 @@ export default function AdminLessons() {
   const activeFilterCount = [age, category, term, subject].filter(Boolean).length;
 
   return (
-    <AdminLayout title="Curriculum Lessons">
+    <AdminLayout title="Curriculum">
       <div className="space-y-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
@@ -2343,7 +2343,7 @@ export default function AdminLessons() {
                 <p className="mt-1 text-xs text-gray-500">
                   Manage age groups in{" "}
                   <a href="/admin/curriculum" className="font-semibold text-sky-700 hover:text-sky-800">
-                    Steps of Progression Manager
+                    Steps of Progression
                   </a>
                   {" "}under Categories.
                 </p>
@@ -2631,7 +2631,7 @@ export default function AdminLessons() {
                 <p className="mt-1 text-xs text-gray-500">
                   Manage age groups in{" "}
                   <a href="/admin/curriculum" className="font-semibold text-sky-700 hover:text-sky-800">
-                    Steps of Progression Manager
+                    Steps of Progression
                   </a>
                   {" "}under Categories.
                 </p>

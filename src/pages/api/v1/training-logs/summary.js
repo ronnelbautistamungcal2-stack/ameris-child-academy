@@ -2,7 +2,7 @@ import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { createApiHandler, unauthorized } from "@/lib/api-error";
 import { optionalDate, optionalString } from "@/lib/validation";
-import { isEmployeeRole, isNonAdminEmployeeRole } from "@/lib/roles";
+import { isEmployeeRole, isSelfServiceEmployeeRole } from "@/lib/roles";
 
 export default createApiHandler(async function handler(req, res) {
   const session = await getSession(req, res);
@@ -19,7 +19,7 @@ export default createApiHandler(async function handler(req, res) {
     const allowed = await hasAccessToCenter(session.user.id, centerId);
     if (!allowed) return res.status(403).json({ error: "Forbidden" });
   }
-  const resolvedUserId = isNonAdminEmployeeRole(session.user.role)
+  const resolvedUserId = isSelfServiceEmployeeRole(session.user.role)
     ? session.user.id
     : userId;
 

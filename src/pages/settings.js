@@ -9,6 +9,7 @@ import { TEACHER_NAV_ITEMS } from "@/components/teacher/teacherNav";
 import { PARENT_NAV_ITEMS } from "@/components/parent/parentNav";
 import { COACH_NAV_ITEMS } from "@/components/coach/coachNav";
 import { SUBSCRIBER_NAV_ITEMS } from "@/components/subscriber/subscriberNav";
+import NotificationPreferences from "@/components/parent/NotificationPreferences";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const STAFF_ROLES = new Set(["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"]);
@@ -534,6 +535,15 @@ export default function SettingsPage() {
                 </form>
               )}
             </SettingsCard>
+
+            {role === "PARENT" ? (
+              <SettingsCard
+                title="Notification settings"
+                description="Choose which family alerts reach you through the portal notification bell."
+              >
+                <NotificationPreferences />
+              </SettingsCard>
+            ) : null}
 
             {role !== "PARENT" ? (
               <SettingsCard

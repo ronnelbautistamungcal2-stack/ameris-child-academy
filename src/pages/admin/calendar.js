@@ -38,6 +38,10 @@ const SOURCE_BADGE = {
   birthday: { bg: "#fdf2f8", text: "#be185d", border: "#fbcfe8", label: "Birthday", icon: "\ud83c\udf82" },
 };
 
+const SHIFT_POSITIONS = ["Teacher", "Assistant Teacher", "Lead Teacher", "Substitute", "Admin Staff", "Other"];
+
+const EMPTY_SHIFT_FORM = { userId: "", date: "", startTime: "08:00", endTime: "16:00", position: "Teacher", notes: "" };
+
 const FILTER_ITEMS = [
   { key: "events", label: "Events", color: "#6366f1", lightBg: "#eef2ff", icon: "\ud83d\udcc5" },
   { key: "shifts", label: "Shifts", color: "#3b82f6", lightBg: "#eff6ff", icon: "\u23f0" },
@@ -119,6 +123,9 @@ export default function CalendarPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [showShiftForm, setShowShiftForm] = useState(false);
+  const [editingShift, setEditingShift] = useState(null);
+  const [shiftForm, setShiftForm] = useState(EMPTY_SHIFT_FORM);
 
   // Auto-dismiss notifications
   useEffect(() => {
@@ -218,9 +225,9 @@ export default function CalendarPage() {
       for (const s of calData.shifts) {
         items.push({
           id: s.id, _source: "shift", type: "Shift", status: "ACTIVE",
-          startDate: s.date, endDate: s.date,
+          startDate: s.date, endDate: s.date, allDay: true,
           user: s.user, label: `${s.user?.name || "\u2014"} ${s.startTime}\u2013${s.endTime}`,
-          _raw: s,
+          _raw: { ...s, allDay: true },
         });
       }
     }
@@ -318,6 +325,73 @@ export default function CalendarPage() {
       setDeleteTarget(null);
     }
   }
+
+  function closeShiftForm() {
+    setShowShiftForm(false);
+    setEditingShift(null);
+    setShiftForm(EMPTY_SHIFT_FORM);
+  }
+
+  function startEditShift(shift) {
+    setEditingShift(shift);
+    setShiftForm({
+      userId: shift.userId || shift.user?.id || "",
+      date: toDateInput(shift.date, { allDay: true }),
+      startTime: shift.startTime || "08:00",
+      endTime: shift.endTime || "16:00",
+      position: shift.position || "Teacher",
+      notes: shift.notes || "",
+    });
+    setShowShiftForm(true);
+  }
+
+  async function saveShift(e) {
+    e.preventDefault();
+    setError(""); setSuccess("");
+    if (!editingShift) return;
+    if (!shiftForm.userId || !shiftForm.date || !shiftForm.startTime || !shiftForm.endTime) {
+      setError("Staff, date, start time, and end time are required"); return;
+    }
+    setSaving(true);
+    try {
+      await apiJson(`/api/v1/shifts/${editingShift.id}`, { method: "PUT", body: JSON.stringify(shiftForm) });
+      setSuccess("Shift updated");
+      closeShiftForm();
+      await loadCalendar();
+    } catch (err) {
+      setError(err.message || "Failed to update shift");
+    } finally { setSaving(false); }
+  }
+
+  async function deleteShift(id) {
+    try {
+      await apiJson(`/api/v1/shifts/${id}`, { method: "DELETE" });
+      setSuccess("Shift deleted");
+      setDeleteTarget(null);
+      await loadCalendar();
+    } catch (err) {
+      setError(err.message || "Failed to delete shift");
+      setDeleteTarget(null);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    if (deleteTarget.source === "shift") await deleteShift(deleteTarget.id);
+    else await deleteEvent(deleteTarget.id);
+  }
+
+  const shiftStaffOptions = (() => {
+    const options = staffUsers.map(u => ({ id: u.id, name: u.name, email: u.email }));
+    const current = editingShift?.user;
+    if (current?.id && !options.some(u => u.id === current.id)) {
+      options.unshift({ id: current.id, name: current.name || current.email || "(unlisted staff)", email: current.email || "" });
+    }
+    return options;
+  })();
+  const shiftPositionOptions = editingShift?.position && !SHIFT_POSITIONS.includes(editingShift.position)
+    ? [editingShift.position, ...SHIFT_POSITIONS]
+    : SHIFT_POSITIONS;
 
   const dayItems = getDayItems(selectedDay);
   const selectedCenter = centers.find(c => c.id === centerId);
@@ -887,6 +961,150 @@ export default function CalendarPage() {
           </div>
         )}
 
+        {showShiftForm && (
+          <div style={{
+            position: "fixed", inset: 0, background: "var(--admin-modal-overlay, rgba(0,0,0,0.5))",
+            zIndex: 900, display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 16, animation: "fadeIn 0.15s ease-out",
+          }}
+            onClick={e => { if (e.target === e.currentTarget) closeShiftForm(); }}
+          >
+            <div style={{
+              background: "var(--admin-bg)", borderRadius: 14, padding: 24,
+              width: "100%", maxWidth: 520, maxHeight: "85vh", overflow: "auto",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+              animation: "slideUp 0.2s ease-out",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 18, color: "var(--admin-text)" }}>Edit Shift</div>
+                  <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginTop: 2 }}>
+                    Changes apply to this shift only
+                  </div>
+                </div>
+                <button type="button" onClick={closeShiftForm}
+                  style={{
+                    width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "var(--admin-bg-tertiary)", border: "none", borderRadius: 8,
+                    cursor: "pointer", fontSize: 14, color: "var(--admin-text-muted)",
+                  }}
+                >✕</button>
+              </div>
+
+              <form onSubmit={saveShift}>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--admin-text-secondary)", marginBottom: 6 }}>
+                    Staff Member <span style={{ color: "#dc2626" }}>*</span>
+                  </label>
+                  <select
+                    value={shiftForm.userId}
+                    onChange={e => setShiftForm(f => ({ ...f, userId: e.target.value }))}
+                    style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--admin-border)", borderRadius: 8, boxSizing: "border-box", fontSize: 13, background: "var(--admin-bg)", color: "var(--admin-text)" }}
+                  >
+                    <option value="">Select staff…</option>
+                    {shiftStaffOptions.map(u => (
+                      <option key={u.id} value={u.id}>{u.name || u.email}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--admin-text-secondary)", marginBottom: 6 }}>
+                      Date <span style={{ color: "#dc2626" }}>*</span>
+                    </label>
+                    <input type="date" value={shiftForm.date}
+                      onChange={e => setShiftForm(f => ({ ...f, date: e.target.value }))}
+                      style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--admin-border)", borderRadius: 8, boxSizing: "border-box", fontSize: 13, background: "var(--admin-bg)", color: "var(--admin-text)" }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--admin-text-secondary)", marginBottom: 6 }}>Position</label>
+                    <select
+                      value={shiftForm.position}
+                      onChange={e => setShiftForm(f => ({ ...f, position: e.target.value }))}
+                      style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--admin-border)", borderRadius: 8, boxSizing: "border-box", fontSize: 13, background: "var(--admin-bg)", color: "var(--admin-text)" }}
+                    >
+                      {shiftPositionOptions.map(pos => <option key={pos} value={pos}>{pos}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--admin-text-secondary)", marginBottom: 6 }}>
+                      Start Time <span style={{ color: "#dc2626" }}>*</span>
+                    </label>
+                    <input type="time" value={shiftForm.startTime}
+                      onChange={e => setShiftForm(f => ({ ...f, startTime: e.target.value }))}
+                      style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--admin-border)", borderRadius: 8, boxSizing: "border-box", fontSize: 13, background: "var(--admin-bg)", color: "var(--admin-text)" }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--admin-text-secondary)", marginBottom: 6 }}>
+                      End Time <span style={{ color: "#dc2626" }}>*</span>
+                    </label>
+                    <input type="time" value={shiftForm.endTime}
+                      onChange={e => setShiftForm(f => ({ ...f, endTime: e.target.value }))}
+                      style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--admin-border)", borderRadius: 8, boxSizing: "border-box", fontSize: 13, background: "var(--admin-bg)", color: "var(--admin-text)" }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--admin-text-secondary)", marginBottom: 6 }}>
+                    Notes <span style={{ fontSize: 11, fontWeight: 400, color: "var(--admin-text-faint)" }}>(optional)</span>
+                  </label>
+                  <textarea
+                    value={shiftForm.notes}
+                    onChange={e => setShiftForm(f => ({ ...f, notes: e.target.value }))}
+                    rows={3}
+                    placeholder="Coverage details, room assignment…"
+                    style={{
+                      width: "100%", padding: "10px 12px", border: "1px solid var(--admin-border)",
+                      borderRadius: 8, boxSizing: "border-box", resize: "vertical", fontSize: 13,
+                      background: "var(--admin-bg)", color: "var(--admin-text)", fontFamily: "inherit",
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", gap: 8, justifyContent: "space-between" }}>
+                  <button type="button"
+                    onClick={() => { const id = editingShift?.id; closeShiftForm(); if (id) setDeleteTarget({ id, source: "shift" }); }}
+                    style={{
+                      padding: "10px 20px", background: "var(--admin-bg)",
+                      color: "var(--admin-danger-accent-text)", border: "1px solid var(--admin-border)",
+                      borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer",
+                    }}>
+                    Delete Shift
+                  </button>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button type="button" onClick={closeShiftForm}
+                      style={{
+                        padding: "10px 20px", background: "var(--admin-bg-tertiary)",
+                        color: "var(--admin-text-secondary)", border: "1px solid var(--admin-border)",
+                        borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer",
+                      }}>
+                      Cancel
+                    </button>
+                    <button type="submit" disabled={saving}
+                      style={{
+                        padding: "10px 24px", background: "#2563eb", color: "#fff",
+                        border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13,
+                        cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1,
+                        boxShadow: "0 2px 8px rgba(37,99,235,0.25)",
+                        display: "flex", alignItems: "center", gap: 6,
+                      }}>
+                      {saving && <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />}
+                      {saving ? "Saving…" : "Update Shift"}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* Calendar + Day detail */}
         {centerId ? (
           <div className="admin-calendar-grid" style={{ display: "grid", gridTemplateColumns: selectedDay ? "1fr 340px" : "1fr", gap: 20, alignItems: "start" }}>
@@ -1044,9 +1262,10 @@ export default function CalendarPage() {
                               {item.label}
                             </div>
                           </div>
-                          {item._source === "event" && (
+                          {(item._source === "event" || item._source === "shift") && (
                             <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                              <button type="button" onClick={() => startEdit(item._raw)}
+                              <button type="button"
+                                onClick={() => (item._source === "shift" ? startEditShift(item._raw) : startEdit(item._raw))}
                                 style={{
                                   fontSize: 11, padding: "4px 10px",
                                   background: "var(--admin-bg)", color: "var(--admin-accent-text)",
@@ -1055,7 +1274,7 @@ export default function CalendarPage() {
                                 }}>
                                 Edit
                               </button>
-                              <button type="button" onClick={() => setDeleteTarget(item.id)}
+                              <button type="button" onClick={() => setDeleteTarget({ id: item.id, source: item._source })}
                                 style={{
                                   fontSize: 11, padding: "4px 10px",
                                   background: "var(--admin-bg)", color: "var(--admin-danger-accent-text)",
@@ -1150,11 +1369,13 @@ export default function CalendarPage() {
 
       <ConfirmDialog
         open={!!deleteTarget}
-        title="Delete Event"
-        message="Are you sure you want to delete this event? This action cannot be undone."
+        title={deleteTarget?.source === "shift" ? "Delete Shift" : "Delete Event"}
+        message={deleteTarget?.source === "shift"
+          ? "Are you sure you want to delete this shift? This action cannot be undone."
+          : "Are you sure you want to delete this event? This action cannot be undone."}
         confirmLabel="Delete"
         variant="danger"
-        onConfirm={() => deleteEvent(deleteTarget)}
+        onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
     </AdminLayout>

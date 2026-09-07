@@ -23,7 +23,7 @@ export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
 
-  if (!["ADMIN", "TEACHER"].includes(session.user.role)) {
+  if (!["ADMIN", "COACH", "TEACHER"].includes(session.user.role)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 

@@ -1702,7 +1702,7 @@ function TeacherProgressReportPanel({ progressRows, loading, childId, birthDate 
         <div className="flex items-center justify-between gap-3">
           <h4 className="text-base font-extrabold text-gray-900">Milestones Achieved This Month</h4>
           <Link
-            href={`/teacher/reports?childId=${encodeURIComponent(childId || "")}`}
+            href={`/teacher/student-performance-report?childId=${encodeURIComponent(childId || "")}`}
             className="text-xs font-semibold text-sky-700 hover:text-sky-800"
           >
             View all Milestone History

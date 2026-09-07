@@ -1,7 +1,13 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { hasEmployeeRole, normalizeRoles, primaryRoleFromRoles, userRoles } from "@/lib/roles";
+import {
+  hasEmployeeRole,
+  normalizeRoles,
+  normalizeStaffDepartment,
+  primaryRoleFromRoles,
+  userRoles,
+} from "@/lib/roles";
 
 function parseDateOrNull(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -64,7 +70,19 @@ export default async function handler(req, res) {
     }
 
     const body = req.body || {};
-    const { email, name, role, roles, dob, hireDate, aboutMe, pictureUrl, password, weeklySchedules } = body;
+    const {
+      email,
+      name,
+      role,
+      roles,
+      dob,
+      hireDate,
+      aboutMe,
+      staffDepartment,
+      pictureUrl,
+      password,
+      weeklySchedules,
+    } = body;
     const updateData = {};
     const assignedRoles = "roles" in body || "role" in body
       ? normalizeRoles(roles || role, role || "PARENT")
@@ -94,6 +112,7 @@ export default async function handler(req, res) {
         updateData.dob = null;
         updateData.hireDate = null;
         updateData.aboutMe = null;
+        updateData.staffDepartment = null;
         updateData.pictureUrl = null;
         updateData.weeklySchedules = { deleteMany: {} };
       }
@@ -114,6 +133,11 @@ export default async function handler(req, res) {
 
     if ("aboutMe" in body)
       updateData.aboutMe = isEmployee && aboutMe ? String(aboutMe).slice(0, 5000) : null;
+
+    if ("staffDepartment" in body)
+      updateData.staffDepartment = isEmployee
+        ? normalizeStaffDepartment(staffDepartment) || null
+        : null;
 
     if ("pictureUrl" in body)
       updateData.pictureUrl = isEmployee && pictureUrl ? String(pictureUrl).slice(0, 2000) : null;

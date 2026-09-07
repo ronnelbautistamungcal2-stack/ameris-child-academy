@@ -1,6 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { isEmployeeRole, isNonAdminEmployeeRole } from "@/lib/roles";
+import { isEmployeeRole, isManagerRole, isSelfServiceEmployeeRole } from "@/lib/roles";
 import {
   decorateTimeOffRequest,
 } from "@/lib/time-off";
@@ -23,14 +23,14 @@ export default async function handler(req, res) {
 
     const { status, reviewNotes, coverageName } = req.body || {};
 
-    // Only admin can approve/deny
-    if (["APPROVED", "DENIED"].includes(status) && session.user.role !== "ADMIN") {
-      return res.status(403).json({ error: "Only admins can approve or deny requests" });
+    // Only admins and coaches can approve/deny
+    if (["APPROVED", "DENIED"].includes(status) && !isManagerRole(session.user.role)) {
+      return res.status(403).json({ error: "Only admins and coaches can approve or deny requests" });
     }
 
     if (
       status === "CANCELLED" &&
-      isNonAdminEmployeeRole(session.user.role) &&
+      isSelfServiceEmployeeRole(session.user.role) &&
       request.userId !== session.user.id
     ) {
       return res.status(403).json({ error: "Forbidden" });

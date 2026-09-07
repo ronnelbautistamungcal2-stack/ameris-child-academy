@@ -1,5 +1,6 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { isManagerRole } from "@/lib/roles";
 
 export default async function handler(req, res) {
   try {
@@ -46,7 +47,7 @@ async function handleGet(req, res, session) {
 }
 
 async function handlePost(req, res, session) {
-  if (session.user.role !== "ADMIN") {
+  if (!isManagerRole(session.user.role)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -54,6 +55,11 @@ async function handlePost(req, res, session) {
 
   if (!centerId || !userId || !date || !startTime || !endTime) {
     return res.status(400).json({ error: "centerId, userId, date, startTime, and endTime are required" });
+  }
+
+  if (session.user.role !== "ADMIN") {
+    const allowed = await hasAccessToCenter(session.user.id, centerId);
+    if (!allowed) return res.status(403).json({ error: "Forbidden" });
   }
 
   if (!/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime)) {

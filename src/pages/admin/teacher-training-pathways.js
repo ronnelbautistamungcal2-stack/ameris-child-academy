@@ -203,13 +203,13 @@ export default function AdminTeacherTrainingPathwaysPage() {
   }
 
   return (
-    <AdminLayout title="Teacher Training Pathways">
+    <AdminLayout title="Staff Professional Development">
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "20px 16px" }}>
         <div style={panelStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
             <div>
               <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: "#111827" }}>
-                Teacher Training Pathways
+                Staff Professional Development
               </h1>
               <p style={{ margin: "8px 0 0", color: "#6b7280", maxWidth: 780 }}>
                 Build a center-specific teacher training pathway without linking it to children&apos;s steps of progression.

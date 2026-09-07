@@ -41,3 +41,18 @@ export async function hasAccessToCenter(userId, centerId) {
   if (hasAnyRole(user, ["ADMIN"])) return true;
   return (user.centers || []).some((c) => c.centerId === centerId);
 }
+
+/**
+ * The centers a non-admin user belongs to. Returns null for admins, who are
+ * not scoped to any subset of centers.
+ */
+export async function accessibleCenterIds(userId) {
+  const { default: prisma } = await import("@/lib/prisma");
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { centers: { select: { centerId: true } } },
+  });
+  if (!user) return [];
+  if (hasAnyRole(user, ["ADMIN"])) return null;
+  return (user.centers || []).map((c) => c.centerId);
+}

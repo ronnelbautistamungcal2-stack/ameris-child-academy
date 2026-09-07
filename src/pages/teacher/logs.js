@@ -822,11 +822,11 @@ export default function TeacherLogs() {
   }
 
   return (
-    <TeacherLayout title="Activity Logging">
+    <TeacherLayout title="Daily Log">
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 border-b border-gray-100 pb-4 md:flex-row md:items-start md:justify-between">
           <div>
-            <h2 className="text-lg font-extrabold text-gray-900">Daily Activity Logging</h2>
+            <h2 className="text-lg font-extrabold text-gray-900">Daily Log</h2>
             <p className="mt-1 text-sm text-gray-600">
               Teachers can set the time for today's entry, but the date stays locked to today. Citizenship Grade entries use a 0-10 score instead of a time. Select one or more children below to log at once.
             </p>

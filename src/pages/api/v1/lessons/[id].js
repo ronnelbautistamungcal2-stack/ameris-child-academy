@@ -58,6 +58,9 @@ export default async function handler(req, res) {
     } = req.body;
 
     const lesson = await prisma.$transaction(async (tx) => {
+      const existing = await tx.lesson.findUnique({ where: { id }, select: { title: true } });
+      if (!existing) throw new Error("Lesson not found");
+
       if (Object.prototype.hasOwnProperty.call(req.body, "supplies") && Array.isArray(supplies)) {
         await tx.lessonSupply.deleteMany({ where: { lessonId: id } });
         if (supplies.length) {
@@ -76,7 +79,7 @@ export default async function handler(req, res) {
         }
       }
 
-      return tx.lesson.update({
+      const updated = await tx.lesson.update({
         where: { id },
         data: {
           title,
@@ -117,6 +120,28 @@ export default async function handler(req, res) {
         },
         include: LESSON_INCLUDE,
       });
+
+      // Planner/checklist rows snapshot the lesson title when a lesson is
+      // attached (see milestone-checklists), so a rename has to cascade or the
+      // weekly planner keeps showing the old title.
+      if (updated.title !== existing.title) {
+        await tx.milestoneChecklistItem.updateMany({
+          where: { lessonId: id, lessonGoalId: null },
+          data: { title: updated.title },
+        });
+        const goals = await tx.lessonGoal.findMany({
+          where: { lessonId: id },
+          select: { id: true, goalIndex: true },
+        });
+        for (const goal of goals) {
+          await tx.milestoneChecklistItem.updateMany({
+            where: { lessonGoalId: goal.id },
+            data: { title: `${updated.title} - Step ${goal.goalIndex}` },
+          });
+        }
+      }
+
+      return updated;
     });
 
     return res.status(200).json(lesson);

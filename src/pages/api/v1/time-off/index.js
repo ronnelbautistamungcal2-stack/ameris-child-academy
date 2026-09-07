@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { isEmployeeRole, isNonAdminEmployeeRole } from "@/lib/roles";
+import { isEmployeeRole, isManagerRole, isSelfServiceEmployeeRole } from "@/lib/roles";
 import {
   getTimeOffAvailabilityWarning,
   decorateTimeOffRequest,
@@ -72,7 +72,7 @@ async function handleGet(req, res, session) {
   applyRequestDateRange(where, from, to);
   applySubmittedRange(where, submittedFrom, submittedTo);
 
-  if (isNonAdminEmployeeRole(session.user.role)) {
+  if (isSelfServiceEmployeeRole(session.user.role)) {
     where.userId = session.user.id;
   } else if (userId) {
     where.userId = userId;
@@ -115,8 +115,8 @@ async function handlePost(req, res, session) {
   if (end < start) return res.status(400).json({ error: "endDate must be after startDate" });
 
   const unexcused = isUnexcusedType(type);
-  if (unexcused && session.user.role !== "ADMIN") {
-    return res.status(403).json({ error: "Only admins can record unexcused time off" });
+  if (unexcused && !isManagerRole(session.user.role)) {
+    return res.status(403).json({ error: "Only admins and coaches can record unexcused time off" });
   }
   if (unexcused && !userId) {
     return res.status(400).json({ error: "userId is required for unexcused time off" });

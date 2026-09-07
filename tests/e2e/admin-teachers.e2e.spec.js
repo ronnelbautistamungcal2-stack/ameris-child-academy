@@ -217,7 +217,7 @@ test.describe.serial("Admin Teachers Page", () => {
   test("supports search and teacher profile navigation", async ({ page }) => {
     const { teacher } = await prepareFixture();
 
-    await page.goto("/admin/teachers");
+    await page.goto("/coach/teachers");
 
     await expect(
       page.getByText("Click a staff member to manage their assignments."),
@@ -231,13 +231,13 @@ test.describe.serial("Admin Teachers Page", () => {
     await expect(page.getByText(fixture.teacherEmail).first()).toBeVisible();
 
     await page.getByRole("link", { name: /View Profile/i }).click();
-    await expect(page).toHaveURL(new RegExp(`/admin/teachers/${teacher.id}$`));
+    await expect(page).toHaveURL(new RegExp(`/coach/teachers/${teacher.id}$`));
   });
 
   test("removes out-of-scope classrooms when center assignments change", async ({ page, request }) => {
     const { teacher, centerA, centerB, classA, classB } = await prepareFixture();
 
-    await page.goto("/admin/teachers");
+    await page.goto("/coach/teachers");
     await expect(
       page.getByText("Click a staff member to manage their assignments."),
     ).toBeVisible();

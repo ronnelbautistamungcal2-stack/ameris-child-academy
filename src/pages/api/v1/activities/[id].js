@@ -101,7 +101,7 @@ export default async function handler(req, res) {
           type: "COMPLIANCE_ALERT",
           title: "IPP Flagged on Course Correction Log",
           body: `${childName}'s Course Correction log was flagged for an Individual Progress Plan (IPP) by ${session.user.name || session.user.email || "a teacher"}.`,
-          link: `/admin/activity-overrides?childId=${updated.childId}`,
+          link: `/coach/activity-overrides?childId=${updated.childId}`,
           metadata: { activityId: updated.id, childId: updated.childId },
         }));
         await prisma.notification.createMany({ data: adminNotifications, skipDuplicates: true }).catch(() => {});

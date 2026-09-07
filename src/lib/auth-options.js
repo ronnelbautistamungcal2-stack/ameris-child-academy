@@ -2,7 +2,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import prisma from "@/lib/prisma";
-import { normalizeRoles, primaryRoleFromRoles } from "@/lib/roles";
+import { normalizeRoles, normalizeStaffDepartment, primaryRoleFromRoles } from "@/lib/roles";
 
 export const authOptions = {
   adapter: PrismaAdapter(prisma),
@@ -32,6 +32,7 @@ export const authOptions = {
             role: primaryRoleFromRoles(user.roles, user.role),
             roles: normalizeRoles(user.roles, user.role),
             pictureUrl: user.pictureUrl,
+            staffDepartment: normalizeStaffDepartment(user.staffDepartment),
             mustChangePassword: Boolean(user.mustChangePassword),
           };
         } catch (error) {
@@ -52,6 +53,7 @@ export const authOptions = {
         token.id = user.id;
         token.email = user.email;
         token.pictureUrl = user.pictureUrl || null;
+        token.staffDepartment = normalizeStaffDepartment(user.staffDepartment);
         token.mustChangePassword = Boolean(user.mustChangePassword);
         token.pictureUrlFetchedAt = Date.now();
         return token;
@@ -105,6 +107,7 @@ export const authOptions = {
           pictureUrl: true,
           name: true,
           email: true,
+          staffDepartment: true,
           mustChangePassword: true,
         },
       });
@@ -113,6 +116,7 @@ export const authOptions = {
       token.roles = normalizeRoles(dbUser.roles, dbUser.role);
       token.role = token.roles.includes(token.role) ? token.role : token.roles[0];
       token.pictureUrl = dbUser.pictureUrl || null;
+      token.staffDepartment = normalizeStaffDepartment(dbUser.staffDepartment);
       token.name = dbUser.name || token.name;
       token.email = dbUser.email || token.email;
       token.mustChangePassword = Boolean(dbUser.mustChangePassword);
@@ -127,6 +131,7 @@ export const authOptions = {
         session.user.role = token.role;
         session.user.roles = normalizeRoles(token.roles, token.role);
         session.user.pictureUrl = token.pictureUrl || null;
+        session.user.staffDepartment = normalizeStaffDepartment(token.staffDepartment);
         session.user.mustChangePassword = Boolean(token.mustChangePassword);
       }
       return session;

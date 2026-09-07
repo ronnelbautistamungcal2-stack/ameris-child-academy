@@ -45,7 +45,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    if (!["ADMIN", "TEACHER"].includes(session.user.role)) {
+    if (!["ADMIN", "COACH", "TEACHER"].includes(session.user.role)) {
       return res.status(403).json({ error: "Forbidden" });
     }
 

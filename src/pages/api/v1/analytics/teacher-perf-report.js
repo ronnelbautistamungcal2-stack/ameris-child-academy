@@ -99,17 +99,21 @@ export default async function handler(req, res) {
     // ── Milestones Grade (avg % of steps-of-progression completed for class) ──
     const progressEntries = childIds.length > 0
       ? await prisma.progressEntry.findMany({
-          where: { childId: { in: childIds } },
+          where: { progress: { childId: { in: childIds } } },
           select: {
             status: true,
-            lesson: { select: { lessonCategory: { select: { id: true, name: true } } } },
+            progress: {
+              select: {
+                lesson: { select: { category: { select: { id: true, name: true } } } },
+              },
+            },
           },
         })
       : [];
 
     const milestoneCatMap = {};
     for (const p of progressEntries) {
-      const catName = p.lesson?.lessonCategory?.name || "Other";
+      const catName = p.progress?.lesson?.category?.name || "Other";
       if (!milestoneCatMap[catName]) milestoneCatMap[catName] = { passed: 0, total: 0 };
       milestoneCatMap[catName].total += 1;
       if (p.status === "PASSED" || p.status === "COMPLETED") milestoneCatMap[catName].passed += 1;

@@ -27,6 +27,7 @@ export default async function handler(req, res) {
   }
 
   const since = daysAgo(7);
+  const now = new Date();
 
   const teachers = await prisma.user.findMany({
     where: {
@@ -74,7 +75,6 @@ export default async function handler(req, res) {
     take: 5000,
   });
 
-  const now = new Date();
   const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const today = startOfDay(now);
   const last30Days = daysAgo(30);

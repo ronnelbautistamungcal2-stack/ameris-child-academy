@@ -115,13 +115,29 @@ export default async function handler(req, res) {
     const ok = await hasAccessToCenter(session.user.id, centerId);
     if (!ok) return res.status(403).json({ error: "Forbidden" });
 
+    // rowIndex has to name a row that is actually on the plan: one of the
+    // defaults, or one POST has appended since. Without this an arbitrary index
+    // silently creates a detached row that no lesson-plan cell can reference.
+    const parsedRowIndex = Number(rowIndex);
+    const storedRows = await prisma.lessonPlanRow.findMany({
+      where: { classRoomId },
+      select: { rowIndex: true },
+    });
+    const maxRowIndex = Math.max(
+      DEFAULT_ROW_COUNT - 1,
+      storedRows.reduce((max, r) => Math.max(max, r.rowIndex), -1),
+    );
+    if (!Number.isInteger(parsedRowIndex) || parsedRowIndex < 0 || parsedRowIndex > maxRowIndex) {
+      return res.status(400).json({ error: "rowIndex is out of range" });
+    }
+
     const row = await prisma.lessonPlanRow.upsert({
-      where: { classRoomId_rowIndex: { classRoomId, rowIndex: Number(rowIndex) } },
+      where: { classRoomId_rowIndex: { classRoomId, rowIndex: parsedRowIndex } },
       update: { label: label || "" },
       create: {
         centerId,
         classRoomId,
-        rowIndex: Number(rowIndex),
+        rowIndex: parsedRowIndex,
         label: label || "",
       },
     });

@@ -7,7 +7,7 @@ test.describe("Teacher Workflows", () => {
   });
 
   test("can navigate to children page", async ({ page }) => {
-    await page.getByRole("button", { name: "Child Progress" }).click();
+    await page.getByRole("button", { name: "Student Management" }).click();
     const childrenLink = page.getByRole("link", { name: "Children", exact: true });
     await expect(childrenLink).toBeVisible();
     await Promise.all([

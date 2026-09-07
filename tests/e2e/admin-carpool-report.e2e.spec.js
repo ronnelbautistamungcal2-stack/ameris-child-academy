@@ -69,10 +69,17 @@ test.describe("Admin carpool report", () => {
     await page.goto("/coach/carpool-report");
     await waitForLoadingDone(page);
 
-    await page.getByLabel("Center").selectOption({ label: fixture.centerName });
-
+    const centerSelect = page.getByLabel("Center");
     const routeAHeading = page.getByRole("heading", { name: new RegExp(`^${fixture.routeAName}`) });
-    await expect(routeAHeading).toBeVisible();
+
+    // reactStrictMode makes the page's centers effect run twice in dev, and when
+    // the second response lands it resets the dropdown to "Select a center...".
+    // A selection made in between is silently wiped, so re-apply it until the
+    // report actually renders.
+    await expect(async () => {
+      await centerSelect.selectOption({ label: fixture.centerName });
+      await expect(routeAHeading).toBeVisible({ timeout: 5000 });
+    }).toPass({ timeout: 45000 });
     const routeASection = routeAHeading.locator("xpath=ancestor::div[contains(@class,'break-inside-avoid')]");
     await expect(routeASection.getByText(fixture.childRouteAName)).toBeVisible();
     await expect(routeASection.getByText(fixture.childRouteBName)).toHaveCount(0);

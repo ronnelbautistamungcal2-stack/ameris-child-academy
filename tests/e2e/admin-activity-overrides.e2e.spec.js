@@ -17,6 +17,22 @@ async function selectScope(page) {
   await expect(page.getByRole("button", { name: "Create Log" })).toBeVisible();
 }
 
+async function openChildDrawer(page) {
+  await page.getByRole("button", { name: /Child One/ }).first().click();
+  await expect(page.getByRole("button", { name: "Close child activity details" })).toBeVisible();
+}
+
+// Drawer entries are plain divs, so match the innermost one that both carries the
+// note and owns its own Edit button -- ancestors match the text too, and nested
+// matches are last in document order.
+function drawerEntry(page, text) {
+  return page
+    .locator("div")
+    .filter({ hasText: text })
+    .filter({ has: page.getByRole("button", { name: "Edit" }) })
+    .last();
+}
+
 test.describe("Admin activity overrides", () => {
   test.describe.configure({ timeout: 120000 });
 
@@ -24,7 +40,9 @@ test.describe("Admin activity overrides", () => {
     await loginAsAdmin(page, request);
   });
 
-  test("can create, edit, and delete a backdated assessment log with photos", async ({ page }) => {
+  // The developmental assessment section was removed from this form in 2f6d087,
+  // so the domain-rating steps this test used to perform no longer exist here.
+  test("can create, edit, and delete a backdated log with photos", async ({ page }) => {
     const note = `QA override ${Date.now()}`;
     const updatedNote = `${note} updated`;
     const createButton = page.getByRole("button", { name: "Create Log" });
@@ -43,8 +61,6 @@ test.describe("Admin activity overrides", () => {
 
     await page.locator('input[type="datetime-local"]').first().fill(dateTime);
     await page.getByLabel("Description").fill(note);
-    await page.getByRole("button", { name: /Developmental Assessment/i }).click();
-    await page.getByRole("button", { name: "4 Advanced" }).first().click();
     await page.getByLabel("Activity photos").setInputFiles(PHOTO_PATH);
 
     await expect(page.getByText("Photos are still uploading. Save will unlock when the upload finishes.")).toBeVisible();
@@ -55,34 +71,37 @@ test.describe("Admin activity overrides", () => {
 
     await expect(page.getByText(/created for Child One/i)).toBeVisible();
 
-    const row = page.locator("tr").filter({ hasText: note }).first();
-    await expect(row).toContainText("1 photo");
-
     await expect(page.getByRole("combobox", { name: "Filter Classroom" })).toBeVisible();
     await expect(page.getByRole("combobox", { name: "Filter Child" })).toBeVisible();
     await expect(page.getByLabel("From Date")).toBeVisible();
     await expect(page.getByLabel("To Date")).toBeVisible();
 
     await page.getByLabel("Search Logs").fill(note);
-    await expect(row).toBeVisible();
     await expect(page.getByRole("button", { name: "Clear filters" })).toBeVisible();
     await page.getByRole("button", { name: "Clear filters" }).click();
 
-    await row.getByRole("button", { name: "Edit" }).click();
+    // The table summarises each child rather than listing individual logs; the
+    // entries themselves live in the drawer opened from the child's row.
+    await openChildDrawer(page);
+    const entry = drawerEntry(page, note);
+    await expect(entry).toContainText("1 photo");
+
+    await entry.getByRole("button", { name: "Edit" }).click();
 
     const editForm = page.locator("form").filter({ hasText: "Edit Activity Log" }).first();
     await editForm.getByLabel("Description").fill(updatedNote);
-    await editForm.getByRole("button", { name: "2 Developing" }).first().click();
     await editForm.getByRole("button", { name: "Save Changes" }).click();
 
     await expect(page.getByText("Activity log updated.")).toBeVisible();
-    await expect(page.locator("tr").filter({ hasText: updatedNote }).first()).toBeVisible();
+
+    const updatedEntry = drawerEntry(page, updatedNote);
+    await expect(updatedEntry).toBeVisible();
 
     page.once("dialog", (dialog) => dialog.accept());
-    await page.locator("tr").filter({ hasText: updatedNote }).first().getByRole("button", { name: "Delete" }).click();
+    await updatedEntry.getByRole("button", { name: "Delete" }).click();
 
     await expect(page.getByText("Activity log deleted.")).toBeVisible();
-    await expect(page.locator("tr").filter({ hasText: updatedNote })).toHaveCount(0);
+    await expect(page.getByText(updatedNote)).toHaveCount(0);
   });
 
   test("shows inline validation before saving invalid override data", async ({ page }) => {

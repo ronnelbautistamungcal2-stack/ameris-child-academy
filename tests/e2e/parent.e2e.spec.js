@@ -46,9 +46,13 @@ test.describe("Parent Workflows", () => {
     await page.goto("/parent/billing");
     await waitForLoadingDone(page);
 
-    await page.getByRole("link", { name: "Request payment link" }).first().click();
-
-    await expect(page).toHaveURL(/\/parent\/messages/, { timeout: 10000 });
+    // A click that lands before the dev build finishes hydrating is swallowed and
+    // the route never changes, so retry until the navigation actually happens.
+    const requestLink = page.getByRole("link", { name: "Request payment link" }).first();
+    await expect(async () => {
+      await requestLink.click();
+      await expect(page).toHaveURL(/\/parent\/messages/, { timeout: 5000 });
+    }).toPass({ timeout: 45000 });
     await expect(page.getByRole("heading", { name: "New Conversation" })).toBeVisible();
     await expect(
       page.locator('input[placeholder="e.g. Regarding attendance..."]'),

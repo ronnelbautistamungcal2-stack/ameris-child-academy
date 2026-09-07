@@ -104,8 +104,12 @@ test.describe("Messaging API @api", () => {
       test.skip();
       return;
     }
-    const thread = await createRes.json();
-    expect(thread.id).toBeTruthy();
+    // Threads are private per recipient, so the endpoint returns { threads: [...] }
+    // with one thread per participant rather than a single thread object.
+    const { threads: createdThreads } = await createRes.json();
+    expect(Array.isArray(createdThreads)).toBe(true);
+    const thread = createdThreads[0];
+    expect(thread?.id).toBeTruthy();
 
     // Send message
     const sendRes = await apiPost(
@@ -157,7 +161,9 @@ test.describe("Messaging API @api", () => {
       adminCookies,
     );
     expect(createRes.status()).toBe(201);
-    const thread = await createRes.json();
+    const { threads: createdThreads } = await createRes.json();
+    const thread = (createdThreads || [])[0];
+    expect(thread?.id).toBeTruthy();
 
     const [teacherThreadsRes, afterNotificationsRes] = await Promise.all([
       apiGet(request, "/api/v1/messages/threads", teacherCookies),
@@ -209,11 +215,21 @@ test.describe("Messaging API @api", () => {
     );
     expect(createRes.status()).toBe(201);
 
-    const thread = await createRes.json();
-    const participantIds = (thread.participants || []).map((participant) => participant.userId);
+    const { threads: createdThreads } = await createRes.json();
+    expect(Array.isArray(createdThreads)).toBe(true);
+    expect(createdThreads.length).toBeGreaterThan(0);
+    for (const created of createdThreads) {
+      expect(created.id).toBeTruthy();
+    }
 
-    expect(thread.id).toBeTruthy();
-    expect(participantIds).toContain(teacherUser.id);
+    // An audience expands to one private thread per recipient, so the teacher is a
+    // participant on exactly one of the created threads rather than on a shared one.
+    const teacherThread = createdThreads.find((created) =>
+      (created.participants || []).some(
+        (participant) => participant.userId === teacherUser.id,
+      ),
+    );
+    expect(teacherThread).toBeTruthy();
   });
 
   test("creating an accommodation rejects non-staff audience groups", async ({ request }) => {

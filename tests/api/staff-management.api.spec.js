@@ -1,8 +1,11 @@
 // @ts-check
 const { test, expect } = require("@playwright/test");
 const XLSX = require("xlsx");
+const { PrismaClient } = require("@prisma/client");
 const { loginAsAdmin, loginAsTeacher } = require("../helpers/auth");
 const { apiGet, apiPost, apiPut } = require("../helpers/api");
+
+const prisma = new PrismaClient();
 
 test.describe("Staff Management API @api", () => {
   let centerId;
@@ -25,11 +28,33 @@ test.describe("Staff Management API @api", () => {
       const usersRes = await apiGet(request, `/api/v1/users?centerId=${centerId}&role=TEACHER`, cookies);
       if (usersRes.status() === 200) {
         const users = await usersRes.json();
-        teacherUserId = Array.isArray(users) && users.length > 0 ? users[0].id : null;
-        teacherUserName = Array.isArray(users) && users.length > 0 ? users[0].name : null;
-        teacherUserEmail = Array.isArray(users) && users.length > 0 ? users[0].email : null;
+        const teacherList = Array.isArray(users) ? users : [];
+        // loginAsTeacher() authenticates as teacher@demo.com. Tests that pair
+        // teacherUserId with teacher cookies (time off balances, request
+        // ownership) only make sense when both point at the same account, so
+        // prefer that user over whoever happens to sort first by name.
+        const demoTeacher =
+          teacherList.find((u) => u.email === "teacher@demo.com") || teacherList[0] || null;
+        teacherUserId = demoTeacher ? demoTeacher.id : null;
+        teacherUserName = demoTeacher ? demoTeacher.name : null;
+        teacherUserEmail = demoTeacher ? demoTeacher.email : null;
       }
     }
+  });
+
+  // Evaluations and training logs are created through the API, which has no
+  // delete endpoint for them, so nothing removed them between runs. They pile up
+  // and break anything that asserts on a count -- the teacher evaluation
+  // visibility e2e spec started seeing five submitted evaluations instead of the
+  // one it had just created.
+  test.afterAll(async () => {
+    await prisma.teacherEvaluation.deleteMany({
+      where: { notes: { in: ["API filter coverage", "Created by E2E test"] } },
+    });
+    await prisma.trainingLog.deleteMany({
+      where: { topic: "E2E Test Training", description: "Created by E2E test" },
+    });
+    await prisma.$disconnect();
   });
 
   // ── Staff Attendance ──────────────────────────────────────────
@@ -172,6 +197,10 @@ test.describe("Staff Management API @api", () => {
         "/api/v1/time-off",
         {
           centerId,
+          // This test covers request creation, not the balance guard. Without the
+          // override it starts returning 409 once earlier runs have consumed the
+          // demo teacher's PTO balance, since nothing deletes those rows.
+          overrideBalanceWarning: true,
           type: "PTO",
           startDate,
           endDate,
@@ -378,6 +407,11 @@ test.describe("Staff Management API @api", () => {
         "/api/v1/time-off",
         {
           centerId,
+          // The assertion below is relative (after === before - 4), so the balance
+          // guard is not what is under test. Each run approves another 4 hours that
+          // nothing cleans up, so without the override this 409s once the granted
+          // 12 hours have been used up by earlier runs.
+          overrideBalanceWarning: true,
           type: "PAID",
           startDate: "2026-04-10T08:00:00.000Z",
           endDate: "2026-04-10T12:00:00.000Z",

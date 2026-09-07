@@ -7,8 +7,15 @@ const webServerCommand =
 
 module.exports = defineConfig({
   testDir: "./tests",
-  timeout: 30000,
+  // Routes are precompiled by globalSetup, but a cold dev server still makes the
+  // first hit on a heavy page slower than a warm one, so leave some headroom.
+  timeout: 60000,
+  // The e2e specs share one dev server across workers, so a page can take well
+  // over the 5s default to render its data. That default was the single largest
+  // source of flaky "element(s) not found" failures.
+  expect: { timeout: 15000 },
   retries: 0,
+  globalSetup: require.resolve("./tests/helpers/global-setup.js"),
   use: {
     baseURL,
   },

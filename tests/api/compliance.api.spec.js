@@ -6,10 +6,6 @@ const { apiGet } = require("../helpers/api");
 
 const prisma = new PrismaClient();
 
-function todayKey() {
-  return new Date().toISOString().split("T")[0];
-}
-
 test.describe("Compliance API @api", () => {
   /** @type {null | {
    * centerId: string,
@@ -62,12 +58,21 @@ test.describe("Compliance API @api", () => {
       }),
     ]);
 
+    // Attendance rows are keyed by *local* midnight: the API stores
+    // `d.setHours(0, 0, 0, 0)` and compliance's startOfDay() reads them back the
+    // same way. Building the date from an ISO "...T00:00:00.000Z" string pins it
+    // to UTC midnight instead, which matches nothing outside UTC.
+    const attendanceDate = new Date();
+    attendanceDate.setHours(0, 0, 0, 0);
+    const attendanceClockIn = new Date(attendanceDate);
+    attendanceClockIn.setHours(8, 0, 0, 0);
+
     const attendance = await prisma.staffAttendance.create({
       data: {
         userId: teacherClockedIn.id,
         centerId: center.id,
-        date: new Date(`${todayKey()}T00:00:00.000Z`),
-        clockIn: new Date(`${todayKey()}T08:00:00.000Z`),
+        date: attendanceDate,
+        clockIn: attendanceClockIn,
         status: "PRESENT",
       },
     });

@@ -43,6 +43,7 @@ export const TEACHER_NAV_ITEMS = [
     ),
     children: [
       { href: "/teacher/progress", label: "Progression Tracking" },
+      { href: "/teacher/children", label: "Children" },
       { href: "/teacher/student-performance-report", label: "Student Performance Report" },
     ],
   },

@@ -80,6 +80,14 @@ const nextConfig = {
         destination: "/coach/carpool-report",
         permanent: false,
       },
+      // The combined teacher Reports page split into separate student and class
+      // reports. Send stale links to the student report, which carries most of
+      // what the old page showed.
+      {
+        source: "/teacher/reports",
+        destination: "/teacher/student-performance-report",
+        permanent: false,
+      },
       // Progress Archive was retired; send stale links to Data Archive.
       {
         source: "/admin/progress-archive",

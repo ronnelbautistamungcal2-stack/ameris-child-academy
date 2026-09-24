@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import ParentFaqPanel from "@/components/admin/ParentFaqPanel";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
@@ -579,6 +580,10 @@ export default function AdminPolicies() {
             </div>
           )}
         </div>
+      </div>
+
+      <div style={{ marginTop: 24 }}>
+        <ParentFaqPanel centers={centers} />
       </div>
 
       <ConfirmDialog

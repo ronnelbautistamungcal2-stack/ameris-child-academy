@@ -333,6 +333,7 @@ model Center {
   evaluationCategoryConfig    EvaluationCategoryConfig?
   permissionPolicyConfigs     PermissionPolicyConfig[]
   supplyRequests              SupplyRequest[]
+  parentFaqs                  ParentFaq[]
   createdAt                   DateTime                     @default(now())
 }
 
@@ -385,6 +386,11 @@ model Child {
   emergencyContacts             Json?
   parentContacts                Json?
   allergies                     String?
+  photoUrl                      String?
+  favoriteActivities            String?
+  strengths                     String?
+  areasOfFocus                  String?
+  snapshotNotes                 String?
   carpool                       String?
   healthAssessmentDocuments     Json?
   enrollmentDocuments           Json?
@@ -850,6 +856,14 @@ model FormTemplate {
   requiresRenewal   Boolean  @default(false)
   renewalPeriodDays Int?
   autoFillMapping   Json?
+  assignmentType    String   @default("FAMILY")
+  ageMinMonths      Int?
+  ageMaxMonths      Int?
+  staffRoles        Json?
+  attachmentUrl     String?
+  attachmentName    String?
+  attachmentSize    Int?
+  dueDate           DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -891,6 +905,22 @@ model PolicyDocument {
   lessons                 Lesson[]
   dailyChecklistItems     DailyChecklistItem[]
   permissionPolicyConfigs PermissionPolicyConfig[]
+}
+
+model ParentFaq {
+  id        String   @id @default(uuid())
+  center    Center?  @relation(fields: [centerId], references: [id])
+  centerId  String?
+  question  String
+  answer    String
+  topic     String   @default("general")
+  sortOrder Int      @default(0)
+  published Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([centerId])
+  @@index([topic])
 }
 
 model AuditLog {

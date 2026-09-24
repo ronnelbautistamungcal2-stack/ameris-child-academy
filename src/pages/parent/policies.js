@@ -1,59 +1,30 @@
 import ParentLayout from "@/components/parent/ParentLayout";
-import {
-  ParentButton,
-  ParentEmpty,
-  ParentPageHeader,
-  ParentSection,
-  ParentSurface,
-} from "@/components/parent/ParentUI";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
-const TOPIC_SHORTCUTS = [
-  {
-    id: "pickup",
-    label: "Pickup & release",
-    description: "Dismissal rules, guardians, and release procedures.",
-    tone: "sky",
-    terms: ["pickup", "drop off", "drop-off", "release", "guardian"],
-  },
-  {
-    id: "health",
-    label: "Illness & attendance",
-    description: "Sick-day guidance, absences, and when children can return.",
-    tone: "amber",
-    terms: ["illness", "sick", "attendance", "absence", "fever", "return"],
-  },
-  {
-    id: "billing",
-    label: "Billing & payments",
-    description: "Tuition, invoices, payment expectations, and account reminders.",
-    tone: "emerald",
-    terms: ["billing", "payment", "tuition", "invoice", "account"],
-  },
-  {
-    id: "enrollment",
-    label: "Enrollment & forms",
-    description: "Registration, renewals, medical paperwork, and required documents.",
-    tone: "sky",
-    terms: ["enrollment", "renewal", "form", "medical", "document", "registration"],
-  },
-];
+const NAVY = "text-[#12386a] dark:text-slate-100";
 
 export default function ParentPolicies() {
   const [docs, setDocs] = useState([]);
+  const [faqs, setFaqs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [query, setQuery] = useState("");
+  const [docQuery, setDocQuery] = useState("");
+  const [faqQuery, setFaqQuery] = useState("");
+  const [openFaqId, setOpenFaqId] = useState(null);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       setError("");
       try {
-        const result = await apiJson("/api/v1/policies");
-        setDocs(Array.isArray(result) ? result : []);
+        const [policyResult, faqResult] = await Promise.all([
+          apiJson("/api/v1/policies"),
+          apiJson("/api/v1/parent-faqs"),
+        ]);
+        setDocs(Array.isArray(policyResult) ? policyResult : []);
+        setFaqs(Array.isArray(faqResult) ? faqResult : []);
       } catch (e) {
         setError(e.message || "Failed to load policies");
       } finally {
@@ -62,305 +33,247 @@ export default function ParentPolicies() {
     })();
   }, []);
 
-  const sortedDocs = useMemo(
-    () =>
-      [...docs].sort((a, b) =>
-        String(a.title || "").localeCompare(String(b.title || "")),
-      ),
-    [docs],
-  );
-
   const filteredDocs = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return sortedDocs;
-    return sortedDocs.filter((doc) =>
-      buildPolicyText(doc).includes(normalizedQuery),
+    // Most recently updated first, the way the center reads its own shelf.
+    const sorted = [...docs].sort(
+      (a, b) =>
+        new Date(b.updatedAt || b.createdAt || 0) -
+          new Date(a.updatedAt || a.createdAt || 0) ||
+        String(a.title || "").localeCompare(String(b.title || "")),
     );
-  }, [query, sortedDocs]);
-
-  const featuredDoc = useMemo(() => {
-    if (!sortedDocs.length) return null;
-    return (
-      sortedDocs.find((doc) =>
-        /handbook|parent handbook|family handbook/i.test(
-          `${doc.title || ""} ${doc.description || ""}`,
-        ),
-      ) || sortedDocs[0]
+    const q = docQuery.trim().toLowerCase();
+    if (!q) return sorted;
+    return sorted.filter((doc) =>
+      `${doc.title || ""} ${doc.description || ""}`.toLowerCase().includes(q),
     );
-  }, [sortedDocs]);
+  }, [docs, docQuery]);
 
-  const topicSummaries = useMemo(
-    () =>
-      TOPIC_SHORTCUTS.map((topic) => ({
-        ...topic,
-        count: sortedDocs.filter((doc) => matchesPolicyTopic(doc, topic)).length,
-      })),
-    [sortedDocs],
-  );
+  const filteredFaqs = useMemo(() => {
+    const q = faqQuery.trim().toLowerCase();
+    if (!q) return faqs;
+    return faqs.filter((faq) =>
+      `${faq.question || ""} ${faq.answer || ""}`.toLowerCase().includes(q),
+    );
+  }, [faqs, faqQuery]);
 
   return (
-    <ParentLayout title="Policies & Procedures">
-      <div className="space-y-4">
-        <ParentPageHeader
-          eyebrow="Family handbook"
-          title="Policies organized around the questions parents ask most"
-          description="Jump straight to pickup, illness, billing, and enrollment guidance, or search the full library when you need a specific document."
-          accent="sky"
-          layout="split"
-          stats={[
-            {
-              label: "Published",
-              value: docs.length,
-              hint: "Available documents",
-              tone: "sky",
-            },
-            {
-              label: "Topics",
-              value: TOPIC_SHORTCUTS.length,
-              hint: "Common parent questions",
-              tone: "gray",
-            },
-            {
-              label: "Search",
-              value: query ? filteredDocs.length : "Ready",
-              hint: query ? "Matching results" : "Find any policy fast",
-              tone: query ? "emerald" : "gray",
-            },
-            {
-              label: "Format",
-              value: "Web/PDF",
-              hint: "Opens in a new tab",
-              tone: "amber",
-            },
-          ]}
-          actions={
-            query ? (
-              <ParentButton variant="secondary" onClick={() => setQuery("")}>
-                Clear search
-              </ParentButton>
-            ) : null
-          }
-        />
+    <ParentLayout title="Policies and Procedures">
+      <div className="space-y-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className={`text-2xl font-black tracking-tight sm:text-3xl ${NAVY}`}>
+            Policies and Procedures
+          </h1>
+          <SearchBox
+            value={docQuery}
+            onChange={setDocQuery}
+            placeholder="Search documents..."
+            label="Search policy documents"
+          />
+        </div>
 
         {error ? (
-          <ParentSurface className="border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-500/30 dark:bg-red-950/25 dark:text-red-200">
             {error}
-          </ParentSurface>
+          </div>
         ) : null}
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-          <ParentSection
-            title="Common parent questions"
-            description="Choose a topic first if you are not sure which document contains the answer."
-            className="bg-gradient-to-br from-white via-sky-50/40 to-white"
-          >
+        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          {loading ? (
+            <div className="p-4">
+              <Skeleton count={5} />
+            </div>
+          ) : filteredDocs.length ? (
+            <ul className="divide-y divide-gray-100 dark:divide-gray-700">
+              {filteredDocs.map((doc) => (
+                <DocumentRow key={doc.id} doc={doc} />
+              ))}
+            </ul>
+          ) : (
+            <p className="px-4 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+              {docQuery
+                ? "No documents match your search."
+                : "No policy documents have been published yet."}
+            </p>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className={`text-xl font-black tracking-tight sm:text-2xl ${NAVY}`}>
+              Common Parent Questions
+            </h2>
+            <SearchBox
+              value={faqQuery}
+              onChange={setFaqQuery}
+              placeholder="Search questions..."
+              label="Search common parent questions"
+            />
+          </div>
+
+          <div className="mt-4">
             {loading ? (
               <Skeleton count={4} />
-            ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {topicSummaries.map((topic) => (
-                    <button
-                      key={topic.id}
-                      type="button"
-                      onClick={() => setQuery(topic.terms[0])}
-                      className={[
-                        "rounded-[24px] border p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm",
-                        topicCardTone(topic.tone),
-                      ].join(" ")}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
-                            {topic.label}
-                          </div>
-                          <div className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
-                            {topic.description}
-                          </div>
-                        </div>
-                        <span className="rounded-full border border-white/80 bg-white/90 px-2.5 py-1 text-[11px] font-extrabold text-gray-600 shadow-sm dark:border-gray-700 dark:bg-slate-900 dark:text-gray-300">
-                          {topic.count}
-                        </span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-
-                {featuredDoc ? (
-                  <a
-                    href={featuredDoc.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="group block rounded-[28px] border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-amber-50/60 p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-sky-800 dark:bg-slate-900/70"
-                  >
-                    <div className="inline-flex rounded-full border border-sky-200 bg-white px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] text-sky-700 dark:border-sky-800 dark:bg-slate-950 dark:text-sky-200">
-                      Featured handbook
-                    </div>
-                    <div className="mt-3 flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-lg font-black tracking-tight text-gray-900 dark:text-gray-100">
-                          {featuredDoc.title}
-                        </div>
-                        <div className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
-                          {featuredDoc.description ||
-                            "Open the current handbook for the broadest parent-facing guidance."}
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-sky-500 transition group-hover:translate-x-0.5">
-                        <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
-                          <path
-                            fillRule="evenodd"
-                            d="M5 10a.75.75 0 01.75-.75h6.638L10.23 7.29a.75.75 0 111.04-1.08l3.5 3.25a.75.75 0 010 1.08l-3.5 3.25a.75.75 0 11-1.04-1.08l2.158-1.96H5.75A.75.75 0 015 10z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="mt-4 inline-flex rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-extrabold text-gray-600 dark:border-gray-700 dark:bg-slate-950 dark:text-gray-300">
-                      Open document
-                    </div>
-                  </a>
-                ) : (
-                  <ParentEmpty
-                    title="No policy documents yet"
-                    description="Published documents will appear here once the center shares them."
+            ) : filteredFaqs.length ? (
+              <div className="space-y-2">
+                {filteredFaqs.map((faq) => (
+                  <FaqRow
+                    key={faq.id}
+                    faq={faq}
+                    open={openFaqId === faq.id}
+                    onToggle={() =>
+                      setOpenFaqId(openFaqId === faq.id ? null : faq.id)
+                    }
                   />
-                )}
+                ))}
               </div>
+            ) : (
+              <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                {faqQuery
+                  ? "No questions match your search."
+                  : "No questions have been posted yet."}
+              </p>
             )}
-          </ParentSection>
-
-          <ParentSection
-            title="Search the full policy library"
-            description="Type a keyword like pickup, handbook, invoice, illness, or medical."
-            className="bg-gradient-to-br from-white via-white to-amber-50/35"
-            action={
-              <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-600 dark:border-gray-700 dark:bg-slate-900 dark:text-gray-300">
-                {query ? `${filteredDocs.length} result${filteredDocs.length === 1 ? "" : "s"}` : `${docs.length} documents`}
-              </span>
-            }
-          >
-            <div className="space-y-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search policies..."
-                  className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-sm dark:border-gray-600 dark:bg-gray-800 sm:flex-1"
-                />
-                {query ? (
-                  <ParentButton variant="soft" onClick={() => setQuery("")}>
-                    Reset
-                  </ParentButton>
-                ) : null}
-              </div>
-
-              {loading ? (
-                <Skeleton count={4} />
-              ) : filteredDocs.length ? (
-                <div className="grid grid-cols-1 gap-3">
-                  {filteredDocs.map((doc) => (
-                    <PolicyDocCard key={doc.id} doc={doc} />
-                  ))}
-                </div>
-              ) : (
-                <ParentEmpty
-                  title="No matching policies"
-                  description="Try a broader search term or use one of the common topic shortcuts."
-                  action={
-                    <ParentButton variant="secondary" onClick={() => setQuery("")}>
-                      Clear search
-                    </ParentButton>
-                  }
-                />
-              )}
-            </div>
-          </ParentSection>
-        </div>
+          </div>
+        </section>
       </div>
     </ParentLayout>
   );
 }
 
-function PolicyDocCard({ doc }) {
-  const docTopics = TOPIC_SHORTCUTS.filter((topic) => matchesPolicyTopic(doc, topic)).slice(
-    0,
-    3,
-  );
+function DocumentRow({ doc }) {
+  const isPdf = /\.pdf($|\?)/i.test(String(doc.url || ""));
 
   return (
-    <a
-      href={doc.url}
-      target="_blank"
-      rel="noreferrer"
-      className="group rounded-[28px] border border-sky-100 bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50/70 hover:shadow-md dark:border-gray-700 dark:bg-gray-900/30"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-base font-extrabold text-gray-900 dark:text-gray-100">
-            {doc.title}
-          </div>
-          <div className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
-            {doc.description || "No summary provided for this document yet."}
-          </div>
-        </div>
-        <div className="shrink-0 text-sky-500 transition group-hover:translate-x-0.5">
-          <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
-            <path
-              fillRule="evenodd"
-              d="M5 10a.75.75 0 01.75-.75h6.638L10.23 7.29a.75.75 0 111.04-1.08l3.5 3.25a.75.75 0 010 1.08l-3.5 3.25a.75.75 0 11-1.04-1.08l2.158-1.96H5.75A.75.75 0 015 10z"
-              clipRule="evenodd"
-            />
-          </svg>
+    <li className="flex items-center gap-3 px-4 py-3">
+      <span className="shrink-0">{isPdf ? <PdfIcon /> : <FileIcon />}</span>
+      <div className="min-w-0 flex-1">
+        <div className={`truncate text-sm font-bold ${NAVY}`}>{doc.title}</div>
+        <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+          Updated {formatUpdated(doc.updatedAt || doc.createdAt)}
         </div>
       </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <span className="inline-flex rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-extrabold text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
-          Open document
-        </span>
-        {docTopics.map((topic) => (
-          <span
-            key={`${doc.id}-${topic.id}`}
-            className={topicBadgeTone(topic.tone)}
-          >
-            {topic.label}
-          </span>
-        ))}
-      </div>
-    </a>
+      <a
+        href={doc.url}
+        target="_blank"
+        rel="noreferrer"
+        className="shrink-0 rounded-lg border border-sky-200 bg-white px-5 py-1.5 text-xs font-bold text-sky-700 transition hover:border-sky-300 hover:bg-sky-50 dark:border-sky-800 dark:bg-transparent dark:text-sky-300 dark:hover:bg-sky-950/40"
+      >
+        View
+      </a>
+    </li>
   );
 }
 
-function buildPolicyText(doc) {
-  return `${doc?.title || ""} ${doc?.description || ""}`.toLowerCase();
+function FaqRow({ faq, open, onToggle }) {
+  return (
+    <div
+      className={[
+        "overflow-hidden rounded-xl border transition-colors",
+        open
+          ? "border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/30"
+          : "border-transparent bg-[#f1f6fb] hover:bg-[#e8f1fa] dark:bg-slate-900/50 dark:hover:bg-slate-900",
+      ].join(" ")}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+      >
+        <span className={`text-sm font-bold ${NAVY}`}>{faq.question}</span>
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2.2}
+          className={`h-4 w-4 shrink-0 text-[#1c5fa8] transition-transform dark:text-sky-300 ${open ? "rotate-180" : ""}`}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="m5 9 7 7 7-7" />
+        </svg>
+      </button>
+      {open ? (
+        <div className="whitespace-pre-wrap px-4 pb-4 text-sm leading-6 text-gray-600 dark:text-gray-300">
+          {faq.answer}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
-function matchesPolicyTopic(doc, topic) {
-  const text = buildPolicyText(doc);
-  return topic.terms.some((term) => text.includes(term));
+function SearchBox({ value, onChange, placeholder, label }) {
+  return (
+    <div className="relative w-full sm:w-72">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        aria-hidden="true"
+        className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+      >
+        <circle cx="11" cy="11" r="7" />
+        <path strokeLinecap="round" d="m20 20-3.5-3.5" />
+      </svg>
+      <input
+        type="search"
+        value={value}
+        aria-label={label}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-full border border-gray-200 bg-white py-2 pl-10 pr-4 text-sm text-gray-700 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-sky-300 focus:ring-2 focus:ring-sky-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:ring-sky-900/40"
+      />
+    </div>
+  );
 }
 
-function topicCardTone(tone = "sky") {
-  const tones = {
-    sky: "border-sky-200 bg-sky-50/80 hover:bg-sky-50 dark:border-sky-800 dark:bg-sky-950/20",
-    emerald:
-      "border-emerald-200 bg-emerald-50/80 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/20",
-    amber:
-      "border-amber-200 bg-amber-50/80 hover:bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20",
-  };
-
-  return tones[tone] || tones.sky;
+function PdfIcon() {
+  return (
+    <svg viewBox="0 0 32 32" className="h-8 w-8" aria-hidden="true">
+      <path
+        fill="#DC2626"
+        d="M7 2.5h11.5L26 10v19a1.5 1.5 0 0 1-1.5 1.5h-17A1.5 1.5 0 0 1 6 29V4a1.5 1.5 0 0 1 1-1.5Z"
+      />
+      <path fill="#FCA5A5" d="M18.5 2.5 26 10h-6a1.5 1.5 0 0 1-1.5-1.5Z" />
+      <text
+        x="16"
+        y="24"
+        textAnchor="middle"
+        fill="#fff"
+        fontSize="8"
+        fontWeight="700"
+        fontFamily="system-ui, sans-serif"
+      >
+        PDF
+      </text>
+    </svg>
+  );
 }
 
-function topicBadgeTone(tone = "sky") {
-  const tones = {
-    sky: "rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700 dark:border-sky-800 dark:bg-sky-950/20 dark:text-sky-200",
-    emerald:
-      "rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-200",
-    amber:
-      "rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-200",
-  };
+function FileIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#1c5fa8"
+      strokeWidth={1.8}
+      className="h-8 w-8"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14 3v4.5h4.5" />
+    </svg>
+  );
+}
 
-  return tones[tone] || tones.sky;
+function formatUpdated(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${mm}/${dd}/${date.getFullYear()}`;
 }

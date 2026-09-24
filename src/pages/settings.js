@@ -1,14 +1,8 @@
-import AppShell from "@/components/shell/AppShell";
 import Skeleton from "@/components/ui/Skeleton";
+import { useShellTitle } from "@/components/shell/PortalShell";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import { apiJson } from "@/lib/api";
 import { useToast } from "@/contexts/ToastContext";
-import { ADMIN_NAV_ITEMS } from "@/components/admin/adminNav";
-import { STAFF_NAV_ITEMS } from "@/components/staff/staffNav";
-import { TEACHER_NAV_ITEMS } from "@/components/teacher/teacherNav";
-import { PARENT_NAV_ITEMS } from "@/components/parent/parentNav";
-import { COACH_NAV_ITEMS } from "@/components/coach/coachNav";
-import { SUBSCRIBER_NAV_ITEMS } from "@/components/subscriber/subscriberNav";
 import NotificationPreferences from "@/components/parent/NotificationPreferences";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -28,10 +22,11 @@ export default function SettingsPage() {
     "/login",
   );
 
+  useShellTitle("Account Settings");
+
   const role = session?.user?.role || "";
   const mustChangePassword = Boolean(session?.user?.mustChangePassword);
   const isStaffRole = STAFF_ROLES.has(role);
-  const navItems = useMemo(() => resolveNavItems(role), [role]);
 
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -273,14 +268,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <AppShell
-      title="Account Settings"
-      userName={session?.user?.name || session?.user?.email}
-      userLabel={session?.user?.email}
-      userImageUrl={livePictureUrl}
-      navItems={navItems}
-      showBack={false}
-    >
+    <>
       <div className="space-y-6">
         {error ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
@@ -572,7 +560,7 @@ export default function SettingsPage() {
           </section>
         </div>
       </div>
-    </AppShell>
+    </>
   );
 }
 
@@ -745,19 +733,6 @@ function SnapshotRow({ label, value }) {
       <div className="mt-1 text-sm font-semibold text-gray-900">{value}</div>
     </div>
   );
-}
-
-function resolveNavItems(role) {
-  if (role === "ADMIN") return ADMIN_NAV_ITEMS;
-  if (role === "TEACHER") return TEACHER_NAV_ITEMS;
-  if (role === "OTHER_STAFF") return STAFF_NAV_ITEMS;
-  if (role === "COACH") return COACH_NAV_ITEMS;
-  if (role === "PARENT") return PARENT_NAV_ITEMS;
-  if (role === "SUBSCRIBER") return SUBSCRIBER_NAV_ITEMS;
-  return [
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/settings", label: "Account Settings" },
-  ];
 }
 
 function formatRoleLabel(role) {

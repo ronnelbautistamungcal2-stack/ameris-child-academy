@@ -68,6 +68,25 @@ export function formatAge(birthDate) {
   return `${years}y ${rem}mo`;
 }
 
+export function ageInYears(birthDate) {
+  const months = ageInMonths(birthDate);
+  if (months === null || months < 0) return null;
+  return Math.floor(months / 12);
+}
+
+/** "8 years 6 months" — the long form the parent portal prints under a name. */
+export function formatAgeLong(birthDate) {
+  const months = ageInMonths(birthDate);
+  if (months === null || months < 0) return "";
+  const years = Math.floor(months / 12);
+  const rem = months % 12;
+  const parts = [];
+  if (years) parts.push(`${years} year${years === 1 ? "" : "s"}`);
+  if (rem) parts.push(`${rem} month${rem === 1 ? "" : "s"}`);
+  if (!parts.length) return "Newborn";
+  return parts.join(" ");
+}
+
 export function childAgeGroup(child) {
   if (!child?.birthDate) return "Unknown";
   const months = ageInMonths(child.birthDate);

@@ -135,7 +135,20 @@ export default async function handler(req, res) {
       if (session.user.role === "PARENT") {
         const children = await prisma.child.findMany({
           where: buildParentLinkedChildWhere(session.user.id),
-          include: linkedParentAccountsInclude,
+          include: {
+            ...linkedParentAccountsInclude,
+            // The parent portal prints "Room" and "Teacher" under each child,
+            // so the room and the staff assigned to it travel with the child.
+            classRoom: {
+              select: {
+                id: true,
+                name: true,
+                teachers: {
+                  select: { teacher: { select: { id: true, name: true } } },
+                },
+              },
+            },
+          },
         });
         return res
           .status(200)

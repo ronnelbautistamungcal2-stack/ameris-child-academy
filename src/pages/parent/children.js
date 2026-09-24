@@ -1,15 +1,13 @@
 import ParentLayout from "@/components/parent/ParentLayout";
-import {
-  ParentEmpty,
-  ParentSection,
-  ParentSurface,
-} from "@/components/parent/ParentUI";
+import { ParentEmpty, ParentSurface } from "@/components/parent/ParentUI";
+import ChildSnapshotDialog from "@/components/parent/ChildSnapshotDialog";
 import StudentPerformanceReportPanel from "@/components/reports/StudentPerformanceReportPanel";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
-import { formatAge } from "@/lib/ageUtils";
+import { ageInYears, formatAgeLong } from "@/lib/ageUtils";
+import { CHILD_SNAPSHOT_FIELDS } from "@/lib/childSnapshot";
 import { useRouter } from "next/router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export default function ParentChildren() {
   const router = useRouter();
@@ -17,13 +15,9 @@ export default function ParentChildren() {
     typeof router.query.childId === "string" ? router.query.childId : "";
   const [children, setChildren] = useState([]);
   const [selectedChildId, setSelectedChildId] = useState("");
-  const [activities, setActivities] = useState([]);
-  const [progressRows, setProgressRows] = useState([]);
-  const [behaviorPlans, setBehaviorPlans] = useState([]);
   const [childrenLoading, setChildrenLoading] = useState(true);
-  const [recordsLoading, setRecordsLoading] = useState(false);
   const [error, setError] = useState("");
-  const [lastSyncAt, setLastSyncAt] = useState(null);
+  const [editingSnapshot, setEditingSnapshot] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,72 +77,103 @@ export default function ParentChildren() {
     });
   }, [router, selectedChildId, childrenLoading]);
 
-  const loadChildRecords = useCallback(async (targetChildId) => {
-    if (!targetChildId) return;
-    setRecordsLoading(true);
-    setError("");
-    setActivities([]);
-    setProgressRows([]);
-    setBehaviorPlans([]);
-    try {
-      const [activityRes, progressRes, planRes] = await Promise.all([
-        apiJson(`/api/v1/activities?childId=${encodeURIComponent(targetChildId)}`),
-        apiJson(`/api/v1/progress?childId=${encodeURIComponent(targetChildId)}`),
-        apiJson(`/api/v1/behavior-plans?childId=${encodeURIComponent(targetChildId)}`),
-      ]);
-      setActivities(Array.isArray(activityRes) ? activityRes : []);
-      setProgressRows(Array.isArray(progressRes) ? progressRes : []);
-      setBehaviorPlans(Array.isArray(planRes) ? planRes : []);
-      setLastSyncAt(new Date());
-    } catch (e) {
-      setError(e.message || "Failed to load child records");
-      setActivities([]);
-      setProgressRows([]);
-      setBehaviorPlans([]);
-    } finally {
-      setRecordsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (selectedChildId) loadChildRecords(selectedChildId);
-  }, [selectedChildId, loadChildRecords]);
-
   const selectedChild = useMemo(
     () => children.find((ch) => ch.id === selectedChildId) || null,
     [children, selectedChildId],
   );
-  const activityFeed = useMemo(
-    () =>
-      [...activities]
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        .slice(0, 10),
-    [activities],
-  );
-  const latestActivity = activityFeed[0] || null;
-  const progressStats = useMemo(() => {
-    const total = progressRows.length;
-    const completed = progressRows.filter((row) =>
-      ["COMPLETED", "PASSED"].includes(row.status),
-    ).length;
-    const needsSupport = progressRows.filter((row) => row.status === "FAILED").length;
 
-    return {
-      total,
-      completed,
-      needsSupport,
-      open: Math.max(total - completed, 0),
-      completionRate: total ? Math.round((completed / total) * 100) : 0,
+  // A snapshot save returns only the snapshot fields, so patch them onto the
+  // child already in state instead of refetching the whole family.
+  const applySnapshot = useCallback((childId, snapshot) => {
+    setChildren((current) =>
+      current.map((child) => {
+        if (child.id !== childId) return child;
+        const next = { ...child };
+        for (const field of CHILD_SNAPSHOT_FIELDS) {
+          next[field] = snapshot?.[field] ?? null;
+        }
+        return next;
+      }),
+    );
+  }, []);
+
+  // The switcher sticks under the app header; once the page scrolls past its
+  // natural position it collapses into a single row so it keeps every child
+  // reachable without eating the viewport.
+  const switcherRef = useRef(null);
+  const [switcherCondensed, setSwitcherCondensed] = useState(false);
+
+  useEffect(() => {
+    const switcher = switcherRef.current;
+    if (!switcher) return undefined;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const headerHeight =
+        parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--app-header-h"),
+        ) || 0;
+      setSwitcherCondensed(switcher.getBoundingClientRect().top <= headerHeight + 1);
     };
-  }, [progressRows]);
-  const pendingPlanApprovals = useMemo(
-    () => behaviorPlans.filter((plan) => !plan.parentApproved),
-    [behaviorPlans],
-  );
+    const onScroll = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(measure);
+    };
+    measure();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [childrenLoading]);
 
-  const refreshChildRecords = useCallback(() => {
-    if (selectedChildId) loadChildRecords(selectedChildId);
-  }, [selectedChildId, loadChildRecords]);
+  // Condensed, the rail is one horizontal row, so a large family scrolls
+  // sideways. Keep the selected child centred and flag the edges that still
+  // have names past them so nobody has to guess the row scrolls.
+  const railRef = useRef(null);
+  const [railEdges, setRailEdges] = useState({ start: false, end: false });
+
+  const measureRailEdges = useCallback(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    const maxScroll = rail.scrollWidth - rail.clientWidth;
+    setRailEdges({
+      start: rail.scrollLeft > 4,
+      end: maxScroll > 4 && rail.scrollLeft < maxScroll - 4,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!switcherCondensed) {
+      setRailEdges({ start: false, end: false });
+      return undefined;
+    }
+    const rail = railRef.current;
+    if (!rail) return undefined;
+
+    const active = rail.querySelector('[data-child-chip-active="true"]');
+    if (active) {
+      // scrollTo on the rail itself, never scrollIntoView, so centring the
+      // chip cannot drag the page vertically out from under the reader.
+      rail.scrollTo({
+        left: Math.max(
+          0,
+          active.offsetLeft - (rail.clientWidth - active.offsetWidth) / 2,
+        ),
+        behavior: "smooth",
+      });
+    }
+
+    measureRailEdges();
+    rail.addEventListener("scroll", measureRailEdges, { passive: true });
+    window.addEventListener("resize", measureRailEdges);
+    return () => {
+      rail.removeEventListener("scroll", measureRailEdges);
+      window.removeEventListener("resize", measureRailEdges);
+    };
+  }, [switcherCondensed, selectedChildId, children.length, measureRailEdges]);
 
   return (
     <ParentLayout title="My Children">
@@ -159,199 +184,318 @@ export default function ParentChildren() {
           </ParentSurface>
         ) : null}
 
-        <ParentSection
-          title="Select child"
-          description="Change child without leaving the current page."
-          className="overflow-hidden border-sky-100 bg-gradient-to-r from-white via-sky-50/60 to-white shadow-[0_18px_60px_-50px_rgba(14,116,144,0.55)] dark:border-sky-900/60 dark:bg-gradient-to-r dark:from-slate-950 dark:via-sky-950/40 dark:to-slate-950 dark:shadow-[0_24px_80px_-52px_rgba(14,116,144,0.75)]"
-          action={
-            <div className="rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] text-sky-700 shadow-sm dark:border-sky-800 dark:bg-slate-900 dark:text-sky-200">
-              {lastSyncAt ? `Synced ${formatRelativeDateTime(lastSyncAt)}` : "Waiting for sync"}
-            </div>
-          }
+        <PageHeading icon={<UsersIcon />}>My Children</PageHeading>
+
+        <div
+          ref={switcherRef}
+          className="sticky z-[5]"
+          style={{ top: "var(--app-header-h, 64px)" }}
         >
-          {childrenLoading ? (
-            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-4">
-              {Array.from({ length: 4 }, (_, i) => (
-                <Skeleton key={i} variant="card" className="h-24 rounded-[20px]" />
-              ))}
-            </div>
-          ) : children.length === 0 ? (
-            <ParentEmpty
-              title="No children found"
-              description="No children are linked to your account yet. Please contact your center administrator."
-            />
-          ) : (
-            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-4">
-              {children.map((child) => (
-                <ChildSwitcherCard
-                  key={child.id}
-                  child={child}
-                  active={child.id === selectedChildId}
-                  onSelect={() => setSelectedChildId(child.id)}
-                />
-              ))}
-            </div>
-          )}
-        </ParentSection>
+          <section
+            className={[
+              "rounded-[28px] border border-sky-100 bg-white shadow-sm dark:border-sky-900/60 dark:bg-gray-800",
+              switcherCondensed
+                ? "p-2.5 shadow-[0_18px_40px_-28px_rgba(14,116,144,0.55)]"
+                : "p-3",
+            ].join(" ")}
+          >
+            {childrenLoading ? (
+              <div className="flex flex-wrap gap-2">
+                {Array.from({ length: 5 }, (_, i) => (
+                  <Skeleton key={i} variant="card" className="h-[52px] w-[168px] rounded-2xl" />
+                ))}
+              </div>
+            ) : children.length === 0 ? (
+              <ParentEmpty
+                title="No children found"
+                description="No children are linked to your account yet. Please contact your center administrator."
+              />
+            ) : (
+              <div className="relative">
+                <div
+                  ref={railRef}
+                  className={
+                    switcherCondensed
+                      ? "scrollbar-hide flex items-stretch gap-2 overflow-x-auto"
+                      : "flex flex-wrap items-stretch gap-2"
+                  }
+                >
+                  {children.map((child) => (
+                    <ChildSwitcherChip
+                      key={child.id}
+                      child={child}
+                      active={child.id === selectedChildId}
+                      onSelect={() => setSelectedChildId(child.id)}
+                    />
+                  ))}
+                </div>
+                {switcherCondensed ? (
+                  <>
+                    <RailEdgeFade side="left" visible={railEdges.start} />
+                    <RailEdgeFade side="right" visible={railEdges.end} />
+                  </>
+                ) : null}
+              </div>
+            )}
+          </section>
+        </div>
 
         {selectedChild ? (
           <div className="space-y-3">
-            <ParentSurface className="overflow-hidden border-transparent bg-gradient-to-br from-sky-600 via-cyan-500 to-blue-500 text-white shadow-[0_24px_80px_-40px_rgba(14,116,144,0.7)] dark:bg-gradient-to-br dark:from-sky-950 dark:via-cyan-900 dark:to-blue-950">
-              <div className="space-y-3">
-                <div className="min-w-0">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/90">
-                    Child snapshot
-                  </div>
-                  <div className="mt-3 flex items-start gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] bg-white/15 text-sm font-black text-white ring-1 ring-white/15">
-                      {initials(selectedChild.firstName, selectedChild.lastName)}
-                    </div>
-                    <div className="min-w-0">
-                      <h2 className="truncate text-xl font-black tracking-tight text-white">
-                        {selectedChild.firstName} {selectedChild.lastName || ""}
-                      </h2>
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        <ChildMetaPill>{formatChildAge(selectedChild.birthDate) || "Age unavailable"}</ChildMetaPill>
-                        <ChildMetaPill>
-                          {latestActivity
-                            ? `Latest ${formatRelativeDateTime(latestActivity.createdAt)}`
-                          : "No recent activity yet"}
-                        </ChildMetaPill>
-                      </div>
-                      <div className="mt-2 max-w-2xl text-[13px] leading-5 text-white/78">
-                        {lastSyncAt
-                          ? `Report was last synced at ${formatTime(lastSyncAt)}.`
-                          : "Report data will appear below once it loads."}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            <ChildProfileCard
+              child={selectedChild}
+              onEditSnapshot={() => setEditingSnapshot(true)}
+            />
 
-                <div className="flex flex-wrap gap-2">
-                  <HeroMetric label="Completion" value={`${progressStats.completionRate}%`} hint="Overall progress" />
-                  <HeroMetric label="Open goals" value={progressStats.open} hint="Still active" />
-                  <HeroMetric label="Support" value={progressStats.needsSupport} hint="Need attention" />
-                  <HeroMetric
-                    label="Progress plan"
-                    value={pendingPlanApprovals.length || behaviorPlans.length}
-                    hint={pendingPlanApprovals.length ? "Needs your approval" : behaviorPlans.length ? "On file" : "None yet"}
-                  />
+            <ParentSurface>
+              <div className="flex items-center gap-2.5 border-b border-gray-100 pb-4 dark:border-gray-700">
+                <SectionIcon tone="sky">
+                  <ChartIcon />
+                </SectionIcon>
+                <div>
+                  <h2 className="text-lg font-black tracking-tight text-gray-900 dark:text-gray-100">
+                    Student Performance Report
+                  </h2>
+                  <p className="mt-0.5 text-sm text-gray-600 dark:text-gray-400">
+                    Goals, grades, milestones, accomplishments, and activity for your child.
+                  </p>
                 </div>
               </div>
+              <div className="pt-4">
+                <StudentPerformanceReportPanel childId={selectedChildId} />
+              </div>
             </ParentSurface>
-
-            <ParentSection
-              title="Student Performance Report"
-              description="Goals, grades, milestones, accomplishments, and activity for your child."
-            >
-              <StudentPerformanceReportPanel
-                childId={selectedChildId}
-                onPlanApproved={refreshChildRecords}
-              />
-            </ParentSection>
           </div>
         ) : null}
       </div>
+
+      {editingSnapshot && selectedChild ? (
+        <ChildSnapshotDialog
+          child={selectedChild}
+          onClose={() => setEditingSnapshot(false)}
+          onSaved={(snapshot) => {
+            applySnapshot(selectedChild.id, snapshot);
+            setEditingSnapshot(false);
+          }}
+        />
+      ) : null}
     </ParentLayout>
   );
 }
 
-function ChildSwitcherCard({ child, active, onSelect }) {
+function PageHeading({ icon, children }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <SectionIcon tone="sky">{icon}</SectionIcon>
+      <h1 className="text-xl font-black tracking-tight text-[#12386a] dark:text-gray-100 sm:text-2xl">
+        {children}
+      </h1>
+    </div>
+  );
+}
+
+function ChildProfileCard({ child, onEditSnapshot }) {
+  const teachers = teacherNames(child);
+
+  return (
+    <section className="rounded-[28px] border-2 border-sky-500 bg-white p-4 shadow-[0_0_0_4px_rgba(186,230,253,0.55)] dark:border-sky-600 dark:bg-gray-800 dark:shadow-[0_0_0_4px_rgba(12,74,110,0.5)] sm:p-5">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+        <div className="flex items-start gap-4">
+          <ChildAvatar child={child} size="lg" />
+          <div className="min-w-0">
+            <h2 className="truncate text-2xl font-black tracking-tight text-[#12386a] dark:text-gray-100">
+              {child.firstName} {child.lastName || ""}
+            </h2>
+            <dl className="mt-2 space-y-1">
+              <MetaRow label="Age" value={displayAge(child.birthDate)} />
+              <MetaRow label="Room" value={child.classRoom?.name || "Unassigned"} />
+              <MetaRow label="Teacher" value={teachers || "Not assigned"} />
+              <MetaRow label="Start Date" value={formatLongDate(child.enrollmentStartDate)} />
+            </dl>
+          </div>
+        </div>
+
+        <div className="rounded-[20px] border border-gray-200 bg-gray-50/70 p-3.5 dark:border-gray-700 dark:bg-gray-900/40">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-black tracking-tight text-[#12386a] dark:text-gray-100">
+              Child Snapshot
+            </h3>
+            <button
+              type="button"
+              onClick={onEditSnapshot}
+              className="rounded-full bg-sky-600 px-3.5 py-1 text-[11px] font-extrabold text-white shadow-sm transition hover:bg-sky-700"
+            >
+              Edit
+            </button>
+          </div>
+          <dl className="mt-2.5 space-y-1">
+            <MetaRow label="Favorite Activities" value={child.favoriteActivities} />
+            <MetaRow label="Strengths" value={child.strengths} />
+            <MetaRow label="Areas of Focus" value={child.areasOfFocus} />
+            <MetaRow label="Allergies" value={child.allergies || "None"} />
+            <MetaRow label="Notes" value={child.snapshotNotes} />
+          </dl>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MetaRow({ label, value }) {
+  return (
+    <div className="flex gap-1.5 text-[13px] leading-5">
+      <dt className="shrink-0 font-bold text-gray-500 dark:text-gray-400">{label}:</dt>
+      <dd className="min-w-0 text-gray-800 dark:text-gray-200">{value || "—"}</dd>
+    </div>
+  );
+}
+
+function ChildSwitcherChip({ child, active, onSelect }) {
   return (
     <button
       type="button"
       onClick={onSelect}
+      aria-pressed={active}
+      data-child-chip-active={active ? "true" : "false"}
       className={[
-        "group relative min-h-[104px] overflow-hidden rounded-[20px] border p-3.5 text-left transition-all duration-200",
+        "flex w-[168px] shrink-0 items-center gap-2 rounded-2xl border px-2.5 py-2 text-left transition-colors",
         active
-          ? "border-sky-300 bg-gradient-to-br from-sky-50 to-white shadow-sm ring-2 ring-sky-100 dark:border-sky-800 dark:bg-gradient-to-br dark:from-sky-950/50 dark:to-slate-950 dark:ring-sky-900/60"
-          : "border-gray-200 bg-white hover:-translate-y-0.5 hover:border-sky-200 hover:bg-sky-50/60 hover:shadow-sm dark:border-gray-800 dark:bg-slate-900 dark:hover:border-sky-800 dark:hover:bg-slate-900",
+          ? "border-sky-400 bg-sky-50 ring-2 ring-sky-100 dark:border-sky-600 dark:bg-sky-950/60 dark:ring-sky-900/60"
+          : "border-gray-200 bg-white hover:border-sky-200 hover:bg-sky-50/70 dark:border-gray-700 dark:bg-slate-900 dark:hover:border-sky-800",
       ].join(" ")}
     >
-      <div className="pointer-events-none absolute right-0 top-0 h-16 w-16 rounded-full bg-sky-100/70 blur-3xl dark:bg-sky-950/40" />
-      <div className="relative flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] bg-sky-600 text-sm font-black text-white shadow-sm">
-          {initials(child.firstName, child.lastName)}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <div className="truncate text-[13px] font-extrabold text-gray-900 dark:text-gray-100">
-              {child.firstName} {child.lastName || ""}
-            </div>
-            {Number.isFinite(child.todayCitizenshipGrade) ? (
-              <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-200">
-                Citizenship {child.todayCitizenshipGrade}/10
-              </span>
-            ) : null}
-          </div>
-          <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
-            {formatChildAge(child.birthDate) || "Age unavailable"}
-          </div>
-          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-            <span className="rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold text-sky-700 ring-1 ring-sky-100 dark:bg-slate-950 dark:text-sky-200 dark:ring-sky-900/70">
-              {active ? "Selected" : "Open"}
-            </span>
-          </div>
-        </div>
-      </div>
+      <ChildAvatar child={child} size="sm" />
+      <span className="min-w-0 flex-1">
+        <span
+          className={[
+            "block truncate text-[12px] font-extrabold",
+            active ? "text-sky-900 dark:text-sky-100" : "text-gray-800 dark:text-gray-200",
+          ].join(" ")}
+        >
+          {child.firstName} {lastInitial(child.lastName)}
+        </span>
+        <span className="mt-0.5 block truncate text-[10px] font-semibold text-gray-500 dark:text-gray-400">
+          {formatAgeLong(child.birthDate) || "Age unavailable"}
+        </span>
+      </span>
     </button>
   );
 }
 
-function ChildMetaPill({ children }) {
+function ChildAvatar({ child, size = "sm" }) {
+  const [broken, setBroken] = useState(false);
+  const dims = {
+    sm: "h-9 w-9 text-[11px]",
+    lg: "h-[88px] w-[88px] text-2xl",
+  };
+  const shape = size === "lg" ? "rounded-[20px]" : "rounded-full";
+  const photo = typeof child?.photoUrl === "string" ? child.photoUrl.trim() : "";
+
+  if (photo && !broken) {
+    return (
+      <img
+        src={photo}
+        alt={`${child.firstName || "Child"} ${child.lastName || ""}`.trim()}
+        onError={() => setBroken(true)}
+        className={`${dims[size]} ${shape} shrink-0 border border-sky-100 object-cover dark:border-sky-900/60`}
+      />
+    );
+  }
+
   return (
-    <span className="rounded-full border border-white/15 bg-white/10 px-2.5 py-0.5 text-[11px] font-semibold text-white/90">
+    <span
+      aria-hidden="true"
+      className={`${dims[size]} ${shape} grid shrink-0 place-items-center bg-gradient-to-br from-sky-600 to-cyan-500 font-black text-white`}
+    >
+      {initials(child?.firstName, child?.lastName)}
+    </span>
+  );
+}
+
+function RailEdgeFade({ side, visible }) {
+  if (!visible) return null;
+  return (
+    <div
+      aria-hidden="true"
+      className={[
+        "pointer-events-none absolute inset-y-0 w-8",
+        side === "left"
+          ? "left-0 bg-gradient-to-r from-white to-transparent dark:from-gray-800"
+          : "right-0 bg-gradient-to-l from-white to-transparent dark:from-gray-800",
+      ].join(" ")}
+    />
+  );
+}
+
+function SectionIcon({ tone = "sky", children }) {
+  const tones = {
+    sky: "bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300",
+    amber: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
+    emerald: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
+    rose: "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300",
+    violet: "bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300",
+  };
+  return (
+    <span
+      aria-hidden="true"
+      className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${tones[tone] || tones.sky}`}
+    >
       {children}
     </span>
   );
 }
 
-function HeroMetric({ label, value, hint }) {
+function UsersIcon() {
   return (
-    <div className="flex min-w-[160px] flex-1 items-center justify-between gap-3 rounded-[18px] border border-white/15 bg-white/10 px-3 py-2.5 ring-1 ring-white/5">
-      <div className="min-w-0">
-        <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/70">
-          {label}
-        </div>
-        <div className="mt-1 text-[11px] leading-4 text-white/70">{hint}</div>
-      </div>
-      <div className="shrink-0 text-[clamp(1.05rem,1.8vw,1.45rem)] font-black leading-tight tracking-tight text-white">
-        {value}
-      </div>
-    </div>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-[18px] w-[18px]">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19" />
+      <circle cx="10" cy="8" r="3" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M20 19v-1.5a3.5 3.5 0 0 0-2.6-3.38M15.5 5.2a3 3 0 0 1 0 5.6" />
+    </svg>
   );
 }
 
-function formatChildAge(birthDate) {
-  const precise = formatAge(birthDate);
-  return precise ? `${precise} old` : "";
+function ChartIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-[18px] w-[18px]">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 20h16M7 20v-7M12 20V6M17 20v-4" />
+    </svg>
+  );
 }
 
-function formatDateTime(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString();
+/**
+ * Whole years once a child has one, because that is how families say it. Under
+ * a year, "0" says nothing, so fall back to the months form.
+ */
+function displayAge(birthDate) {
+  const years = ageInYears(birthDate);
+  if (years === null) return "—";
+  if (years >= 1) return String(years);
+  return formatAgeLong(birthDate) || "—";
 }
 
-function formatTime(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+function teacherNames(child) {
+  const links = Array.isArray(child?.classRoom?.teachers) ? child.classRoom.teachers : [];
+  return links
+    .map((link) => link?.teacher?.name)
+    .filter(Boolean)
+    .join(", ");
 }
 
-function formatRelativeDateTime(value) {
-  if (!value) return "-";
+function formatLongDate(value) {
+  if (!value) return "—";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  const now = new Date();
-  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startTarget = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const diffDays = Math.round((startToday.getTime() - startTarget.getTime()) / 86400000);
-  if (diffDays === 0) return `today at ${formatTime(date)}`;
-  if (diffDays === 1) return `yesterday at ${formatTime(date)}`;
-  return formatDateTime(date);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function lastInitial(lastName) {
+  const trimmed = (lastName || "").trim();
+  return trimmed ? trimmed.slice(0, 1).toUpperCase() : "";
 }
 
 function initials(firstName, lastName) {

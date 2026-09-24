@@ -45,6 +45,22 @@ test.describe("Children API @api", () => {
     expect(Array.isArray(data)).toBe(true);
   });
 
+  test("GET /api/v1/children carries room and teachers for a parent", async ({ request }) => {
+    const cookies = await loginAsParent(request);
+    const res = await apiGet(request, "/api/v1/children", cookies);
+    expect(res.status()).toBe(200);
+    const data = await res.json();
+    if (!data.length) test.skip();
+    for (const child of data) {
+      expect(child).toHaveProperty("classRoom");
+      expect(child).toHaveProperty("photoUrl");
+      if (child.classRoom) {
+        expect(child.classRoom).toHaveProperty("name");
+        expect(Array.isArray(child.classRoom.teachers)).toBe(true);
+      }
+    }
+  });
+
   test("POST /api/v1/children returns 400 without required fields", async ({ request }) => {
     const cookies = await loginAsAdmin(request);
     const res = await apiPost(request, "/api/v1/children", {}, cookies);
@@ -158,6 +174,56 @@ test.describe("Children API @api", () => {
 
     expect(Array.isArray(child.healthAssessmentDocuments)).toBe(true);
     expect(child.healthAssessmentDocuments[0]?.expirationDate).toBe(expirationDate);
+  });
+
+  test("PUT /api/v1/children/:id/snapshot saves the child snapshot", async ({ request }) => {
+    if (!createdChildId) test.skip();
+    const cookies = await loginAsAdmin(request);
+    const res = await apiPut(
+      request,
+      `/api/v1/children/${createdChildId}/snapshot`,
+      {
+        favoriteActivities: "Blocks, Music",
+        strengths: "Curious",
+        areasOfFocus: "Taking turns",
+        allergies: "None",
+        snapshotNotes: "Naps well after lunch",
+      },
+      cookies,
+    );
+    expect(res.status()).toBe(200);
+    const data = await res.json();
+    expect(data.favoriteActivities).toBe("Blocks, Music");
+    expect(data.snapshotNotes).toBe("Naps well after lunch");
+
+    const getRes = await apiGet(request, `/api/v1/children/${createdChildId}`, cookies);
+    const child = await getRes.json();
+    expect(child.strengths).toBe("Curious");
+    expect(child.allergies).toBe("None");
+  });
+
+  test("PUT /api/v1/children/:id/snapshot rejects an off-site photo url", async ({ request }) => {
+    if (!createdChildId) test.skip();
+    const cookies = await loginAsAdmin(request);
+    const res = await apiPut(
+      request,
+      `/api/v1/children/${createdChildId}/snapshot`,
+      { photoUrl: "https://example.com/tracker.png" },
+      cookies,
+    );
+    expect(res.status()).toBe(400);
+  });
+
+  test("PUT /api/v1/children/:id/snapshot returns 403 for an unrelated parent", async ({ request }) => {
+    if (!createdChildId) test.skip();
+    const cookies = await loginAsParent(request);
+    const res = await apiPut(
+      request,
+      `/api/v1/children/${createdChildId}/snapshot`,
+      { snapshotNotes: "Not my child" },
+      cookies,
+    );
+    expect(res.status()).toBe(403);
   });
 
   test("POST /api/v1/children returns 403 for parent role", async ({ request }) => {

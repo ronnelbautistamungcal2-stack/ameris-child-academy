@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import FormLibraryPanel from "@/components/admin/FormLibraryPanel";
 import { apiJson } from "@/lib/api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -592,6 +593,7 @@ export default function FormRenewals() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [detailRecord, setDetailRecord] = useState(null);
+  const [view, setView] = useState("renewals");
   const pageSize = 10;
 
   const refresh = useCallback(async () => {
@@ -707,6 +709,7 @@ export default function FormRenewals() {
               </p>
             </div>
           </div>
+          {view === "renewals" ? (
           <button
             type="button"
             onClick={runCheck}
@@ -733,12 +736,48 @@ export default function FormRenewals() {
             <IconBell size={16} style={checking ? { animation: "spin 1s linear infinite" } : {}} />
             {checking ? "Checking..." : "Run Renewal Check"}
           </button>
+          ) : null}
+        </div>
+
+        {/* ── View switcher ──────────────────────────── */}
+        <div style={{ display: "flex", gap: 4, borderBottom: "1px solid var(--admin-border)" }}>
+          {[
+            { key: "renewals", label: "Renewals" },
+            { key: "library", label: "Form Library" },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => {
+                setView(tab.key);
+                setError("");
+                setSuccess("");
+              }}
+              style={{
+                padding: "10px 16px",
+                fontSize: 13,
+                fontWeight: 700,
+                border: "none",
+                background: "none",
+                cursor: "pointer",
+                color: view === tab.key ? "#2563eb" : "var(--admin-text-muted)",
+                borderBottom: `2px solid ${view === tab.key ? "#2563eb" : "transparent"}`,
+                marginBottom: -1,
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
         {/* ── Banners ────────────────────────────────── */}
         {error ? <Banner kind="error" message={error} onDismiss={() => setError("")} /> : null}
         {success ? <Banner kind="success" message={success} onDismiss={() => setSuccess("")} /> : null}
 
+        {view === "library" ? (
+          <FormLibraryPanel onError={setError} onSuccess={setSuccess} />
+        ) : (
+        <>
         {/* ── Stat cards ─────────────────────────────── */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
           <StatCard
@@ -1153,6 +1192,8 @@ export default function FormRenewals() {
             </div>
           ) : null}
         </Panel>
+        </>
+        )}
       </div>
 
       {/* ── Details Modal ──────────────────────────── */}

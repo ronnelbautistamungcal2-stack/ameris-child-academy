@@ -1,4 +1,4 @@
-const CACHE_NAME = "ameris-v1";
+const CACHE_NAME = "ameris-v2";
 
 const APP_SHELL = ["/login", "/dashboard", "/offline"];
 
@@ -92,10 +92,18 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Static assets: cache-first
+  // Static assets: cache-first. Production chunk names are content-hashed, so a
+  // cached copy is always the right one; development chunks and hot updates
+  // reuse the same paths, so they must go to the network every time.
+  const isDevAsset =
+    url.pathname.includes("/_next/static/development/") ||
+    url.pathname.includes("/_next/static/webpack/") ||
+    url.pathname.includes("hot-update");
+
   if (
-    url.pathname.startsWith("/_next/static/") ||
-    url.pathname.startsWith("/icons/")
+    !isDevAsset &&
+    (url.pathname.startsWith("/_next/static/") ||
+      url.pathname.startsWith("/icons/"))
   ) {
     event.respondWith(
       caches.match(request).then(

@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 125" width="1600" height="125" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Children climbing marble steps toward a pillar at sunrise">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9fc9ea"/>
+      <stop offset="45%" stop-color="#cfe4f4"/>
+      <stop offset="74%" stop-color="#f7d9a3"/>
+      <stop offset="100%" stop-color="#fdefd2"/>
+    </linearGradient>
+    <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fff6de"/>
+      <stop offset="55%" stop-color="#ffdf9e" stop-opacity="0.75"/>
+      <stop offset="100%" stop-color="#ffd48a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="stone" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#dfe3ea"/>
+    </linearGradient>
+    <linearGradient id="fadeLeft" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="fadeRight" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+    <g id="kid">
+      <circle cx="0" cy="-46" r="11"/>
+      <path d="M-11 -34 q11 -6 22 0 l3 26 q-14 5 -28 0 z"/>
+      <path d="M-9 -8 l-3 22 h7 l4 -16 z"/>
+      <path d="M6 -8 l6 20 h-7 l-5 -15 z"/>
+    </g>
+  </defs>
+
+  <rect width="1600" height="125" fill="url(#sky)"/>
+  <circle cx="700" cy="96" r="105" fill="url(#sunGlow)"/>
+  <circle cx="700" cy="96" r="15" fill="#fffaf0"/>
+
+  <g fill="#ffffff" opacity="0.5">
+    <ellipse cx="300" cy="26" rx="150" ry="10"/>
+    <ellipse cx="420" cy="16" rx="96" ry="7"/>
+    <ellipse cx="880" cy="18" rx="170" ry="9"/>
+    <ellipse cx="1180" cy="30" rx="130" ry="8"/>
+  </g>
+
+  <path d="M0 96 q170 -16 330 -4 q150 12 290 2 q130 -10 270 3 q150 12 330 -2 q170 -14 380 5 v30 H0 z" fill="#b9c8d8" opacity="0.5"/>
+  <path d="M0 104 q200 -12 380 1 q180 12 350 -1 q190 -14 440 4 v22 H0 z" fill="#9fb4c8" opacity="0.42"/>
+  <rect x="0" y="112" width="1600" height="13" fill="#f2f4f7"/>
+
+  <g fill="url(#stone)" stroke="#d3d8e1" stroke-width="1">
+    <rect x="812" y="104" width="112" height="21"/>
+    <rect x="884" y="92" width="112" height="33"/>
+    <rect x="956" y="80" width="112" height="45"/>
+    <rect x="1028" y="68" width="112" height="57"/>
+    <rect x="1100" y="56" width="150" height="69"/>
+  </g>
+
+  <g fill="#1f2937">
+    <g transform="translate(846 104) scale(0.4)"><use href="#kid"/></g>
+    <g transform="translate(918 92) scale(0.4)"><use href="#kid"/></g>
+    <g transform="translate(990 80) scale(0.4)"><use href="#kid"/></g>
+    <g transform="translate(1062 68) scale(0.4)"><use href="#kid"/></g>
+    <g transform="translate(1140 56) scale(0.4)">
+      <use href="#kid"/>
+      <path d="M11 -40 l22 -20 l5 6 l-20 22 z"/>
+    </g>
+  </g>
+
+  <g>
+    <rect x="1262" y="44" width="26" height="12" fill="#e6e9ef" stroke="#d3d8e1"/>
+    <rect x="1256" y="32" width="38" height="14" rx="2" fill="#f1f3f7" stroke="#d3d8e1"/>
+    <rect x="1266" y="0" width="18" height="34" fill="#eef1f5" stroke="#dde1e8"/>
+    <rect x="1262" y="56" width="26" height="69" fill="#e9ecf1" stroke="#d3d8e1"/>
+  </g>
+
+  <g fill="#cbb98a" opacity="0.8">
+    <ellipse cx="80" cy="118" rx="130" ry="22"/>
+    <ellipse cx="240" cy="122" rx="110" ry="16"/>
+    <ellipse cx="1470" cy="118" rx="150" ry="22"/>
+  </g>
+  <g fill="#e2d5ad" opacity="0.75">
+    <ellipse cx="140" cy="124" rx="90" ry="13"/>
+    <ellipse cx="1390" cy="124" rx="100" ry="12"/>
+  </g>
+
+  <rect x="0" y="0" width="210" height="125" fill="url(#fadeLeft)"/>
+  <rect x="1390" y="0" width="210" height="125" fill="url(#fadeRight)"/>
+</svg>

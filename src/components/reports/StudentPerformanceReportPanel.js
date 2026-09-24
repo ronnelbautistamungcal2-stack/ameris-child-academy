@@ -231,17 +231,23 @@ export default function StudentPerformanceReportPanel({ childId, onPlanApproved 
     <div className="space-y-3">
       {/* Summary Stats */}
       <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-        <Kpi label="Total Goals" value={report.progress?.totalGoals || 0} tone="gray" />
-        <Kpi label="Completed" value={report.progress?.completed || 0} tone="emerald" />
-        <Kpi label="Failed" value={report.progress?.failed || 0} tone="rose" />
-        <Kpi label="Completion Rate" value={`${report.progress?.completionRate || 0}%`} tone="sky" />
+        <Kpi label="Total Goals" value={report.progress?.totalGoals || 0} tone="gray" icon={<DocumentIcon />} />
+        <Kpi label="Completed" value={report.progress?.completed || 0} tone="emerald" icon={<CheckCircleIcon />} />
+        <Kpi label="Failed" value={report.progress?.failed || 0} tone="rose" icon={<XCircleIcon />} />
+        <Kpi
+          label="Completion Rate"
+          value={`${report.progress?.completionRate || 0}%`}
+          tone="sky"
+          icon={<GaugeIcon />}
+        />
       </div>
 
       {/* Citizenship Grade + Milestones Grade */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <div className="rounded-[22px] border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-slate-900">
-          <div className="text-base font-black tracking-tight text-gray-900 dark:text-gray-100">Citizenship Grade</div>
-          <p className="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">Score over time, from logged citizenship grades.</p>
+          <PanelHeading tone="amber" icon={<StarIcon />} title="Citizenship Grade">
+            Score over time, from logged citizenship grades.
+          </PanelHeading>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <DateField label="Start Date" value={citizenshipFrom} onChange={setCitizenshipFrom} />
             <DateField label="End Date" value={citizenshipTo} onChange={setCitizenshipTo} />
@@ -256,8 +262,9 @@ export default function StudentPerformanceReportPanel({ childId, onPlanApproved 
         </div>
 
         <div className="rounded-[22px] border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-slate-900">
-          <div className="text-base font-black tracking-tight text-gray-900 dark:text-gray-100">Milestones Grade</div>
-          <p className="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">Percent passed by category from steps of progression completed.</p>
+          <PanelHeading tone="amber" icon={<TrophyIcon />} title="Milestones Grade">
+            Percent passed by category from steps of progression completed.
+          </PanelHeading>
           <div className="mt-3">
             <SelectField label="Filter by Age Group" value={milestonesAgeGroup} onChange={setMilestonesAgeGroup}>
               <option value="">All age groups</option>
@@ -278,8 +285,9 @@ export default function StudentPerformanceReportPanel({ childId, onPlanApproved 
 
       {/* Active Goals */}
       <div className="rounded-[22px] border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-slate-900">
-        <div className="text-base font-black tracking-tight text-gray-900 dark:text-gray-100">Active Goals</div>
-        <p className="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">Goals this student is currently working on.</p>
+        <PanelHeading tone="amber" icon={<TargetIcon />} title="Active Goals">
+          Goals this student is currently working on.
+        </PanelHeading>
         {activeGoals.length > 0 ? (
           <div className="mt-3 space-y-2">
             {activeGoals.map((g) => (
@@ -302,8 +310,9 @@ export default function StudentPerformanceReportPanel({ childId, onPlanApproved 
       {/* Accomplishments + Citizenship Log */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <div className="rounded-[22px] border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-slate-900">
-          <div className="text-base font-black tracking-tight text-gray-900 dark:text-gray-100">Accomplishments</div>
-          <p className="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">From logged "Accomplishment" activity.</p>
+          <PanelHeading tone="amber" icon={<MedalIcon />} title="Accomplishments">
+            From logged "Accomplishment" activity.
+          </PanelHeading>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <DateField label="Start Date" value={accomplishmentFrom} onChange={setAccomplishmentFrom} />
             <DateField label="End Date" value={accomplishmentTo} onChange={setAccomplishmentTo} />
@@ -323,8 +332,9 @@ export default function StudentPerformanceReportPanel({ childId, onPlanApproved 
         </div>
 
         <div className="rounded-[22px] border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-slate-900">
-          <div className="text-base font-black tracking-tight text-gray-900 dark:text-gray-100">Citizenship Log</div>
-          <p className="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">From logged "Citizenship" activity.</p>
+          <PanelHeading tone="sky" icon={<UsersIcon />} title="Citizenship Log">
+            From logged "Citizenship" activity.
+          </PanelHeading>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <DateField label="Start Date" value={citizenshipLogFrom} onChange={setCitizenshipLogFrom} />
             <DateField label="End Date" value={citizenshipLogTo} onChange={setCitizenshipLogTo} />
@@ -346,8 +356,9 @@ export default function StudentPerformanceReportPanel({ childId, onPlanApproved 
 
       {/* Individual Progress Plans */}
       <div className="rounded-[22px] border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-slate-900">
-        <div className="text-base font-black tracking-tight text-gray-900 dark:text-gray-100">Individual Progress Plan</div>
-        <p className="mt-0.5 text-[13px] text-gray-600 dark:text-gray-300">Intervention plans on file for this child.</p>
+        <PanelHeading tone="sky" icon={<ClipboardIcon />} title="Individual Progress Plan">
+          Intervention plans on file for this child.
+        </PanelHeading>
         {behaviorPlans.length > 0 ? (
           <div className="mt-3 space-y-3">
             {behaviorPlans.map((plan) => (
@@ -368,8 +379,9 @@ export default function StudentPerformanceReportPanel({ childId, onPlanApproved 
 
       {/* Student Activity Log */}
       <div className="rounded-[22px] border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-slate-900">
-        <div className="text-base font-black tracking-tight text-gray-900 dark:text-gray-100">Student Activity Log</div>
-        <p className="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">Daily activity log.</p>
+        <PanelHeading tone="sky" icon={<ListIcon />} title="Student Activity Log">
+          Daily activity log.
+        </PanelHeading>
         <div className="mt-3 flex items-end gap-2">
           <div className="max-w-[220px] flex-1">
             <DateField label="Jump to Date" value={activityLogDate} onChange={setActivityLogDate} />
@@ -405,7 +417,7 @@ export default function StudentPerformanceReportPanel({ childId, onPlanApproved 
   );
 }
 
-function Kpi({ label, value, tone = "gray" }) {
+function Kpi({ label, value, tone = "gray", icon }) {
   const tones = {
     sky: "border-sky-200 bg-sky-50/80 text-sky-900 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-100",
     emerald: "border-emerald-200 bg-emerald-50/80 text-emerald-900 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-100",
@@ -413,10 +425,150 @@ function Kpi({ label, value, tone = "gray" }) {
     gray: "border-gray-200 bg-gray-50/90 text-gray-900 dark:border-gray-800 dark:bg-slate-900 dark:text-gray-100",
   };
   return (
-    <div className={`rounded-[18px] border px-3.5 py-3 shadow-sm ${tones[tone] || tones.gray}`}>
-      <div className="text-[clamp(1.05rem,1.8vw,1.4rem)] font-black leading-tight tracking-tight">{String(value)}</div>
-      <div className="mt-1 text-[11px] font-extrabold uppercase tracking-[0.16em] opacity-70">{label}</div>
+    <div className={`flex items-center gap-2.5 rounded-[18px] border px-3.5 py-3 shadow-sm ${tones[tone] || tones.gray}`}>
+      {icon ? (
+        <span aria-hidden="true" className="shrink-0 opacity-80">
+          {icon}
+        </span>
+      ) : null}
+      <div className="min-w-0">
+        <div className="text-[clamp(1.05rem,1.8vw,1.4rem)] font-black leading-tight tracking-tight">{String(value)}</div>
+        <div className="mt-0.5 text-[11px] font-extrabold uppercase tracking-[0.16em] opacity-70">{label}</div>
+      </div>
     </div>
+  );
+}
+
+/**
+ * Every block in the report is titled the same way: a tinted glyph, the name,
+ * and one line saying where the numbers come from.
+ */
+function PanelHeading({ tone = "sky", icon, title, children }) {
+  const tones = {
+    sky: "bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300",
+    amber: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
+    emerald: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
+  };
+  return (
+    <div className="flex items-start gap-2.5">
+      <span
+        aria-hidden="true"
+        className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${tones[tone] || tones.sky}`}
+      >
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <div className="text-base font-black tracking-tight text-gray-900 dark:text-gray-100">{title}</div>
+        <p className="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">{children}</p>
+      </div>
+    </div>
+  );
+}
+
+function Glyph({ children }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-[18px] w-[18px]">
+      {children}
+    </svg>
+  );
+}
+
+function StarIcon() {
+  return (
+    <Glyph>
+      <path strokeLinecap="round" strokeLinejoin="round" d="m12 4 2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.6-4.8 2.6.9-5.4L4.2 9.7l5.4-.8L12 4Z" />
+    </Glyph>
+  );
+}
+
+function TrophyIcon() {
+  return (
+    <Glyph>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 4h8v5a4 4 0 0 1-8 0V4Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H5v2a3 3 0 0 0 3 3M16 5h3v2a3 3 0 0 1-3 3M10 20h4M12 13v7" />
+    </Glyph>
+  );
+}
+
+function TargetIcon() {
+  return (
+    <Glyph>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="3.5" />
+    </Glyph>
+  );
+}
+
+function MedalIcon() {
+  return (
+    <Glyph>
+      <circle cx="12" cy="14.5" r="4.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.5 10.4 6 4h12l-2.5 6.4" />
+    </Glyph>
+  );
+}
+
+function UsersIcon() {
+  return (
+    <Glyph>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19" />
+      <circle cx="10" cy="8" r="3" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M20 19v-1.5a3.5 3.5 0 0 0-2.6-3.38M15.5 5.2a3 3 0 0 1 0 5.6" />
+    </Glyph>
+  );
+}
+
+function ClipboardIcon() {
+  return (
+    <Glyph>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 4h6v2.5H9z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 5.2h2.5A1.5 1.5 0 0 1 19 6.7v12.1a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 18.8V6.7a1.5 1.5 0 0 1 1.5-1.5H9" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.5 11h7M8.5 15h4.5" />
+    </Glyph>
+  );
+}
+
+function ListIcon() {
+  return (
+    <Glyph>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" />
+    </Glyph>
+  );
+}
+
+function DocumentIcon() {
+  return (
+    <Glyph>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13 4H7.5A1.5 1.5 0 0 0 6 5.5v13A1.5 1.5 0 0 0 7.5 20h9a1.5 1.5 0 0 0 1.5-1.5V9l-5-5Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13 4v5h5" />
+    </Glyph>
+  );
+}
+
+function CheckCircleIcon() {
+  return (
+    <Glyph>
+      <circle cx="12" cy="12" r="8.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="m8.5 12.3 2.4 2.4 4.6-4.9" />
+    </Glyph>
+  );
+}
+
+function XCircleIcon() {
+  return (
+    <Glyph>
+      <circle cx="12" cy="12" r="8.5" />
+      <path strokeLinecap="round" d="m9.5 9.5 5 5M14.5 9.5l-5 5" />
+    </Glyph>
+  );
+}
+
+function GaugeIcon() {
+  return (
+    <Glyph>
+      <circle cx="12" cy="12" r="8.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3.5A8.5 8.5 0 0 1 20.5 12" />
+    </Glyph>
   );
 }
 

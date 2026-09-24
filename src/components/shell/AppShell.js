@@ -7,6 +7,11 @@ import { useTheme } from "@/contexts/ThemeContext";
 import AmerisLogo from "@/components/ui/AmerisLogo";
 import { roleHomePath, roleLabel } from "@/lib/roles";
 
+// Drop the real photo in at public/banner-blessings-to-pillars.png; the SVG
+// below is the stand-in that renders until that file exists.
+export const HEADER_BANNER_SRC = "/banner-blessings-to-pillars.png";
+const HEADER_BANNER_FALLBACK_SRC = "/banner-blessings-to-pillars.svg";
+
 export default function AppShell({
   title,
   userName,
@@ -22,6 +27,9 @@ export default function AppShell({
   backLabel = "Back",
   showBack,
   showFooter = false,
+  sidebarVariant = "light",
+  bannerSrc = "",
+  bannerTagline = "",
 }) {
   const router = useRouter();
   const { data: session, update } = useSession();
@@ -29,6 +37,35 @@ export default function AppShell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const menuButtonRef = useRef(null);
   const mainContentId = "app-shell-main";
+  const navy = sidebarVariant === "navy";
+  // With a banner the logo and the bar share one full-width row at the top of
+  // the page instead of the logo sitting in the sidebar column.
+  const unifiedHeader = !!bannerSrc;
+  const [bannerUrl, setBannerUrl] = useState(bannerSrc);
+  const headerRef = useRef(null);
+
+  useEffect(() => {
+    setBannerUrl(bannerSrc);
+  }, [bannerSrc]);
+
+  // Publish the sticky header's height so pages can stick their own content
+  // directly beneath it (see --app-header-h usage in parent/children).
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return undefined;
+    const apply = () => {
+      const height = Math.round(header.getBoundingClientRect().height);
+      document.documentElement.style.setProperty("--app-header-h", `${height}px`);
+    };
+    apply();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", apply);
+      return () => window.removeEventListener("resize", apply);
+    }
+    const observer = new ResizeObserver(apply);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, [bannerUrl, title]);
 
   const showBackComputed = useMemo(() => {
     if (typeof showBack === "boolean") return showBack;
@@ -115,18 +152,48 @@ export default function AppShell({
     [activePath],
   );
 
-  const Sidebar = (
-    <aside className="sticky top-0 flex h-screen w-72 flex-col border-r border-white/60 bg-white/75 backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900/85">
-      <div className="px-6 pb-6 pt-6">
-        <Link href="/dashboard" className="flex justify-center">
-          <AmerisLogo size="lg" showText={false} className="max-w-full" />
-        </Link>
-      </div>
-
-      <nav className="scrollbar-hide flex-1 overflow-y-auto px-4 pb-6" aria-label="Primary navigation">
-        <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-blue-300 dark:text-blue-500">
-          Navigation
+  const renderSidebar = (showLogo = true, drawer = false) => (
+    <aside
+      className={[
+        "sticky flex w-72 flex-col",
+        navy
+          ? "bg-[#12386a] dark:bg-[#0b2545]"
+          : "border-r border-white/60 bg-white/75 backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900/85",
+      ].join(" ")}
+      style={
+        unifiedHeader && !drawer
+          ? {
+              top: "var(--app-header-h, 141px)",
+              height: "calc(100vh - var(--app-header-h, 141px))",
+            }
+          : { top: 0, height: "100vh" }
+      }
+    >
+      {showLogo ? (
+        <div
+          className={[
+            "px-6 pb-6 pt-6",
+            navy ? "bg-white shadow-sm dark:bg-gray-900" : "",
+          ].join(" ")}
+        >
+          <Link href="/dashboard" className="flex justify-center">
+            <AmerisLogo size="lg" showText={false} className="max-w-full" />
+          </Link>
         </div>
+      ) : null}
+
+      <nav
+        className={[
+          "scrollbar-hide flex-1 overflow-y-auto px-4 pb-6",
+          navy ? "pt-5" : "",
+        ].join(" ")}
+        aria-label="Primary navigation"
+      >
+        {navy ? null : (
+          <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-blue-300 dark:text-blue-500">
+            Navigation
+          </div>
+        )}
         <div className="space-y-1">
           {(navItems || []).map((item, idx) => {
             if (!item) return null;
@@ -141,6 +208,7 @@ export default function AppShell({
                   items={item.children}
                   isActive={isActive}
                   activePath={activePath}
+                  navy={navy}
                 />
               );
             }
@@ -153,15 +221,31 @@ export default function AppShell({
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={[
-                  "flex items-center justify-between rounded-2xl px-4 py-2.5 text-sm font-bold transition-all duration-150",
-                  active
-                    ? "bg-gradient-to-r from-blue-100 to-sky-50 text-blue-900 shadow-sm dark:bg-blue-900/40 dark:from-blue-900/40 dark:to-sky-900/20 dark:text-blue-200"
-                    : "text-gray-600 hover:bg-blue-50 hover:text-blue-800 dark:text-gray-300 dark:hover:bg-gray-800",
+                  navy
+                    ? "flex items-center justify-between rounded-2xl px-4 py-3 text-[15px] font-bold transition-all duration-150"
+                    : "flex items-center justify-between rounded-2xl px-4 py-2.5 text-sm font-bold transition-all duration-150",
+                  navy
+                    ? active
+                      ? "bg-white text-[#12386a] shadow-md"
+                      : "text-white/85 hover:bg-white/10 hover:text-white"
+                    : active
+                      ? "bg-gradient-to-r from-blue-100 to-sky-50 text-blue-900 shadow-sm dark:bg-blue-900/40 dark:from-blue-900/40 dark:to-sky-900/20 dark:text-blue-200"
+                      : "text-gray-600 hover:bg-blue-50 hover:text-blue-800 dark:text-gray-300 dark:hover:bg-gray-800",
                 ].join(" ")}
               >
-                <span className="flex items-center gap-2.5 truncate">
+                <span className={navy ? "flex items-center gap-3 truncate" : "flex items-center gap-2.5 truncate"}>
                   {item.icon ? (
-                    <span className={active ? "text-blue-700 dark:text-blue-300" : "text-gray-400 dark:text-gray-500"}>
+                    <span
+                      className={
+                        navy
+                          ? active
+                            ? "text-[#12386a]"
+                            : "text-white/80"
+                          : active
+                            ? "text-blue-700 dark:text-blue-300"
+                            : "text-gray-400 dark:text-gray-500"
+                      }
+                    >
                       {item.icon}
                     </span>
                   ) : null}
@@ -180,26 +264,32 @@ export default function AppShell({
     </aside>
   );
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50/50 to-amber-50/40 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
-      <a href={`#${mainContentId}`} className="skip-link">
-        Skip to main content
-      </a>
-      <div className={["mx-auto flex min-h-screen w-full", shellMaxWidthClassName].join(" ")}>
-        <div className="hidden md:block">{Sidebar}</div>
-
-        {mobileOpen ? (
-          <MobileSidebar
-            onClose={() => setMobileOpen(false)}
-            triggerRef={menuButtonRef}
-          >
-            {Sidebar}
-          </MobileSidebar>
-        ) : null}
-
-        <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-10 border-b border-white/60 bg-white/70 backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900/70">
-            <div className="flex items-center justify-between gap-3 px-4 py-3">
+  const headerBody = (
+    <>
+            {bannerUrl ? (
+              <>
+                <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                  <img
+                    src={bannerUrl}
+                    alt=""
+                    aria-hidden="true"
+                    className="h-full w-full object-cover object-[center_47.5%]"
+                    onError={() => {
+                      setBannerUrl((current) =>
+                        current === HEADER_BANNER_FALLBACK_SRC ? "" : HEADER_BANNER_FALLBACK_SRC,
+                      );
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-r from-white/85 via-white/25 to-transparent dark:from-gray-900/90 dark:via-gray-900/50 dark:to-gray-900/20" />
+                </div>
+              </>
+            ) : null}
+            <div
+              className={[
+                "relative flex items-center justify-between gap-3 px-4",
+                bannerUrl ? "min-h-[140px] py-4" : "py-3",
+              ].join(" ")}
+            >
               <div className="flex min-w-0 items-center gap-3">
                 <button
                   ref={menuButtonRef}
@@ -214,7 +304,14 @@ export default function AppShell({
                     <path strokeLinecap="round" d="M4 6h16M4 12h16M4 18h16" />
                   </svg>
                 </button>
-                {title ? (
+                {bannerTagline ? (
+                  <div className="min-w-0">
+                    <div className="truncate font-serif text-lg font-bold italic tracking-tight text-[#12386a] dark:text-sky-200 sm:text-2xl">
+                      {bannerTagline}
+                    </div>
+                    {title ? <span className="sr-only">{title}</span> : null}
+                  </div>
+                ) : title ? (
                   <div className="min-w-0">
                     <div className="truncate text-sm font-extrabold text-gray-900 dark:text-gray-100 md:text-base">
                       {title}
@@ -223,7 +320,14 @@ export default function AppShell({
                 ) : null}
               </div>
 
-              <div className="flex items-center gap-1.5 sm:gap-2">
+              <div
+                className={[
+                  "flex items-center gap-1.5 sm:gap-2",
+                  bannerUrl
+                    ? "rounded-2xl bg-white/85 px-2 py-1 shadow-sm backdrop-blur-sm dark:bg-gray-900/80"
+                    : "",
+                ].join(" ")}
+              >
                 <NotificationBell userId={userId} />
                 <RoleSwitcher
                   activeRole={activeRole}
@@ -296,7 +400,58 @@ export default function AppShell({
                 </button>
               </div>
             </div>
-          </header>
+    </>
+  );
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50/50 to-amber-50/40 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+      <a href={`#${mainContentId}`} className="skip-link">
+        Skip to main content
+      </a>
+      {unifiedHeader ? (
+        <header
+          ref={headerRef}
+          className="sticky top-0 z-30 border-b border-white/50 bg-white dark:border-gray-700 dark:bg-gray-900"
+        >
+          <div className={["mx-auto flex w-full items-stretch", shellMaxWidthClassName].join(" ")}>
+            <div className="hidden w-72 shrink-0 items-center justify-center bg-white px-6 dark:bg-gray-900 md:flex">
+              <Link href="/dashboard" className="flex w-full justify-center">
+                <AmerisLogo size="lg" showText={false} className="max-w-full" />
+              </Link>
+            </div>
+            <div className="relative min-w-0 flex-1 overflow-hidden">{headerBody}</div>
+          </div>
+        </header>
+      ) : null}
+
+      <div
+        className={["mx-auto flex w-full", shellMaxWidthClassName].join(" ")}
+        style={
+          unifiedHeader
+            ? { minHeight: "calc(100vh - var(--app-header-h, 141px))" }
+            : { minHeight: "100vh" }
+        }
+      >
+        <div className="hidden md:block">{renderSidebar(!unifiedHeader)}</div>
+
+        {mobileOpen ? (
+          <MobileSidebar
+            onClose={() => setMobileOpen(false)}
+            triggerRef={menuButtonRef}
+          >
+            {renderSidebar(true, true)}
+          </MobileSidebar>
+        ) : null}
+
+        <div className="min-w-0 flex-1">
+          {unifiedHeader ? null : (
+            <header
+              ref={headerRef}
+              className="sticky top-0 z-10 border-b border-white/60 bg-white/70 backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900/70"
+            >
+              {headerBody}
+            </header>
+          )}
 
           <main id={mainContentId} className="px-4 py-6" tabIndex={-1}>
             <div className={["mx-auto w-full", contentMaxWidthClassName].join(" ")}>
@@ -367,7 +522,7 @@ export default function AppShell({
   );
 }
 
-function NavGroup({ label, icon, items, isActive, activePath }) {
+function NavGroup({ label, icon, items, isActive, activePath, navy = false }) {
   const hasActiveChild = items.some((i) => i.href && isActive(i.href));
   const [open, setOpen] = useState(hasActiveChild);
 
@@ -382,15 +537,29 @@ function NavGroup({ label, icon, items, isActive, activePath }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={[
-          "flex w-full items-center justify-between rounded-2xl px-4 py-2.5 text-sm font-bold transition-all duration-150",
-          hasActiveChild
-            ? "text-blue-800 dark:text-blue-300"
-            : "text-gray-600 hover:bg-blue-50 hover:text-blue-800 dark:text-gray-300 dark:hover:bg-gray-800",
+          navy
+            ? "flex w-full items-center justify-between rounded-2xl px-4 py-3 text-[15px] font-bold transition-all duration-150"
+            : "flex w-full items-center justify-between rounded-2xl px-4 py-2.5 text-sm font-bold transition-all duration-150",
+          navy
+            ? hasActiveChild
+              ? "bg-white/10 text-white"
+              : "text-white/85 hover:bg-white/10 hover:text-white"
+            : hasActiveChild
+              ? "text-blue-800 dark:text-blue-300"
+              : "text-gray-600 hover:bg-blue-50 hover:text-blue-800 dark:text-gray-300 dark:hover:bg-gray-800",
         ].join(" ")}
       >
-        <span className="flex items-center gap-2.5 truncate">
+        <span className={navy ? "flex items-center gap-3 truncate" : "flex items-center gap-2.5 truncate"}>
           {icon ? (
-            <span className={hasActiveChild ? "text-blue-700 dark:text-blue-400" : "text-gray-400 dark:text-gray-500"}>
+            <span
+              className={
+                navy
+                  ? "text-white/80"
+                  : hasActiveChild
+                    ? "text-blue-700 dark:text-blue-400"
+                    : "text-gray-400 dark:text-gray-500"
+              }
+            >
               {icon}
             </span>
           ) : null}
@@ -400,7 +569,8 @@ function NavGroup({ label, icon, items, isActive, activePath }) {
           viewBox="0 0 20 20"
           fill="currentColor"
           className={[
-            "h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200 dark:text-gray-500",
+            "h-4 w-4 shrink-0 transition-transform duration-200",
+            navy ? "text-white/70" : "text-gray-400 dark:text-gray-500",
             open ? "rotate-180" : "",
           ].join(" ")}
         >
@@ -413,7 +583,12 @@ function NavGroup({ label, icon, items, isActive, activePath }) {
       </button>
 
       {open && (
-        <div className="ml-3 mt-0.5 space-y-0.5 border-l-2 border-blue-100 pl-3 dark:border-gray-700">
+        <div
+          className={[
+            "ml-3 mt-0.5 space-y-0.5 border-l-2 pl-3",
+            navy ? "border-white/25" : "border-blue-100 dark:border-gray-700",
+          ].join(" ")}
+        >
           {items.map((child) => {
             if (!child?.href) return null;
             const active = isActive(child.href);
@@ -424,9 +599,13 @@ function NavGroup({ label, icon, items, isActive, activePath }) {
                 aria-current={active ? "page" : undefined}
                 className={[
                   "flex items-center justify-between rounded-xl px-3 py-2 text-[13px] font-bold transition-all duration-150",
-                  active
-                    ? "bg-gradient-to-r from-blue-100 to-sky-50 text-blue-900 dark:bg-blue-900/40 dark:from-blue-900/40 dark:to-sky-900/20 dark:text-blue-200"
-                    : "text-gray-500 hover:bg-blue-50 hover:text-blue-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200",
+                  navy
+                    ? active
+                      ? "bg-white text-[#12386a]"
+                      : "text-white/75 hover:bg-white/10 hover:text-white"
+                    : active
+                      ? "bg-gradient-to-r from-blue-100 to-sky-50 text-blue-900 dark:bg-blue-900/40 dark:from-blue-900/40 dark:to-sky-900/20 dark:text-blue-200"
+                      : "text-gray-500 hover:bg-blue-50 hover:text-blue-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200",
                 ].join(" ")}
               >
                 <span className="truncate">{child.label}</span>

@@ -16,6 +16,7 @@ import { getMenuForDate } from "@/lib/menuPlan";
 import { buildParentNotices } from "@/lib/parentNotices";
 import { ParentButton } from "@/components/parent/ParentUI";
 import { useShellTitle } from "@/components/shell/PortalShell";
+import SignInOutDialog, { FamilyIcon } from "@/components/parent/SignInOutDialog";
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
@@ -551,6 +552,7 @@ function ParentDashboard({ centers, children, loading, error, submissions }) {
   const [events, setEvents] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [behaviorPlans, setBehaviorPlans] = useState([]);
+  const [signInOpen, setSignInOpen] = useState(false);
 
   // Events drive both the calendar grid and the date-based notices.
   useEffect(() => {
@@ -664,6 +666,24 @@ function ParentDashboard({ centers, children, loading, error, submissions }) {
 
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+        <button
+          type="button"
+          onClick={() => setSignInOpen(true)}
+          className="group flex w-full items-center gap-4 rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 to-sky-100 px-5 py-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-md focus:outline-none focus-visible:ring-4 focus-visible:ring-sky-200 dark:border-sky-900 dark:from-sky-950/60 dark:to-sky-900/40"
+        >
+          <FamilyIcon className="h-10 w-10 shrink-0 text-[#1c5fa8] dark:text-sky-300" />
+          <span className="flex-1 text-xl font-black tracking-tight text-[#12386a] dark:text-slate-100 sm:text-2xl">
+            Sign Children In / Out
+          </span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} className="h-6 w-6 shrink-0 text-[#12386a] transition group-hover:translate-x-0.5 dark:text-slate-100">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m9 5 7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+
+      {signInOpen ? <SignInOutDialog onClose={() => setSignInOpen(false)} /> : null}
+
       {pendingPlanApprovals.length > 0 ? (
         <ParentApprovalAlert plans={pendingPlanApprovals} />
       ) : null}

@@ -47,7 +47,9 @@ export default async function handler(req, res) {
         where: { id: existing.id },
         data: {
           checkedInAt: now,
+          checkedInById: session.user.id,
           checkedOutAt: null,
+          checkedOutById: null,
           classRoomId:
             existing.classRoomId !== undefined && existing.classRoomId !== null
               ? existing.classRoomId
@@ -61,6 +63,7 @@ export default async function handler(req, res) {
           day,
           classRoomId: child.classRoomId || null,
           checkedInAt: now,
+          checkedInById: session.user.id,
         },
       });
 

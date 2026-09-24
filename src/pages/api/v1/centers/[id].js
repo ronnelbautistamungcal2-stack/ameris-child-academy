@@ -1,5 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { centerGeofenceData } from "@/lib/parentSignIn";
 import { normalizeSubscription } from "@/lib/subscriptions";
 
 export default async function handler(req, res) {
@@ -37,9 +38,11 @@ export default async function handler(req, res) {
     }
 
     const { name, address } = req.body;
+    const geofence = centerGeofenceData(req.body || {});
+    if (geofence.error) return res.status(400).json({ error: geofence.error });
     const center = await prisma.center.update({
       where: { id },
-      data: { name, address },
+      data: { name, address, ...geofence.data },
       include: { users: true, classes: true },
     });
     return res.status(200).json(center);

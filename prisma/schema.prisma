@@ -207,6 +207,8 @@ model User {
   email                              String                              @unique
   name                               String?
   password                           String?
+  // bcrypt hash of the 6-digit PIN parents enter to sign children in/out.
+  signInPinHash                      String?
   mustChangePassword                 Boolean                             @default(false)
   dob                                DateTime?
   hireDate                           DateTime?
@@ -288,6 +290,11 @@ model Center {
   id                          String                       @id @default(uuid())
   name                        String
   address                     String?
+  // Where the building is, for the parent sign-in/out geofence. Parents can
+  // only sign children in or out within signInRadiusMeters of this point.
+  latitude                    Float?
+  longitude                   Float?
+  signInRadiusMeters          Int                          @default(1609)
   users                       CenterUser[]
   classes                     ClassRoom[]
   children                    Child[]
@@ -594,19 +601,22 @@ model ActivityLog {
 }
 
 model Attendance {
-  id           String     @id @default(uuid())
-  day          DateTime
-  center       Center     @relation(fields: [centerId], references: [id])
-  centerId     String
-  child        Child      @relation(fields: [childId], references: [id])
-  childId      String
-  classRoom    ClassRoom? @relation(fields: [classRoomId], references: [id])
-  classRoomId  String?
-  checkedInAt  DateTime?
-  checkedOutAt DateTime?
-  notes        String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id             String     @id @default(uuid())
+  day            DateTime
+  center         Center     @relation(fields: [centerId], references: [id])
+  centerId       String
+  child          Child      @relation(fields: [childId], references: [id])
+  childId        String
+  classRoom      ClassRoom? @relation(fields: [classRoomId], references: [id])
+  classRoomId    String?
+  checkedInAt    DateTime?
+  checkedOutAt   DateTime?
+  // Who recorded the sign-in/out; null for rows written before this existed.
+  checkedInById  String?
+  checkedOutById String?
+  notes          String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
   @@unique([childId, day])
   @@index([centerId, day])
@@ -845,18 +855,18 @@ model Message {
 }
 
 model FormTemplate {
-  id                String   @id @default(uuid())
-  center            Center?  @relation(fields: [centerId], references: [id])
+  id                String    @id @default(uuid())
+  center            Center?   @relation(fields: [centerId], references: [id])
   centerId          String?
   title             String
   description       String?
   targetRole        Role
   schema            Json?
-  active            Boolean  @default(true)
-  requiresRenewal   Boolean  @default(false)
+  active            Boolean   @default(true)
+  requiresRenewal   Boolean   @default(false)
   renewalPeriodDays Int?
   autoFillMapping   Json?
-  assignmentType    String   @default("FAMILY")
+  assignmentType    String    @default("FAMILY")
   ageMinMonths      Int?
   ageMaxMonths      Int?
   staffRoles        Json?
@@ -864,8 +874,8 @@ model FormTemplate {
   attachmentName    String?
   attachmentSize    Int?
   dueDate           DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   submissions FormSubmission[]
 }

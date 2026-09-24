@@ -3,6 +3,9 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
+import { DEFAULT_SIGN_IN_RADIUS_METERS, METERS_PER_MILE, centerHasLocation } from "@/lib/parentSignIn";
+
+const DEFAULT_RADIUS_MILES = String(Math.round((DEFAULT_SIGN_IN_RADIUS_METERS / METERS_PER_MILE) * 100) / 100);
 
 export default function AdminCenters() {
   const [centers, setCenters] = useState([]);
@@ -11,6 +14,10 @@ export default function AdminCenters() {
 
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
+  const [radiusMiles, setRadiusMiles] = useState(DEFAULT_RADIUS_MILES);
+  const [locating, setLocating] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -36,16 +43,56 @@ export default function AdminCenters() {
     return [...centers].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   }, [centers]);
 
+  function resetForm() {
+    setName("");
+    setAddress("");
+    setLatitude("");
+    setLongitude("");
+    setRadiusMiles(DEFAULT_RADIUS_MILES);
+  }
+
+  function formPayload() {
+    const miles = Number(radiusMiles);
+    return {
+      name,
+      address,
+      latitude: latitude.trim(),
+      longitude: longitude.trim(),
+      signInRadiusMeters:
+        radiusMiles === "" || !Number.isFinite(miles) ? "" : Math.round(miles * METERS_PER_MILE),
+    };
+  }
+
+  // Admin stands at the center and pins it with the device's GPS.
+  function pinCurrentLocation() {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setError("This browser cannot share its location.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLatitude(pos.coords.latitude.toFixed(6));
+        setLongitude(pos.coords.longitude.toFixed(6));
+        setLocating(false);
+      },
+      () => {
+        setError("Could not read your location. Allow location access and try again.");
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  }
+
   async function createCenter(e) {
     e.preventDefault();
     setError("");
     try {
       await apiJson("/api/v1/centers", {
         method: "POST",
-        body: JSON.stringify({ name, address }),
+        body: JSON.stringify(formPayload()),
       });
-      setName("");
-      setAddress("");
+      resetForm();
       setShowForm(false);
       await refresh();
     } catch (e2) {
@@ -57,6 +104,13 @@ export default function AdminCenters() {
     setEditing(center);
     setName(center.name || "");
     setAddress(center.address || "");
+    setLatitude(String(center.latitude ?? ""));
+    setLongitude(String(center.longitude ?? ""));
+    setRadiusMiles(
+      center.signInRadiusMeters
+        ? String(Math.round((center.signInRadiusMeters / METERS_PER_MILE) * 100) / 100)
+        : DEFAULT_RADIUS_MILES,
+    );
     setShowForm(true);
   }
 
@@ -67,11 +121,10 @@ export default function AdminCenters() {
     try {
       await apiJson(`/api/v1/centers/${editing.id}`, {
         method: "PUT",
-        body: JSON.stringify({ name, address }),
+        body: JSON.stringify(formPayload()),
       });
       setEditing(null);
-      setName("");
-      setAddress("");
+      resetForm();
       setShowForm(false);
       await refresh();
     } catch (e2) {
@@ -81,8 +134,7 @@ export default function AdminCenters() {
 
   function cancelForm() {
     setEditing(null);
-    setName("");
-    setAddress("");
+    resetForm();
     setShowForm(false);
   }
 
@@ -155,6 +207,51 @@ export default function AdminCenters() {
                 />
               </label>
             </div>
+            <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: "#1E40AF" }}>
+              Parent sign-in location
+            </div>
+            <p style={{ margin: "4px 0 10px", fontSize: 12, color: "var(--admin-text-muted)" }}>
+              Parents can only sign children in or out from their phone when they are within this distance of the center.
+              Until a location is set, parent sign-in is turned off for this center.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 12, alignItems: "end" }}>
+              <label style={{ display: "block" }}>
+                <div style={fieldLabelStyle}>Latitude</div>
+                <input
+                  value={latitude}
+                  onChange={(e) => setLatitude(e.target.value)}
+                  style={inputStyle}
+                  inputMode="decimal"
+                  placeholder="e.g. 33.748997"
+                />
+              </label>
+              <label style={{ display: "block" }}>
+                <div style={fieldLabelStyle}>Longitude</div>
+                <input
+                  value={longitude}
+                  onChange={(e) => setLongitude(e.target.value)}
+                  style={inputStyle}
+                  inputMode="decimal"
+                  placeholder="e.g. -84.387985"
+                />
+              </label>
+              <label style={{ display: "block" }}>
+                <div style={fieldLabelStyle}>Radius (miles)</div>
+                <input
+                  value={radiusMiles}
+                  onChange={(e) => setRadiusMiles(e.target.value)}
+                  style={inputStyle}
+                  inputMode="decimal"
+                  type="number"
+                  min="0.05"
+                  max="50"
+                  step="0.05"
+                />
+              </label>
+              <button type="button" style={secondaryBtnStyle} onClick={pinCurrentLocation} disabled={locating}>
+                {locating ? "Locating…" : "📍 Use my current location"}
+              </button>
+            </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
               <button type="button" style={secondaryBtnStyle} onClick={cancelForm}>
                 Cancel
@@ -213,6 +310,11 @@ export default function AdminCenters() {
                             No subscription
                           </span>
                         )}
+                      </div>
+                      <div style={{ marginTop: 2, fontSize: 12, color: centerHasLocation(c) ? "#059669" : "#D97706" }}>
+                        {centerHasLocation(c)
+                          ? `Parent sign-in within ${Math.round(((c.signInRadiusMeters || DEFAULT_SIGN_IN_RADIUS_METERS) / METERS_PER_MILE) * 100) / 100} mi`
+                          : "Parent sign-in location not set"}
                       </div>
                       {c.address && (
                         <div style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)", display: "flex", alignItems: "center", gap: 4 }}>

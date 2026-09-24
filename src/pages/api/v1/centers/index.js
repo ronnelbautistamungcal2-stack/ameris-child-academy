@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { centerGeofenceData } from "@/lib/parentSignIn";
 import { normalizeSubscription } from "@/lib/subscriptions";
 import { buildParentLinkedChildWhere } from "@/lib/child-parent-links";
 
@@ -69,9 +70,11 @@ export default async function handler(req, res) {
 
     const { name, address } = req.body;
     if (!name) return res.status(400).json({ error: "Name required" });
+    const geofence = centerGeofenceData(req.body || {});
+    if (geofence.error) return res.status(400).json({ error: geofence.error });
 
     const center = await prisma.center.create({
-      data: { name, address },
+      data: { name, address, ...geofence.data },
       include: { users: true },
     });
 

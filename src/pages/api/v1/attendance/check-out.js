@@ -45,7 +45,7 @@ export default async function handler(req, res) {
   const record = existing
     ? await prisma.attendance.update({
         where: { id: existing.id },
-        data: { checkedOutAt: now },
+        data: { checkedOutAt: now, checkedOutById: session.user.id },
       })
     : await prisma.attendance.create({
         data: {
@@ -54,6 +54,7 @@ export default async function handler(req, res) {
           day,
           classRoomId: child.classRoomId || null,
           checkedOutAt: now,
+          checkedOutById: session.user.id,
         },
       });
 

@@ -5,31 +5,40 @@ import { buildParentLinkedChildWhere } from "@/lib/child-parent-links";
 import { startOfDay } from "@/lib/attendance-classroom";
 import { checkProximity, isValidPin, parseCoordinates } from "@/lib/parentSignIn";
 
-// Wrong PINs are counted per account, not per IP, so a phone moving between
-// networks cannot reset its allowance. A correct PIN clears the count. Held in
-// memory, like the other rate limits, so a server restart also clears it.
-const MAX_WRONG_PINS = 5;
+// Wrong guesses are counted per account, not per IP, so a phone moving between
+// networks cannot reset its allowance. A correct guess clears the count. Held
+// in memory, like the other rate limits, so a server restart also clears it.
+const MAX_WRONG_GUESSES = 5;
 const LOCKOUT_MS = 15 * 60_000;
-const wrongPins = new Map();
 
-function lockedOut(userId) {
-  const entry = wrongPins.get(userId);
-  if (!entry) return false;
-  if (Date.now() - entry.since > LOCKOUT_MS) {
-    wrongPins.delete(userId);
-    return false;
-  }
-  return entry.count >= MAX_WRONG_PINS;
+function guessCounter() {
+  const entries = new Map();
+  return {
+    lockedOut(userId) {
+      const entry = entries.get(userId);
+      if (!entry) return false;
+      if (Date.now() - entry.since > LOCKOUT_MS) {
+        entries.delete(userId);
+        return false;
+      }
+      return entry.count >= MAX_WRONG_GUESSES;
+    },
+    wrong(userId) {
+      const entry = entries.get(userId);
+      if (!entry || Date.now() - entry.since > LOCKOUT_MS) {
+        entries.set(userId, { count: 1, since: Date.now() });
+      } else {
+        entry.count += 1;
+      }
+    },
+    clear(userId) {
+      entries.delete(userId);
+    },
+  };
 }
 
-function recordWrongPin(userId) {
-  const entry = wrongPins.get(userId);
-  if (!entry || Date.now() - entry.since > LOCKOUT_MS) {
-    wrongPins.set(userId, { count: 1, since: Date.now() });
-  } else {
-    entry.count += 1;
-  }
-}
+const wrongPins = guessCounter();
+const wrongPasswords = guessCounter();
 
 export function isParentSession(session) {
   return !!session?.user && hasAnyRole(session.user, ["PARENT"]);
@@ -49,10 +58,10 @@ export async function getPinHash(userId) {
  * well, so it cannot be used to guess a PIN around the lockout.
  */
 export async function verifyPin(userId, pin) {
-  if (lockedOut(userId)) {
+  if (wrongPins.lockedOut(userId)) {
     return {
       status: 429,
-      error: "Too many PIN attempts. Please wait 15 minutes and try again.",
+      error: "Too many PIN attempts. Please wait 15 minutes or use Forgot PIN.",
     };
   }
   if (!isValidPin(pin)) return { status: 400, error: "Enter your 6-digit PIN." };
@@ -60,16 +69,61 @@ export async function verifyPin(userId, pin) {
   const hash = await getPinHash(userId);
   if (!hash) return { status: 409, error: "Create a PIN before signing children in or out." };
   if (await bcrypt.compare(pin, hash)) {
-    wrongPins.delete(userId);
+    wrongPins.clear(userId);
     return null;
   }
-  recordWrongPin(userId);
+  wrongPins.wrong(userId);
   return { status: 401, error: "That PIN is not correct." };
 }
 
 export async function setPin(userId, pin) {
   const signInPinHash = await bcrypt.hash(pin, 10);
   await prisma.user.update({ where: { id: userId }, data: { signInPinHash } });
+}
+
+/**
+ * Forgot PIN: the parent proves who they are with their account password and
+ * picks a new PIN. Returns null on success or `{ status, error }`. A reset
+ * also lifts a wrong-PIN lockout, and the parent is notified so a PIN changed
+ * by someone else on an unlocked phone does not go unnoticed.
+ */
+export async function resetPinWithPassword(userId, password, pin, confirmPin) {
+  if (wrongPasswords.lockedOut(userId)) {
+    return {
+      status: 429,
+      error: "Too many password attempts. Please wait 15 minutes or contact the center.",
+    };
+  }
+  if (!isValidPin(pin)) return { status: 400, error: "Your new PIN must be 6 digits." };
+  if (pin !== confirmPin) return { status: 400, error: "The new PINs do not match." };
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { password: true },
+  });
+  if (!user?.password) {
+    return {
+      status: 409,
+      error: "Your account has no password to confirm with. Please contact the center to reset your PIN.",
+    };
+  }
+  if (typeof password !== "string" || !password || !(await bcrypt.compare(password, user.password))) {
+    wrongPasswords.wrong(userId);
+    return { status: 401, error: "That password is not correct." };
+  }
+
+  wrongPasswords.clear(userId);
+  await setPin(userId, pin);
+  wrongPins.clear(userId);
+  await prisma.notification.create({
+    data: {
+      recipientId: userId,
+      type: "SYSTEM",
+      title: "Your sign-in PIN was changed",
+      body: "The PIN you use to sign children in and out was just reset. If this wasn't you, contact the center right away.",
+    },
+  });
+  return null;
 }
 
 const centerSelect = {

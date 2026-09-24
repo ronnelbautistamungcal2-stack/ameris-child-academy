@@ -227,6 +227,7 @@ export default function SignInOutDialog({ onClose, onChanged }) {
   const [hasPin, setHasPin] = useState(true);
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [children, setChildren] = useState([]);
   const [selected, setSelected] = useState(() => new Set());
@@ -271,6 +272,57 @@ export default function SignInOutDialog({ onClose, onChanged }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  function openReset() {
+    setPin("");
+    setConfirmPin("");
+    setPassword("");
+    setError("");
+    setStep("reset");
+  }
+
+  function closeReset() {
+    setPin("");
+    setConfirmPin("");
+    setPassword("");
+    setError("");
+    setStep("pin");
+  }
+
+  async function submitReset(event) {
+    event.preventDefault();
+    if (!password) {
+      setError("Enter the password you use to log in.");
+      return;
+    }
+    if (!isValidPin(pin)) {
+      setError(`Enter all ${PIN_LENGTH} digits of your new PIN.`);
+      return;
+    }
+    if (pin !== confirmPin) {
+      setError("The new PINs do not match.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const data = await apiJson("/api/v1/parent-sign-in/reset-pin", {
+        method: "POST",
+        body: JSON.stringify({ password, pin, confirmPin }),
+      });
+      verifiedPin.current = pin;
+      setHasPin(true);
+      setPassword("");
+      setChildren(Array.isArray(data?.children) ? data.children : []);
+      setFlash("Your PIN has been reset. Use your new PIN from now on.");
+      setStep("children");
+    } catch (e) {
+      setError(e.message || "Could not reset your PIN.");
+      setPassword("");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submitPin(event) {
     event.preventDefault();
@@ -481,6 +533,69 @@ export default function SignInOutDialog({ onClose, onChanged }) {
               className="mt-6 w-full rounded-xl bg-[#12386a] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#0e2c54] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy ? "Checking…" : hasPin ? "Continue" : "Save PIN & Continue"}
+            </button>
+            {hasPin ? (
+              <button
+                type="button"
+                onClick={openReset}
+                className="mt-4 text-sm font-bold text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+              >
+                Forgot PIN?
+              </button>
+            ) : null}
+          </form>
+        ) : null}
+
+        {step === "reset" ? (
+          <form onSubmit={submitReset} className="px-6 py-8 text-center">
+            <AmerisLogo size="md" showText={false} className="mx-auto" />
+            <h2 className={"mt-4 font-serif text-2xl font-black " + NAVY}>Reset Your PIN</h2>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+              Confirm it&apos;s you with the password you use to log in, then choose a new {PIN_LENGTH} digit PIN.
+            </p>
+
+            <label className="mt-5 block text-left">
+              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-gray-500">Account password</span>
+              <input
+                type="password"
+                autoComplete="current-password"
+                autoFocus
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-[#1c5fa8] focus:ring-2 focus:ring-sky-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:ring-sky-900"
+              />
+            </label>
+
+            <div className="mt-4 space-y-4">
+              <div>
+                <div className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">New PIN</div>
+                <PinBoxes value={pin} onChange={setPin} label="New PIN" />
+              </div>
+              <div>
+                <div className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Confirm new PIN</div>
+                <PinBoxes value={confirmPin} onChange={setConfirmPin} label="Confirm new PIN" />
+              </div>
+            </div>
+
+            {error ? (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300" role="alert">
+                {error}
+              </div>
+            ) : null}
+
+            <button
+              type="submit"
+              disabled={busy || !password || pin.length !== PIN_LENGTH || confirmPin.length !== PIN_LENGTH}
+              className="mt-6 w-full rounded-xl bg-[#12386a] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#0e2c54] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {busy ? "Saving…" : "Reset PIN & Continue"}
+            </button>
+            <button
+              type="button"
+              onClick={closeReset}
+              className="mt-4 text-sm font-bold text-gray-600 underline-offset-2 hover:underline dark:text-gray-300"
+            >
+              Back to PIN entry
             </button>
           </form>
         ) : null}

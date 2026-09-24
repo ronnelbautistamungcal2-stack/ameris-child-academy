@@ -11,6 +11,7 @@ const CENTER = { latitude: 33.749, longitude: -84.388 };
 const NEAR = { latitude: 33.752, longitude: -84.387 };
 const FAR = { latitude: 33.79, longitude: -84.388 };
 const PIN = "482915";
+const NEW_PIN = "730264";
 
 test.describe.serial("Parent sign-in/out API @api", () => {
   let parentId;
@@ -214,6 +215,61 @@ test.describe.serial("Parent sign-in/out API @api", () => {
     expect(record.checkedOutAt).not.toBeNull();
   });
 
+  test("forgot PIN: needs the account password and matching new PINs", async ({ request }) => {
+    const cookies = await loginAsParent(request);
+    const wrongPassword = await apiPost(
+      request,
+      "/api/v1/parent-sign-in/reset-pin",
+      { password: "not-my-password", pin: NEW_PIN, confirmPin: NEW_PIN },
+      cookies,
+    );
+    expect(wrongPassword.status()).toBe(401);
+
+    const mismatch = await apiPost(
+      request,
+      "/api/v1/parent-sign-in/reset-pin",
+      { password: "parentpass", pin: NEW_PIN, confirmPin: "000000" },
+      cookies,
+    );
+    expect(mismatch.status()).toBe(400);
+
+    // Neither failed attempt changed the PIN.
+    const oldStillWorks = await apiPost(request, "/api/v1/parent-sign-in/pin", { pin: PIN }, cookies);
+    expect(oldStillWorks.status()).toBe(200);
+  });
+
+  test("forgot PIN: resets the PIN, lifts a lockout and notifies the parent", async ({ request }) => {
+    const cookies = await loginAsParent(request);
+    for (let i = 0; i < 5; i += 1) {
+      await apiPost(request, "/api/v1/parent-sign-in/pin", { pin: "000001" }, cookies);
+    }
+    const locked = await apiPost(request, "/api/v1/parent-sign-in/pin", { pin: PIN }, cookies);
+    expect(locked.status()).toBe(429);
+
+    const started = new Date();
+    const res = await apiPost(
+      request,
+      "/api/v1/parent-sign-in/reset-pin",
+      { password: "parentpass", pin: NEW_PIN, confirmPin: NEW_PIN },
+      cookies,
+    );
+    expect(res.status()).toBe(200);
+    expect((await res.json()).children.some((c) => c.id === childId)).toBe(true);
+
+    const oldPin = await apiPost(request, "/api/v1/parent-sign-in/pin", { pin: PIN }, cookies);
+    expect(oldPin.status()).toBe(401);
+    const newPin = await apiPost(request, "/api/v1/parent-sign-in/pin", { pin: NEW_PIN }, cookies);
+    expect(newPin.status()).toBe(200);
+
+    const notice = await prisma.notification.findFirst({
+      where: { recipientId: parentId, title: "Your sign-in PIN was changed", createdAt: { gte: started } },
+    });
+    expect(notice).not.toBeNull();
+    await prisma.notification.deleteMany({
+      where: { recipientId: parentId, title: "Your sign-in PIN was changed" },
+    });
+  });
+
   test("cannot sign in a child who is not theirs", async ({ request }) => {
     const cookies = await loginAsParent(request);
     const stranger = await prisma.child.create({
@@ -223,7 +279,7 @@ test.describe.serial("Parent sign-in/out API @api", () => {
       const res = await apiPost(
         request,
         "/api/v1/parent-sign-in",
-        { pin: PIN, ...NEAR, changes: [{ childId: stranger.id, action: "IN" }] },
+        { pin: NEW_PIN, ...NEAR, changes: [{ childId: stranger.id, action: "IN" }] },
         cookies,
       );
       expect(res.status()).toBe(403);

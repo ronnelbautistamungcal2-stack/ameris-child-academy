@@ -391,6 +391,14 @@ model Child {
   strengths                     String?
   areasOfFocus                  String?
   snapshotNotes                 String?
+  profileSummary                String?
+  languages                     String?
+  medicalInfo                   String?
+  homeAddress                   String?
+  authorizedPickup              String?
+  pediatricianName              String?
+  pediatricianPhone             String?
+  emergencyNotes                String?
   carpool                       String?
   healthAssessmentDocuments     Json?
   enrollmentDocuments           Json?

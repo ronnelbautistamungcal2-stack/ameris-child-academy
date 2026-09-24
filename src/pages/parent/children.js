@@ -6,6 +6,7 @@ import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { ageInYears, formatAgeLong } from "@/lib/ageUtils";
 import { CHILD_SNAPSHOT_FIELDS } from "@/lib/childSnapshot";
+import Link from "next/link";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -312,6 +313,15 @@ function ChildProfileCard({ child, onEditSnapshot }) {
               <MetaRow label="Teacher" value={teachers || "Not assigned"} />
               <MetaRow label="Start Date" value={formatLongDate(child.enrollmentStartDate)} />
             </dl>
+            <Link
+              href={`/parent/children/${encodeURIComponent(child.id)}`}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3.5 py-1.5 text-[12px] font-extrabold text-sky-800 transition hover:border-sky-300 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-900/30 dark:text-sky-200 dark:hover:bg-sky-900/50"
+            >
+              View Profile
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} className="h-3.5 w-3.5" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 6l6 6-6 6" />
+              </svg>
+            </Link>
           </div>
         </div>
 

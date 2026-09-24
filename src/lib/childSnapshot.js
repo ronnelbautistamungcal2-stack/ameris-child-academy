@@ -3,6 +3,10 @@
  * lines that describe who the child is, plus the profile photo the switcher
  * and the header card use. Allergies already lived on Child, so the snapshot
  * edits it in place rather than duplicating it.
+ *
+ * The Child Profile page adds the rest of what a family knows best (home
+ * address, pick-up list, pediatrician, languages) through the same endpoint.
+ * Contacts and classroom details stay with the center's full child record.
  */
 
 export const CHILD_SNAPSHOT_TEXT_FIELDS = [
@@ -11,6 +15,14 @@ export const CHILD_SNAPSHOT_TEXT_FIELDS = [
   "areasOfFocus",
   "allergies",
   "snapshotNotes",
+  "profileSummary",
+  "languages",
+  "medicalInfo",
+  "homeAddress",
+  "authorizedPickup",
+  "pediatricianName",
+  "pediatricianPhone",
+  "emergencyNotes",
 ];
 
 export const CHILD_SNAPSHOT_FIELDS = ["photoUrl", ...CHILD_SNAPSHOT_TEXT_FIELDS];
@@ -25,6 +37,14 @@ export const childSnapshotSelect = {
   areasOfFocus: true,
   allergies: true,
   snapshotNotes: true,
+  profileSummary: true,
+  languages: true,
+  medicalInfo: true,
+  homeAddress: true,
+  authorizedPickup: true,
+  pediatricianName: true,
+  pediatricianPhone: true,
+  emergencyNotes: true,
 };
 
 export function pickChildSnapshot(child) {

@@ -85,6 +85,36 @@ test.describe("Parent Workflows", () => {
     await expect(page.getByText(note)).toBeVisible();
   });
 
+  test("view profile opens the child profile and saves the about section", async ({ page }) => {
+    await page.goto("/parent/children");
+    await waitForLoadingDone(page);
+
+    await page.getByRole("link", { name: "View Profile" }).click();
+    await expect(page).toHaveURL(/\/parent\/children\/[^/?]+$/);
+    await expect(page.getByRole("heading", { name: "Child Profile" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Family Information" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Classroom Information" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Emergency Contacts" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Red Flags" })).toBeVisible();
+
+    const summary = `A bright and curious learner ${Date.now()}`;
+    await page.getByRole("button", { name: /^Edit About / }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Summary").fill(summary);
+    await dialog.getByLabel("Languages").fill("English");
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByText(summary)).toBeVisible();
+
+    await page.reload();
+    await waitForLoadingDone(page);
+    await expect(page.getByText(summary)).toBeVisible();
+
+    await page.getByRole("link", { name: "Back to Children" }).click();
+    await expect(page.getByRole("heading", { name: "My Children" })).toBeVisible();
+  });
+
   test("forms & renewals lists required forms and no permissions tab", async ({ page }) => {
     await page.goto("/parent/forms");
     await waitForLoadingDone(page);

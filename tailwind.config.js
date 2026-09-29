@@ -6,6 +6,7 @@ module.exports = {
     extend: {
       fontFamily: {
         sans: ["Nunito", "ui-rounded", "system-ui", "sans-serif"],
+        serif: ["Gelasio", "Georgia", "Cambria", "serif"],
       },
       borderRadius: {
         "4xl": "2rem",

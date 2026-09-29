@@ -244,27 +244,26 @@ export default function StudentPerformanceReportPanel({ childId, onPlanApproved 
 
       {/* Citizenship Grade + Milestones Grade */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <div className="rounded-[22px] border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-slate-900">
-          <PanelHeading tone="amber" icon={<StarIcon />} title="Citizenship Grade">
-            Score over time, from logged citizenship grades.
-          </PanelHeading>
+        <ReportCard>
+          <PanelHeading tone="amber" icon={<StarIcon />} title="Citizenship Grade" />
           <div className="mt-3 grid grid-cols-2 gap-2">
             <DateField label="Start Date" value={citizenshipFrom} onChange={setCitizenshipFrom} />
             <DateField label="End Date" value={citizenshipTo} onChange={setCitizenshipTo} />
           </div>
           <div className="mt-3">
-            <TrendLineChart
-              data={citizenshipChartData}
-              lines={[{ key: "score", label: "Score", color: "#0284c7" }]}
-              yLabel="Score"
-            />
+            {citizenshipChartData.length > 0 ? (
+              <TrendLineChart
+                data={citizenshipChartData}
+                lines={[{ key: "score", label: "Score", color: "#2563eb" }]}
+              />
+            ) : (
+              <ChartEmpty>No citizenship grades in this range.</ChartEmpty>
+            )}
           </div>
-        </div>
+        </ReportCard>
 
-        <div className="rounded-[22px] border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-slate-900">
-          <PanelHeading tone="amber" icon={<TrophyIcon />} title="Milestones Grade">
-            Percent passed by category from steps of progression completed.
-          </PanelHeading>
+        <ReportCard>
+          <PanelHeading tone="sky" icon={<FilterIcon />} title="Milestones Grade" />
           <div className="mt-3">
             <SelectField label="Filter by Age Group" value={milestonesAgeGroup} onChange={setMilestonesAgeGroup}>
               <option value="">All age groups</option>
@@ -277,42 +276,37 @@ export default function StudentPerformanceReportPanel({ childId, onPlanApproved 
             {milestoneChartData.length > 0 ? (
               <MilestonesBarChart data={milestoneChartData} />
             ) : (
-              <div className="flex h-48 items-center justify-center text-sm text-gray-500 dark:text-gray-400">No milestone data.</div>
+              <ChartEmpty>No milestone data.</ChartEmpty>
             )}
           </div>
-        </div>
+        </ReportCard>
       </div>
 
-      {/* Active Goals */}
-      <div className="rounded-[22px] border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-slate-900">
-        <PanelHeading tone="amber" icon={<TargetIcon />} title="Active Goals">
-          Goals this student is currently working on.
-        </PanelHeading>
-        {activeGoals.length > 0 ? (
-          <div className="mt-3 space-y-2">
-            {activeGoals.map((g) => (
-              <div key={g.id} className="flex items-center justify-between rounded-[16px] border border-gray-200 bg-gray-50/70 px-3.5 py-2.5 dark:border-gray-800 dark:bg-slate-800/80">
-                <div>
-                  <div className="text-[13px] font-extrabold text-gray-900 dark:text-gray-100">{g.lessonTitle || "—"}</div>
-                  {g.categoryName && <div className="text-xs text-gray-500 dark:text-gray-400">{g.categoryName}</div>}
-                </div>
-                <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${STATUS_BADGE[g.status] || "bg-gray-100 text-gray-700"}`}>
-                  {g.status?.replace(/_/g, " ")}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="mt-3 rounded-[16px] border border-gray-200 bg-gray-50/70 p-3 text-sm text-gray-500 dark:border-gray-800 dark:bg-slate-800/80 dark:text-gray-400">No active goals.</div>
-        )}
-      </div>
-
-      {/* Accomplishments + Citizenship Log */}
+      {/* Active Goals + Accomplishments */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <div className="rounded-[22px] border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-slate-900">
-          <PanelHeading tone="amber" icon={<MedalIcon />} title="Accomplishments">
-            From logged "Accomplishment" activity.
-          </PanelHeading>
+        <ReportCard>
+          <PanelHeading tone="rose" icon={<TargetIcon />} title="Active Goals" />
+          {activeGoals.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {activeGoals.map((g) => (
+                <div key={g.id} className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50/70 px-3.5 py-2.5 dark:border-gray-800 dark:bg-slate-800/80">
+                  <div>
+                    <div className="text-[13px] font-extrabold text-gray-900 dark:text-gray-100">{g.lessonTitle || "—"}</div>
+                    {g.categoryName && <div className="text-xs text-gray-500 dark:text-gray-400">{g.categoryName}</div>}
+                  </div>
+                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${STATUS_BADGE[g.status] || "bg-gray-100 text-gray-700"}`}>
+                    {g.status?.replace(/_/g, " ")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyBox>No active goals.</EmptyBox>
+          )}
+        </ReportCard>
+
+        <ReportCard>
+          <PanelHeading tone="amber" icon={<MedalIcon />} title="Accomplishments" />
           <div className="mt-3 grid grid-cols-2 gap-2">
             <DateField label="Start Date" value={accomplishmentFrom} onChange={setAccomplishmentFrom} />
             <DateField label="End Date" value={accomplishmentTo} onChange={setAccomplishmentTo} />
@@ -320,21 +314,40 @@ export default function StudentPerformanceReportPanel({ childId, onPlanApproved 
           {filteredAccomplishments.length > 0 ? (
             <div className="mt-3 space-y-2">
               {filteredAccomplishments.map((a) => (
-                <div key={a.id} className="rounded-[16px] border border-emerald-100 bg-emerald-50 px-3.5 py-2.5 dark:border-emerald-900/60 dark:bg-emerald-950/30">
+                <div key={a.id} className="rounded-xl border border-emerald-100 bg-emerald-50 px-3.5 py-2.5 dark:border-emerald-900/60 dark:bg-emerald-950/30">
                   <div className="text-xs text-emerald-600 dark:text-emerald-300">{fmtDate(a.createdAt)}</div>
                   <div className="mt-0.5 text-[13px] text-emerald-900 dark:text-emerald-100">{a.notes || a.details?.text || "Accomplishment recorded."}</div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="mt-3 rounded-[16px] border border-gray-200 bg-gray-50/70 p-3 text-sm text-gray-500 dark:border-gray-800 dark:bg-slate-800/80 dark:text-gray-400">No accomplishments found.</div>
+            <EmptyBox>No accomplishments found.</EmptyBox>
           )}
-        </div>
+        </ReportCard>
+      </div>
 
-        <div className="rounded-[22px] border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-slate-900">
-          <PanelHeading tone="sky" icon={<UsersIcon />} title="Citizenship Log">
-            From logged "Citizenship" activity.
-          </PanelHeading>
+      {/* Individual Progress Plans + Citizenship Log */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <ReportCard>
+          <PanelHeading tone="sky" icon={<ClipboardIcon />} title="Individual Progress Plan" />
+          {behaviorPlans.length > 0 ? (
+            <div className="mt-3 space-y-3">
+              {behaviorPlans.map((plan) => (
+                <PlanSummaryCard
+                  key={plan.id}
+                  plan={plan}
+                  onApprove={() => approvePlan(plan.id)}
+                  approving={approvingPlanId === plan.id}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyBox>No Individual Progress Plans on file.</EmptyBox>
+          )}
+        </ReportCard>
+
+        <ReportCard>
+          <PanelHeading tone="sky" icon={<UsersIcon />} title="Citizenship Log" />
           <div className="mt-3 grid grid-cols-2 gap-2">
             <DateField label="Start Date" value={citizenshipLogFrom} onChange={setCitizenshipLogFrom} />
             <DateField label="End Date" value={citizenshipLogTo} onChange={setCitizenshipLogTo} />
@@ -342,55 +355,36 @@ export default function StudentPerformanceReportPanel({ childId, onPlanApproved 
           {filteredCitizenshipLogs.length > 0 ? (
             <div className="mt-3 space-y-2">
               {filteredCitizenshipLogs.map((a) => (
-                <div key={a.id} className="rounded-[16px] border border-gray-200 bg-gray-50/70 px-3.5 py-2.5 dark:border-gray-800 dark:bg-slate-800/80">
+                <div key={a.id} className="rounded-xl border border-gray-200 bg-gray-50/70 px-3.5 py-2.5 dark:border-gray-800 dark:bg-slate-800/80">
                   <div className="text-xs text-gray-500 dark:text-gray-400">{fmtDate(a.createdAt)}</div>
                   <div className="mt-0.5 text-[13px] text-gray-900 dark:text-gray-100">{a.notes || a.details?.text || "Citizenship log entry."}</div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="mt-3 rounded-[16px] border border-gray-200 bg-gray-50/70 p-3 text-sm text-gray-500 dark:border-gray-800 dark:bg-slate-800/80 dark:text-gray-400">No citizenship log entries found.</div>
+            <EmptyBox>No citizenship log entries found.</EmptyBox>
           )}
-        </div>
-      </div>
-
-      {/* Individual Progress Plans */}
-      <div className="rounded-[22px] border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-slate-900">
-        <PanelHeading tone="sky" icon={<ClipboardIcon />} title="Individual Progress Plan">
-          Intervention plans on file for this child.
-        </PanelHeading>
-        {behaviorPlans.length > 0 ? (
-          <div className="mt-3 space-y-3">
-            {behaviorPlans.map((plan) => (
-              <PlanSummaryCard
-                key={plan.id}
-                plan={plan}
-                onApprove={() => approvePlan(plan.id)}
-                approving={approvingPlanId === plan.id}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="mt-3 rounded-[16px] border border-gray-200 bg-gray-50/70 p-3 text-sm text-gray-600 dark:border-gray-800 dark:bg-slate-800/80 dark:text-gray-300">
-            No Individual Progress Plans on file.
-          </div>
-        )}
+        </ReportCard>
       </div>
 
       {/* Student Activity Log */}
-      <div className="rounded-[22px] border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-slate-900">
-        <PanelHeading tone="sky" icon={<ListIcon />} title="Student Activity Log">
-          Daily activity log.
-        </PanelHeading>
-        <div className="mt-3 flex items-end gap-2">
-          <div className="max-w-[220px] flex-1">
-            <DateField label="Jump to Date" value={activityLogDate} onChange={setActivityLogDate} />
-          </div>
+      <ReportCard>
+        <PanelHeading tone="sky" icon={<CalendarIcon />} title="Student Activity Log" />
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2">
+            <span className="text-[13px] font-semibold text-gray-700 dark:text-gray-300">Jump to Date</span>
+            <input
+              type="date"
+              value={activityLogDate}
+              onChange={(e) => setActivityLogDate(e.target.value)}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-slate-800 dark:text-gray-100"
+            />
+          </label>
           {activityLogDate && (
             <button
               type="button"
               onClick={() => setActivityLogDate("")}
-              className="mb-0.5 shrink-0 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-slate-800"
+              className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-slate-800"
             >
               Show All
             </button>
@@ -408,59 +402,82 @@ export default function StudentPerformanceReportPanel({ childId, onPlanApproved 
             )}
           </div>
         ) : (
-          <div className="mt-3 rounded-[16px] border border-gray-200 bg-gray-50/70 p-3 text-sm text-gray-500 dark:border-gray-800 dark:bg-slate-800/80 dark:text-gray-400">
-            {activityLogDate ? "No activity logs found for that date." : "No activity logs found."}
-          </div>
+          <EmptyBox>{activityLogDate ? "No activity logs found for that date." : "No activity logs found."}</EmptyBox>
         )}
-      </div>
+      </ReportCard>
+    </div>
+  );
+}
+
+function ReportCard({ children }) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-slate-900">
+      {children}
+    </div>
+  );
+}
+
+/** Grey well with a faint document glyph, the mockup's "nothing here yet" state. */
+function EmptyBox({ children }) {
+  return (
+    <div className="mt-3 flex min-h-[88px] flex-col items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-4 text-center text-[13px] text-gray-500 dark:border-gray-800 dark:bg-slate-800/70 dark:text-gray-400">
+      <span aria-hidden="true" className="text-gray-400 dark:text-gray-500">
+        <DocumentIcon />
+      </span>
+      {children}
+    </div>
+  );
+}
+
+function ChartEmpty({ children }) {
+  return (
+    <div className="flex h-48 flex-col items-center justify-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="h-7 w-7 text-gray-300 dark:text-gray-600">
+        <rect x="4" y="11" width="4" height="9" rx="1" />
+        <rect x="10" y="5" width="4" height="15" rx="1" />
+        <rect x="16" y="8" width="4" height="12" rx="1" />
+      </svg>
+      {children}
     </div>
   );
 }
 
 function Kpi({ label, value, tone = "gray", icon }) {
   const tones = {
-    sky: "border-sky-200 bg-sky-50/80 text-sky-900 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-100",
-    emerald: "border-emerald-200 bg-emerald-50/80 text-emerald-900 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-100",
-    rose: "border-rose-200 bg-rose-50/80 text-rose-900 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-100",
-    gray: "border-gray-200 bg-gray-50/90 text-gray-900 dark:border-gray-800 dark:bg-slate-900 dark:text-gray-100",
+    sky: "text-sky-600 dark:text-sky-400",
+    emerald: "text-emerald-600 dark:text-emerald-400",
+    rose: "text-rose-600 dark:text-rose-400",
+    gray: "text-gray-500 dark:text-gray-400",
   };
   return (
-    <div className={`flex items-center gap-2.5 rounded-[18px] border px-3.5 py-3 shadow-sm ${tones[tone] || tones.gray}`}>
+    <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3.5 py-3 shadow-sm dark:border-gray-800 dark:bg-slate-900">
       {icon ? (
-        <span aria-hidden="true" className="shrink-0 opacity-80">
+        <span aria-hidden="true" className={`shrink-0 [&_svg]:h-7 [&_svg]:w-7 ${tones[tone] || tones.gray}`}>
           {icon}
         </span>
       ) : null}
       <div className="min-w-0">
-        <div className="text-[clamp(1.05rem,1.8vw,1.4rem)] font-black leading-tight tracking-tight">{String(value)}</div>
-        <div className="mt-0.5 text-[11px] font-extrabold uppercase tracking-[0.16em] opacity-70">{label}</div>
+        <div className="text-[clamp(1.1rem,1.8vw,1.45rem)] font-black leading-tight tracking-tight text-gray-900 dark:text-gray-100">{String(value)}</div>
+        <div className="mt-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-gray-500 dark:text-gray-400">{label}</div>
       </div>
     </div>
   );
 }
 
-/**
- * Every block in the report is titled the same way: a tinted glyph, the name,
- * and one line saying where the numbers come from.
- */
-function PanelHeading({ tone = "sky", icon, title, children }) {
+/** Every block in the report is titled the same way: a coloured glyph and the name. */
+function PanelHeading({ tone = "sky", icon, title }) {
   const tones = {
-    sky: "bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300",
-    amber: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
-    emerald: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
+    sky: "text-blue-600 dark:text-sky-300",
+    amber: "text-amber-500 dark:text-amber-300",
+    rose: "text-rose-600 dark:text-rose-400",
+    emerald: "text-emerald-600 dark:text-emerald-300",
   };
   return (
-    <div className="flex items-start gap-2.5">
-      <span
-        aria-hidden="true"
-        className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${tones[tone] || tones.sky}`}
-      >
+    <div className="flex items-center gap-2">
+      <span aria-hidden="true" className={`shrink-0 [&_svg]:h-5 [&_svg]:w-5 ${tones[tone] || tones.sky}`}>
         {icon}
       </span>
-      <div className="min-w-0">
-        <div className="text-base font-black tracking-tight text-gray-900 dark:text-gray-100">{title}</div>
-        <p className="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">{children}</p>
-      </div>
+      <div className="text-base font-black tracking-tight text-[#12386a] dark:text-gray-100">{title}</div>
     </div>
   );
 }
@@ -476,7 +493,7 @@ function Glyph({ children }) {
 function StarIcon() {
   return (
     <Glyph>
-      <path strokeLinecap="round" strokeLinejoin="round" d="m12 4 2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.6-4.8 2.6.9-5.4L4.2 9.7l5.4-.8L12 4Z" />
+      <path fill="currentColor" strokeLinecap="round" strokeLinejoin="round" d="m12 4 2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.6-4.8 2.6.9-5.4L4.2 9.7l5.4-.8L12 4Z" />
     </Glyph>
   );
 }
@@ -528,11 +545,20 @@ function ClipboardIcon() {
   );
 }
 
-function ListIcon() {
+function CalendarIcon() {
   return (
     <Glyph>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" />
+      <rect x="4" y="5.5" width="16" height="14.5" rx="2" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 10h16M8.5 3.5v4M15.5 3.5v4" />
     </Glyph>
+  );
+}
+
+function FilterIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-[18px] w-[18px]">
+      <path d="M4 5.2A1.2 1.2 0 0 1 5.2 4h13.6a1.2 1.2 0 0 1 .9 2l-5.2 5.9v5.6a1 1 0 0 1-.55.9l-3 1.5A1 1 0 0 1 9.5 19v-7.1L4.3 6a1.2 1.2 0 0 1-.3-.8Z" />
+    </svg>
   );
 }
 
@@ -575,7 +601,7 @@ function GaugeIcon() {
 function DateField({ label, value, onChange }) {
   return (
     <label className="block">
-      <div className="mb-1 text-[11px] font-extrabold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">{label}</div>
+      <div className="mb-1 text-[13px] font-semibold text-gray-700 dark:text-gray-300">{label}</div>
       <input
         type="date"
         value={value}
@@ -589,7 +615,7 @@ function DateField({ label, value, onChange }) {
 function SelectField({ label, value, onChange, children }) {
   return (
     <label className="block">
-      <div className="mb-1 text-[11px] font-extrabold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">{label}</div>
+      <div className="mb-1 text-[13px] font-semibold text-gray-700 dark:text-gray-300">{label}</div>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -700,6 +726,7 @@ function PlanDetail({ label, value }) {
 }
 
 function ActivityLogEntry({ activity: a }) {
+  const [open, setOpen] = useState(false);
   const typeLabel = ACTIVITY_TYPE_LABELS[a.type] || a.type;
   const time = a.createdAt ? new Date(a.createdAt).toLocaleString() : "";
   const details = a.details && typeof a.details === "object" ? a.details : {};
@@ -745,20 +772,55 @@ function ActivityLogEntry({ activity: a }) {
   const detailText = renderDetails();
 
   return (
-    <div className="flex gap-3 rounded-lg border border-gray-200 bg-gray-50/70 px-3 py-2.5 dark:border-gray-800 dark:bg-slate-800/80">
-      <div className="mt-0.5 shrink-0">
-        <ActivityIcon type={a.type} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{typeLabel}</span>
-          <span className="text-xs text-gray-500 dark:text-gray-400">{time}</span>
+    <div className="rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-slate-800/80">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={!detailText}
+        aria-expanded={detailText ? open : undefined}
+        className="flex w-full items-center gap-3 px-3 py-2.5 text-left disabled:cursor-default"
+      >
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-100 dark:bg-slate-700">
+          <ActivityIcon type={a.type} />
+        </span>
+        <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-extrabold ${ACTIVITY_PILL[a.type] || ACTIVITY_PILL.DEFAULT}`}>
+          {typeLabel}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[13px] text-gray-600 dark:text-gray-300">{time}</span>
+        {detailText ? (
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2.5}
+            aria-hidden="true"
+            className={`h-4 w-4 shrink-0 text-[#12386a] transition-transform dark:text-gray-300 ${open ? "rotate-90" : ""}`}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="m9 6 6 6-6 6" />
+          </svg>
+        ) : null}
+      </button>
+      {open && detailText ? (
+        <div className="border-t border-gray-100 px-3 py-2.5 pl-[3.25rem] text-[13px] text-gray-700 dark:border-gray-700 dark:text-gray-200">
+          {detailText}
         </div>
-        {detailText && <div className="mt-0.5 text-xs text-gray-600 dark:text-gray-300">{detailText}</div>}
-      </div>
+      ) : null}
     </div>
   );
 }
+
+const ACTIVITY_PILL = {
+  NAP: "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200",
+  BOTTLE: "bg-cyan-100 text-cyan-800 dark:bg-cyan-950/60 dark:text-cyan-200",
+  MEAL: "bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-200",
+  SNACK: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200",
+  ACCOMPLISHMENT: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200",
+  CHARACTER_HIGHLIGHT: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200",
+  CITIZENSHIP: "bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-200",
+  INCIDENT: "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-200",
+  BEHAVIOR: "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-200",
+  DEFAULT: "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200",
+};
 
 function ActivityIcon({ type }) {
   const icons = {

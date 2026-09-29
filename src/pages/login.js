@@ -2,8 +2,6 @@ import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { useTheme } from "@/contexts/ThemeContext";
-import { MoonIcon, SunIcon } from "@/components/public/icons";
 import AmerisLogo from "@/components/ui/AmerisLogo";
 
 export default function Login() {
@@ -13,7 +11,6 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
-  const { theme, toggleTheme } = useTheme();
 
   const callbackUrlRaw = router.query?.callbackUrl;
   const callbackUrl =
@@ -58,53 +55,34 @@ export default function Login() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-50 dark:bg-gray-950">
-      {/* Background decoration */}
+    <div className="relative min-h-screen overflow-hidden bg-slate-100 dark:bg-gray-950">
+      {/* Background photo: children climbing the steps toward the pillar */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-24 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-blue-200/50 blur-2xl dark:bg-blue-900/30" />
-        <div className="absolute -bottom-24 left-0 h-[420px] w-[420px] rounded-full bg-sky-200/40 blur-2xl dark:bg-sky-900/20" />
-        <div className="absolute -bottom-24 right-0 h-[420px] w-[420px] rounded-full bg-amber-200/30 blur-2xl dark:bg-amber-900/20" />
-        <div className="absolute left-10 top-28 h-10 w-28 rounded-full bg-white/70 shadow-sm dark:bg-gray-800/50" />
-        <div className="absolute left-36 top-20 h-8 w-20 rounded-full bg-white/70 shadow-sm dark:bg-gray-800/50" />
-        <div className="absolute right-24 top-24 h-10 w-28 rounded-full bg-white/70 shadow-sm dark:bg-gray-800/50" />
-        <div className="absolute right-44 top-16 h-8 w-20 rounded-full bg-white/70 shadow-sm dark:bg-gray-800/50" />
+        <div
+          className="absolute inset-0 bg-cover bg-[position:22%_center] dark:brightness-[0.55]"
+          style={{ backgroundImage: "url('/uploads/Home_Page_Picture.png')" }}
+        />
+        <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-white/90 to-transparent dark:from-gray-950/90" />
       </div>
 
-      {/* Header */}
-      <header className="relative z-10 px-6 py-6">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <Link href="/" className="block w-[clamp(124px,30vw,156px)] sm:w-[136px]">
-            <AmerisLogo size="md" showText={false} />
+      <main className="relative z-10 flex min-h-screen items-center px-4 py-10 sm:px-8">
+        <div className="mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-8 lg:grid-cols-[1fr_440px] lg:gap-16">
+          {/* Logo */}
+          <Link
+            href="/"
+            className="mx-auto block w-[min(260px,70vw)] lg:mx-0 lg:-mt-56 lg:w-[500px]"
+            aria-label="Ameris Academy home"
+          >
+            <AmerisLogo
+              size="xl"
+              showTagline
+              className="drop-shadow-[0_2px_12px_rgba(255,255,255,0.85)]"
+              style={{ width: "100%" }}
+            />
           </Link>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
-              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            >
-              {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-            </button>
-            <Link
-              href="/signup"
-              className="text-sm font-semibold text-blue-800 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-            >
-              Sign up
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* Main */}
-      <main className="relative z-10 px-6 pb-16">
-        <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-10 lg:grid-cols-[1fr_460px_1fr]">
-          {/* Left illustration */}
-          <div className="hidden lg:block">
-            <LeftIllustration />
-          </div>
 
           {/* Login card */}
-          <div className="rounded-3xl border border-gray-200 bg-white/90 p-8 shadow-sm backdrop-blur animate-[modalIn_0.4s_ease-out] dark:border-gray-700 dark:bg-gray-900/90">
+          <div className="w-full max-w-[440px] justify-self-center rounded-3xl border border-white/70 bg-white/95 p-8 shadow-2xl shadow-slate-900/20 backdrop-blur animate-[modalIn_0.4s_ease-out] sm:p-10 lg:justify-self-end dark:border-gray-700 dark:bg-gray-900/90">
             <div className="text-center">
               <h1 className="text-2xl font-extrabold text-gray-900 dark:text-gray-100">Welcome back</h1>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -215,76 +193,8 @@ export default function Login() {
             </div>
 
           </div>
-
-          {/* Right illustration */}
-          <div className="hidden lg:block">
-            <RightIllustration />
-          </div>
         </div>
       </main>
-    </div>
-  );
-}
-
-/* Illustrations */
-
-function LeftIllustration() {
-  return (
-    <div className="relative mx-auto max-w-xs">
-      <div className="rounded-[48px] bg-white/60 p-8 shadow-sm backdrop-blur dark:bg-gray-800/60">
-        <svg viewBox="0 0 200 200" className="h-auto w-full">
-          {/* Building blocks / daycare */}
-          <rect x="30" y="120" width="140" height="60" rx="12" fill="#BFDBFE" />
-          <rect x="50" y="90" width="100" height="50" rx="10" fill="#93C5FD" />
-          <rect x="70" y="65" width="60" height="40" rx="8" fill="#3B82F6" />
-          {/* Roof */}
-          <polygon points="100,40 55,68 145,68" fill="#1E3A8A" />
-          {/* Door */}
-          <rect x="85" y="140" width="30" height="40" rx="4" fill="#EFF6FF" />
-          {/* Windows */}
-          <rect x="55" y="130" width="18" height="18" rx="3" fill="#EFF6FF" />
-          <rect x="127" y="130" width="18" height="18" rx="3" fill="#EFF6FF" />
-          <rect x="70" y="100" width="18" height="18" rx="3" fill="#EFF6FF" />
-          <rect x="112" y="100" width="18" height="18" rx="3" fill="#EFF6FF" />
-          {/* Sun */}
-          <circle cx="165" cy="35" r="16" fill="#FCD34D" />
-          <circle cx="165" cy="35" r="10" fill="#FBBF24" />
-        </svg>
-        <p className="mt-4 text-center text-sm font-semibold text-gray-600 dark:text-gray-300">
-          Nurturing young minds since 2015
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function RightIllustration() {
-  return (
-    <div className="relative mx-auto max-w-xs">
-      <div className="rounded-[48px] bg-white/60 p-8 shadow-sm backdrop-blur dark:bg-gray-800/60">
-        <svg viewBox="0 0 200 200" className="h-auto w-full">
-          {/* Graduation cap scene */}
-          <circle cx="100" cy="105" r="50" fill="#A7F3D0" />
-          <circle cx="100" cy="95" r="30" fill="#0F172A" />
-          {/* Eyes */}
-          <circle cx="88" cy="90" r="4" fill="#fff" />
-          <circle cx="112" cy="90" r="4" fill="#fff" />
-          {/* Smile */}
-          <path d="M90 103c4 6 16 6 20 0" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
-          {/* Graduation cap */}
-          <polygon points="100,58 60,75 100,85 140,75" fill="#1E293B" />
-          <rect x="97" y="55" width="6" height="12" rx="1" fill="#1E293B" />
-          <line x1="140" y1="75" x2="140" y2="92" stroke="#1E293B" strokeWidth="2" />
-          <circle cx="140" cy="94" r="3" fill="#FBBF24" />
-          {/* Stars */}
-          <polygon points="45,40 47,46 53,46 48,50 50,56 45,52 40,56 42,50 37,46 43,46" fill="#FCD34D" />
-          <polygon points="160,50 161.5,54 166,54 162.5,57 164,61 160,58 156,61 157.5,57 154,54 158.5,54" fill="#FCD34D" />
-          <polygon points="50,150 51.5,154 56,154 52.5,157 54,161 50,158 46,161 47.5,157 44,154 48.5,154" fill="#FCD34D" />
-        </svg>
-        <p className="mt-4 text-center text-sm font-semibold text-gray-600 dark:text-gray-300">
-          Every child deserves a brighter beginning
-        </p>
-      </div>
     </div>
   );
 }

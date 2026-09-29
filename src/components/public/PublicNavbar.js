@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
-import { LoginUserIcon, MenuIcon, XIcon } from "./icons";
+import { MenuIcon, XIcon } from "./icons";
 import AmerisLogo from "@/components/ui/AmerisLogo";
 import { PUBLIC_NAV_LINKS } from "./siteData";
 
@@ -44,16 +44,16 @@ export default function PublicNavbar() {
           <AmerisLogo size="xl" showText={false} className="drop-shadow-sm" />
         </Link>
 
-        <nav className="hidden items-center gap-5 text-[12px] font-semibold text-slate-700 md:flex lg:gap-6">
+        <nav className="ml-auto hidden items-center gap-1 text-[13px] font-semibold text-slate-700 md:flex lg:gap-2">
           {PUBLIC_NAV_LINKS.map((link) => (
             <Link
               key={link.href}
               href={link.href}
               className={[
-                "rounded-full px-1 py-1 transition",
+                "rounded-[6px] px-3.5 py-2 transition",
                 activeMatcher(link.href)
-                  ? "text-[#19388f]"
-                  : "hover:text-[#19388f]",
+                  ? "bg-[#2566b8] text-white shadow-[0_8px_18px_-12px_rgba(37,102,184,0.9)]"
+                  : "hover:text-[#2566b8]",
               ].join(" ")}
             >
               {link.label}
@@ -64,9 +64,8 @@ export default function PublicNavbar() {
         <div className="flex items-center gap-3">
           <Link
             href="/login"
-            className="hidden items-center gap-2 rounded-[10px] bg-[#19388f] px-3.5 py-2 text-[12px] font-extrabold text-white shadow-[0_12px_24px_-18px_rgba(25,56,143,0.9)] transition hover:bg-[#163179] md:inline-flex"
+            className="hidden items-center rounded-[6px] bg-[#133a7c] px-6 py-2 text-[13px] font-bold text-white shadow-[0_10px_22px_-14px_rgba(19,58,124,0.9)] transition hover:bg-[#0f2f66] md:inline-flex"
           >
-            <LoginUserIcon className="h-[13px] w-[13px]" />
             Login
           </Link>
           <button

@@ -1,7 +1,7 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { emitNewMessage } from "@/lib/socket";
-import { notifyMessageRecipients } from "@/lib/messaging";
+import { normalizeMessageAttachment, notifyMessageRecipients } from "@/lib/messaging";
 import {
   getAllowedMessagingCenterIds,
   resolveMessageAudienceUsers,
@@ -58,7 +58,7 @@ export default async function handler(req, res) {
       where: {
         ...(adminAll
           ? { ...(centerId ? { centerId } : {}) }
-          : { participants: { some: { userId: user.id } } }),
+          : { participants: { some: { userId: user.id, deletedAt: null } } }),
         ...(normalizedType ? { type: normalizedType } : {}),
         ...(normalizedStatus ? { status: normalizedStatus } : {}),
       },
@@ -74,20 +74,30 @@ export default async function handler(req, res) {
       threads.map(async (thread) => {
         const myParticipant = thread.participants.find((participant) => participant.userId === user.id);
         if (!myParticipant) {
-          return { ...thread, unreadCount: 0 };
+          return { ...thread, unreadCount: 0, archivedAt: null, sentCount: 0 };
         }
 
-        const unreadCount = await prisma.message.count({
-          where: {
-            threadId: thread.id,
-            senderId: { not: user.id },
-            ...(myParticipant.lastReadAt
-              ? { createdAt: { gt: myParticipant.lastReadAt } }
-              : {}),
-          },
-        });
+        const [unreadCount, sentCount] = await Promise.all([
+          prisma.message.count({
+            where: {
+              threadId: thread.id,
+              senderId: { not: user.id },
+              ...(myParticipant.lastReadAt
+                ? { createdAt: { gt: myParticipant.lastReadAt } }
+                : {}),
+            },
+          }),
+          prisma.message.count({
+            where: { threadId: thread.id, senderId: user.id },
+          }),
+        ]);
 
-        return { ...thread, unreadCount };
+        return {
+          ...thread,
+          unreadCount,
+          archivedAt: myParticipant.archivedAt,
+          sentCount,
+        };
       }),
     );
 
@@ -105,7 +115,9 @@ export default async function handler(req, res) {
       threadType,
       priority,
       dueDate,
+      attachment,
     } = req.body || {};
+    const attachmentData = normalizeMessageAttachment(attachment);
 
     // Accept either `participants` (with an optional per-person role) or the
     // legacy flat `participantIds` array.
@@ -236,11 +248,12 @@ export default async function handler(req, res) {
                 { userId: recipient.id, asRole: recipient.asRole || undefined },
               ],
             },
-            messages: firstMessage
+            messages: firstMessage || attachmentData
               ? {
                   create: {
                     senderId: user.id,
-                    body: String(firstMessage).slice(0, 5000),
+                    body: String(firstMessage || "").slice(0, 5000),
+                    ...attachmentData,
                   },
                 }
               : undefined,

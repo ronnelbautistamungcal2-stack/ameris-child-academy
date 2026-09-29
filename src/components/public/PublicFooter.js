@@ -1,108 +1,72 @@
 import Image from "next/image";
 import Link from "next/link";
-import AmerisLogo from "@/components/ui/AmerisLogo";
-import { MailIcon, MapPinIcon, PhoneIcon } from "./icons";
-import { PUBLIC_CONTACT, SITE_TAGLINE } from "./siteData";
+import { SITE_NAME } from "./siteData";
+
+const FOOTER_LINKS = [
+  { href: "/", label: "Home" },
+  { href: "/programs", label: "Programs" },
+  { href: "/resources", label: "Resources" },
+  { href: "/about", label: "About Us" },
+  { href: "/contact", label: "Contact Us" },
+  { href: "/login", label: "Login" },
+];
 
 export default function PublicFooter() {
   return (
-    <footer className="relative overflow-hidden -mt-16">
-      <div className="pointer-events-none absolute inset-0">
-        <Image
-          src="/homepage-assets/Image_Bottom.webp"
-          alt=""
-          fill
-          sizes="100vw"
-          className="object-cover object-center"
+    <footer className="relative bg-[#0f3472] text-white">
+      {/* Wave sits above the footer so the section before it shows through the curve. */}
+      <svg
+        viewBox="0 0 1440 90"
+        preserveAspectRatio="none"
+        className="pointer-events-none absolute inset-x-0 bottom-full block h-[48px] w-full sm:h-[72px]"
+        aria-hidden="true"
+      >
+        <path
+          d="M0,52 C240,4 520,6 760,34 C1000,62 1240,58 1440,20 L1440,90 L0,90 Z"
+          fill="#2d63b3"
+          opacity="0.55"
         />
-      </div>
+        <path
+          d="M0,70 C260,22 540,24 780,50 C1020,76 1250,70 1440,38 L1440,90 L0,90 Z"
+          fill="#0f3472"
+        />
+      </svg>
 
-      {/* White wave — blends seamlessly with the white content section above */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 overflow-hidden" style={{ height: "80px" }}>
-        <svg
-          viewBox="0 0 1440 80"
-          preserveAspectRatio="none"
-          className="w-full h-full"
-          aria-hidden="true"
-          fill="white"
-        >
-          <path d="M0,0 L1440,0 L1440,35 C1100,65 700,25 350,50 C180,60 60,45 0,55 Z" />
-        </svg>
-      </div>
+      <div className="mx-auto w-full max-w-[1280px] px-6 pb-6 pt-6 lg:px-10">
+        <div className="flex flex-col items-center gap-6 md:flex-row md:gap-10">
+          <Link href="/" className="relative block aspect-[1767/890] w-[200px] shrink-0 sm:w-[230px]">
+            <Image
+              src="/ameris-logo-dark.png"
+              alt={`${SITE_NAME} logo`}
+              fill
+              sizes="230px"
+              className="object-contain"
+            />
+          </Link>
 
-      <div className="relative w-full pt-20">
-        <div className="px-6 py-6 lg:px-10">
-          <div className="grid gap-8 md:grid-cols-[1.15fr_1fr_1.2fr]">
-            <div className="min-w-0">
-              <Link href="/" className="block w-[clamp(200px,32vw,300px)]">
-                <AmerisLogo size="xl" showText={false} className="drop-shadow-sm" />
-              </Link>
-              <p className="mt-3 text-[12px] font-semibold text-slate-700">{SITE_TAGLINE}</p>
-            </div>
-
-            <div>
-              <h2 className="text-[15px] font-black text-slate-800">Contact Us</h2>
-              <div className="mt-3 space-y-3 text-[13px] text-slate-800">
-                <div className="flex items-start gap-3">
-                  <span className="mt-0.5 text-[#1f3c91]">
-                    <MapPinIcon className="h-4 w-4" />
-                  </span>
-                  <span>
-                    {PUBLIC_CONTACT.addressLines.map((line) => (
-                      <span key={line} className="block">
-                        {line}
-                      </span>
-                    ))}
-                  </span>
-                </div>
-                <a href={PUBLIC_CONTACT.phoneHref} className="flex items-start gap-3 hover:text-[#1f3c91]">
-                  <span className="mt-0.5 text-[#1f3c91]">
-                    <PhoneIcon className="h-4 w-4" />
-                  </span>
-                  <span>{PUBLIC_CONTACT.phoneDisplay}</span>
-                </a>
-                <a href={`mailto:${PUBLIC_CONTACT.email}`} className="flex items-start gap-3 hover:text-[#1f3c91]">
-                  <span className="mt-0.5 text-[#1f3c91]">
-                    <MailIcon className="h-4 w-4" />
-                  </span>
-                  <span>{PUBLIC_CONTACT.email}</span>
-                </a>
-                <div className="flex items-start gap-3">
-                  <span className="mt-0.5 text-[#1f3c91]">
-                    <ClockIcon className="h-4 w-4" />
-                  </span>
-                  <span>{PUBLIC_CONTACT.visitHours}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="text-[13px] leading-6 text-slate-800">
-              <p>
-                Ameris Academy Inc is an equal opportunity provider. It admits children of any race,
-                color, national and ethnic origin to all the rights, privileges, programs, and activities
-                generally accorded or made available to children at the center.
-              </p>
-              <p className="mt-3">
-                It does not discriminate on the basis of race, color, national and ethnic origin in
-                administration of its admissions policies, activities, and other programs.
-              </p>
-            </div>
-          </div>
+          <nav
+            aria-label="Footer"
+            className="flex flex-wrap items-center justify-center text-[13px] text-white/90 md:border-l md:border-white/35 md:pl-6"
+          >
+            {FOOTER_LINKS.map((link, index) => (
+              <span key={link.href} className="flex items-center">
+                {index > 0 && <span className="mx-3 h-3.5 w-px bg-white/45" aria-hidden="true" />}
+                <Link href={link.href} className="py-1 transition hover:text-white hover:underline">
+                  {link.label}
+                </Link>
+              </span>
+            ))}
+          </nav>
         </div>
 
-        <div className="bg-[#163c96] px-0 py-2 text-center text-[12px] text-white">
-          &copy; {new Date().getFullYear()} Ameris Academy Inc. All Rights Reserved.
+        <div className="mt-6 border-t border-white/25 pt-5 text-center text-[12.5px] leading-6 text-white/90">
+          <p>{SITE_NAME} is an equal opportunity provider.</p>
+          <p>
+            We do not discriminate on the basis of race, color, national origin, sex, disability, or
+            age in the provision of our programs and services.
+          </p>
         </div>
       </div>
     </footer>
-  );
-}
-
-function ClockIcon({ className = "h-4 w-4" }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <circle cx="12" cy="12" r="9" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 2" />
-    </svg>
   );
 }

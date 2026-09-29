@@ -420,6 +420,7 @@ model Child {
   behaviorPlans                 BehaviorPlan[]
   childFlagReviews              ChildFlagReview[]
   parentInvolvements            ParentInvolvement[]
+  taggedInvolvements            ParentInvolvement[]                @relation("ParentInvolvementChildren")
 }
 
 model ChildGuardian {
@@ -829,34 +830,42 @@ model ThreadParticipant {
   userId     String
   asRole     Role?
   lastReadAt DateTime?
+  // Archive and delete are per person: hiding a conversation from one inbox
+  // never removes it for the other participants.
+  archivedAt DateTime?
+  deletedAt  DateTime?
   createdAt  DateTime      @default(now())
 
   @@unique([threadId, userId])
 }
 
 model Message {
-  id        String        @id @default(uuid())
-  thread    MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  threadId  String
-  sender    User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  senderId  String
-  body      String
-  createdAt DateTime      @default(now())
+  id             String        @id @default(uuid())
+  thread         MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  threadId       String
+  sender         User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  senderId       String
+  body           String
+  attachmentUrl  String?
+  attachmentName String?
+  attachmentSize Int?
+  attachmentType String?
+  createdAt      DateTime      @default(now())
 }
 
 model FormTemplate {
-  id                String   @id @default(uuid())
-  center            Center?  @relation(fields: [centerId], references: [id])
+  id                String    @id @default(uuid())
+  center            Center?   @relation(fields: [centerId], references: [id])
   centerId          String?
   title             String
   description       String?
   targetRole        Role
   schema            Json?
-  active            Boolean  @default(true)
-  requiresRenewal   Boolean  @default(false)
+  active            Boolean   @default(true)
+  requiresRenewal   Boolean   @default(false)
   renewalPeriodDays Int?
   autoFillMapping   Json?
-  assignmentType    String   @default("FAMILY")
+  assignmentType    String    @default("FAMILY")
   ageMinMonths      Int?
   ageMaxMonths      Int?
   staffRoles        Json?
@@ -864,8 +873,8 @@ model FormTemplate {
   attachmentName    String?
   attachmentSize    Int?
   dueDate           DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   submissions FormSubmission[]
 }
@@ -921,6 +930,24 @@ model ParentFaq {
 
   @@index([centerId])
   @@index([topic])
+}
+
+// One filled-in line of the admin Menu Planner: the food item planned for a
+// component (e.g. "vegetable") of a meal, for one age group on one day.
+// Blank lines are not stored.
+model MenuItem {
+  id          String   @id @default(uuid())
+  date        DateTime @db.Date
+  meal        String
+  ageGroup    String
+  component   String
+  item        String
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  @@unique([date, meal, ageGroup, component])
+  @@index([date])
 }
 
 model AuditLog {
@@ -1705,6 +1732,14 @@ model ParentInvolvementActivity {
   centerId     String
   title        String
   description  String?
+  // Shown in the Date/Time column when the activity has no fixed date
+  // ("Ongoing", "Various Dates"). startsAt/endsAt win when set.
+  schedule     String?
+  startsAt     DateTime?
+  endsAt       DateTime?
+  // Volunteer slots; null means no limit (shown as "—").
+  capacity     Int?
+  sortOrder    Int                 @default(0)
   active       Boolean             @default(true)
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
@@ -1721,8 +1756,14 @@ model ParentInvolvement {
   parentId   String
   child      Child?                    @relation(fields: [childId], references: [id], onDelete: SetNull)
   childId    String?
+  // Multi-child records; childId is kept for records logged before this existed.
+  children   Child[]                   @relation("ParentInvolvementChildren")
+  // LOG = time already given, SIGNUP = a volunteer slot the parent committed to.
+  kind       String                    @default("LOG")
   notes      String?
   occurredAt DateTime                  @default(now())
+  endedAt    DateTime?
+  hours      Float?
   createdAt  DateTime                  @default(now())
 
   @@index([parentId, occurredAt])

@@ -21,7 +21,7 @@ const STATUS_ORDER = ["ACTION_REQUIRED", "NOT_STARTED", "SUBMITTED", "COMPLETED"
 const STATUS_META = {
   COMPLETED: {
     label: "Completed",
-    pill: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-300",
+    pill: "border-green-200 bg-green-50 text-green-700 dark:border-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-300",
     icon: "check",
   },
   SUBMITTED: {
@@ -31,12 +31,12 @@ const STATUS_META = {
   },
   ACTION_REQUIRED: {
     label: "Action Required",
-    pill: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/25 dark:text-rose-300",
+    pill: "border-red-200 bg-red-50 text-red-600 dark:border-rose-800 dark:bg-rose-900/25 dark:text-rose-300",
     icon: "alert",
   },
   NOT_STARTED: {
     label: "Not Started",
-    pill: "border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300",
+    pill: "border-gray-200 bg-gray-100 text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300",
     icon: "clock",
   },
 };
@@ -164,10 +164,10 @@ export default function ParentForms() {
 
   return (
     <ParentLayout title="Forms & Renewals">
-      <div className="space-y-4">
+      <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-5">
         <PageHeader schoolYear={schoolYear} onSchoolYear={setSchoolYear} />
 
-        <div className="flex gap-6 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
           {[
             { key: "required", label: "Required Forms" },
             { key: "history", label: "Submission History" },
@@ -177,10 +177,10 @@ export default function ParentForms() {
               type="button"
               onClick={() => setTab(item.key)}
               className={[
-                "-mb-px border-b-2 px-1 pb-3 pt-1 text-sm font-extrabold transition",
+                "-mb-px rounded-t-lg border-b-2 px-5 py-2.5 text-sm font-extrabold transition",
                 tab === item.key
-                  ? "border-[#1c5fa8] text-[#1c5fa8] dark:border-sky-400 dark:text-sky-300"
-                  : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200",
+                  ? "border-[#1c5fa8] bg-sky-50/70 text-[#12386a] dark:border-sky-400 dark:bg-sky-900/20 dark:text-sky-200"
+                  : "border-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700/40 dark:hover:text-gray-200",
               ].join(" ")}
             >
               {item.label}
@@ -203,8 +203,8 @@ export default function ParentForms() {
               />
             ) : null}
 
-            <section>
-              <h2 className="mb-2 text-sm font-extrabold text-[#12386a] dark:text-gray-100">
+            <section className="rounded-xl border border-gray-200 p-3 dark:border-gray-700">
+              <h2 className="mb-2.5 text-sm font-extrabold text-[#12386a] dark:text-gray-100">
                 Select a Child or Family
               </h2>
               {loading ? (
@@ -254,29 +254,23 @@ export default function ParentForms() {
 
 function PageHeader({ schoolYear, onSchoolYear }) {
   return (
-    <section className="flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:flex-row sm:items-center sm:justify-between">
+    <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#1c5fa8] text-white">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} className="h-6 w-6">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M14 3v5h5" />
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M19 8.5V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h7.5L19 8.5z"
-            />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8.5 13h7M8.5 16.5h5" />
-          </svg>
-        </span>
+        <svg viewBox="0 0 24 24" className="h-10 w-10 shrink-0 text-[#2f80ed] dark:text-sky-400" aria-hidden="true">
+          <path fill="currentColor" d="M6 2h8.2L20 7.8V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" />
+          <path fill="#fff" fillOpacity=".45" d="M14 2v4.5A1.5 1.5 0 0 0 15.5 8H20z" />
+          <path stroke="#fff" strokeWidth={1.7} strokeLinecap="round" d="M8 12.5h8M8 16h8M8 19h5" />
+        </svg>
         <h1 className="text-2xl font-black tracking-tight text-[#12386a] dark:text-gray-100">
           Forms &amp; Renewals
         </h1>
       </div>
-      <label className="sm:w-56">
+      <label className="sm:w-48">
         <span className="sr-only">School year</span>
         <select
           value={schoolYear}
           onChange={(e) => onSchoolYear(Number(e.target.value))}
-          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-bold text-gray-700 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200"
+          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-bold text-gray-700 shadow-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200"
         >
           {schoolYearOptions().map((option) => (
             <option key={option.value} value={option.value}>
@@ -291,17 +285,17 @@ function PageHeader({ schoolYear, onSchoolYear }) {
 
 function InfoNote() {
   return (
-    <div className="flex gap-3 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 dark:border-sky-900 dark:bg-sky-900/20">
+    <div className="flex items-center gap-3 rounded-lg bg-[#e8f1fc] px-4 py-3 dark:bg-sky-900/20">
       <svg
         viewBox="0 0 24 24"
         fill="currentColor"
-        className="mt-0.5 h-5 w-5 shrink-0 text-[#1c5fa8] dark:text-sky-400"
+        className="h-6 w-6 shrink-0 text-[#2f80ed] dark:text-sky-400"
       >
         <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 4.75a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5zM13.2 17h-2.4v-6h2.4v6z" />
       </svg>
-      <div className="text-sm leading-6 text-gray-700 dark:text-gray-300">
+      <div className="text-[13px] leading-5 text-gray-700 dark:text-gray-300">
         <p>
-          Complete all required forms for each of your children. Forms with a status of{" "}
+          Please complete all required forms for each of your children. Forms with a status of{" "}
           <span className="font-bold">Action Required</span> need to be completed or renewed.
         </p>
         <p>Forms you have already sent stay here so you can review them at any time.</p>
@@ -327,8 +321,8 @@ function Banner({ tone, children }) {
 
 function ScopePicker({ scopes, activeKey, rowsByScope, onSelect }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-      <div className="flex gap-3 overflow-x-auto pb-1">
+    <div>
+      <div className="flex gap-2.5 overflow-x-auto pb-1">
         {scopes.map((scope) => {
           const rows = rowsByScope.get(scope.key) || [];
           const outstanding = rows.filter((row) => row.status === "ACTION_REQUIRED").length;
@@ -341,14 +335,14 @@ function ScopePicker({ scopes, activeKey, rowsByScope, onSelect }) {
               data-scope-active={active ? "true" : "false"}
               onClick={() => onSelect(scope.key)}
               className={[
-                "flex w-[104px] shrink-0 flex-col items-center gap-1.5 rounded-xl border px-2 py-3 text-center transition",
+                "flex w-[96px] shrink-0 flex-col items-center gap-1 rounded-lg border px-2 py-2.5 text-center transition",
                 active
-                  ? "border-[#1c5fa8] bg-sky-50 shadow-sm dark:border-sky-500 dark:bg-sky-900/30"
-                  : "border-transparent hover:border-gray-200 hover:bg-gray-50 dark:hover:border-gray-600 dark:hover:bg-gray-700/40",
+                  ? "border-[#5aa0ef] bg-[#e3f0fd] shadow-sm dark:border-sky-500 dark:bg-sky-900/30"
+                  : "border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900/40 dark:hover:border-gray-600 dark:hover:bg-gray-700/40",
               ].join(" ")}
             >
               <span
-                className={`flex h-12 w-12 items-center justify-center rounded-full text-sm font-black text-white ${scope.tone}`}
+                className={`mb-0.5 flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold text-white ${scope.tone}`}
               >
                 {scope.kind === "FAMILY" ? (
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-6 w-6">
@@ -361,17 +355,17 @@ function ScopePicker({ scopes, activeKey, rowsByScope, onSelect }) {
                   scope.initials
                 )}
               </span>
-              <span className="w-full truncate text-xs font-extrabold text-[#12386a] dark:text-gray-100">
-                {scope.label}
+              <span className="w-full truncate text-xs font-bold text-gray-900 dark:text-gray-100">
+                {scope.shortLabel || scope.label}
               </span>
               {scope.sublabel ? (
-                <span className="text-[11px] text-gray-500 dark:text-gray-400">{scope.sublabel}</span>
+                <span className="text-[11px] leading-none text-gray-500 dark:text-gray-400">{scope.sublabel}</span>
               ) : null}
               <span
                 className={[
-                  "text-[11px] font-extrabold",
+                  "text-[10px] font-bold",
                   outstanding
-                    ? "text-rose-600 dark:text-rose-400"
+                    ? "text-red-600 dark:text-rose-400"
                     : toStart || rows.length === 0
                       ? "text-gray-500 dark:text-gray-400"
                       : "text-emerald-600 dark:text-emerald-400",
@@ -397,8 +391,8 @@ function ScopePicker({ scopes, activeKey, rowsByScope, onSelect }) {
 
 function FormsTable({ loading, scope, rows, totalRows, statusFilter, onStatusFilter, onOpen }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-      <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <section className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+      <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-black tracking-tight text-[#12386a] dark:text-gray-100">
           {scope ? `Forms for ${scope.label}` : "Forms"}
         </h2>
@@ -406,7 +400,7 @@ function FormsTable({ loading, scope, rows, totalRows, statusFilter, onStatusFil
           value={statusFilter}
           onChange={(e) => onStatusFilter(e.target.value)}
           aria-label="Filter by status"
-          className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-bold text-gray-700 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 sm:w-48"
+          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 sm:w-44"
         >
           <option value="all">All Statuses</option>
           {STATUS_ORDER.map((key) => (
@@ -434,20 +428,20 @@ function FormsTable({ loading, scope, rows, totalRows, statusFilter, onStatusFil
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] border-collapse text-sm">
+          <table className="w-full min-w-[640px] border-collapse text-[13px]">
             <thead>
-              <tr className="border-y border-gray-200 bg-gray-50 text-left text-[11px] font-extrabold uppercase tracking-[0.12em] text-gray-500 dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-400">
-                <th className="px-5 py-3">Form Name</th>
-                <th className="px-5 py-3">Due Date</th>
-                <th className="px-5 py-3">Status</th>
-                <th className="px-5 py-3 text-right">Actions</th>
+              <tr className="border-y border-gray-200 bg-gray-100 text-left text-[11px] font-bold uppercase tracking-wide text-gray-600 dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-400">
+                <th className="px-4 py-2.5">Form Name</th>
+                <th className="w-[18%] px-4 py-2.5">Due Date</th>
+                <th className="w-[22%] px-4 py-2.5">Status</th>
+                <th className="w-[20%] px-4 py-2.5 text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.template.id} className="border-b border-gray-100 last:border-0 dark:border-gray-700">
-                  <td className="px-5 py-3">
-                    <div className="font-bold text-gray-900 dark:text-gray-100">{row.template.title}</div>
+                <tr key={row.template.id} className="border-b border-gray-200 last:border-0 dark:border-gray-700">
+                  <td className="px-4 py-2">
+                    <div className="font-medium text-gray-900 dark:text-gray-100">{row.template.title}</div>
                     {row.template.attachmentUrl ? (
                       <a
                         href={row.template.attachmentUrl}
@@ -459,12 +453,12 @@ function FormsTable({ loading, scope, rows, totalRows, statusFilter, onStatusFil
                       </a>
                     ) : null}
                   </td>
-                  <td className="px-5 py-3 text-gray-600 dark:text-gray-400">{formatDate(row.dueDate)}</td>
-                  <td className="px-5 py-3">
+                  <td className="px-4 py-2 font-medium text-gray-800 dark:text-gray-300">{formatDate(row.dueDate)}</td>
+                  <td className="px-4 py-2">
                     <FormStatusBadge status={row.status} />
                   </td>
-                  <td className="px-5 py-3">
-                    <div className="flex justify-end">
+                  <td className="px-4 py-2">
+                    <div className="flex justify-center">
                       <RowAction row={row} onOpen={onOpen} />
                     </div>
                   </td>
@@ -480,9 +474,9 @@ function FormsTable({ loading, scope, rows, totalRows, statusFilter, onStatusFil
 
 function RowAction({ row, onOpen }) {
   const navy =
-    "inline-flex items-center justify-center rounded-lg bg-[#12386a] px-5 py-1.5 text-xs font-extrabold text-white transition hover:bg-[#0b2545]";
+    "inline-flex w-24 items-center justify-center rounded-md bg-[#12386a] py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#0b2545]";
   const light =
-    "inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-5 py-1.5 text-xs font-extrabold text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-700";
+    "inline-flex w-24 items-center justify-center rounded-md border border-gray-300 bg-white py-1.5 text-xs font-bold text-[#12386a] shadow-sm transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-700";
 
   if (row.action === "VIEW") {
     return (
@@ -502,7 +496,7 @@ function RowAction({ row, onOpen }) {
 function FormStatusBadge({ status }) {
   const meta = STATUS_META[status] || STATUS_META.NOT_STARTED;
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-extrabold ${meta.pill}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold ${meta.pill}`}>
       <StatusIcon name={meta.icon} />
       {meta.label}
     </span>
@@ -951,19 +945,19 @@ function FormModal({ row, scope, mode, onClose, onSubmitted }) {
 /* ─────────────────────────── row / scope helpers ─────────────────────────── */
 
 const AVATAR_TONES = [
-  "bg-[#2f80ed]",
-  "bg-[#27ae60]",
-  "bg-[#9b51e0]",
-  "bg-[#f2994a]",
-  "bg-[#12386a]",
-  "bg-[#2d9cdb]",
-  "bg-[#bb6bd9]",
-  "bg-[#c0917a]",
+  "bg-[#2f86e8]",
+  "bg-[#5f9e8f]",
+  "bg-[#9a63d6]",
+  "bg-[#6fa3e0]",
+  "bg-[#3a7cc6]",
+  "bg-[#4fb6de]",
+  "bg-[#f4a660]",
+  "bg-[#6d9bd6]",
 ];
 
 function buildScopes(children) {
   const scopes = [
-    { key: "family", kind: "FAMILY", label: "Family", sublabel: "", tone: "bg-[#4f6076]", child: null },
+    { key: "family", kind: "FAMILY", label: "Family", sublabel: "", tone: "bg-[#12386a]", child: null },
   ];
   children.forEach((child, index) => {
     const name = `${child.firstName || ""} ${child.lastName || ""}`.trim() || "Child";
@@ -971,6 +965,7 @@ function buildScopes(children) {
       key: child.id,
       kind: "CHILD",
       label: name,
+      shortLabel: child.firstName || name,
       sublabel: formatAgeMonths(ageInMonths(child.birthDate)) || "",
       initials: initialsOf(name),
       tone: AVATAR_TONES[index % AVATAR_TONES.length],
@@ -1096,7 +1091,7 @@ function formatDate(value) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString();
+  return date.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" });
 }
 
 /* ─────────────────────────── guided fields ─────────────────────────── */

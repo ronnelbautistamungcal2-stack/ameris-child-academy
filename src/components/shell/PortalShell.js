@@ -47,6 +47,9 @@ function findNavLabel(items, path) {
 
 const ShellTitleContext = createContext(() => {});
 
+/** Fired on window when the viewer reads, archives or deletes a conversation. */
+export const MESSAGES_CHANGED_EVENT = "ameris:messages-changed";
+
 /**
  * Lets a page name itself in the shared shell without owning the shell. Pages
  * mount and unmount underneath a single PortalShell, so the title is the only
@@ -103,7 +106,10 @@ export default function PortalShell({ children }) {
       const threads = await apiJson("/api/v1/messages/threads");
       setUnreadCount(
         Array.isArray(threads)
-          ? threads.reduce((sum, thread) => sum + (thread.unreadCount || 0), 0)
+          ? threads.reduce(
+              (sum, thread) => sum + (thread.archivedAt ? 0 : thread.unreadCount || 0),
+              0,
+            )
           : 0,
       );
     } catch {
@@ -113,6 +119,10 @@ export default function PortalShell({ children }) {
 
   useEffect(() => {
     refreshUnreadCount();
+    // The messages page announces reads, archives and deletes so the badge
+    // does not wait for the next incoming message to catch up.
+    window.addEventListener(MESSAGES_CHANGED_EVENT, refreshUnreadCount);
+    return () => window.removeEventListener(MESSAGES_CHANGED_EVENT, refreshUnreadCount);
   }, [refreshUnreadCount]);
 
   useNewMessages(

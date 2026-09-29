@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Gelasio:ital,wght@0,400;0,500;0,600;0,700;1,700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -598,4 +598,22 @@ main {
   --admin-danger-accent-text: rgb(248 113 113);
   --admin-card-bg: rgb(17 24 39);
   --admin-modal-overlay: rgba(0, 0, 0, 0.7);
+}
+
+/* Menu Planner "Print / Export": print only the planner, landscape. */
+@media print {
+  @page { size: landscape; margin: 10mm; }
+  body.printing-menu * { visibility: hidden; }
+  body.printing-menu .menu-print-area,
+  body.printing-menu .menu-print-area * { visibility: visible; }
+  body.printing-menu .menu-print-area {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    border: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body.printing-menu .menu-no-print { display: none !important; }
+  body.printing-menu .menu-print-area table { min-width: 0; }
 }

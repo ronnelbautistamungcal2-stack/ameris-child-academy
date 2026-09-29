@@ -2,7 +2,7 @@
 const { test, expect } = require("@playwright/test");
 const { PrismaClient } = require("@prisma/client");
 const { loginAsAdmin, loginAsTeacher, loginAsParent } = require("../helpers/auth");
-const { apiGet, apiPost } = require("../helpers/api");
+const { apiDelete, apiGet, apiPatch, apiPost } = require("../helpers/api");
 
 const prisma = new PrismaClient();
 
@@ -249,5 +249,71 @@ test.describe("Messaging API @api", () => {
     expect(createRes.status()).toBe(400);
     const body = await createRes.json();
     expect(body.error).toContain("Accommodations can only be sent");
+  });
+  test("archive and delete only file the conversation away for the caller", async ({ request }) => {
+    const teacherCookies = await loginAsTeacher(request);
+    const parentCookies = await loginAsParent(request);
+    const parent = await prisma.user.findUnique({ where: { email: "parent@demo.com" } });
+    expect(parent).toBeTruthy();
+
+    const createRes = await apiPost(
+      request,
+      "/api/v1/messages/threads",
+      {
+        participants: [{ id: parent.id }],
+        title: "QA archive and delete",
+        firstMessage: "Please file this away.",
+        attachment: { url: "https://evil.example/x.pdf", name: "x.pdf", size: 10 },
+      },
+      teacherCookies,
+    );
+    expect(createRes.status()).toBe(201);
+    const threadId = (await createRes.json()).threads[0].id;
+
+    const findThread = async (cookies) => {
+      const res = await apiGet(request, "/api/v1/messages/threads", cookies);
+      expect(res.status()).toBe(200);
+      return (await res.json()).find((thread) => thread.id === threadId);
+    };
+
+    try {
+      // Only files stored by the upload endpoint can be attached.
+      const created = await prisma.message.findFirst({ where: { threadId } });
+      expect(created.attachmentUrl).toBeNull();
+
+      expect((await apiPatch(request, `/api/v1/messages/threads/${threadId}`, {}, parentCookies)).status()).toBe(400);
+
+      const archiveRes = await apiPatch(
+        request,
+        `/api/v1/messages/threads/${threadId}`,
+        { archived: true },
+        parentCookies,
+      );
+      expect(archiveRes.status()).toBe(200);
+      expect((await findThread(parentCookies)).archivedAt).toBeTruthy();
+      expect((await findThread(teacherCookies)).archivedAt).toBeNull();
+
+      // A new reply brings an archived conversation back to the inbox.
+      const replyRes = await apiPost(
+        request,
+        "/api/v1/messages/send",
+        {
+          threadId,
+          body: "",
+          attachment: { url: "/uploads/qa-agenda.pdf", name: "Agenda.pdf", size: 2048, type: "application/pdf" },
+        },
+        teacherCookies,
+      );
+      expect(replyRes.status()).toBe(201);
+      expect((await replyRes.json()).attachmentName).toBe("Agenda.pdf");
+      expect((await findThread(parentCookies)).archivedAt).toBeNull();
+
+      const deleteRes = await apiDelete(request, `/api/v1/messages/threads/${threadId}`, parentCookies);
+      expect(deleteRes.status()).toBe(200);
+      expect(await findThread(parentCookies)).toBeUndefined();
+      expect(await findThread(teacherCookies)).toBeTruthy();
+    } finally {
+      await prisma.messageThread.delete({ where: { id: threadId } }).catch(() => null);
+    }
   });
 });

@@ -184,8 +184,6 @@ export default function ParentChildren() {
           </ParentSurface>
         ) : null}
 
-        <PageHeading icon={<UsersIcon />}>My Children</PageHeading>
-
         <div
           ref={switcherRef}
           className="sticky z-[5]"
@@ -193,16 +191,23 @@ export default function ParentChildren() {
         >
           <section
             className={[
-              "rounded-[28px] border border-sky-100 bg-white shadow-sm dark:border-sky-900/60 dark:bg-gray-800",
+              "rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800",
               switcherCondensed
                 ? "p-2.5 shadow-[0_18px_40px_-28px_rgba(14,116,144,0.55)]"
-                : "p-3",
+                : "p-4",
             ].join(" ")}
           >
+            {/* The title rides inside the card, but drops out once the card
+                sticks so the condensed rail stays one row tall. */}
+            {switcherCondensed ? null : (
+              <div className="mb-3">
+                <PageHeading icon={<UsersIcon />}>My Children</PageHeading>
+              </div>
+            )}
             {childrenLoading ? (
               <div className="flex flex-wrap gap-2">
                 {Array.from({ length: 5 }, (_, i) => (
-                  <Skeleton key={i} variant="card" className="h-[52px] w-[168px] rounded-2xl" />
+                  <Skeleton key={i} variant="card" className="h-[60px] w-[172px] rounded-xl" />
                 ))}
               </div>
             ) : children.length === 0 ? (
@@ -249,17 +254,12 @@ export default function ParentChildren() {
 
             <ParentSurface>
               <div className="flex items-center gap-2.5 border-b border-gray-100 pb-4 dark:border-gray-700">
-                <SectionIcon tone="sky">
+                <span aria-hidden="true" className="shrink-0 text-blue-600 dark:text-sky-400">
                   <ChartIcon />
-                </SectionIcon>
-                <div>
-                  <h2 className="text-lg font-black tracking-tight text-gray-900 dark:text-gray-100">
-                    Student Performance Report
-                  </h2>
-                  <p className="mt-0.5 text-sm text-gray-600 dark:text-gray-400">
-                    Goals, grades, milestones, accomplishments, and activity for your child.
-                  </p>
-                </div>
+                </span>
+                <h2 className="text-lg font-black tracking-tight text-[#12386a] dark:text-gray-100">
+                  Student Performance Report
+                </h2>
               </div>
               <div className="pt-4">
                 <StudentPerformanceReportPanel childId={selectedChildId} />
@@ -286,7 +286,7 @@ export default function ParentChildren() {
 function PageHeading({ icon, children }) {
   return (
     <div className="flex items-center gap-2.5">
-      <SectionIcon tone="sky">{icon}</SectionIcon>
+      <span aria-hidden="true" className="shrink-0 text-blue-600 dark:text-sky-400">{icon}</span>
       <h1 className="text-xl font-black tracking-tight text-[#12386a] dark:text-gray-100 sm:text-2xl">
         {children}
       </h1>
@@ -298,12 +298,12 @@ function ChildProfileCard({ child, onEditSnapshot }) {
   const teachers = teacherNames(child);
 
   return (
-    <section className="rounded-[28px] border-2 border-sky-500 bg-white p-4 shadow-[0_0_0_4px_rgba(186,230,253,0.55)] dark:border-sky-600 dark:bg-gray-800 dark:shadow-[0_0_0_4px_rgba(12,74,110,0.5)] sm:p-5">
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+    <section className="rounded-[20px] bg-gradient-to-r from-[#1f5fd1] via-[#2b8fe0] to-[#34c3e8] p-[3px] shadow-[0_10px_30px_-18px_rgba(31,95,209,0.8)]">
+      <div className="grid grid-cols-1 gap-4 rounded-[17px] bg-white p-4 dark:bg-gray-800 sm:p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <div className="flex items-start gap-4">
           <ChildAvatar child={child} size="lg" />
           <div className="min-w-0">
-            <h2 className="truncate text-2xl font-black tracking-tight text-[#12386a] dark:text-gray-100">
+            <h2 className="truncate text-3xl font-black tracking-tight text-[#1f5fd1] dark:text-sky-300">
               {child.firstName} {child.lastName || ""}
             </h2>
             <dl className="mt-2 space-y-1">
@@ -315,20 +315,20 @@ function ChildProfileCard({ child, onEditSnapshot }) {
           </div>
         </div>
 
-        <div className="rounded-[20px] border border-gray-200 bg-gray-50/70 p-3.5 dark:border-gray-700 dark:bg-gray-900/40">
-          <div className="flex items-center justify-between gap-3">
+        <div className="self-start rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900/40">
+          <div className="flex items-center justify-between gap-3 rounded-t-xl border-b border-gray-200 bg-slate-50 px-3.5 py-2 dark:border-gray-700 dark:bg-gray-900/60">
             <h3 className="text-sm font-black tracking-tight text-[#12386a] dark:text-gray-100">
               Child Snapshot
             </h3>
             <button
               type="button"
               onClick={onEditSnapshot}
-              className="rounded-full bg-sky-600 px-3.5 py-1 text-[11px] font-extrabold text-white shadow-sm transition hover:bg-sky-700"
+              className="rounded-md border border-gray-300 bg-white px-3 py-0.5 text-[11px] font-bold text-gray-700 shadow-sm transition hover:border-sky-400 hover:text-sky-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
             >
               Edit
             </button>
           </div>
-          <dl className="mt-2.5 space-y-1">
+          <dl className="space-y-1 px-3.5 py-2.5">
             <MetaRow label="Favorite Activities" value={child.favoriteActivities} />
             <MetaRow label="Strengths" value={child.strengths} />
             <MetaRow label="Areas of Focus" value={child.areasOfFocus} />
@@ -344,7 +344,7 @@ function ChildProfileCard({ child, onEditSnapshot }) {
 function MetaRow({ label, value }) {
   return (
     <div className="flex gap-1.5 text-[13px] leading-5">
-      <dt className="shrink-0 font-bold text-gray-500 dark:text-gray-400">{label}:</dt>
+      <dt className="shrink-0 font-bold text-[#12386a] dark:text-gray-300">{label}:</dt>
       <dd className="min-w-0 text-gray-800 dark:text-gray-200">{value || "—"}</dd>
     </div>
   );
@@ -358,23 +358,23 @@ function ChildSwitcherChip({ child, active, onSelect }) {
       aria-pressed={active}
       data-child-chip-active={active ? "true" : "false"}
       className={[
-        "flex w-[168px] shrink-0 items-center gap-2 rounded-2xl border px-2.5 py-2 text-left transition-colors",
+        "flex w-[172px] shrink-0 items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors",
         active
-          ? "border-sky-400 bg-sky-50 ring-2 ring-sky-100 dark:border-sky-600 dark:bg-sky-950/60 dark:ring-sky-900/60"
-          : "border-gray-200 bg-white hover:border-sky-200 hover:bg-sky-50/70 dark:border-gray-700 dark:bg-slate-900 dark:hover:border-sky-800",
+          ? "border-sky-300 bg-sky-100/80 shadow-sm dark:border-sky-600 dark:bg-sky-950/60"
+          : "border-transparent bg-white hover:border-sky-200 hover:bg-sky-50/70 dark:bg-slate-900 dark:hover:border-sky-800",
       ].join(" ")}
     >
-      <ChildAvatar child={child} size="sm" />
+      <ChildAvatar child={child} size="md" />
       <span className="min-w-0 flex-1">
         <span
           className={[
-            "block truncate text-[12px] font-extrabold",
+            "block truncate text-[13px] font-extrabold",
             active ? "text-sky-900 dark:text-sky-100" : "text-gray-800 dark:text-gray-200",
           ].join(" ")}
         >
           {child.firstName} {lastInitial(child.lastName)}
         </span>
-        <span className="mt-0.5 block truncate text-[10px] font-semibold text-gray-500 dark:text-gray-400">
+        <span className="mt-0.5 block truncate text-[11px] font-medium text-gray-500 dark:text-gray-400">
           {formatAgeLong(child.birthDate) || "Age unavailable"}
         </span>
       </span>
@@ -385,10 +385,10 @@ function ChildSwitcherChip({ child, active, onSelect }) {
 function ChildAvatar({ child, size = "sm" }) {
   const [broken, setBroken] = useState(false);
   const dims = {
-    sm: "h-9 w-9 text-[11px]",
-    lg: "h-[88px] w-[88px] text-2xl",
+    md: "h-11 w-11 text-xs",
+    lg: "h-[96px] w-[96px] text-2xl",
   };
-  const shape = size === "lg" ? "rounded-[20px]" : "rounded-full";
+  const shape = size === "lg" ? "rounded-full" : "rounded-lg";
   const photo = typeof child?.photoUrl === "string" ? child.photoUrl.trim() : "";
 
   if (photo && !broken) {
@@ -427,27 +427,9 @@ function RailEdgeFade({ side, visible }) {
   );
 }
 
-function SectionIcon({ tone = "sky", children }) {
-  const tones = {
-    sky: "bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300",
-    amber: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
-    emerald: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
-    rose: "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300",
-    violet: "bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300",
-  };
-  return (
-    <span
-      aria-hidden="true"
-      className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${tones[tone] || tones.sky}`}
-    >
-      {children}
-    </span>
-  );
-}
-
 function UsersIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-[18px] w-[18px]">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-6 w-6">
       <path strokeLinecap="round" strokeLinejoin="round" d="M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19" />
       <circle cx="10" cy="8" r="3" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M20 19v-1.5a3.5 3.5 0 0 0-2.6-3.38M15.5 5.2a3 3 0 0 1 0 5.6" />
@@ -457,8 +439,10 @@ function UsersIcon() {
 
 function ChartIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-[18px] w-[18px]">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 20h16M7 20v-7M12 20V6M17 20v-4" />
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6">
+      <rect x="3.5" y="12" width="4" height="8.5" rx="1" />
+      <rect x="10" y="4" width="4" height="16.5" rx="1" />
+      <rect x="16.5" y="8" width="4" height="12.5" rx="1" />
     </svg>
   );
 }

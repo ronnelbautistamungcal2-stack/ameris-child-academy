@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { activityData } from "@/lib/parentInvolvement";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -9,12 +10,12 @@ export default async function handler(req, res) {
   const { id } = req.query;
 
   if (req.method === "PUT") {
-    const { title, description, active } = req.body || {};
+    const { title, active } = req.body || {};
     const activity = await prisma.parentInvolvementActivity.update({
       where: { id },
       data: {
         ...(title !== undefined ? { title: String(title).trim() } : {}),
-        ...(description !== undefined ? { description: description || null } : {}),
+        ...activityData(req.body),
         ...(active !== undefined ? { active: Boolean(active) } : {}),
       },
     });

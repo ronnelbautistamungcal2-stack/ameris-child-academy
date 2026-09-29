@@ -1,6 +1,7 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { buildParentLinkedChildWhere } from "@/lib/child-parent-links";
+import { activityData, openSignupWhere } from "@/lib/parentInvolvement";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -23,19 +24,36 @@ export default async function handler(req, res) {
   if (req.method === "GET") {
     const activities = await prisma.parentInvolvementActivity.findMany({
       where: { centerId, active: true },
-      orderBy: { title: "asc" },
+      orderBy: [{ sortOrder: "asc" }, { startsAt: "asc" }, { title: "asc" }],
     });
-    return res.status(200).json(activities);
+    const ids = activities.map((a) => a.id);
+    const signups = ids.length
+      ? await prisma.parentInvolvement.findMany({
+          where: openSignupWhere(ids),
+          select: { activityId: true, parentId: true },
+        })
+      : [];
+    return res.status(200).json(
+      activities.map((a) => {
+        const taken = signups.filter((s) => s.activityId === a.id);
+        return {
+          ...a,
+          signedUpCount: taken.length,
+          spotsLeft: a.capacity == null ? null : Math.max(0, a.capacity - taken.length),
+          signedUp: taken.some((s) => s.parentId === session.user.id),
+        };
+      }),
+    );
   }
 
   if (req.method === "POST") {
     if (session.user.role !== "ADMIN") {
       return res.status(403).json({ error: "Only admins can manage involvement activities" });
     }
-    const { title, description } = req.body || {};
+    const { title } = req.body || {};
     if (!title) return res.status(400).json({ error: "title is required" });
     const activity = await prisma.parentInvolvementActivity.create({
-      data: { centerId, title: String(title).trim(), description: description || null },
+      data: { centerId, title: String(title).trim(), ...activityData(req.body) },
     });
     return res.status(201).json(activity);
   }

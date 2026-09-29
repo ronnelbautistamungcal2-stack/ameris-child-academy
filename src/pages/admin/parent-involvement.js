@@ -9,6 +9,66 @@ function formatDateTime(value) {
   return d.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+const EMPTY_ACTIVITY = { title: "", description: "", schedule: "", startsAt: "", endsAt: "", capacity: "" };
+
+// datetime-local wants local time without a zone.
+function toLocalInput(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function activityPayload(f) {
+  return {
+    title: f.title.trim(),
+    description: f.description || null,
+    schedule: f.schedule || null,
+    startsAt: f.startsAt ? new Date(f.startsAt).toISOString() : null,
+    endsAt: f.endsAt ? new Date(f.endsAt).toISOString() : null,
+    capacity: f.capacity === "" ? null : f.capacity,
+  };
+}
+
+function describeSchedule(a) {
+  if (!a.startsAt) return a.schedule || "Ongoing";
+  const start = formatDateTime(a.startsAt);
+  if (!a.endsAt) return start;
+  return `${start} - ${new Date(a.endsAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
+}
+
+const inputStyle = { width: "100%", border: "1px solid #d1d5db", borderRadius: 8, padding: "8px 12px", fontSize: 14, boxSizing: "border-box" };
+const labelStyle = { display: "block", fontSize: 12, fontWeight: 600, color: "#6b7280", marginBottom: 4 };
+
+function ScheduleFields({ value, onChange }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
+      <div>
+        <label style={labelStyle}>Starts (optional)</label>
+        <input type="datetime-local" value={value.startsAt} onChange={(e) => onChange({ ...value, startsAt: e.target.value })} style={inputStyle} />
+      </div>
+      <div>
+        <label style={labelStyle}>Ends (optional)</label>
+        <input type="datetime-local" value={value.endsAt} onChange={(e) => onChange({ ...value, endsAt: e.target.value })} style={inputStyle} />
+      </div>
+      <div>
+        <label style={labelStyle}>Label when there is no date</label>
+        <input value={value.schedule} onChange={(e) => onChange({ ...value, schedule: e.target.value })} placeholder="Ongoing, Various Dates…" style={inputStyle} />
+      </div>
+      <div>
+        <label style={labelStyle}>Volunteer spots</label>
+        <input type="number" min="0" value={value.capacity} onChange={(e) => onChange({ ...value, capacity: e.target.value })} placeholder="Blank = no limit" style={inputStyle} />
+      </div>
+    </div>
+  );
+}
+
+function recordChildren(r) {
+  const list = r.children?.length ? r.children : r.child ? [r.child] : [];
+  return list.length ? list.map((c) => `${c.firstName} ${c.lastName}`).join(", ") : "—";
+}
+
 export default function AdminParentInvolvement() {
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
@@ -19,9 +79,9 @@ export default function AdminParentInvolvement() {
   const [error, setError] = useState("");
   const [tab, setTab] = useState("activities");
 
-  const [form, setForm] = useState({ title: "", description: "" });
+  const [form, setForm] = useState(EMPTY_ACTIVITY);
   const [editId, setEditId] = useState(null);
-  const [editForm, setEditForm] = useState({ title: "", description: "" });
+  const [editForm, setEditForm] = useState(EMPTY_ACTIVITY);
   const [filterParent, setFilterParent] = useState("");
   const [parents, setParents] = useState([]);
 
@@ -72,9 +132,9 @@ export default function AdminParentInvolvement() {
     try {
       await apiJson(`/api/v1/parent-involvement/activities?centerId=${encodeURIComponent(centerId)}`, {
         method: "POST",
-        body: JSON.stringify({ title: form.title.trim(), description: form.description || null }),
+        body: JSON.stringify(activityPayload(form)),
       });
-      setForm({ title: "", description: "" });
+      setForm(EMPTY_ACTIVITY);
       await loadActivities();
     } catch (e) {
       setError(e.message || "Failed to save");
@@ -89,7 +149,7 @@ export default function AdminParentInvolvement() {
     try {
       await apiJson(`/api/v1/parent-involvement/activities/${id}`, {
         method: "PUT",
-        body: JSON.stringify({ title: editForm.title.trim(), description: editForm.description || null }),
+        body: JSON.stringify(activityPayload(editForm)),
       });
       setEditId(null);
       await loadActivities();
@@ -116,7 +176,7 @@ export default function AdminParentInvolvement() {
         <div style={{ marginBottom: 24 }}>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111827", margin: 0 }}>Parent Involvement</h1>
           <p style={{ marginTop: 4, fontSize: 14, color: "#6b7280" }}>
-            Define involvement activities for parents to log, and view submitted records.
+            Post volunteer opportunities for parents to sign up for or log time against, and view their records.
           </p>
         </div>
 
@@ -197,6 +257,7 @@ export default function AdminParentInvolvement() {
                             style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: 8, padding: "8px 12px", fontSize: 14, boxSizing: "border-box" }}
                           />
                         </div>
+                        <ScheduleFields value={form} onChange={setForm} />
                         <button
                           type="submit"
                           disabled={saving || !form.title.trim()}
@@ -225,6 +286,7 @@ export default function AdminParentInvolvement() {
                                   rows={2}
                                   style={{ border: "1px solid #d1d5db", borderRadius: 8, padding: "6px 10px", fontSize: 14 }}
                                 />
+                                <ScheduleFields value={editForm} onChange={setEditForm} />
                                 <div style={{ display: "flex", gap: 8 }}>
                                   <button onClick={() => handleEdit(a.id)} disabled={saving} style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 6, padding: "6px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
                                   <button onClick={() => setEditId(null)} style={{ background: "#f3f4f6", border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 14px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
@@ -235,10 +297,23 @@ export default function AdminParentInvolvement() {
                                 <div>
                                   <div style={{ fontWeight: 700, fontSize: 14, color: "#111827" }}>{a.title}</div>
                                   {a.description && <div style={{ fontSize: 13, color: "#6b7280", marginTop: 2 }}>{a.description}</div>}
+                                  <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+                                    {describeSchedule(a)} · {a.capacity == null ? "No spot limit" : `${a.spotsLeft} of ${a.capacity} spots left`}
+                                  </div>
                                 </div>
                                 <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                                   <button
-                                    onClick={() => { setEditId(a.id); setEditForm({ title: a.title, description: a.description || "" }); }}
+                                    onClick={() => {
+                                      setEditId(a.id);
+                                      setEditForm({
+                                        title: a.title,
+                                        description: a.description || "",
+                                        schedule: a.schedule || "",
+                                        startsAt: toLocalInput(a.startsAt),
+                                        endsAt: toLocalInput(a.endsAt),
+                                        capacity: a.capacity == null ? "" : String(a.capacity),
+                                      });
+                                    }}
                                     style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 12px", fontSize: 12, cursor: "pointer", color: "#374151" }}
                                   >Edit</button>
                                   <button
@@ -290,8 +365,10 @@ export default function AdminParentInvolvement() {
                           <tr style={{ borderBottom: "2px solid #e5e7eb", textAlign: "left" }}>
                             <th style={{ padding: "8px 12px", color: "#6b7280", fontWeight: 600 }}>Activity</th>
                             <th style={{ padding: "8px 12px", color: "#6b7280", fontWeight: 600 }}>Parent</th>
-                            <th style={{ padding: "8px 12px", color: "#6b7280", fontWeight: 600 }}>Child</th>
+                            <th style={{ padding: "8px 12px", color: "#6b7280", fontWeight: 600 }}>Type</th>
+                            <th style={{ padding: "8px 12px", color: "#6b7280", fontWeight: 600 }}>Children</th>
                             <th style={{ padding: "8px 12px", color: "#6b7280", fontWeight: 600 }}>Date & Time</th>
+                            <th style={{ padding: "8px 12px", color: "#6b7280", fontWeight: 600 }}>Hours</th>
                             <th style={{ padding: "8px 12px", color: "#6b7280", fontWeight: 600 }}>Notes</th>
                           </tr>
                         </thead>
@@ -300,10 +377,10 @@ export default function AdminParentInvolvement() {
                             <tr key={r.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
                               <td style={{ padding: "9px 12px", fontWeight: 600, color: "#111827" }}>{r.activity?.title}</td>
                               <td style={{ padding: "9px 12px", color: "#374151" }}>{r.parent?.name || r.parent?.email || "—"}</td>
-                              <td style={{ padding: "9px 12px", color: "#374151" }}>
-                                {r.child ? `${r.child.firstName} ${r.child.lastName}` : "—"}
-                              </td>
+                              <td style={{ padding: "9px 12px", color: "#374151" }}>{r.kind === "SIGNUP" ? "Sign-up" : "Logged"}</td>
+                              <td style={{ padding: "9px 12px", color: "#374151" }}>{recordChildren(r)}</td>
                               <td style={{ padding: "9px 12px", color: "#6b7280" }}>{formatDateTime(r.occurredAt)}</td>
+                              <td style={{ padding: "9px 12px", color: "#6b7280" }}>{typeof r.hours === "number" ? r.hours.toFixed(2) : "—"}</td>
                               <td style={{ padding: "9px 12px", color: "#6b7280" }}>{r.notes || "—"}</td>
                             </tr>
                           ))}

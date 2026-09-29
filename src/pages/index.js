@@ -4,104 +4,71 @@ import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import PublicLayout from "@/components/public/PublicLayout";
-import { StarIcon, PlayIcon, ArrowRightIcon } from "@/components/public/icons";
-
-const FEATURE_PILLARS = [
-  {
-    title: "Safe & Loving Environment",
-    description:
-      "Every child's safety, happiness, and well-being are our highest priorities.",
-    imageSrc: "/homepage-assets/image_14.webp",
-    imageAlt: "Safe and loving environment icon",
-  },
-  {
-    title: "Learning Through Growth",
-    description:
-      "Age-appropriate academics and social development for every stage.",
-    imageSrc: "/homepage-assets/image_15.webp",
-    imageAlt: "Learning through growth icon",
-  },
-  {
-    title: "Character & Confidence",
-    description: "Building kindness, teamwork, and leadership every day.",
-    imageSrc: "/homepage-assets/image_16.webp",
-    imageAlt: "Character and confidence icon",
-  },
-  {
-    title: "Fun Indoor & Outdoor Play",
-    description:
-      "Interactive play, sports, and creative activities children love.",
-    imageSrc: "/homepage-assets/image_17.webp",
-    imageAlt: "Fun indoor and outdoor play icon",
-  },
-  {
-    title: "Healthy Fresh Nutrition",
-    description:
-      "Fresh vegetables grown in our own organic greenhouse system for healthier children.",
-    imageSrc: null,
-    imageAlt: "Healthy fresh nutrition icon",
-  },
-];
+import { MapPinIcon, PhoneIcon } from "@/components/public/icons";
+import { PUBLIC_CONTACT } from "@/components/public/siteData";
 
 const PROGRAMS = [
   {
     title: "Infants",
-    description: "Personalized love and care in a safe, trusting environment.",
-    ageRange: "1 - 12 months",
+    ageRange: "0 – 12 months",
     imageSrc: "/homepage-assets/Infants.webp",
-    imagePosition: "center center",
-    badgeImageSrc: "/homepage-assets/image_19.webp",
-    badgeImageAlt: "Infants icon",
+    labelClassName: "bg-[#fbe3ea]",
   },
   {
     title: "Toddlers",
-    description:
-      "Exploring, discovering, and building confidence through play and hands-on learning.",
-    ageRange: "1 - 2 years",
+    ageRange: "1 – 2 years",
     imageSrc: "/homepage-assets/Toddlers.webp",
-    imagePosition: "center center",
-    badgeImageSrc: "/homepage-assets/image_20.webp",
-    badgeImageAlt: "Toddlers icon",
+    labelClassName: "bg-[#def3d9]",
   },
   {
-    title: "Pre-K",
-    description:
-      "Building confidence, character, and preparing for school and beyond.",
-    ageRange: "3 - 5 years",
+    title: "Preschool",
+    ageRange: "3 – 5 years",
     imageSrc: "/homepage-assets/Pre-K.webp",
-    imagePosition: "center center",
-    badgeImageSrc: "/homepage-assets/image_21.webp",
-    badgeImageAlt: "Pre-K icon",
+    labelClassName: "bg-[#e7e1f6]",
   },
   {
     title: "School Age",
-    description:
-      "Leadership, life skills, academic support, and fun that inspires growth.",
-    ageRange: "5 - 12 years",
+    ageRange: "6 – 12 years",
     imageSrc: "/homepage-assets/New_School_Age.webp",
-    imagePosition: "center center",
-    badgeImageSrc: "/homepage-assets/image_22.webp",
-    badgeImageAlt: "School age icon",
+    labelClassName: "bg-[#fdf1c4]",
   },
 ];
 
-const TESTIMONIALS = [
+const FEATURES = [
   {
-    quote:
-      "I love that when my kids get there each morning my teacher gives them a big smile and says hi with their names. Thank you for all the heart you put into each day.",
-    author: "Jennie",
+    title: "Safe & Nurturing",
+    description: "A secure environment where every child is valued and cared for.",
+    circleClassName: "bg-[#ec5f84]",
+    Icon: HeartGlyph,
   },
   {
-    quote:
-      "I really like that every activity and lesson is catered to their age. I don't ever have to worry about my kids not being included in class activities.",
-    author: "Helen",
+    title: "Hands-On Learning",
+    description: "Experiences that inspire curiosity and development.",
+    circleClassName: "bg-[#2f7fd6]",
+    Icon: BookGlyph,
   },
   {
-    quote:
-      "I love that the children have the opportunity to help in the gardens and enjoy healthy meals and snacks made with fresh vegetables grown right on site.",
-    author: "Carolyn",
+    title: "Character & Responsibility",
+    description: "Building positive relationships, teamwork, and leadership.",
+    circleClassName: "bg-[#3a9950]",
+    Icon: PeopleGlyph,
+  },
+  {
+    title: "Indoor & Outdoor Play",
+    description: "Engaging activities that keep children active, creative, and social.",
+    circleClassName: "bg-[#8d5fd8]",
+    Icon: PlayGlyph,
+  },
+  {
+    title: "Healthy Nutrition",
+    description: "Fresh vegetables grown in our organic greenhouse for healthier children.",
+    circleClassName: "bg-[#f4a623]",
+    Icon: AppleGlyph,
   },
 ];
+
+// Height of the absolutely positioned public navbar: logo width / logo aspect + py-4.
+const NAVBAR_OFFSET = "calc(clamp(170px, 22vw, 270px) / 1.985 + 2rem)";
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -150,25 +117,64 @@ export default function Home() {
   return (
     <PublicLayout
       title="Home"
-      description="Turning Today's Blessings into Tomorrow's Pillars at Ameris Academy."
+      description="Nurturing blessings, building character, raising pillars at Ameris Academy."
     >
-      <div className="pb-20">
-        <HeroSection />
-        <div className="relative bg-white pt-8">
-          <FeatureSection />
-          <ProgramsSection />
-          <AboutSection />
-          <TestimonialsSection />
-        </div>
-      </div>
+      <HeroSection />
+      <ProgramsSection />
+      <FeaturesSection />
+      <AboutContactSection />
     </PublicLayout>
   );
 }
 
 function HeroSection() {
+  return (
+    <section className="relative bg-white" style={{ paddingTop: NAVBAR_OFFSET }}>
+      <div className="relative">
+        <div className="relative min-h-[300px] w-full overflow-hidden md:aspect-[2062/763] md:min-h-0">
+          <Image
+            src="/homepage-assets/Hero_Pillar.webp"
+            alt="Children climbing marble steps toward a pillar at sunrise"
+            fill
+            sizes="100vw"
+            priority
+            className="object-cover object-[32%_center] md:object-center"
+          />
+          {/* Soft white fade into the header above and the programs section below. */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-[12%] bg-gradient-to-b from-white/85 to-transparent" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[26%] bg-gradient-to-t from-white via-white/70 to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-[8%] bg-gradient-to-l from-white/60 to-transparent" />
+
+          <div className="absolute inset-x-0 top-[7%] px-5 md:left-[2.5%] md:right-auto md:w-[36%] md:px-0">
+            <h1
+              className="text-center font-serif text-[clamp(1.6rem,2.9vw,3rem)] font-semibold leading-[1.18] text-[#16275e]"
+              style={{ textShadow: "0 1px 12px rgba(255,255,255,0.75)" }}
+            >
+              Nurturing Blessings,
+              <br />
+              Building Character,
+              <br />
+              Raising Pillars.
+            </h1>
+          </div>
+
+          <div className="absolute right-[5%] top-[8%] hidden w-[38%] md:block">
+            <HeroVideo />
+          </div>
+        </div>
+
+        <div className="relative -mt-10 px-5 md:hidden">
+          <HeroVideo />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HeroVideo() {
   const videoRef = useRef(null);
   const [hasStarted, setHasStarted] = useState(false);
-  const [videoAspectRatio, setVideoAspectRatio] = useState("16 / 9");
+  const [duration, setDuration] = useState(0);
 
   const handlePlay = () => {
     const video = videoRef.current;
@@ -177,127 +183,129 @@ function HeroSection() {
     setHasStarted(true);
   };
 
-  const handleLoadedMetadata = (event) => {
-    const { videoWidth, videoHeight } = event.currentTarget;
-    if (!videoWidth || !videoHeight) return;
-    setVideoAspectRatio(`${videoWidth} / ${videoHeight}`);
-  };
-
   return (
-    <section className="relative pb-24 pt-32 sm:pb-28 sm:pt-36">
-      <div className="pointer-events-none absolute inset-0">
-        <Image
-          src="/homepage-assets/Image_Top.webp"
-          alt=""
-          fill
-          sizes="100vw"
-          priority
-          className="object-cover object-center"
+    <div className="rounded-[12px] bg-white p-[6px] shadow-[0_22px_48px_-24px_rgba(20,40,90,0.55)] ring-1 ring-slate-200">
+      <div className="relative aspect-video overflow-hidden rounded-[8px] bg-[linear-gradient(180deg,#f6f7fa_0%,#e9ecf2_100%)]">
+        <video
+          ref={videoRef}
+          className={`absolute inset-0 h-full w-full object-cover transition ${hasStarted ? "opacity-100" : "opacity-0"}`}
+          src="/home-video.mp4"
+          playsInline
+          preload="metadata"
+          controls={hasStarted}
+          onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 0)}
+          onEnded={() => setHasStarted(false)}
         />
+
+        {!hasStarted && (
+          <button
+            type="button"
+            onClick={handlePlay}
+            className="group absolute inset-0 z-10 block text-left"
+            aria-label="Play video"
+          >
+            <span className="absolute inset-x-[22%] top-[10%] h-[42%]">
+              <Image
+                src="/ameris-logo-transparent.png"
+                alt=""
+                fill
+                sizes="(max-width: 768px) 60vw, 22vw"
+                className="object-contain"
+              />
+            </span>
+
+            <span className="absolute left-1/2 top-[64%] flex h-[20%] min-h-[40px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#3b3f46]/85 text-white shadow-lg transition group-hover:scale-105 group-hover:bg-[#2a2d33]" style={{ aspectRatio: "1 / 1" }}>
+              <svg viewBox="0 0 24 24" className="ml-[8%] h-1/2 w-1/2" fill="currentColor" aria-hidden="true">
+                <path d="M8 5.5v13l10.5-6.5L8 5.5z" />
+              </svg>
+            </span>
+
+            <span className="absolute inset-x-0 bottom-0 flex items-center gap-2.5 bg-gradient-to-t from-black/70 to-black/25 px-3 py-1.5 text-[11px] font-medium text-white sm:text-[12px]">
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" fill="currentColor" aria-hidden="true">
+                <path d="M7 5v14l11-7L7 5z" />
+              </svg>
+              <span className="shrink-0 tabular-nums">0:00 / {formatTime(duration)}</span>
+              <span className="h-[3px] flex-1 rounded-full bg-white/40" />
+              <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="currentColor" aria-hidden="true">
+                <path d="M4 9v6h4l5 4V5L8 9H4zm12.5 3a4.5 4.5 0 00-2.5-4v8a4.5 4.5 0 002.5-4z" />
+              </svg>
+              <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+                <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+              </svg>
+            </span>
+          </button>
+        )}
       </div>
+    </div>
+  );
+}
 
-      <div className="relative mx-auto w-full px-5 lg:px-8">
-        <div className="grid items-center gap-8 md:grid-cols-[0.42fr_0.58fr] lg:gap-10">
-          <div className="mx-auto max-w-[360px] text-center md:mx-0 md:pl-8">
-            <h1 className="text-[clamp(2rem,3.5vw,3.3rem)] font-extrabold leading-[1.08] tracking-tight text-[#1d2352]">
-              Turning Today&apos;s Blessings into Tomorrow&apos;s Pillars
-            </h1>
-          </div>
+function formatTime(seconds) {
+  const total = Math.floor(seconds || 0);
+  const minutes = Math.floor(total / 60);
+  return `${minutes}:${String(total % 60).padStart(2, "0")}`;
+}
 
-          <div className="relative md:justify-self-end md:w-full md:max-w-[760px]">
-            <div className="rounded-[28px] bg-[#dddde4]/88 p-3 shadow-[0_24px_56px_-42px_rgba(27,58,109,0.65)] ring-1 ring-white/70 backdrop-blur">
-              <div
-                className="relative overflow-hidden rounded-[24px] bg-[linear-gradient(180deg,#ececef_0%,#e4e4ea_100%)]"
-                style={{ aspectRatio: videoAspectRatio }}
-              >
-                <video
-                  ref={videoRef}
-                  className={`absolute inset-0 h-full w-full object-cover transition ${hasStarted ? "opacity-100" : "opacity-0"}`}
-                  src="/home-video.mp4"
-                  playsInline
-                  preload="metadata"
-                  controls={hasStarted}
-                  onLoadedMetadata={handleLoadedMetadata}
-                  onEnded={() => setHasStarted(false)}
-                />
-
-                <div className={`absolute inset-0 transition ${hasStarted ? "pointer-events-none opacity-0" : "opacity-100"}`}>
-                  <div className="absolute inset-x-[16%] inset-y-[22%]">
-                    <div className="relative h-full w-full">
-                      <Image
-                        src="/ameris-logo-transparent.png"
-                        alt="Ameris Academy logo"
-                        fill
-                        sizes="(max-width: 768px) 80vw, 34rem"
-                        className="object-contain"
-                        priority
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {!hasStarted && (
-                  <button
-                    type="button"
-                    onClick={handlePlay}
-                    className="absolute inset-0 z-10 grid place-items-center text-[#2a69ba]"
-                    aria-label="Play video"
-                  >
-                    <span className="inline-flex h-[72px] w-[72px] items-center justify-center rounded-full bg-white/90 shadow-[0_20px_40px_-28px_rgba(25,56,143,0.95)] ring-2 ring-[#7fd0f1]/70 transition hover:scale-105">
-                      <PlayIcon className="ml-1 h-9 w-9" />
-                    </span>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
+function ProgramsSection() {
+  return (
+    <section className="bg-white pt-8 md:pt-4">
+      <div className="mx-auto w-full max-w-[1280px] px-5 lg:px-10">
+        <div className="text-center">
+          <h2 className="font-serif text-[clamp(1.75rem,3vw,2.6rem)] font-bold leading-tight text-[#16275e]">
+            Programs for Every Stage
+          </h2>
+          <p className="mt-1.5 font-serif text-[15px] text-slate-700 sm:text-[17px]">
+            Quality care that nurtures learning, character, and growth from infancy through age 12
+          </p>
         </div>
-      </div>
 
-      {/* Asymmetric wave — peaks on the left, slopes down to the right */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 overflow-hidden leading-none">
-        <svg
-          viewBox="0 0 1440 90"
-          preserveAspectRatio="none"
-          className="block w-full"
-          style={{ height: "90px" }}
-          aria-hidden="true"
-        >
-          <path
-            d="M0,90 L0,42 C120,6 280,58 520,38 C720,22 980,60 1250,48 C1340,44 1400,52 1440,58 L1440,90 Z"
-            fill="white"
-          />
-        </svg>
+        <div className="mt-7 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
+          {PROGRAMS.map((program) => (
+            <Link
+              key={program.title}
+              href="/programs"
+              className="group overflow-hidden rounded-[10px] bg-white shadow-[0_14px_30px_-20px_rgba(20,40,90,0.55)] ring-1 ring-slate-200 transition hover:-translate-y-0.5"
+            >
+              <div className="relative aspect-[4/3] overflow-hidden">
+                <Image
+                  src={program.imageSrc}
+                  alt={`${program.title} classroom`}
+                  fill
+                  sizes="(max-width: 768px) 50vw, 25vw"
+                  className="object-cover transition duration-300 group-hover:scale-[1.03]"
+                />
+              </div>
+              <div className={`px-3 py-3 text-center ${program.labelClassName}`}>
+                <h3 className="font-serif text-[1.1rem] font-bold leading-tight text-[#1d3c8a] sm:text-[1.3rem]">
+                  {program.title}
+                </h3>
+                <p className="mt-0.5 font-serif text-[13px] text-slate-700 sm:text-[14px]">{program.ageRange}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
       </div>
     </section>
   );
 }
 
-function FeatureSection() {
+function FeaturesSection() {
   return (
-    <section className="py-8">
-      <div className="mx-auto w-full px-6 lg:px-10">
-        <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-5">
-          {FEATURE_PILLARS.map((item) => (
-            <article key={item.title} className="text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center">
-                {item.imageSrc ? (
-                  <Image
-                    src={item.imageSrc}
-                    alt={item.imageAlt}
-                    width={56}
-                    height={56}
-                    className="h-14 w-14 object-contain"
-                  />
-                ) : (
-                  <LeafIcon className="h-10 w-10 text-[#3c9f48]" />
-                )}
-              </div>
-              <h2 className="mt-2.5 text-[1rem] font-extrabold leading-tight text-[#1d2352]">
-                {item.title}
-              </h2>
-              <p className="mt-2 text-[12px] leading-6 text-slate-600">
-                {item.description}
+    <section className="bg-white pb-10 pt-8">
+      <div className="mx-auto w-full max-w-[1280px] px-5 lg:px-10">
+        <div className="grid grid-cols-2 gap-y-7 sm:grid-cols-3 md:grid-cols-5 md:gap-y-0 md:divide-x md:divide-slate-300">
+          {FEATURES.map(({ title, description, circleClassName, Icon }) => (
+            <article key={title} className="px-3 text-center lg:px-5">
+              <span
+                className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full text-white shadow-[0_8px_16px_-10px_rgba(0,0,0,0.5)] sm:h-16 sm:w-16 ${circleClassName}`}
+              >
+                <Icon className="h-7 w-7 sm:h-8 sm:w-8" />
+              </span>
+              <h3 className="mt-3 font-serif text-[14px] font-bold leading-snug text-[#16275e] sm:text-[15px]">
+                {title}
+              </h3>
+              <p className="mx-auto mt-1.5 max-w-[210px] font-serif text-[12.5px] leading-[1.45] text-slate-600 sm:text-[13px]">
+                {description}
               </p>
             </article>
           ))}
@@ -307,170 +315,139 @@ function FeatureSection() {
   );
 }
 
-function ProgramsSection() {
+function AboutContactSection() {
   return (
-    <section className="bg-white pt-10">
-      <div className="mx-auto w-full px-6 lg:px-10">
-        <h2 className="text-center text-[1.85rem] font-extrabold tracking-tight text-[#1d2352]">
-          Programs for Every Age &amp; Stage
-        </h2>
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-          {PROGRAMS.map((program) => (
-            <article
-              key={program.title}
-              className="overflow-hidden rounded-[18px] bg-white shadow-[0_22px_44px_-40px_rgba(27,58,109,0.5)] ring-1 ring-slate-200/70"
-            >
-              <div className="relative aspect-[15/10] overflow-hidden">
-                <Image
-                  src={program.imageSrc}
-                  alt={program.title}
-                  fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 25vw"
-                  className="object-cover"
-                  style={{ objectPosition: program.imagePosition }}
-                />
-                <span className="absolute bottom-2.5 left-2.5 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/95 p-0.5 shadow-lg">
-                  <Image
-                    src={program.badgeImageSrc}
-                    alt={program.badgeImageAlt}
-                    width={46}
-                    height={46}
-                    className="h-9 w-9 rounded-full object-cover"
-                  />
-                </span>
-              </div>
-              <div className="px-4 pb-4 pt-3 text-center">
-                <h3 className="text-[1.05rem] font-extrabold text-[#1d2352]">{program.title}</h3>
-                <p className="mt-2 text-[13px] leading-6 text-slate-600">{program.description}</p>
-                <div className="mt-4 text-[13px] font-bold text-slate-500">{program.ageRange}</div>
-              </div>
-            </article>
-          ))}
+    <section className="relative overflow-hidden bg-gradient-to-b from-[#f3f6fb] to-[#e8eef7] pb-24 pt-10 sm:pb-28">
+      <LeafSprig className="pointer-events-none absolute -left-4 bottom-10 hidden h-44 w-24 text-[#6fa24a] md:block" />
+      <LeafSprig className="pointer-events-none absolute -right-4 top-4 hidden h-44 w-24 -scale-x-100 text-[#6fa24a] md:block" />
+
+      <div className="relative mx-auto grid w-full max-w-[1120px] gap-8 px-6 md:grid-cols-[1.55fr_1fr] md:gap-0 lg:px-10">
+        <div className="md:pr-10">
+          <h2 className="font-serif text-[clamp(1.6rem,2.6vw,2.3rem)] font-bold leading-tight text-[#16275e]">
+            About Ameris Academy
+          </h2>
+          <p className="mt-3 font-serif text-[14px] leading-[1.6] text-slate-700 sm:text-[15px]">
+            We believe every child is a blessing. Through quality care, a loving environment, and
+            character training, we nurture each child as they learn, build confidence, develop
+            character, and form meaningful relationships, while preparing them to be the pillars of
+            tomorrow.
+          </p>
+          <Link
+            href="/about"
+            className="mt-5 inline-flex items-center rounded-[6px] bg-[#1f5aa8] px-5 py-2.5 text-[13px] font-bold text-white shadow-[0_10px_20px_-14px_rgba(31,90,168,0.9)] transition hover:bg-[#184a8c]"
+          >
+            Learn More About Us
+          </Link>
         </div>
-      </div>
-    </section>
-  );
-}
 
-function AboutSection() {
-  return (
-    <section className="pt-10">
-      <div className="mx-auto w-full px-6 lg:px-10">
-        <div className="relative overflow-hidden rounded-[22px] p-4 shadow-[0_20px_50px_-42px_rgba(27,58,109,0.35)] ring-1 ring-white/90">
-          <div className="pointer-events-none absolute inset-0">
-            <Image
-              src="/homepage-assets/Image_Middle.webp"
-              alt=""
-              fill
-              sizes="100vw"
-              className="object-cover object-center"
-            />
-          </div>
-          <div className="grid items-center gap-4 md:grid-cols-[1fr_1.03fr]">
-            <div className="relative overflow-hidden rounded-[18px] bg-white/88 shadow-[0_18px_40px_-34px_rgba(27,58,109,0.35)]">
-              <div className="relative aspect-[16/10]">
-                <Image
-                  src="/homepage-assets/Building_Foundations.webp"
-                  alt="Children learning together"
-                  fill
-                  sizes="(max-width: 1024px) 100vw, 40vw"
-                  className="object-cover"
-                  style={{ objectPosition: "center center" }}
-                />
-              </div>
-            </div>
-
-            <div className="relative overflow-hidden rounded-[18px] bg-white/82 px-5 py-5 shadow-[0_18px_40px_-34px_rgba(27,58,109,0.25)]">
-              <div className="absolute bottom-0 right-2 hidden h-28 w-20 text-[#7fb447] md:block">
-                <TreeIllustration />
-              </div>
-              <div className="relative max-w-none">
-                <div className="text-[12px] font-black uppercase tracking-[0.18em] text-[#5b9a2e]">
-                  About Us
-                </div>
-                <h2 className="mt-2 text-[2rem] font-extrabold leading-tight tracking-tight text-[#1d2352]">
-                  Building Foundations for a Bright Future
-                </h2>
-                <p className="mt-4 text-[13px] leading-7 text-slate-700">
-                  At Ameris Academy, we believe every child is a blessing. Through quality
-                  teaching, character training, and a loving environment, we help children grow
-                  academically, socially, and emotionally while preparing them to become the
-                  pillars of tomorrow.
-                </p>
-                <div className="mt-5">
-                  <Link
-                    href="/about"
-                    className="inline-flex items-center gap-2 rounded-[12px] bg-[#19388f] px-5 py-3 text-[13px] font-extrabold text-white transition hover:bg-[#163179]"
-                  >
-                    Learn More About Us
-                    <ArrowRightIcon className="h-4 w-4" />
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function TestimonialsSection() {
-  return (
-    <section className="pt-4 pb-10">
-      <div className="mx-auto w-full px-6 lg:px-10">
-        <h2 className="text-center text-[1.85rem] font-extrabold tracking-tight text-[#1d2352]">
-          What Parents Are Saying
-        </h2>
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
-          {TESTIMONIALS.map((item) => (
-            <article
-              key={item.author}
-              className="rounded-[18px] bg-white px-4 py-5 shadow-[0_20px_44px_-38px_rgba(27,58,109,0.5)] ring-1 ring-slate-200/70"
-            >
-              <QuoteIcon className="h-7 w-7 text-[#1d2f87]" />
-              <p className="mt-3 text-[13px] leading-7 text-slate-700">{item.quote}</p>
-              <div className="mt-4 text-[13px] font-black text-[#1d2352]">-{item.author}</div>
-              <div className="mt-3 flex gap-1 text-[#f0b324]">
-                {Array.from({ length: 5 }).map((_, index) => (
-                  <StarIcon key={`${item.author}-${index}`} className="h-4 w-4 fill-current stroke-current" />
+        <div className="border-t border-slate-300 pt-8 md:border-l md:border-t-0 md:pl-10 md:pt-0">
+          <h2 className="font-serif text-[clamp(1.6rem,2.6vw,2.3rem)] font-bold leading-tight text-[#16275e]">
+            Contact Us
+          </h2>
+          <div className="mt-4 space-y-4 font-serif text-[15px] text-slate-800 sm:text-[16px]">
+            <a href={PUBLIC_CONTACT.phoneHref} className="flex items-center gap-4 transition hover:text-[#1f5aa8]">
+              <PhoneIcon className="h-5 w-5 shrink-0 text-[#16275e]" />
+              <span>{PUBLIC_CONTACT.phoneDisplay}</span>
+            </a>
+            <div className="flex items-start gap-4">
+              <MapPinIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#16275e]" />
+              <span>
+                {PUBLIC_CONTACT.addressLines.map((line) => (
+                  <span key={line} className="block">
+                    {line}
+                  </span>
                 ))}
-              </div>
-            </article>
-          ))}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
   );
 }
 
-function QuoteIcon({ className = "h-8 w-8" }) {
+function LeafSprig({ className = "" }) {
+  const leaves = [
+    { x: 40, y: 22, r: -35 },
+    { x: 62, y: 44, r: 40 },
+    { x: 34, y: 70, r: -40 },
+    { x: 60, y: 94, r: 45 },
+    { x: 30, y: 120, r: -45 },
+    { x: 56, y: 146, r: 50 },
+    { x: 28, y: 170, r: -50 },
+  ];
+
   return (
-    <svg viewBox="0 0 32 32" className={className} fill="currentColor" aria-hidden="true">
-      <path d="M14 7C8.477 7 4 11.477 4 17v8h10v-8H9.13A5.004 5.004 0 0114 12V7zm14 0c-5.523 0-10 4.477-10 10v8h10v-8h-4.87A5.004 5.004 0 0128 12V7z" />
+    <svg viewBox="0 0 100 220" className={className} fill="currentColor" aria-hidden="true">
+      <path
+        d="M20 218C30 170 38 120 44 70 47 45 48 25 46 6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        opacity="0.8"
+      />
+      {leaves.map((leaf) => (
+        <ellipse
+          key={`${leaf.x}-${leaf.y}`}
+          cx={leaf.x}
+          cy={leaf.y}
+          rx="9"
+          ry="19"
+          transform={`rotate(${leaf.r} ${leaf.x} ${leaf.y})`}
+          opacity="0.75"
+        />
+      ))}
     </svg>
   );
 }
 
-function LeafIcon({ className = "h-9 w-9" }) {
+function HeartGlyph({ className }) {
   return (
-    <svg viewBox="0 0 48 48" className={className} fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 28c0-10.493 8.507-19 19-19h5v5c0 13.255-10.745 24-24 24h-1v-10z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M17 32c4-7 9.5-12.5 17-17" />
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0112 7.6a4.3 4.3 0 017.5 2.7c0 5.6-7.5 10.2-7.5 10.2z" />
     </svg>
   );
 }
 
-function TreeIllustration() {
+function BookGlyph({ className }) {
   return (
-    <svg viewBox="0 0 140 220" className="h-full w-full" fill="none" aria-hidden="true">
-      <path d="M67 210c0-39 7-69 18-97H54c9 28 13 58 13 97z" fill="#8b5a31" />
-      <ellipse cx="71" cy="210" rx="32" ry="8" fill="#9cc56b" opacity="0.5" />
-      <circle cx="67" cy="65" r="42" fill="#9fcf4e" />
-      <circle cx="43" cy="90" r="31" fill="#a9d75c" />
-      <circle cx="92" cy="92" r="28" fill="#8bc34a" />
-      <circle cx="82" cy="48" r="24" fill="#a6d962" />
-      <circle cx="47" cy="55" r="22" fill="#8ebd44" />
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 6.5C10 5 7 4.6 3.5 5v13c3.5-.4 6.5 0 8.5 1.5 2-1.5 5-1.9 8.5-1.5V5C17 4.6 14 5 12 6.5z" />
+      <path d="M12 6.5v13" />
+    </svg>
+  );
+}
+
+function PeopleGlyph({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <circle cx="12" cy="6.5" r="2.6" />
+      <circle cx="5.5" cy="8.5" r="2.1" />
+      <circle cx="18.5" cy="8.5" r="2.1" />
+      <path d="M8.2 19v-4.3A3.8 3.8 0 0112 11a3.8 3.8 0 013.8 3.7V19H8.2z" />
+      <path d="M2 19v-3.2A3 3 0 015.5 13a3.4 3.4 0 011.7.5 5.3 5.3 0 00-.5 2.2V19H2zM22 19v-3.2a3 3 0 00-3.5-2.8 3.4 3.4 0 00-1.7.5 5.3 5.3 0 01.5 2.2V19H22z" />
+    </svg>
+  );
+}
+
+function PlayGlyph({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <circle cx="7" cy="4.8" r="2.1" />
+      <circle cx="17" cy="4.8" r="2.1" />
+      <path d="M7 8c-1.3 0-2.2.8-2.4 2l-.8 4.2 1.8.4.6-2.6.5 3.4-1.7 5.6 1.9.6 1.6-5 1.2 5h2l-1.6-6.3.4-3.2 1.5 1.6 2-.9-2.8-3.4C8.6 8.4 7.9 8 7 8z" />
+      <path d="M17 8c-.9 0-1.6.4-2.2 1.2l-2.3 3.1 1.9.9 1.4-1.6.4 3.2-1.6 6.3h2l1.2-5 1.6 5 1.9-.6-1.7-5.6.5-3.4.6 2.6 1.8-.4-.8-4.2C19.2 8.8 18.3 8 17 8z" />
+    </svg>
+  );
+}
+
+function AppleGlyph({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <path d="M16.4 8.2c-1.6 0-2.6.8-4.4.8s-2.8-.8-4.4-.8C5.3 8.2 3.8 10.5 3.8 13.4c0 4 2.8 8.1 5.3 8.1 1.2 0 1.7-.7 2.9-.7s1.7.7 2.9.7c2.5 0 5.3-4.1 5.3-8.1 0-2.9-1.5-5.2-3.8-5.2z" />
+      <path d="M12 8.2c0-2.3.9-4.2 2.4-5.4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M13.2 5.4c1.4-1.7 3.4-2 4.8-1.6-.4 1.8-2.3 3-4.8 1.6z" />
     </svg>
   );
 }

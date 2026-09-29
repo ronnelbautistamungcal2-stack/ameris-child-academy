@@ -1,5 +1,6 @@
 import StaffLayout from "@/components/staff/StaffLayout";
-import { WorkspaceHero, WorkspacePill, WorkspaceState } from "@/components/ui/Workspace";
+import MenuPlanner from "@/components/menus/MenuPlanner";
+import { WorkspaceHero, WorkspacePill } from "@/components/ui/Workspace";
 import { isKitchenStaff } from "@/lib/roles";
 import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
@@ -20,19 +21,16 @@ export default function StaffKitchenMenusPage() {
   }
 
   return (
-    <StaffLayout title="Menus">
+    <StaffLayout title="Menus" contentMaxWidthClassName="max-w-[1440px]">
       <div className="space-y-5">
         <WorkspaceHero
           eyebrow="Kitchen"
           title="Menus"
-          description="Weekly meal planning for the kitchen team."
+          description="The weekly menu planned by the center admin."
           meta={<WorkspacePill tone="amber">Kitchen staff only</WorkspacePill>}
         />
 
-        <WorkspaceState
-          title="Menus are not set up yet."
-          description="This page is reserved for the kitchen menu planner. The menu structure will be defined in a later phase; until then, meal-related tasks stay on your daily Checklist."
-        />
+        <MenuPlanner title="Menu" />
       </div>
     </StaffLayout>
   );

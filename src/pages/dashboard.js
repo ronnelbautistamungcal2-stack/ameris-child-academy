@@ -12,7 +12,7 @@ import {
   TodaysMenuCard,
 } from "@/components/parent/ParentHomeCards";
 import { ageInMonths } from "@/lib/ageUtils";
-import { getMenuForDate } from "@/lib/menuPlan";
+import { toDateKey, todaysMenuRows } from "@/lib/menuPlan";
 import { buildParentNotices } from "@/lib/parentNotices";
 import { ParentButton } from "@/components/parent/ParentUI";
 import { useShellTitle } from "@/components/shell/PortalShell";
@@ -551,6 +551,7 @@ function ParentDashboard({ centers, children, loading, error, submissions }) {
   const [events, setEvents] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [behaviorPlans, setBehaviorPlans] = useState([]);
+  const [menuRows, setMenuRows] = useState(null);
 
   // Events drive both the calendar grid and the date-based notices.
   useEffect(() => {
@@ -618,6 +619,21 @@ function ParentDashboard({ centers, children, loading, error, submissions }) {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await apiJson(`/api/v1/menus?start=${toDateKey(new Date())}&days=1`);
+        if (!cancelled) setMenuRows(todaysMenuRows(data?.items || []));
+      } catch {
+        if (!cancelled) setMenuRows(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const pendingPlanApprovals = useMemo(
     () => behaviorPlans.filter((plan) => !plan.parentApproved),
     [behaviorPlans],
@@ -659,8 +675,6 @@ function ParentDashboard({ centers, children, loading, error, submissions }) {
     () => buildParentNotices({ events, submissions, notifications }),
     [events, submissions, notifications],
   );
-
-  const menuRows = useMemo(() => getMenuForDate(new Date()), []);
 
   return (
     <div className="space-y-4">

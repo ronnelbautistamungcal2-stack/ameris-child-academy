@@ -2,7 +2,11 @@ import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { emitNewMessage } from "@/lib/socket";
 import { assertSubscriptionFeature } from "@/lib/subscriptions";
-import { notifyMessageRecipients } from "@/lib/messaging";
+import {
+  normalizeMessageAttachment,
+  notifyMessageRecipients,
+  resurfaceThreadForRecipients,
+} from "@/lib/messaging";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -15,8 +19,9 @@ export default async function handler(req, res) {
     return res.status(405).end();
   }
 
-  const { threadId, body } = req.body || {};
-  if (!threadId || !body) {
+  const { threadId, body, attachment } = req.body || {};
+  const attachmentData = normalizeMessageAttachment(attachment);
+  if (!threadId || (!body && !attachmentData.attachmentUrl)) {
     return res.status(400).json({ error: "threadId and body are required" });
   }
 
@@ -67,7 +72,8 @@ export default async function handler(req, res) {
     data: {
       threadId,
       senderId: user.id,
-      body: String(body).slice(0, 5000),
+      body: String(body || "").slice(0, 5000),
+      ...attachmentData,
     },
     include: { sender: { select: { id: true, name: true, email: true, role: true, pictureUrl: true } } },
   });
@@ -90,11 +96,12 @@ export default async function handler(req, res) {
 
   const otherParticipantIds = participantIds.filter((id) => id !== user.id);
   if (otherParticipantIds.length > 0) {
+    await resurfaceThreadForRecipients(threadId, otherParticipantIds);
     await notifyMessageRecipients({
       sender: user,
       recipientIds: otherParticipantIds,
       threadId,
-      body,
+      body: body || `Sent an attachment: ${attachmentData.attachmentName}`,
     });
   }
 

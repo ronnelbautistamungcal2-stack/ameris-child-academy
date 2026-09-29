@@ -7,8 +7,10 @@ export const PUBLIC_CONTACT = {
   phoneDisplay: "(801) 327-8776",
   phoneHref: "tel:+18013278776",
   email: "info@amerisacademy.com",
-  addressLines: ["2650 S Decker Lake Ln #2", "West Valley City, UT 84119"],
-  visitHours: "Mon-Fri, 7:00 am - 5:30 pm",
+  addressLines: ["2156 W 2200 S", "West Valley City, UT 84119"],
+  hoursDays: "Monday – Friday",
+  hoursTime: "7:15 AM – 4:30 PM",
+  visitHours: "Mon-Fri, 7:15 am - 4:30 pm",
 };
 
 export const PUBLIC_NAV_LINKS = [

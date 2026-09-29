@@ -124,11 +124,15 @@ test.describe("Parent Workflows", () => {
     await expect(page.locator("main")).toBeVisible();
   });
 
-  test("messages page keeps the conversation switcher visible on laptop widths", async ({ page }) => {
+  test("messages page shows the inbox folders beside the reading pane on laptop widths", async ({ page }) => {
     await page.setViewportSize({ width: 1100, height: 900 });
     await page.goto("/parent/messages");
     await waitForLoadingDone(page);
-    await expect(page.getByRole("button", { name: "Conversations", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Messages", exact: true })).toBeVisible();
+    await expect(page.getByRole("tab", { name: /^Inbox/ })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Sent" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Archived" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Conversation", exact: true })).toBeVisible();
   });
 
   test("billing request opens prefilled compose flow", async ({ page }) => {
@@ -146,13 +150,9 @@ test.describe("Parent Workflows", () => {
       await requestLink.click();
       await expect(page).toHaveURL(/\/parent\/messages/, { timeout: 5000 });
     }).toPass({ timeout: 45000 });
-    await expect(page.getByRole("heading", { name: "New Conversation" })).toBeVisible();
-    await expect(
-      page.locator('input[placeholder="e.g. Regarding attendance..."]'),
-    ).toHaveValue("Billing support request");
-    await expect(
-      page.locator('textarea[placeholder="Type your message..."]'),
-    ).toHaveValue(/billing/i);
+    await expect(page.getByRole("heading", { name: "New Message" })).toBeVisible();
+    await expect(page.getByLabel("Subject")).toHaveValue("Billing support request");
+    await expect(page.getByLabel("Message", { exact: true })).toHaveValue(/billing/i);
   });
 
   test("sign out works from parent portal", async ({ page }) => {

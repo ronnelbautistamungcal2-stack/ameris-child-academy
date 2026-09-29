@@ -1,7 +1,7 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { emitNewMessage } from "@/lib/socket";
-import { notifyMessageRecipients } from "@/lib/messaging";
+import { notifyMessageRecipients, resurfaceThreadForRecipients } from "@/lib/messaging";
 import {
   canCompleteWorkflow,
   canMarkReadyForReview,
@@ -175,6 +175,7 @@ export default async function handler(req, res) {
 
     const otherParticipantIds = participantIds.filter((participantId) => participantId !== user.id);
     if (otherParticipantIds.length > 0) {
+      await resurfaceThreadForRecipients(id, otherParticipantIds);
       await notifyMessageRecipients({
         sender: user,
         recipientIds: otherParticipantIds,
@@ -187,6 +188,31 @@ export default async function handler(req, res) {
     return res.status(200).json(full);
   }
 
-  res.setHeader("Allow", ["GET", "PUT"]);
+  // Archive, unarchive and delete only change the caller's own inbox; the
+  // other participants keep the conversation exactly as it was.
+  if (req.method === "PATCH" || req.method === "DELETE") {
+    if (!isParticipant) {
+      return res.status(403).json({ error: "Only participants can file this conversation" });
+    }
+
+    let data;
+    if (req.method === "DELETE") {
+      data = { deletedAt: new Date() };
+    } else if (typeof req.body?.archived === "boolean") {
+      data = { archivedAt: req.body.archived ? new Date() : null };
+    } else {
+      return res.status(400).json({ error: "archived (boolean) is required" });
+    }
+
+    const participant = await prisma.threadParticipant.update({
+      where: { threadId_userId: { threadId: id, userId: user.id } },
+      data,
+      select: { archivedAt: true, deletedAt: true },
+    });
+
+    return res.status(200).json({ id, ...participant });
+  }
+
+  res.setHeader("Allow", ["GET", "PUT", "PATCH", "DELETE"]);
   res.status(405).end();
 }

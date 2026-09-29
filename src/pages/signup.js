@@ -2,8 +2,6 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { signIn } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
-import { useTheme } from "@/contexts/ThemeContext";
-import { MoonIcon, SunIcon } from "@/components/public/icons";
 import AmerisLogo from "@/components/ui/AmerisLogo";
 
 export default function Signup() {
@@ -129,16 +127,33 @@ export default function Signup() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-50">
-      <BackgroundScene />
+    <div className="relative min-h-screen overflow-hidden bg-slate-100 dark:bg-gray-950">
+      {/* Background photo: children climbing the steps toward the pillar */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+        <div
+          className="absolute inset-0 bg-cover bg-[position:22%_center] dark:brightness-[0.55]"
+          style={{ backgroundImage: "url('/uploads/Home_Page_Picture.png')" }}
+        />
+        <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-white/90 to-transparent dark:from-gray-950/90" />
+      </div>
 
-      <SignupHeader />
+      <main className="relative z-10 flex min-h-screen items-center px-4 py-10 sm:px-8">
+        <div className="mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-8 lg:grid-cols-[1fr_480px] lg:gap-16">
+          {/* Logo */}
+          <Link
+            href="/"
+            className="mx-auto block w-[min(260px,70vw)] lg:mx-0 lg:mt-4 lg:w-[460px] lg:self-start"
+            aria-label="Ameris Academy home"
+          >
+            <AmerisLogo
+              size="xl"
+              showTagline
+              className="drop-shadow-[0_2px_12px_rgba(255,255,255,0.85)]"
+              style={{ width: "100%" }}
+            />
+          </Link>
 
-      <main className="relative z-10 px-6 pb-16">
-        <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-10 lg:grid-cols-[1fr_520px_1fr]">
-          <div className="hidden lg:block" />
-
-          <div className="rounded-3xl border border-gray-200 bg-white/90 p-8 shadow-sm backdrop-blur">
+          <div className="w-full max-w-[480px] justify-self-center rounded-3xl border border-white/70 bg-white/95 p-8 shadow-2xl shadow-slate-900/20 backdrop-blur animate-[modalIn_0.4s_ease-out] lg:justify-self-end dark:border-gray-700 dark:bg-gray-900/90">
             <Link
               href="/login"
               className="inline-flex items-center gap-2 text-sm font-semibold text-blue-800 hover:text-blue-900"
@@ -295,10 +310,6 @@ export default function Signup() {
               </Link>
             </div>
           </div>
-
-          <div className="hidden lg:block">
-            <RightIllustration />
-          </div>
         </div>
       </main>
     </div>
@@ -383,80 +394,3 @@ function PasswordInput({ value, onChange, show, setShow }) {
     </div>
   );
 }
-
-function SignupHeader() {
-  const { theme, toggleTheme } = useTheme();
-  return (
-    <header className="relative z-10 px-6 py-6">
-      <div className="mx-auto flex max-w-6xl items-center justify-between">
-        <Link href="/" className="block w-[clamp(124px,30vw,156px)] sm:w-[136px]">
-          <AmerisLogo size="md" showText={false} />
-        </Link>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-50"
-            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          >
-            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-          </button>
-          <Link
-            href="/login"
-            className="text-sm font-semibold text-blue-800 hover:text-blue-900"
-          >
-            Log in
-          </Link>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-function BackgroundScene() {
-  return (
-    <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-      <div className="absolute -top-24 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-blue-200/50 blur-2xl dark:bg-blue-900/30" />
-      <div className="absolute -bottom-24 left-0 h-[420px] w-[420px] rounded-full bg-sky-200/40 blur-2xl dark:bg-sky-900/20" />
-      <div className="absolute -bottom-24 right-0 h-[420px] w-[420px] rounded-full bg-amber-200/30 blur-2xl dark:bg-amber-900/20" />
-      <div className="absolute left-10 top-28 h-10 w-28 rounded-full bg-white/70 shadow-sm dark:bg-gray-800/50" />
-      <div className="absolute left-36 top-20 h-8 w-20 rounded-full bg-white/70 shadow-sm dark:bg-gray-800/50" />
-      <div className="absolute right-24 top-24 h-10 w-28 rounded-full bg-white/70 shadow-sm dark:bg-gray-800/50" />
-      <div className="absolute right-44 top-16 h-8 w-20 rounded-full bg-white/70 shadow-sm dark:bg-gray-800/50" />
-    </div>
-  );
-}
-
-function RightIllustration() {
-  return (
-    <div className="relative mx-auto max-w-sm">
-      <div className="rounded-[48px] bg-white/60 p-10 shadow-sm backdrop-blur">
-        <svg viewBox="0 0 260 220" className="h-auto w-full">
-          <circle cx="70" cy="110" r="58" fill="#BAE6FD" />
-          <circle cx="190" cy="105" r="62" fill="#A7F3D0" />
-          <path
-            d="M90 160c10 20 22 30 40 30s30-10 40-30"
-            fill="none"
-            stroke="#94A3B8"
-            strokeWidth="8"
-            strokeLinecap="round"
-          />
-          <circle cx="130" cy="96" r="26" fill="#0F172A" />
-          <circle cx="118" cy="90" r="5" fill="#fff" />
-          <circle cx="142" cy="90" r="5" fill="#fff" />
-          <path
-            d="M128 105c2 4 4 6 6 6s4-2 6-6"
-            fill="none"
-            stroke="#fff"
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
-        </svg>
-        <div className="mt-5 text-center text-sm font-semibold text-gray-700">
-          Welcome to your childcare portal
-        </div>
-      </div>
-    </div>
-  );
-}
-

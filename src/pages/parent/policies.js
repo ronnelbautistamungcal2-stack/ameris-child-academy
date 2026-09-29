@@ -20,10 +20,10 @@ export default function ParentPolicies() {
       setError("");
       try {
         const [policyResult, faqResult] = await Promise.all([
-          apiJson("/api/v1/policies"),
+          apiJson("/api/v1/policies?category=POLICY"),
           apiJson("/api/v1/parent-faqs"),
         ]);
-        setDocs(Array.isArray(policyResult) ? policyResult : []);
+        setDocs(sortByCreated(Array.isArray(policyResult) ? policyResult : []));
         setFaqs(Array.isArray(faqResult) ? faqResult : []);
       } catch (e) {
         setError(e.message || "Failed to load policies");
@@ -34,16 +34,9 @@ export default function ParentPolicies() {
   }, []);
 
   const filteredDocs = useMemo(() => {
-    // Most recently updated first, the way the center reads its own shelf.
-    const sorted = [...docs].sort(
-      (a, b) =>
-        new Date(b.updatedAt || b.createdAt || 0) -
-          new Date(a.updatedAt || a.createdAt || 0) ||
-        String(a.title || "").localeCompare(String(b.title || "")),
-    );
     const q = docQuery.trim().toLowerCase();
-    if (!q) return sorted;
-    return sorted.filter((doc) =>
+    if (!q) return docs;
+    return docs.filter((doc) =>
       `${doc.title || ""} ${doc.description || ""}`.toLowerCase().includes(q),
     );
   }, [docs, docQuery]);
@@ -77,19 +70,19 @@ export default function ParentPolicies() {
           </div>
         ) : null}
 
-        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <section className="rounded-2xl border border-gray-200 bg-white px-3 py-1 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:px-4">
           {loading ? (
-            <div className="p-4">
-              <Skeleton count={5} />
+            <div className="py-3">
+              <Skeleton count={6} />
             </div>
           ) : filteredDocs.length ? (
             <ul className="divide-y divide-gray-100 dark:divide-gray-700">
               {filteredDocs.map((doc) => (
-                <DocumentRow key={doc.id} doc={doc} />
+                <DocRow key={doc.id} doc={doc} />
               ))}
             </ul>
           ) : (
-            <p className="px-4 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+            <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
               {docQuery
                 ? "No documents match your search."
                 : "No policy documents have been published yet."}
@@ -140,28 +133,60 @@ export default function ParentPolicies() {
   );
 }
 
-function DocumentRow({ doc }) {
-  const isPdf = /\.pdf($|\?)/i.test(String(doc.url || ""));
-
+function DocRow({ doc }) {
   return (
-    <li className="flex items-center gap-3 px-4 py-3">
-      <span className="shrink-0">{isPdf ? <PdfIcon /> : <FileIcon />}</span>
+    <li className="flex items-center gap-3 py-2.5 sm:gap-4">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-900">
+        <PdfIcon />
+      </span>
       <div className="min-w-0 flex-1">
-        <div className={`truncate text-sm font-bold ${NAVY}`}>{doc.title}</div>
-        <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-          Updated {formatUpdated(doc.updatedAt || doc.createdAt)}
-        </div>
+        <p className={`truncate text-sm font-bold ${NAVY}`}>{doc.title}</p>
+        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+          Updated {formatShortDate(doc.updatedAt || doc.createdAt)}
+        </p>
       </div>
       <a
         href={doc.url}
         target="_blank"
         rel="noreferrer"
-        className="shrink-0 rounded-lg border border-sky-200 bg-white px-5 py-1.5 text-xs font-bold text-sky-700 transition hover:border-sky-300 hover:bg-sky-50 dark:border-sky-800 dark:bg-transparent dark:text-sky-300 dark:hover:bg-sky-950/40"
+        aria-label={`View ${doc.title}`}
+        className="shrink-0 rounded-lg border-2 border-[#1c7ed6] bg-white px-6 py-1.5 text-sm font-bold text-[#1c5fa8] transition hover:bg-sky-50 dark:border-sky-500 dark:bg-transparent dark:text-sky-300 dark:hover:bg-sky-950/40 sm:px-9"
       >
         View
       </a>
     </li>
   );
+}
+
+// Red Acrobat-style document mark, matching the mockup's policy list.
+function PdfIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden="true">
+      <path
+        fill="#E11D24"
+        d="M5.5 1.5h9l5 5v15a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-19a1 1 0 0 1 1-1Z"
+      />
+      <path fill="#F87171" d="M14.5 1.5 19.5 6.5h-4a1 1 0 0 1-1-1Z" />
+      <path
+        fill="none"
+        stroke="#fff"
+        strokeWidth={1.3}
+        strokeLinejoin="round"
+        d="M11.2 8.2c-.9 0-.6 2.2.9 4.8 1.3 2.3 2.9 3.9 3.9 3.5.9-.4-.5-1.6-3.2-1.3-2.9.3-5.4 1.6-5.2 2.4.2.9 1.8-.3 3-2.8 1.1-2.4 1.5-6.6.6-6.6Z"
+      />
+    </svg>
+  );
+}
+
+function formatShortDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("en-US", {
+    month: "2-digit",
+    day: "2-digit",
+    year: "numeric",
+  });
 }
 
 function FaqRow({ faq, open, onToggle }) {
@@ -226,54 +251,11 @@ function SearchBox({ value, onChange, placeholder, label }) {
   );
 }
 
-function PdfIcon() {
-  return (
-    <svg viewBox="0 0 32 32" className="h-8 w-8" aria-hidden="true">
-      <path
-        fill="#DC2626"
-        d="M7 2.5h11.5L26 10v19a1.5 1.5 0 0 1-1.5 1.5h-17A1.5 1.5 0 0 1 6 29V4a1.5 1.5 0 0 1 1-1.5Z"
-      />
-      <path fill="#FCA5A5" d="M18.5 2.5 26 10h-6a1.5 1.5 0 0 1-1.5-1.5Z" />
-      <text
-        x="16"
-        y="24"
-        textAnchor="middle"
-        fill="#fff"
-        fontSize="8"
-        fontWeight="700"
-        fontFamily="system-ui, sans-serif"
-      >
-        PDF
-      </text>
-    </svg>
+// Oldest first, so the list follows the order the center added documents in.
+function sortByCreated(docs) {
+  return [...docs].sort(
+    (a, b) =>
+      new Date(a.createdAt || 0) - new Date(b.createdAt || 0) ||
+      String(a.title || "").localeCompare(String(b.title || "")),
   );
-}
-
-function FileIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="#1c5fa8"
-      strokeWidth={1.8}
-      className="h-8 w-8"
-      aria-hidden="true"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5z"
-      />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M14 3v4.5h4.5" />
-    </svg>
-  );
-}
-
-function formatUpdated(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  return `${mm}/${dd}/${date.getFullYear()}`;
 }

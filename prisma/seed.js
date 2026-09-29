@@ -235,6 +235,27 @@ async function main() {
     },
   });
 
+  // Volunteer opportunities for the parent involvement page
+  const hasActivities = await prisma.parentInvolvementActivity.count({
+    where: { centerId: center.id },
+  });
+  if (!hasActivities) {
+    const at = (date, time) => new Date(`${date}T${time}:00`);
+    const opportunities = [
+      { title: "Classroom Helper", description: "Assist in classroom activities.", schedule: "Ongoing", capacity: 5 },
+      { title: "Lunch Help", description: "Help serve lunch and tidy up afterwards.", schedule: "Ongoing", capacity: 3 },
+      { title: "Playground Support", description: "Supervise and play during outdoor time.", schedule: "Ongoing", capacity: 4 },
+      { title: "Special Event Helper", description: "Set up and run our seasonal events.", schedule: "Various Dates", capacity: 10 },
+      { title: "Trunk or Treat", description: "Decorate a trunk and hand out treats.", startsAt: at("2026-10-24", "16:00"), endsAt: at("2026-10-24", "19:00"), capacity: 8 },
+      { title: "Fall Clean-Up Day", description: "Help tidy the grounds and garden for fall.", startsAt: at("2026-10-10", "09:00"), endsAt: at("2026-10-10", "12:00"), capacity: 12 },
+      { title: "Holiday Program", description: "Help with costumes, seating and snacks.", startsAt: at("2026-12-12", "13:00"), endsAt: at("2026-12-12", "16:00"), capacity: 8 },
+      { title: "Donate Supplies", description: "Drop off classroom supplies from the wish list.", schedule: "Ongoing", capacity: null },
+    ];
+    await prisma.parentInvolvementActivity.createMany({
+      data: opportunities.map((o, sortOrder) => ({ ...o, centerId: center.id, sortOrder })),
+    });
+  }
+
   // Demo invite codes (for signup flows)
   const invites = [
     { code: "PARENTDEMO", role: "PARENT" },

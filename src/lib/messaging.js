@@ -9,6 +9,34 @@ const MESSAGE_ROLE_PATHS = {
   COACH: "/coach/messages",
 };
 
+// Message attachments must be files already stored by /api/v1/uploads, so a
+// message can never smuggle in an arbitrary external link.
+export function normalizeMessageAttachment(attachment) {
+  const url = String(attachment?.url || "").trim();
+  if (!/^\/uploads\/[A-Za-z0-9._-]+$/.test(url)) return {};
+  const size = Number(attachment?.size);
+  return {
+    attachmentUrl: url,
+    attachmentName: String(attachment?.name || "Attachment").slice(0, 200),
+    attachmentSize: Number.isFinite(size) && size > 0 ? Math.round(size) : null,
+    attachmentType: attachment?.type ? String(attachment.type).slice(0, 120) : null,
+  };
+}
+
+// A new message brings an archived or deleted conversation back into the
+// recipients' inboxes, the way email does, so replies are never missed.
+export async function resurfaceThreadForRecipients(threadId, recipientIds) {
+  if (!recipientIds?.length) return;
+  await prisma.threadParticipant.updateMany({
+    where: {
+      threadId,
+      userId: { in: recipientIds },
+      OR: [{ archivedAt: { not: null } }, { deletedAt: { not: null } }],
+    },
+    data: { archivedAt: null, deletedAt: null },
+  });
+}
+
 async function createNotificationsWithFallback(data) {
   if (!data.length) return [];
 

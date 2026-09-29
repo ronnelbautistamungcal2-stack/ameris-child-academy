@@ -157,7 +157,7 @@ export default function AppShell({
       className={[
         "sticky flex w-72 flex-col",
         navy
-          ? "bg-[#12386a] dark:bg-[#0b2545]"
+          ? "bg-[#1a3a62] dark:bg-[#0b2545]"
           : "border-r border-white/60 bg-white/75 backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900/85",
       ].join(" ")}
       style={
@@ -226,8 +226,8 @@ export default function AppShell({
                     : "flex items-center justify-between rounded-2xl px-4 py-2.5 text-sm font-bold transition-all duration-150",
                   navy
                     ? active
-                      ? "bg-white text-[#12386a] shadow-md"
-                      : "text-white/85 hover:bg-white/10 hover:text-white"
+                      ? "bg-gradient-to-r from-[#3669a8] to-[#4578b4] text-white shadow-md shadow-black/20"
+                      : "text-white/90 hover:bg-white/10 hover:text-white"
                     : active
                       ? "bg-gradient-to-r from-blue-100 to-sky-50 text-blue-900 shadow-sm dark:bg-blue-900/40 dark:from-blue-900/40 dark:to-sky-900/20 dark:text-blue-200"
                       : "text-gray-600 hover:bg-blue-50 hover:text-blue-800 dark:text-gray-300 dark:hover:bg-gray-800",
@@ -238,9 +238,7 @@ export default function AppShell({
                     <span
                       className={
                         navy
-                          ? active
-                            ? "text-[#12386a]"
-                            : "text-white/80"
+                          ? "text-white"
                           : active
                             ? "text-blue-700 dark:text-blue-300"
                             : "text-gray-400 dark:text-gray-500"
@@ -414,9 +412,9 @@ export default function AppShell({
           className="sticky top-0 z-30 border-b border-white/50 bg-white dark:border-gray-700 dark:bg-gray-900"
         >
           <div className={["mx-auto flex w-full items-stretch", shellMaxWidthClassName].join(" ")}>
-            <div className="hidden w-72 shrink-0 items-center justify-center bg-white px-6 dark:bg-gray-900 md:flex">
+            <div className="hidden w-72 shrink-0 items-center justify-center bg-white px-3 dark:bg-gray-900 md:flex">
               <Link href="/dashboard" className="flex w-full justify-center">
-                <AmerisLogo size="lg" showText={false} className="max-w-full" />
+                <AmerisLogo size="lg" tight showText={false} className="max-w-full" style={{ width: "100%" }} />
               </Link>
             </div>
             <div className="relative min-w-0 flex-1 overflow-hidden">{headerBody}</div>
@@ -543,7 +541,7 @@ function NavGroup({ label, icon, items, isActive, activePath, navy = false }) {
           navy
             ? hasActiveChild
               ? "bg-white/10 text-white"
-              : "text-white/85 hover:bg-white/10 hover:text-white"
+              : "text-white/90 hover:bg-white/10 hover:text-white"
             : hasActiveChild
               ? "text-blue-800 dark:text-blue-300"
               : "text-gray-600 hover:bg-blue-50 hover:text-blue-800 dark:text-gray-300 dark:hover:bg-gray-800",
@@ -554,7 +552,7 @@ function NavGroup({ label, icon, items, isActive, activePath, navy = false }) {
             <span
               className={
                 navy
-                  ? "text-white/80"
+                  ? "text-white"
                   : hasActiveChild
                     ? "text-blue-700 dark:text-blue-400"
                     : "text-gray-400 dark:text-gray-500"
@@ -601,8 +599,8 @@ function NavGroup({ label, icon, items, isActive, activePath, navy = false }) {
                   "flex items-center justify-between rounded-xl px-3 py-2 text-[13px] font-bold transition-all duration-150",
                   navy
                     ? active
-                      ? "bg-white text-[#12386a]"
-                      : "text-white/75 hover:bg-white/10 hover:text-white"
+                      ? "bg-gradient-to-r from-[#3669a8] to-[#4578b4] text-white shadow-md shadow-black/20"
+                      : "text-white/80 hover:bg-white/10 hover:text-white"
                     : active
                       ? "bg-gradient-to-r from-blue-100 to-sky-50 text-blue-900 dark:bg-blue-900/40 dark:from-blue-900/40 dark:to-sky-900/20 dark:text-blue-200"
                       : "text-gray-500 hover:bg-blue-50 hover:text-blue-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200",

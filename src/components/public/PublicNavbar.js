@@ -1,13 +1,22 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
-import { MenuIcon, XIcon } from "./icons";
+import { useTheme } from "@/contexts/ThemeContext";
+import { MenuIcon, MoonIcon, SunIcon, XIcon } from "./icons";
 import AmerisLogo from "@/components/ui/AmerisLogo";
 import { PUBLIC_NAV_LINKS } from "./siteData";
+
+// The navbar uses the tight (padding-cropped) logo and sizes it by height so
+// the bar stays slim. Pages under the absolutely positioned navbar pad their
+// first section by NAVBAR_OFFSET (logo height + py-2.5).
+const LOGO_HEIGHT = "clamp(46px, 5.2vw, 68px)";
+const LOGO_ASPECT = 1601 / 595;
+export const NAVBAR_OFFSET = `calc(${LOGO_HEIGHT} + 1.25rem)`;
 
 export default function PublicNavbar() {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { theme, toggleTheme } = useTheme();
   const activePath = (router.asPath || "/").split("?")[0];
   const activeMatcher = useMemo(
     () => (href) => activePath === href || activePath.startsWith(`${href}/`),
@@ -39,9 +48,13 @@ export default function PublicNavbar() {
 
   return (
     <header className="absolute inset-x-0 top-0 z-50">
-      <div className="mx-auto flex w-full items-center justify-between gap-5 px-5 py-4 lg:px-8">
-        <Link href="/" className="block w-[clamp(170px,22vw,270px)] shrink-0">
-          <AmerisLogo size="xl" showText={false} className="drop-shadow-sm" />
+      <div className="mx-auto flex w-full items-center justify-between gap-5 px-5 py-2.5 lg:px-8">
+        <Link
+          href="/"
+          className="block shrink-0"
+          style={{ height: LOGO_HEIGHT, width: `calc(${LOGO_HEIGHT} * ${LOGO_ASPECT})` }}
+        >
+          <AmerisLogo tight showText={false} className="drop-shadow-sm" style={{ width: "100%" }} />
         </Link>
 
         <nav className="ml-auto hidden items-center gap-1 text-[13px] font-semibold text-slate-700 md:flex lg:gap-2">
@@ -62,6 +75,15 @@ export default function PublicNavbar() {
         </nav>
 
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-[6px] border border-white/80 bg-white/90 text-slate-700 transition hover:text-[#2566b8] dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:text-sky-300"
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+          </button>
           <Link
             href="/login"
             className="hidden items-center rounded-[6px] bg-[#133a7c] px-6 py-2 text-[13px] font-bold text-white shadow-[0_10px_22px_-14px_rgba(19,58,124,0.9)] transition hover:bg-[#0f2f66] md:inline-flex"

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import PublicLayout from "@/components/public/PublicLayout";
+import { NAVBAR_OFFSET } from "@/components/public/PublicNavbar";
 import { MapPinIcon, PhoneIcon } from "@/components/public/icons";
 import { PUBLIC_CONTACT } from "@/components/public/siteData";
 
@@ -66,9 +67,6 @@ const FEATURES = [
     Icon: AppleGlyph,
   },
 ];
-
-// Height of the absolutely positioned public navbar: logo width / logo aspect + py-4.
-const NAVBAR_OFFSET = "calc(clamp(170px, 22vw, 270px) / 1.985 + 2rem)";
 
 export default function Home() {
   const { data: session, status } = useSession();

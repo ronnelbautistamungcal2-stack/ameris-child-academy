@@ -1,5 +1,6 @@
 import Image from "next/image";
 import PublicLayout from "@/components/public/PublicLayout";
+import { NAVBAR_OFFSET } from "@/components/public/PublicNavbar";
 
 const RESOURCES = [
   {
@@ -53,9 +54,6 @@ const RESOURCES = [
     href: "https://jobs.utah.gov/occ/resources",
   },
 ];
-
-// Height of the absolutely positioned public navbar: logo width / logo aspect + py-4.
-const NAVBAR_OFFSET = "calc(clamp(170px, 22vw, 270px) / 1.985 + 2rem)";
 
 export default function ResourcesPage() {
   return (

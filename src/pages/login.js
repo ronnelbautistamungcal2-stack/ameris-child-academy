@@ -65,7 +65,14 @@ export default function Login() {
         <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-white/90 to-transparent dark:from-gray-950/90" />
       </div>
 
-      <main className="relative z-10 flex min-h-screen items-center px-4 py-10 sm:px-8">
+      <Link
+        href="/"
+        className="absolute left-4 top-4 z-20 inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/90 px-4 py-2 text-sm font-semibold text-blue-800 shadow-md backdrop-blur transition hover:bg-white hover:text-blue-900 sm:left-8 sm:top-6 dark:border-gray-700 dark:bg-gray-900/90 dark:text-blue-400 dark:hover:text-blue-300"
+      >
+        <span aria-hidden="true">←</span> Back to home
+      </Link>
+
+      <main className="relative z-10 flex min-h-screen items-center px-4 pb-10 pt-20 sm:px-8">
         <div className="mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-8 lg:grid-cols-[1fr_440px] lg:gap-16">
           {/* Logo */}
           <Link

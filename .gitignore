@@ -32,3 +32,6 @@ planner-fix-ledger*.json
 test-results/
 playwright-report/
 playwright/.cache/
+
+# Client mockup images (~90 MB) - regenerate with scripts/extract-client-mockups.py
+docs/client-requests/*/mockups/

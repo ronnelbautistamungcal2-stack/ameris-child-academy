@@ -478,6 +478,14 @@ model Lesson {
   linkedLesson            Lesson?                  @relation("LessonLinkedLesson", fields: [linkedLessonId], references: [id], onDelete: SetNull)
   linkedLessonId          String?
   linkedFrom              Lesson[]                 @relation("LessonLinkedLesson")
+  ageYears                Int?
+  ageMonths               Int?
+  priorStep               Lesson?                  @relation("LessonPriorStep", fields: [priorStepId], references: [id], onDelete: SetNull)
+  priorStepId             String?
+  priorStepOf             Lesson[]                 @relation("LessonPriorStep")
+  nextStep                Lesson?                  @relation("LessonNextStep", fields: [nextStepId], references: [id], onDelete: SetNull)
+  nextStepId              String?
+  nextStepOf              Lesson[]                 @relation("LessonNextStep")
   media                   String[]                 @default([])
   goals                   LessonGoal[]
   progress                Progress[]
@@ -491,6 +499,8 @@ model Lesson {
 
   @@index([policyDocumentId])
   @@index([linkedLessonId])
+  @@index([priorStepId])
+  @@index([nextStepId])
   @@index([centerId, term])
   @@index([centerId, lessonSlot])
 }

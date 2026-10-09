@@ -1,6 +1,7 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import { normalizeLessonSlot, normalizeTermDaySelections } from "@/lib/lessonScheduling";
 import prisma from "@/lib/prisma";
+import { parseStepAge, validateStepLinks } from "@/lib/progressionSteps";
 
 const LESSON_INCLUDE = {
   category: true,
@@ -16,6 +17,8 @@ const LESSON_INCLUDE = {
       reference: true,
     },
   },
+  priorStep: { select: { id: true, title: true, reference: true } },
+  nextStep: { select: { id: true, title: true, reference: true } },
 };
 
 export default async function handler(req, res) {
@@ -64,10 +67,17 @@ export default async function handler(req, res) {
       categoryId,
       policyDocumentId,
       linkedLessonId,
+      priorStepId,
+      nextStepId,
       supplies,
     } = req.body;
     if (!title || !cId)
       return res.status(400).json({ error: "Title and centerId required" });
+
+    const age = parseStepAge(req.body);
+    if (age.error) return res.status(400).json({ error: age.error });
+    const linkError = await validateStepLinks(prisma, { centerId: cId, priorStepId, nextStepId });
+    if (linkError) return res.status(400).json({ error: linkError });
 
     const lesson = await prisma.lesson.create({
       data: {
@@ -83,6 +93,10 @@ export default async function handler(req, res) {
         categoryId: categoryId || null,
         policyDocumentId: policyDocumentId || null,
         linkedLessonId: linkedLessonId || null,
+        ageYears: age.data.ageYears ?? null,
+        ageMonths: age.data.ageMonths ?? null,
+        priorStepId: priorStepId || null,
+        nextStepId: nextStepId || null,
         supplies: supplies && Array.isArray(supplies) && supplies.length
           ? {
               create: supplies.map((s) => ({

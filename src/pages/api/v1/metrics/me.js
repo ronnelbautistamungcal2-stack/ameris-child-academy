@@ -6,6 +6,7 @@ import {
   unauthorized,
 } from "@/lib/api-error";
 import { assertSubscriptionFeature } from "@/lib/subscriptions";
+import { STAFF_PORTAL_ROLES } from "@/lib/roles";
 
 function startOfDay(date = new Date()) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -35,7 +36,7 @@ export default createApiHandler(async function handler(req, res) {
   if (!session) throw unauthorized();
 
   const role = session.user.role;
-  if (!["ADMIN", "TEACHER", "OTHER_STAFF"].includes(role)) {
+  if (!["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES].includes(role)) {
     throw forbidden();
   }
 

@@ -1,7 +1,7 @@
 import AppShell from "@/components/shell/AppShell";
 import { buildStaffNavItems } from "@/components/staff/staffNav";
 import { useRequireRole } from "@/hooks/useRequireRole";
-import { isKitchenStaff } from "@/lib/roles";
+import { isKitchenStaff, STAFF_PORTAL_ROLES } from "@/lib/roles";
 import { useMemo } from "react";
 
 export default function StaffLayout({
@@ -10,7 +10,7 @@ export default function StaffLayout({
   shellMaxWidthClassName,
   contentMaxWidthClassName,
 }) {
-  const { session, status, allowed } = useRequireRole(["OTHER_STAFF"], "/dashboard");
+  const { session, status, allowed } = useRequireRole(STAFF_PORTAL_ROLES, "/dashboard");
   const navItems = useMemo(
     () => buildStaffNavItems({ isKitchenStaff: isKitchenStaff(session?.user) }),
     [session?.user],

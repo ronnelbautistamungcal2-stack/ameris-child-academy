@@ -6,10 +6,11 @@ import {
   normalizeRoles,
   normalizeStaffDepartment,
   primaryRoleFromRoles,
+  STAFF_PORTAL_ROLES,
   userRoles,
 } from "@/lib/roles";
 
-const STAFF_ROLES = ["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"];
+const STAFF_ROLES = ["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "COACH"];
 
 function parseOptionalDate(value) {
   if (value === null || value === undefined || value === "") return null;

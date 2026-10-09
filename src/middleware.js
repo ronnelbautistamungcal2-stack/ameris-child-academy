@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { STAFF_PORTAL_ROLES } from "@/lib/roles";
 
 const PUBLIC_PATHS = new Set([
   "/",
@@ -25,13 +26,14 @@ const PUBLIC_PREFIXES = [
   "/sw.js",
 ];
 
-const ROLE_ROUTES = {
-  ADMIN: ["/admin"],
-  TEACHER: ["/teacher"],
-  OTHER_STAFF: ["/staff"],
-  PARENT: ["/parent"],
-  COACH: ["/coach"],
-  SUBSCRIBER: ["/subscriber"],
+// Route prefix -> roles allowed there. Admins may visit every portal.
+const ROUTE_ROLES = {
+  "/admin": ["ADMIN"],
+  "/teacher": ["TEACHER"],
+  "/staff": STAFF_PORTAL_ROLES,
+  "/parent": ["PARENT"],
+  "/coach": ["COACH"],
+  "/subscriber": ["SUBSCRIBER"],
 };
 
 export async function middleware(request) {
@@ -67,15 +69,9 @@ export async function middleware(request) {
   }
 
   const userRole = token.role;
-  for (const [role, prefixes] of Object.entries(ROLE_ROUTES)) {
-    for (const prefix of prefixes) {
-      if (
-        pathname.startsWith(prefix) &&
-        userRole !== role &&
-        userRole !== "ADMIN"
-      ) {
-        return NextResponse.redirect(new URL("/dashboard", request.url));
-      }
+  for (const [prefix, roles] of Object.entries(ROUTE_ROLES)) {
+    if (pathname.startsWith(prefix) && !roles.includes(userRole) && userRole !== "ADMIN") {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
     }
   }
 

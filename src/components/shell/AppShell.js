@@ -868,6 +868,12 @@ function getRoleDotClass(role) {
       return "bg-emerald-500";
     case "OTHER_STAFF":
       return "bg-cyan-500";
+    case "KITCHEN_STAFF":
+      return "bg-orange-500";
+    case "HR_STAFF":
+      return "bg-indigo-500";
+    case "STUDENT_SUPPORT":
+      return "bg-teal-500";
     case "COACH":
       return "bg-amber-500";
     case "PARENT":

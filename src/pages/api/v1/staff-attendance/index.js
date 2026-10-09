@@ -1,12 +1,12 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { isSelfServiceEmployeeRole } from "@/lib/roles";
+import { isSelfServiceEmployeeRole, STAFF_PORTAL_ROLES } from "@/lib/roles";
 
 export default async function handler(req, res) {
   try {
     const session = await getSession(req, res);
     if (!session) return res.status(401).json({ error: "Unauthorized" });
-    if (!["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"].includes(session.user.role)) {
+    if (!["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "COACH"].includes(session.user.role)) {
       return res.status(403).json({ error: "Forbidden" });
     }
 

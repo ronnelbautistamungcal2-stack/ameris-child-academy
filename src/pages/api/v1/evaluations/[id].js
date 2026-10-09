@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import { badRequest } from "@/lib/api-error";
 import prisma from "@/lib/prisma";
+import { STAFF_PORTAL_ROLES } from "@/lib/roles";
 import {
   ensureObject,
   optionalDate,
@@ -45,7 +46,7 @@ export default async function handler(req, res) {
 
 async function handleGet(req, res, session) {
   const { id } = req.query;
-  if (!["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"].includes(session.user.role)) {
+  if (!["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "COACH"].includes(session.user.role)) {
     return res.status(403).json({ error: "Forbidden" });
   }
   const evaluation = await prisma.teacherEvaluation.findUnique({

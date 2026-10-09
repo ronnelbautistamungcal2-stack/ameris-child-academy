@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { isStaffPortalRole, STAFF_PORTAL_ROLES } from "@/lib/roles";
 
 export default async function handler(req, res) {
   try {
@@ -9,11 +10,11 @@ export default async function handler(req, res) {
     const { centerId, staffId } = req.query;
 
     if (req.method === "GET") {
-      if (!["ADMIN", "OTHER_STAFF"].includes(session.user.role)) {
+      if (!["ADMIN", ...STAFF_PORTAL_ROLES].includes(session.user.role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
       if (!centerId) return res.status(400).json({ error: "centerId is required" });
-      const resolvedStaffId = session.user.role === "OTHER_STAFF" ? session.user.id : staffId;
+      const resolvedStaffId = isStaffPortalRole(session.user.role) ? session.user.id : staffId;
       const records = await prisma.staffCommendation.findMany({
         where: { centerId, ...(resolvedStaffId ? { staffId: resolvedStaffId } : {}) },
         include: { createdBy: { select: { id: true, name: true } } },

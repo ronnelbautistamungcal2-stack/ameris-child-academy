@@ -1,4 +1,4 @@
-import { userRoles } from "@/lib/roles";
+import { STAFF_PORTAL_ROLES, userRoles } from "@/lib/roles";
 import { buildParentLinkedChildWhere } from "@/lib/child-parent-links";
 import { isAccommodationThread } from "@/lib/messageWorkflows";
 
@@ -218,8 +218,8 @@ export async function resolveMessageAudienceUsers({
       return resolveUsersForRoles(
         prismaClient,
         accommodationThread
-          ? ["TEACHER", "OTHER_STAFF"]
-          : ["TEACHER", "OTHER_STAFF", "COACH"],
+          ? ["TEACHER", ...STAFF_PORTAL_ROLES]
+          : ["TEACHER", ...STAFF_PORTAL_ROLES, "COACH"],
         scopedCenterIds,
         user.id,
       );

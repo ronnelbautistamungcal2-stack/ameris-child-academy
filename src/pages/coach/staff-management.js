@@ -14,6 +14,7 @@ import { apiJson } from "@/lib/api";
 import { toCalendarDay } from "@/lib/calendar";
 import { getTimeOffTypeLabel, groupTimeOffRequests } from "@/lib/time-off";
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { STAFF_PORTAL_ROLES } from "@/lib/roles";
 
 const TIMEOFF_CALENDAR_LEGEND = [
   { label: "Events", cls: "bg-indigo-100" },
@@ -262,7 +263,7 @@ export default function StaffManagement() {
             () => [],
           ),
           apiJson(
-            `/api/v1/users?centerId=${centerId}&roles=TEACHER,OTHER_STAFF,COACH`,
+            `/api/v1/users?centerId=${centerId}&roles=${["TEACHER", ...STAFF_PORTAL_ROLES, "COACH"].join(",")}`,
           ).catch(
             () => [],
           ),

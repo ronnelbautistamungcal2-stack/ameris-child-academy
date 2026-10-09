@@ -1,7 +1,7 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
-import { hasEmployeeRole, ROLE_OPTIONS, STAFF_DEPARTMENTS, userRoles } from "@/lib/roles";
+import { hasEmployeeRole, ROLE_OPTIONS, STAFF_DEPARTMENTS, STAFF_PORTAL_ROLES, userRoles } from "@/lib/roles";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -11,6 +11,9 @@ const ROLE_CONFIG = {
   ADMIN: { color: "#7c3aed", bg: "#f5f3ff", darkBg: "rgba(124,58,237,0.18)", label: "Admin", icon: "shield" },
   TEACHER: { color: "#2563eb", bg: "#eff6ff", darkBg: "rgba(37,99,235,0.18)", label: "Teacher", icon: "book" },
   OTHER_STAFF: { color: "#0891b2", bg: "#ecfeff", darkBg: "rgba(8,145,178,0.18)", label: "Other Staff", icon: "briefcase" },
+  KITCHEN_STAFF: { color: "#ea580c", bg: "#fff7ed", darkBg: "rgba(234,88,12,0.18)", label: "Kitchen Staff", icon: "briefcase" },
+  HR_STAFF: { color: "#4f46e5", bg: "#eef2ff", darkBg: "rgba(79,70,229,0.18)", label: "HR Staff", icon: "briefcase" },
+  STUDENT_SUPPORT: { color: "#0d9488", bg: "#f0fdfa", darkBg: "rgba(13,148,136,0.18)", label: "Student Support", icon: "briefcase" },
   PARENT: { color: "#059669", bg: "#ecfdf5", darkBg: "rgba(5,150,105,0.18)", label: "Parent", icon: "heart" },
   COACH: { color: "#d97706", bg: "#fffbeb", darkBg: "rgba(217,119,6,0.18)", label: "Coach", icon: "star" },
   SUBSCRIBER: { color: "#6b7280", bg: "#f9fafb", darkBg: "rgba(107,114,128,0.18)", label: "Subscriber", icon: "user" },
@@ -330,7 +333,7 @@ export default function AdminUsers() {
         <StatCard label="Total Users" value={users.length} color="#2563eb" icon={IconUsers} />
         <StatCard label="Teachers" value={roleCounts.TEACHER || 0} color="#2563eb" icon={IconBook} />
         <StatCard label="Parents" value={roleCounts.PARENT || 0} color="#059669" icon={IconHeart} />
-        <StatCard label="Staff" value={(roleCounts.ADMIN || 0) + (roleCounts.COACH || 0) + (roleCounts.OTHER_STAFF || 0)} color="#7c3aed" icon={IconShield} />
+        <StatCard label="Staff" value={["ADMIN", "COACH", ...STAFF_PORTAL_ROLES].reduce((sum, role) => sum + (roleCounts[role] || 0), 0)} color="#7c3aed" icon={IconShield} />
       </div>
 
       <Panel>
@@ -598,6 +601,9 @@ export default function AdminUsers() {
               { key: "ALL", label: "All" },
               { key: "TEACHER", label: "Teachers" },
               { key: "OTHER_STAFF", label: "Other Staff" },
+              { key: "KITCHEN_STAFF", label: "Kitchen" },
+              { key: "HR_STAFF", label: "HR" },
+              { key: "STUDENT_SUPPORT", label: "Student Support" },
               { key: "PARENT", label: "Parents" },
               { key: "ADMIN", label: "Admins" },
               { key: "COACH", label: "Coaches" },

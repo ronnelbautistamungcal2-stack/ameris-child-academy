@@ -1,11 +1,12 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { STAFF_PORTAL_ROLES } from "@/lib/roles";
 import {
   checklistVisibleToStaff,
   getUserChecklistRoles,
 } from "@/lib/dailyChecklistVisibility";
 
-const CHECKLIST_STAFF_ROLES = ["TEACHER", "OTHER_STAFF", "COACH"];
+const CHECKLIST_STAFF_ROLES = ["TEACHER", ...STAFF_PORTAL_ROLES, "COACH"];
 
 export default async function handler(req, res) {
   try {

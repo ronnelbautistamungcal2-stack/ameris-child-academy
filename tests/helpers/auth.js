@@ -89,6 +89,18 @@ async function loginAsOtherStaff(request) {
   return getAuthCookie(request, "otherstaff@demo.com", "otherstaffpass");
 }
 
+async function loginAsKitchenStaff(request) {
+  return getAuthCookie(request, "kitchen@demo.com", "kitchenpass");
+}
+
+async function loginAsHrStaff(request) {
+  return getAuthCookie(request, "hr@demo.com", "hrpass");
+}
+
+async function loginAsStudentSupport(request) {
+  return getAuthCookie(request, "support@demo.com", "supportpass");
+}
+
 module.exports = {
   getAuthCookie,
   getSessionCookieValue,
@@ -98,4 +110,7 @@ module.exports = {
   loginAsParent,
   loginAsCoach,
   loginAsOtherStaff,
+  loginAsKitchenStaff,
+  loginAsHrStaff,
+  loginAsStudentSupport,
 };

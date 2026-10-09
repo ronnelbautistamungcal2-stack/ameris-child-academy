@@ -5,8 +5,9 @@ import { apiJson } from "@/lib/api";
 import { useToast } from "@/contexts/ToastContext";
 import NotificationPreferences from "@/components/parent/NotificationPreferences";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { STAFF_PORTAL_ROLES } from "@/lib/roles";
 
-const STAFF_ROLES = new Set(["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"]);
+const STAFF_ROLES = new Set(["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "COACH"]);
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set([
   "image/jpeg",
@@ -18,7 +19,7 @@ const ALLOWED_IMAGE_TYPES = new Set([
 export default function SettingsPage() {
   const toast = useToast();
   const { session, status, allowed, update } = useRequireRole(
-    ["ADMIN", "TEACHER", "OTHER_STAFF", "PARENT", "COACH", "SUBSCRIBER"],
+    ["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "PARENT", "COACH", "SUBSCRIBER"],
     "/login",
   );
 

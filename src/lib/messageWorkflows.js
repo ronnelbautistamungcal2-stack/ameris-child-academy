@@ -1,4 +1,4 @@
-import { userRoles } from "@/lib/roles";
+import { isStaffPortalRole, STAFF_PORTAL_ROLES, userRoles } from "@/lib/roles";
 
 export const MESSAGE_THREAD_TYPES = [
   { value: "MESSAGE", label: "Message" },
@@ -60,7 +60,7 @@ export function canSendAccommodation(role) {
 }
 
 export function canReceiveAccommodation(role) {
-  return ["TEACHER", "OTHER_STAFF"].includes(String(role || "").toUpperCase());
+  return ["TEACHER", ...STAFF_PORTAL_ROLES].includes(String(role || "").toUpperCase());
 }
 
 /**
@@ -85,7 +85,7 @@ export function getAvailableThreadTypesForRole(role) {
   const normalizedRole = String(role || "").toUpperCase();
   if (normalizedRole === "ADMIN") return MESSAGE_THREAD_TYPES;
   if (normalizedRole === "COACH") return MESSAGE_THREAD_TYPES;
-  if (normalizedRole === "TEACHER" || normalizedRole === "OTHER_STAFF") {
+  if (normalizedRole === "TEACHER" || isStaffPortalRole(normalizedRole)) {
     return MESSAGE_THREAD_TYPES.filter((item) =>
       ["MESSAGE", "REQUEST"].includes(item.value),
     );

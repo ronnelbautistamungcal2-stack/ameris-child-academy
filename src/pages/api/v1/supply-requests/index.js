@@ -1,6 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { isEmployeeRole, isManagerRole, isSelfServiceEmployeeRole } from "@/lib/roles";
+import { isEmployeeRole, isManagerRole, isSelfServiceEmployeeRole, STAFF_PORTAL_ROLES } from "@/lib/roles";
 
 const VALID_STATUSES = ["PENDING", "APPROVED", "FULFILLED", "DENIED"];
 
@@ -55,7 +55,7 @@ async function handleGet(req, res, session) {
 }
 
 async function handlePost(req, res, session) {
-  if (!["ADMIN", "COACH", "TEACHER", "OTHER_STAFF"].includes(session.user.role)) {
+  if (!["ADMIN", "COACH", "TEACHER", ...STAFF_PORTAL_ROLES].includes(session.user.role)) {
     return res.status(403).json({ error: "Only admins, coaches, teachers, and staff can request supplies" });
   }
 

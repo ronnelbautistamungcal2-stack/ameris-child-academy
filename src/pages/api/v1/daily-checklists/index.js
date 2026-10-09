@@ -9,6 +9,7 @@ import {
 } from "@/lib/lessonScheduling";
 import prisma from "@/lib/prisma";
 import { getTeacherClassIds } from "@/lib/teacherScope";
+import { STAFF_PORTAL_ROLES } from "@/lib/roles";
 import {
   itemMatchesDate,
   normalizeChecklistFrequency,
@@ -460,7 +461,7 @@ export default async function handler(req, res) {
   if (!session) return res.status(401).json({ error: "Unauthorized" });
 
   const role = session.user.role;
-  if (!["ADMIN", "COACH", "TEACHER", "OTHER_STAFF"].includes(role)) {
+  if (!["ADMIN", "COACH", "TEACHER", ...STAFF_PORTAL_ROLES].includes(role)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 

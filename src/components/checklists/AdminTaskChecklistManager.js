@@ -26,6 +26,7 @@ import {
   normalizeLessonSource,
 } from "@/lib/lessonScheduling";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { STAFF_PORTAL_ROLES } from "@/lib/roles";
 
 const CATEGORY_OPTIONS = [
   { value: "OPENING", label: "Opening" },
@@ -249,7 +250,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
         apiJson(`/api/v1/lesson-categories?centerId=${encodeURIComponent(centerId)}`).catch(() => []),
         apiJson(`/api/v1/lesson-term-calendars?centerId=${encodeURIComponent(centerId)}`).catch(() => []),
         apiJson(`/api/v1/policies?centerId=${encodeURIComponent(centerId)}`).catch(() => []),
-        apiJson(`/api/v1/users?centerId=${encodeURIComponent(centerId)}&roles=TEACHER,OTHER_STAFF,COACH`),
+        apiJson(`/api/v1/users?centerId=${encodeURIComponent(centerId)}&roles=${["TEACHER", ...STAFF_PORTAL_ROLES, "COACH"].join(",")}`),
       ]);
       setChecklists(Array.isArray(lists) ? lists : []);
       setClassrooms(Array.isArray(rooms) ? rooms : []);

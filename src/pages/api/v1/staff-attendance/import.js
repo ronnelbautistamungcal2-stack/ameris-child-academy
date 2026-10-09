@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import XLSX from "xlsx";
+import { STAFF_PORTAL_ROLES } from "@/lib/roles";
 
 export const config = {
   api: {
@@ -10,7 +11,7 @@ export const config = {
   },
 };
 
-const STAFF_ROLE_FILTER = ["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"];
+const STAFF_ROLE_FILTER = ["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "COACH"];
 const VALID_STATUSES = new Set(["PRESENT", "LATE", "ABSENT", "HALF_DAY"]);
 
 const COLUMN_ALIASES = {

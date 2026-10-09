@@ -18,6 +18,7 @@ import { COACH_NAV_ITEMS } from "@/components/coach/coachNav";
 import { SUBSCRIBER_NAV_ITEMS } from "@/components/subscriber/subscriberNav";
 import { apiJson } from "@/lib/api";
 import { useNewMessages, useUserSocket } from "@/hooks/useSocket";
+import { isStaffPortalRole } from "@/lib/roles";
 
 const FALLBACK_NAV = [
   { href: "/dashboard", label: "Dashboard" },
@@ -27,7 +28,7 @@ const FALLBACK_NAV = [
 function navForRole(role) {
   if (role === "ADMIN") return ADMIN_NAV_ITEMS;
   if (role === "TEACHER") return TEACHER_NAV_ITEMS;
-  if (role === "OTHER_STAFF") return STAFF_NAV_ITEMS;
+  if (isStaffPortalRole(role)) return STAFF_NAV_ITEMS;
   if (role === "COACH") return COACH_NAV_ITEMS;
   if (role === "PARENT") return PARENT_NAV_ITEMS;
   if (role === "SUBSCRIBER") return SUBSCRIBER_NAV_ITEMS;

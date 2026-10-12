@@ -264,7 +264,7 @@ export default function Dashboard() {
                     </Link>
                   ) : role === "TEACHER" ? (
                     <Link
-                      href="/teacher/children"
+                      href="/teacher/classroom"
                       className="text-sm font-semibold text-blue-600 hover:text-blue-700"
                     >
                       View All

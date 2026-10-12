@@ -159,14 +159,8 @@ export default function TeacherDashboard() {
   const selectedCenterName =
     centers.find((center) => center.id === centerId)?.name || "";
   const headerDate = useMemo(() => formatHeaderDate(new Date()), []);
-  const redFlagChildrenHref = useMemo(() => {
-    if (!centerId) return "/teacher/children";
-    const params = new URLSearchParams({
-      centerId,
-      flagged: "1",
-    });
-    return `/teacher/children?${params.toString()}`;
-  }, [centerId]);
+  // Client request: red flags and children present open the classroom list.
+  const redFlagChildrenHref = "/teacher/classroom";
   const messagesHref = useMemo(() => {
     if (!centerId) return "/teacher/messages";
     return `/teacher/messages?centerId=${encodeURIComponent(centerId)}`;

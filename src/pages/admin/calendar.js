@@ -3,7 +3,6 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import MonthlyCalendar from "@/components/calendar/MonthlyCalendar";
 import { apiJson } from "@/lib/api";
 import { formatDateInputValue, toCalendarDay } from "@/lib/calendar";
-import { getTimeOffTypeLabel } from "@/lib/time-off";
 import { useEffect, useState, useCallback } from "react";
 
 const EVENT_TYPES = [
@@ -95,12 +94,6 @@ function hoursBetween(start, end) {
   const diff = (endDate - startDate) / (1000 * 60 * 60);
   return Number.isFinite(diff) && diff > 0 ? diff : 0;
 }
-
-const LEGEND = [
-  { label: "Events", cls: "bg-indigo-100" },
-  { label: "Shifts", cls: "bg-blue-100" },
-  { label: "Birthdays", cls: "bg-pink-100" },
-];
 
 export default function CalendarPage() {
   const [centers, setCenters] = useState([]);
@@ -237,7 +230,7 @@ export default function CalendarPage() {
           id: t.id, _source: "timeoff", type: t.type, status: t.status,
           startDate: t.startDate, endDate: t.endDate,
           user: t.user,
-          label: `${t.user?.name || "\u2014"} (${t.typeLabel || getTimeOffTypeLabel(t.type)})`,
+          label: t.user?.name || "\u2014",
           _raw: t,
         });
       }
@@ -435,9 +428,9 @@ export default function CalendarPage() {
                 boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
                 display: "flex", alignItems: "center", gap: 8,
               }}>
-                <span style={{ fontSize: 16 }}>\u26a0\ufe0f</span>
+                <span style={{ fontSize: 16 }}>{"\u26a0\ufe0f"}</span>
                 <span style={{ flex: 1 }}>{error}</span>
-                <button onClick={() => setError("")} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", fontSize: 14 }}>\u2715</button>
+                <button onClick={() => setError("")} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", fontSize: 14 }}>{"\u2715"}</button>
               </div>
             )}
             {success && (
@@ -448,7 +441,7 @@ export default function CalendarPage() {
                 boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
                 display: "flex", alignItems: "center", gap: 8,
               }}>
-                <span style={{ fontSize: 16 }}>\u2705</span>
+                <span style={{ fontSize: 16 }}>{"\u2705"}</span>
                 <span style={{ flex: 1 }}>{success}</span>
               </div>
             )}
@@ -588,7 +581,7 @@ export default function CalendarPage() {
                     boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
                   }}
                 >
-                  <option value="">Select center\u2026</option>
+                  <option value="">{"Select center\u2026"}</option>
                   {centers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               )}
@@ -821,7 +814,7 @@ export default function CalendarPage() {
                     background: "var(--admin-bg-tertiary)", border: "none", borderRadius: 8,
                     cursor: "pointer", fontSize: 14, color: "var(--admin-text-muted)",
                   }}
-                >\u2715</button>
+                >{"\u2715"}</button>
               </div>
 
               <form onSubmit={saveEvent}>
@@ -1151,7 +1144,6 @@ export default function CalendarPage() {
                 onMonthChange={(y, m) => { setCalYear(y); setCalMonth(m); setSelectedDay(null); }}
                 onDayClick={setSelectedDay}
                 selectedDay={selectedDay}
-                legendItems={LEGEND}
               />
             </div>
 
@@ -1187,7 +1179,7 @@ export default function CalendarPage() {
                     }}
                     onMouseEnter={e => { e.currentTarget.style.background = "var(--admin-border)"; }}
                     onMouseLeave={e => { e.currentTarget.style.background = "var(--admin-bg-tertiary)"; }}
-                  >\u2715</button>
+                  >{"\u2715"}</button>
                 </div>
 
                 {/* Day items */}
@@ -1218,7 +1210,7 @@ export default function CalendarPage() {
                       textAlign: "center", padding: "28px 16px",
                       color: "var(--admin-text-faint)", fontSize: 13,
                     }}>
-                      <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.4 }}>\ud83d\udcc5</div>
+                      <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.4 }}>{"\ud83d\udcc5"}</div>
                       <div style={{ fontWeight: 600 }}>No events this day</div>
                       <div style={{ fontSize: 12, marginTop: 4 }}>Click "+ Add" to create one</div>
                     </div>
@@ -1329,7 +1321,7 @@ export default function CalendarPage() {
             background: "var(--admin-bg)", border: "1px solid var(--admin-border)",
             borderRadius: 14,
           }}>
-            <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.3 }}>\ud83d\udcc5</div>
+            <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.3 }}>{"\ud83d\udcc5"}</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: "var(--admin-text-secondary)", marginBottom: 6 }}>
               Select a center to view the calendar
             </div>

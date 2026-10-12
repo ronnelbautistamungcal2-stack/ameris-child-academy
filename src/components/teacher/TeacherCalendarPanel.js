@@ -1,7 +1,6 @@
 import MonthlyCalendar from "@/components/calendar/MonthlyCalendar";
 import { apiJson } from "@/lib/api";
 import { toCalendarDay } from "@/lib/calendar";
-import { getTimeOffTypeLabel } from "@/lib/time-off";
 import { useCallback, useEffect, useState } from "react";
 
 function formatDateTimeRange(start, end) {
@@ -41,14 +40,6 @@ const SOURCE_BADGE = {
   timeoff: "bg-emerald-100 text-emerald-700",
   birthday: "bg-pink-100 text-pink-700",
 };
-
-const LEGEND = [
-  { label: "Events", cls: "bg-indigo-100" },
-  { label: "My Shifts", cls: "bg-blue-100" },
-  { label: "Paid", cls: "bg-emerald-100" },
-  { label: "Unpaid", cls: "bg-gray-200" },
-  { label: "Birthdays", cls: "bg-pink-100" },
-];
 
 export default function TeacherCalendarPanel({
   centerId: controlledCenterId,
@@ -138,7 +129,7 @@ export default function TeacherCalendarPanel({
           startDate: t.startDate,
           endDate: t.endDate,
           user: t.user,
-          label: `${t.typeLabel || getTimeOffTypeLabel(t.type)} (${t.status})`,
+          label: "Time Off",
           _raw: t,
         });
       }
@@ -219,7 +210,6 @@ function getDayItems(day) {
                 events={normalizedEvents}
                 onMonthChange={(y, m) => { setCalYear(y); setCalMonth(m); setSelectedDay(null); }}
                 onDayClick={setSelectedDay}
-                legendItems={LEGEND}
               />
             </div>
 

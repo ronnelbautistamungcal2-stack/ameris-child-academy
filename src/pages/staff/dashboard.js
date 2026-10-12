@@ -245,7 +245,7 @@ export default function StaffDashboardPage() {
                 value={unreadMessages}
                 description="Unread conversation items tied to this center view."
                 href="/staff/messages"
-                tone="sky"
+                kind="messages"
               />
               <WorkspaceStat
                 label="Open Checklist Items"
@@ -266,7 +266,7 @@ export default function StaffDashboardPage() {
                 value={pendingTimeOffGroups.length}
                 description="Requests awaiting approval in the selected center."
                 href="/staff/time-off"
-                tone="slate"
+                kind="timeOffPending"
               />
             </>
           }

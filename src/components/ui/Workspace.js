@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DASHBOARD_BUBBLES } from "@/lib/dashboardBubbles";
 
 const TONE_STYLES = {
   sky: {
@@ -127,10 +128,12 @@ export function WorkspaceStat({
   value,
   description,
   tone = "slate",
+  kind,
   icon,
   href,
 }) {
-  const style = TONE_STYLES[tone] || TONE_STYLES.slate;
+  // `kind` picks the shared dashboard bubble colour (see dashboardBubbles).
+  const style = (kind && DASHBOARD_BUBBLES[kind]) || TONE_STYLES[tone] || TONE_STYLES.slate;
   const content = (
     <>
       <div className="flex items-start justify-between gap-3">

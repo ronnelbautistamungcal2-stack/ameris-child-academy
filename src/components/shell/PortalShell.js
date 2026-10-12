@@ -162,7 +162,6 @@ export default function PortalShell({ children }) {
         shellMaxWidthClassName="max-w-[1760px]"
         contentMaxWidthClassName="max-w-[1400px]"
         showBack={false}
-        sidebarVariant={isParent ? "navy" : "light"}
         bannerSrc={isParent ? HEADER_BANNER_SRC : ""}
         bannerTagline={isParent ? "From Blessings to Pillars" : ""}
       >

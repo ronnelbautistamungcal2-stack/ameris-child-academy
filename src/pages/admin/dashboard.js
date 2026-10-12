@@ -11,6 +11,7 @@ import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { DASHBOARD_BUBBLES } from "@/lib/dashboardBubbles";
 
 export default function AdminDashboard() {
   const [centers, setCenters] = useState([]);
@@ -265,7 +266,7 @@ export default function AdminDashboard() {
                     : "Attendance data is not available right now"
                 }
                 href="#live-room-status"
-                color="sky"
+                kind="studentsPresent"
                 icon={<IconUsers className="h-6 w-6" />}
               />
               <Tile
@@ -273,7 +274,7 @@ export default function AdminDashboard() {
                 value={String(childFlagsSummary.openCount)}
                 subtitle="Open flags requiring review"
                 href={childFlagsHref}
-                color={childFlagsSummary.openCount > 0 ? "amber" : "emerald"}
+                kind="redFlags"
                 icon={<IconFlag className="h-6 w-6" />}
               />
               <Tile
@@ -281,7 +282,7 @@ export default function AdminDashboard() {
                 value="Open"
                 subtitle="Teacher and parent conversations"
                 href={`/admin/messages?centerId=${encodeURIComponent(centerId)}`}
-                color="violet"
+                kind="messages"
                 icon={<IconMessage className="h-6 w-6" />}
               />
             </div>
@@ -597,8 +598,11 @@ const TILE_COLORS = {
   },
 };
 
-function Tile({ title, value, subtitle, href, color = "sky", icon }) {
-  const palette = TILE_COLORS[color] || TILE_COLORS.sky;
+function Tile({ title, value, subtitle, href, color = "sky", kind, icon }) {
+  const bubble = kind ? DASHBOARD_BUBBLES[kind] : null;
+  const palette = bubble
+    ? { bg: bubble.card, border: "", hover: "", icon: bubble.icon, value: bubble.value, arrow: bubble.arrow }
+    : TILE_COLORS[color] || TILE_COLORS.sky;
   return (
     <Link
       href={href}

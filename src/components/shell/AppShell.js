@@ -27,7 +27,9 @@ export default function AppShell({
   backLabel = "Back",
   showBack,
   showFooter = false,
-  sidebarVariant = "light",
+  // Every portal uses the navy sidebar (client request 2026-10-02); "light"
+  // remains available for a page that needs it.
+  sidebarVariant = "navy",
   bannerSrc = "",
   bannerTagline = "",
 }) {
@@ -402,7 +404,7 @@ export default function AppShell({
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50/50 to-amber-50/40 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+    <div className="min-h-screen bg-[#eef4fb] dark:bg-gradient-to-br dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
       <a href={`#${mainContentId}`} className="skip-link">
         Skip to main content
       </a>

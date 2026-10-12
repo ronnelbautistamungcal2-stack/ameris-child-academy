@@ -1,5 +1,8 @@
+import { otherPagesGroup } from "@/components/shell/navExtras";
+
 const iconClass = "h-5 w-5 shrink-0";
 
+// Follows the client's Parent Navigation list (2026-10-02 requests).
 export const PARENT_NAV_ITEMS = [
   {
     href: "/dashboard",
@@ -29,16 +32,6 @@ export const PARENT_NAV_ITEMS = [
     ],
   },
   {
-    href: "/parent/policies",
-    label: "Policies and Procedures",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} className={iconClass}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M14 3v4.5h4.5M8.75 12.5h6.5M8.75 16h4.5" />
-      </svg>
-    ),
-  },
-  {
     href: "/settings",
     label: "Account Settings",
     icon: (
@@ -57,6 +50,7 @@ export const PARENT_NAV_ITEMS = [
     ),
     children: [
       { href: "/parent/menus", label: "Menus" },
+      { href: "/parent/policies", label: "Policies & Procedures" },
       { href: "/parent/resources", label: "Additional Resources" },
     ],
   },
@@ -69,13 +63,5 @@ export const PARENT_NAV_ITEMS = [
       </svg>
     ),
   },
-  {
-    href: "/parent/contact",
-    label: "Contact Us",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} className={iconClass}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 6.2c0-.9.7-1.7 1.6-1.7h1.8c.7 0 1.4.5 1.6 1.2l.7 2.5c.2.6 0 1.3-.5 1.7l-1.1.9a12.3 12.3 0 0 0 4.6 4.6l.9-1.1c.4-.5 1.1-.7 1.7-.5l2.5.7c.7.2 1.2.9 1.2 1.6v1.8c0 .9-.8 1.6-1.7 1.6A14.8 14.8 0 0 1 4.5 6.2z" />
-      </svg>
-    ),
-  },
+  otherPagesGroup([{ href: "/parent/contact", label: "Contact Us" }]),
 ];

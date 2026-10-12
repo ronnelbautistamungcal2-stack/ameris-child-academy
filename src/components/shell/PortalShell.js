@@ -11,7 +11,7 @@ import { useSession } from "next-auth/react";
 import AppShell, { HEADER_BANNER_SRC } from "@/components/shell/AppShell";
 import Skeleton from "@/components/ui/Skeleton";
 import { ADMIN_NAV_ITEMS } from "@/components/admin/adminNav";
-import { STAFF_NAV_ITEMS } from "@/components/staff/staffNav";
+import { buildStaffNavItems } from "@/components/staff/staffNav";
 import { TEACHER_NAV_ITEMS } from "@/components/teacher/teacherNav";
 import { PARENT_NAV_ITEMS } from "@/components/parent/parentNav";
 import { COACH_NAV_ITEMS } from "@/components/coach/coachNav";
@@ -28,7 +28,7 @@ const FALLBACK_NAV = [
 function navForRole(role) {
   if (role === "ADMIN") return ADMIN_NAV_ITEMS;
   if (role === "TEACHER") return TEACHER_NAV_ITEMS;
-  if (isStaffPortalRole(role)) return STAFF_NAV_ITEMS;
+  if (isStaffPortalRole(role)) return buildStaffNavItems({ role });
   if (role === "COACH") return COACH_NAV_ITEMS;
   if (role === "PARENT") return PARENT_NAV_ITEMS;
   if (role === "SUBSCRIBER") return SUBSCRIBER_NAV_ITEMS;

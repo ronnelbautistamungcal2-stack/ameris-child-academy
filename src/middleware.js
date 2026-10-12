@@ -18,6 +18,9 @@ const PUBLIC_PATHS = new Set([
 
 const PUBLIC_PREFIXES = [
   "/api/auth",
+  // Front-desk kiosk: used with no one signed in; its APIs require an enrolled
+  // device instead, and /kiosk/setup checks for an admin itself.
+  "/kiosk",
   "/_next",
   "/icons",
   "/uploads",

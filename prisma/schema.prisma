@@ -341,6 +341,7 @@ model Center {
   supplyRequests              SupplyRequest[]
   parentFaqs                  ParentFaq[]
   pickupPeople                PickupPerson[]
+  kioskDevices                KioskDevice[]
   createdAt                   DateTime                     @default(now())
 }
 
@@ -613,6 +614,9 @@ model Attendance {
   classRoomId  String?
   checkedInAt  DateTime?
   checkedOutAt DateTime?
+  // Initials of whoever signed the child in / out, e.g. "BJK" (time sheets).
+  checkInBy    String?
+  checkOutBy   String?
   notes        String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -1169,6 +1173,9 @@ model StaffAttendance {
   date         DateTime
   clockIn      DateTime?
   clockOut     DateTime?
+  // Initials of whoever recorded the clock-in / clock-out (time sheets).
+  clockInBy    String?
+  clockOutBy   String?
   status       StaffAttendanceStatus @default(PRESENT)
   lateMinutes  Int                   @default(0)
   notes        String?
@@ -1967,4 +1974,21 @@ model KioskCredential {
   registrationIssuedById String?
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
+}
+
+// A front-desk tablet an admin enrolled as a center's kiosk. The browser keeps
+// a random token in a cookie; only its hash is stored. Kiosk APIs refuse any
+// request without the cookie of an enrolled, unrevoked device.
+model KioskDevice {
+  id          String    @id @default(uuid())
+  center      Center    @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  name        String
+  tokenHash   String    @unique
+  createdById String?
+  lastSeenAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([centerId])
 }

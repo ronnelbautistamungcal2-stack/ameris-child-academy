@@ -143,5 +143,7 @@ export const ADMIN_NAV_ITEMS = [
     { href: "/admin/curriculum", label: "Steps of Progression" },
     { href: "/admin/affiliates", label: "Affiliates & Partners" },
     { href: "/admin/subscriptions", label: "Subscriptions" },
+    // Not in the client's list yet; where kiosk setup lives is still open.
+    { href: "/kiosk/setup", label: "Kiosk Setup" },
   ]),
 ];

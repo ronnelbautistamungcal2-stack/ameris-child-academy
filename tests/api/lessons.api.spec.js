@@ -193,13 +193,20 @@ test.describe("Lessons API prior/next steps and age @api", () => {
       { priorStepId: step.id },
       { priorStepId: next.id, nextStepId: next.id },
       { priorStepId: "nonexistent-step" },
-      { ageYears: 13 },
-      { ageMonths: 0 },
+      { ageYears: 19 },
+      { ageMonths: 12 },
     ];
     for (const body of invalid) {
       const bad = await apiPut(request, `/api/v1/lessons/${step.id}`, body, cookies);
       expect(bad.status(), JSON.stringify(body)).toBe(400);
     }
+
+    // The ends of the client's ranges are accepted: 0-18 years, 0-11 months.
+    for (const body of [{ ageYears: 18, ageMonths: 0 }, { ageYears: 0, ageMonths: 11 }]) {
+      const ok = await apiPut(request, `/api/v1/lessons/${step.id}`, body, cookies);
+      expect(ok.status(), JSON.stringify(body)).toBe(200);
+    }
+    await apiPut(request, `/api/v1/lessons/${step.id}`, { ageYears: 2, ageMonths: 6 }, cookies);
 
     // A PUT that omits the fields leaves them alone.
     const renamed = await apiPut(request, `/api/v1/lessons/${step.id}`, { title: `QA Middle Step ${suffix} v2` }, cookies);

@@ -2,9 +2,10 @@
 // fields that place a step in a sequence: the age it is expected at, and the
 // prior/next steps that progression tracking falls back to or advances to.
 
-// Ranges come from the client spec (Curriculum sheet, Add Step pop-up).
-export const STEP_AGE_YEAR_OPTIONS = Array.from({ length: 13 }, (_, i) => i); // 0-12
-export const STEP_AGE_MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1); // 1-12
+// Ranges confirmed by the client: 0-18 years plus 0-11 months, so an exact
+// age such as 2 years is entered as 2 yr 0 mo.
+export const STEP_AGE_YEAR_OPTIONS = Array.from({ length: 19 }, (_, i) => i); // 0-18
+export const STEP_AGE_MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => i); // 0-11
 
 function parseAgePart(value, options, label) {
   if (value === undefined) return { value: undefined };

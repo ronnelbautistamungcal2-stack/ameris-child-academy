@@ -414,7 +414,7 @@ export default function AppShell({
           <div className={["mx-auto flex w-full items-stretch", shellMaxWidthClassName].join(" ")}>
             <div className="hidden w-72 shrink-0 items-center justify-center bg-white px-3 dark:bg-gray-900 md:flex">
               <Link href="/dashboard" className="flex w-full justify-center">
-                <AmerisLogo size="lg" tight showText={false} className="max-w-full" style={{ width: "100%" }} />
+                <AmerisLogo size="lg" tight showText={false} className="max-w-full" style={{ width: "176px" }} />
               </Link>
             </div>
             <div className="relative min-w-0 flex-1 overflow-hidden">{headerBody}</div>

@@ -1,6 +1,8 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { pinStatusOf } from "@/lib/kioskPins";
+import { normalizeMiddleInitial } from "@/lib/personNames";
 import {
   hasEmployeeRole,
   normalizeRoles,
@@ -37,8 +39,9 @@ function parseWeeklySchedules(value) {
 
 function sanitizeUser(user) {
   if (!user) return user;
-  const { password, ...safeUser } = user;
+  const { password, kioskCredential, ...safeUser } = user;
   safeUser.roles = userRoles(safeUser);
+  safeUser.pinStatus = pinStatusOf(kioskCredential);
   return safeUser;
 }
 
@@ -56,7 +59,7 @@ export default async function handler(req, res) {
 
     const user = await prisma.user.findUnique({
       where: { id },
-      include: { centers: true, children: true, weeklySchedules: true },
+      include: { centers: true, children: true, weeklySchedules: true, kioskCredential: true },
     });
     if (!user) return res.status(404).json({ error: "User not found" });
 
@@ -82,6 +85,8 @@ export default async function handler(req, res) {
       pictureUrl,
       password,
       weeklySchedules,
+      middleInitial,
+      disabled,
     } = body;
     const updateData = {};
     const assignedRoles = "roles" in body || "role" in body
@@ -105,6 +110,22 @@ export default async function handler(req, res) {
     }
 
     if ("name" in body) updateData.name = name ? String(name) : null;
+    if ("middleInitial" in body) {
+      const normalizedMiddleInitial = normalizeMiddleInitial(middleInitial);
+      if (!normalizedMiddleInitial) {
+        return res.status(400).json({ error: "Middle initial is required" });
+      }
+      updateData.middleInitial = normalizedMiddleInitial;
+    }
+    if ("disabled" in body) {
+      if (session.user.role !== "ADMIN") {
+        return res.status(403).json({ error: "Only admins can enable or disable users" });
+      }
+      if (session.user.id === id && disabled) {
+        return res.status(400).json({ error: "You cannot disable your own account" });
+      }
+      updateData.disabled = Boolean(disabled);
+    }
     if (assignedRoles && session.user.role === "ADMIN") {
       updateData.roles = assignedRoles;
       updateData.role = primaryRoleFromRoles(assignedRoles, "PARENT");
@@ -165,7 +186,7 @@ export default async function handler(req, res) {
       user = await prisma.user.update({
         where: { id },
         data: updateData,
-        include: { centers: true, weeklySchedules: true },
+        include: { centers: true, weeklySchedules: true, kioskCredential: true },
       });
     } catch (error) {
       if (error?.code === "P2002") {

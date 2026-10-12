@@ -215,6 +215,9 @@ model User {
   hireDate                           DateTime?
   aboutMe                            String?
   staffDepartment                    String?
+  middleInitial                      String?
+  disabled                           Boolean                             @default(false)
+  kioskCredential                    KioskCredential?
   pictureUrl                         String?
   role                               Role                                @default(PARENT)
   roles                              Role[]                              @default([])
@@ -337,6 +340,7 @@ model Center {
   permissionPolicyConfigs     PermissionPolicyConfig[]
   supplyRequests              SupplyRequest[]
   parentFaqs                  ParentFaq[]
+  pickupPeople                PickupPerson[]
   createdAt                   DateTime                     @default(now())
 }
 
@@ -413,6 +417,7 @@ model Child {
   parent                        User?                              @relation(fields: [parentId], references: [id])
   parentId                      String?
   guardians                     ChildGuardian[]
+  pickupPeople                  ChildPickupPerson[]
   formSubmissions               FormSubmission[]
   enrollmentStartDate           DateTime?
   enrollmentEndDate             DateTime?
@@ -1912,4 +1917,54 @@ model OtherStaffGradeConfig {
   absenceDeductionPct Float    @default(2)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+}
+
+// Someone authorized to pick up children who has no login (grandparent,
+// nanny...). They sign children in and out at the kiosk with a PIN.
+model PickupPerson {
+  id              String              @id @default(uuid())
+  center          Center              @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId        String
+  firstName       String
+  middleInitial   String?
+  lastName        String
+  phone           String?
+  children        ChildPickupPerson[]
+  kioskCredential KioskCredential?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([centerId, lastName])
+}
+
+model ChildPickupPerson {
+  child          Child        @relation(fields: [childId], references: [id], onDelete: Cascade)
+  childId        String
+  pickupPerson   PickupPerson @relation(fields: [pickupPersonId], references: [id], onDelete: Cascade)
+  pickupPersonId String
+  createdAt      DateTime     @default(now())
+
+  @@id([childId, pickupPersonId])
+  @@index([pickupPersonId])
+}
+
+// A person's kiosk PIN: a user (staff or parent) or a pickup person, never
+// both. pinLookup is a keyed hash so the kiosk can find who a PIN belongs to
+// and PINs stay unique; pinCipher is the encrypted PIN so its owner can view
+// it after re-entering their password. registrationLookup is the hash of the
+// temporary code an admin issues so the person can set a new PIN.
+model KioskCredential {
+  id                     String        @id @default(uuid())
+  user                   User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                 String?       @unique
+  pickupPerson           PickupPerson? @relation(fields: [pickupPersonId], references: [id], onDelete: Cascade)
+  pickupPersonId         String?       @unique
+  pinLookup              String?       @unique
+  pinCipher              String?
+  pinSetAt               DateTime?
+  registrationLookup     String?       @unique
+  registrationExpiresAt  DateTime?
+  registrationIssuedById String?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
 }

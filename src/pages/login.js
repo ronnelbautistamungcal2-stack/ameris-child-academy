@@ -21,6 +21,12 @@ export default function Login() {
         : null;
 
   useEffect(() => {
+    if (router.query?.error === "AccountDisabled") {
+      setError("Your account has been disabled. Please contact your center administrator.");
+    }
+  }, [router.query?.error]);
+
+  useEffect(() => {
     if (!error) return;
     const timer = setTimeout(() => setError(""), 8000);
     return () => clearTimeout(timer);

@@ -62,6 +62,14 @@ export async function middleware(request) {
     return NextResponse.redirect(loginUrl);
   }
 
+  if (token.disabled) {
+    // Sign the disabled user out: drop the session cookie on the way to /login.
+    const response = NextResponse.redirect(new URL("/login?error=AccountDisabled", request.url));
+    response.cookies.delete("next-auth.session-token");
+    response.cookies.delete("__Secure-next-auth.session-token");
+    return response;
+  }
+
   if (token.mustChangePassword && pathname !== "/settings") {
     const settingsUrl = new URL("/settings", request.url);
     settingsUrl.searchParams.set("forcePasswordChange", "1");

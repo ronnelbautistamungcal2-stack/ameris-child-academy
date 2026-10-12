@@ -6,7 +6,10 @@ import { hasAnyRole } from "@/lib/roles";
  * Get session on server-side with full user context.
  */
 export async function getSession(req, res) {
-  return getServerSession(req, res, authOptions);
+  const session = await getServerSession(req, res, authOptions);
+  // Sessions of users disabled after signing in stop working at their next refresh.
+  if (!session || session.user?.disabled) return null;
+  return session;
 }
 
 /**

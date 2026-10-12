@@ -21,6 +21,7 @@ import {
 import { useToast } from "@/contexts/ToastContext";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import AuthorizedPickupSection from "@/components/admin/AuthorizedPickupSection";
 
 function createParentContacts(value = []) {
   const source = Array.isArray(value) ? value : [];
@@ -2683,6 +2684,14 @@ export default function AdminChildren() {
                   </Field>
                 </div>
               </>
+            ) : null}
+
+            {editing?.id ? (
+              <AuthorizedPickupSection
+                childId={editing.id}
+                centerId={editing.centerId}
+                otherChildren={children.filter((c) => c.id !== editing.id && c.centerId === editing.centerId)}
+              />
             ) : null}
 
             {/* Section: Documents */}

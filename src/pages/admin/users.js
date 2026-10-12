@@ -1,7 +1,8 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
-import { hasEmployeeRole, ROLE_OPTIONS, STAFF_DEPARTMENTS, STAFF_PORTAL_ROLES, userRoles } from "@/lib/roles";
+import { useSession } from "next-auth/react";
+import { hasEmployeeRole, ROLE_OPTIONS, STAFF_DEPARTMENTS, userRoles } from "@/lib/roles";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -55,6 +56,7 @@ export default function AdminUsers() {
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
+  const [middleInitial, setMiddleInitial] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [roles, setRoles] = useState(["PARENT"]);
@@ -67,6 +69,10 @@ export default function AdminUsers() {
   const [weeklySchedules, setWeeklySchedules] = useState([]);
 
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  // Temporary kiosk registration code, shown once after Reset PIN.
+  const [pinReset, setPinReset] = useState(null);
+  const { data: session } = useSession();
   const [page, setPage] = useState(0);
 
   async function refresh() {
@@ -101,6 +107,9 @@ export default function AdminUsers() {
 
   const sorted = useMemo(() => {
     let filtered = roleTab === "ALL" ? users : users.filter((u) => userRoles(u).includes(roleTab));
+    if (statusFilter !== "ALL") {
+      filtered = filtered.filter((u) => (statusFilter === "INACTIVE") === Boolean(u.disabled));
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       filtered = filtered.filter(
@@ -112,13 +121,13 @@ export default function AdminUsers() {
     return [...filtered].sort((a, b) =>
       (a.name || a.email || "").localeCompare(b.name || b.email || ""),
     );
-  }, [users, roleTab, search]);
+  }, [users, roleTab, search, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const paged = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   // Reset page when filters change
-  useEffect(() => { setPage(0); }, [roleTab, search]);
+  useEffect(() => { setPage(0); }, [roleTab, search, statusFilter]);
 
   const roleCounts = useMemo(() => {
     const counts = { ALL: users.length };
@@ -150,6 +159,8 @@ export default function AdminUsers() {
   const resetForm = useCallback(() => {
     setEditing(null);
     setName("");
+    setMiddleInitial("");
+    setPinReset(null);
     setEmail("");
     setPassword("");
     setRoles(["PARENT"]);
@@ -165,6 +176,8 @@ export default function AdminUsers() {
   const startEdit = useCallback((user) => {
     setEditing(user);
     setName(user.name || "");
+    setMiddleInitial(user.middleInitial || "");
+    setPinReset(null);
     setEmail(user.email || "");
     setRoles(userRoles(user));
     setPassword("");
@@ -252,6 +265,7 @@ export default function AdminUsers() {
         body: JSON.stringify({
           email,
           name: name || null,
+          middleInitial,
           password,
           roles,
           centerId: centerId || undefined,
@@ -285,6 +299,7 @@ export default function AdminUsers() {
         body: JSON.stringify({
           email,
           name: name || null,
+          middleInitial,
           roles,
           password: password || undefined,
           dob: employeeProfileNeeded ? dob || null : null,
@@ -303,6 +318,32 @@ export default function AdminUsers() {
       setError(e2.message || "Failed to update user");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function setUserDisabled(user, disabled) {
+    if (disabled && !confirm(`Disable ${user.name || user.email}? They will no longer be able to log in.`)) return;
+    setError("");
+    try {
+      await apiJson(`/api/v1/users/${user.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ disabled }),
+      });
+      setSuccess(disabled ? "User disabled" : "User enabled");
+      await refresh();
+    } catch (e2) {
+      setError(e2.message || "Failed to update user");
+    }
+  }
+
+  async function resetPin(user) {
+    setError("");
+    try {
+      const result = await apiJson(`/api/v1/users/${user.id}/pin-reset`, { method: "POST" });
+      setPinReset(result);
+      await refresh();
+    } catch (e2) {
+      setError(e2.message || "Failed to reset PIN");
     }
   }
 
@@ -328,14 +369,6 @@ export default function AdminUsers() {
         </div>
       )}
 
-      {/* Stats cards */}
-      <div style={statsGrid}>
-        <StatCard label="Total Users" value={users.length} color="#2563eb" icon={IconUsers} />
-        <StatCard label="Teachers" value={roleCounts.TEACHER || 0} color="#2563eb" icon={IconBook} />
-        <StatCard label="Parents" value={roleCounts.PARENT || 0} color="#059669" icon={IconHeart} />
-        <StatCard label="Staff" value={["ADMIN", "COACH", ...STAFF_PORTAL_ROLES].reduce((sum, role) => sum + (roleCounts[role] || 0), 0)} color="#7c3aed" icon={IconShield} />
-      </div>
-
       <Panel>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -350,8 +383,9 @@ export default function AdminUsers() {
           </button>
         </div>
 
-        {/* Search bar */}
-        <div style={{ marginTop: 16, position: "relative" }}>
+        {/* Search bar + status filter */}
+        <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ position: "relative", flex: "1 1 280px" }}>
           <div style={searchIconWrap}>
             <SearchIcon />
           </div>
@@ -372,6 +406,17 @@ export default function AdminUsers() {
               &#215;
             </button>
           )}
+        </div>
+          <select
+            aria-label="Filter by status"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{ ...inputStyle, width: "auto", minWidth: 160 }}
+          >
+            <option value="ALL">All users</option>
+            <option value="ACTIVE">Active users</option>
+            <option value="INACTIVE">Inactive users</option>
+          </select>
         </div>
 
         {error && !modalOpen ? <ErrorBanner message={error} /> : null}
@@ -418,6 +463,16 @@ export default function AdminUsers() {
                       placeholder="e.g. Jane Doe"
                     />
                   </Field>
+                  <Field label="Middle Initial">
+                    <input
+                      value={middleInitial}
+                      onChange={(e) => setMiddleInitial(e.target.value.replace(/[^a-zA-Z]/g, "").slice(0, 1).toUpperCase())}
+                      style={{ ...inputStyle, maxWidth: 90 }}
+                      required
+                      maxLength={1}
+                      placeholder="e.g. J"
+                    />
+                  </Field>
                   <Field label="Email Address">
                     <input
                       value={email}
@@ -441,6 +496,16 @@ export default function AdminUsers() {
                   </Field>
                 </div>
               </FormSection>
+
+              {editing ? (
+                <FormSection title="Kiosk PIN">
+                  <KioskPinPanel
+                    status={users.find((u) => u.id === editing.id)?.pinStatus || editing.pinStatus}
+                    pinReset={pinReset}
+                    onReset={() => resetPin(editing)}
+                  />
+                </FormSection>
+              ) : null}
 
               {/* Section: Profile */}
               {employeeProfileNeeded ? (
@@ -642,7 +707,7 @@ export default function AdminUsers() {
                     <tr>
                       <th style={thStyle}>User</th>
                       <th style={thStyle}>Role</th>
-                      <th style={{ ...thStyle, display: "none", "@media(minWidth:768px)": { display: "table-cell" } }}>Joined</th>
+                      <th style={thStyle}>Joined</th>
                       <th style={{ ...thStyle, textAlign: "right" }}>Actions</th>
                     </tr>
                   </thead>
@@ -651,7 +716,9 @@ export default function AdminUsers() {
                       <UserRow
                         key={u.id}
                         user={u}
+                        isSelf={u.id === session?.user?.id}
                         onEdit={() => openEdit(u)}
+                        onToggleDisabled={() => setUserDisabled(u, !u.disabled)}
                         onDelete={() => deleteUser(u.id)}
                       />
                     ))}
@@ -705,7 +772,7 @@ export default function AdminUsers() {
 
 /* ── Sub-components ── */
 
-function UserRow({ user, onEdit, onDelete }) {
+function UserRow({ user, isSelf, onEdit, onToggleDisabled, onDelete }) {
   const [hovered, setHovered] = useState(false);
   const roles = userRoles(user);
   const primaryRole = roles[0] || user.role || "SUBSCRIBER";
@@ -758,6 +825,7 @@ function UserRow({ user, onEdit, onDelete }) {
             <div style={{ fontSize: 12, color: "var(--admin-text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {user.email}
             </div>
+            {user.disabled ? <span style={inactiveBadge}>Inactive</span> : null}
           </div>
         </div>
       </td>
@@ -801,6 +869,17 @@ function UserRow({ user, onEdit, onDelete }) {
           >
             <EditIcon />
           </button>
+          {isSelf ? null : (
+            <button
+              type="button"
+              style={user.disabled ? iconButton : iconButtonDanger}
+              onClick={onToggleDisabled}
+              title={user.disabled ? "Enable user" : "Disable user (they can no longer log in)"}
+              aria-label={user.disabled ? "Enable user" : "Disable user"}
+            >
+              {user.disabled ? <EnableIcon /> : <DisableIcon />}
+            </button>
+          )}
           <button
             type="button"
             style={iconButtonDanger}
@@ -815,30 +894,50 @@ function UserRow({ user, onEdit, onDelete }) {
   );
 }
 
-function StatCard({ label, value, color, icon: Icon }) {
+function KioskPinPanel({ status, pinReset, onReset }) {
+  const summary = status?.registrationPending
+    ? `Registration number issued; waiting for the PIN to be set at the kiosk (expires ${new Date(status.registrationExpiresAt).toLocaleDateString()}).`
+    : status?.hasPin
+      ? `PIN set on ${new Date(status.pinSetAt).toLocaleDateString()}.`
+      : "No PIN yet.";
   return (
-    <div style={statCardStyle}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 10,
-            background: `${color}14`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-          }}
-        >
-          <Icon color={color} />
+    <div>
+      <div style={{ fontSize: 13, color: "var(--admin-text-muted)" }}>{summary}</div>
+      {pinReset ? (
+        <div style={pinCodeBox}>
+          <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>Registration number</div>
+          <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: "0.3em", margin: "4px 0" }}>{pinReset.code}</div>
+          <div style={{ fontSize: 12 }}>
+            Take this number to the kiosk. The person taps Register, enters it, and chooses their new PIN.
+            It works once and expires {new Date(pinReset.expiresAt).toLocaleDateString()}. It will not be shown again.
+          </div>
         </div>
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.1, color: "var(--admin-text)" }}>{value}</div>
-          <div style={{ fontSize: 12, color: "var(--admin-text-muted)", marginTop: 2 }}>{label}</div>
+      ) : null}
+      <button type="button" style={{ ...secondaryButton, marginTop: 10 }} onClick={onReset}>
+        Reset PIN
+      </button>
+      {status?.hasPin && !pinReset ? (
+        <div style={{ marginTop: 6, fontSize: 11, color: "var(--admin-text-muted)" }}>
+          Resetting stops the current PIN from working straight away.
         </div>
-      </div>
+      ) : null}
     </div>
+  );
+}
+
+function DisableIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15" aria-hidden="true">
+      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM4.93 6.34A6 6 0 0013.66 15.07L4.93 6.34zm1.41-1.41l8.73 8.73A6 6 0 006.34 4.93z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
+function EnableIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15" aria-hidden="true">
+      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+    </svg>
   );
 }
 
@@ -1101,41 +1200,6 @@ function TrashIcon() {
       <path d="M3 6h18" />
       <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
       <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-    </svg>
-  );
-}
-
-function IconUsers({ color }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  );
-}
-
-function IconBook({ color }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
-    </svg>
-  );
-}
-
-function IconHeart({ color }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
-    </svg>
-  );
-}
-
-function IconShield({ color }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
     </svg>
   );
 }
@@ -1422,17 +1486,24 @@ const tabCountActiveStyle = {
   color: "#2563eb",
 };
 
-const statsGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-  gap: 12,
+const inactiveBadge = {
+  display: "inline-block",
+  marginTop: 3,
+  padding: "1px 8px",
+  borderRadius: 999,
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#b91c1c",
+  background: "#fee2e2",
 };
 
-const statCardStyle = {
-  background: "var(--admin-bg)",
-  border: "1px solid var(--admin-border)",
+const pinCodeBox = {
+  marginTop: 10,
+  padding: "12px 14px",
   borderRadius: 12,
-  padding: 16,
+  border: "1px solid #bfdbfe",
+  background: "#eff6ff",
+  color: "#1e3a8a",
 };
 
 const searchInputStyle = {

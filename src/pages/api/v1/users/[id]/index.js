@@ -217,6 +217,7 @@ export default async function handler(req, res) {
         });
         await tx.teacherClass.deleteMany({ where: { teacherId: id } });
         await tx.centerUser.deleteMany({ where: { userId: id } });
+        await tx.timeSheetAudit.deleteMany({ where: { kind: "staff", userId: id } });
         await tx.activityLog.updateMany({
           where: { recordedById: id },
           data: { recordedById: null },

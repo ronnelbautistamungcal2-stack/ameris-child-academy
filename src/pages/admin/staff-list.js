@@ -1,10 +1,10 @@
 import AdminLayout from "@/components/admin/AdminLayout";
-import ComingSoon from "@/components/shell/ComingSoon";
+import StaffTimeSheetList from "@/components/timesheets/StaffTimeSheetList";
 
 export default function StaffListPage() {
   return (
     <AdminLayout title="Staff List">
-      <ComingSoon title="Staff List" />
+      <StaffTimeSheetList />
     </AdminLayout>
   );
 }

@@ -22,6 +22,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AuthorizedPickupSection from "@/components/admin/AuthorizedPickupSection";
+import TimeSheetModal from "@/components/timesheets/TimeSheetModal";
 
 function createParentContacts(value = []) {
   const source = Array.isArray(value) ? value : [];
@@ -226,6 +227,8 @@ export default function AdminChildren() {
   const [copyContactsFromChildId, setCopyContactsFromChildId] = useState("");
 
   const [editing, setEditing] = useState(null);
+  // Child Time Sheet opened from a student's clock icon.
+  const [timeSheetChildId, setTimeSheetChildId] = useState(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [birthDate, setBirthDate] = useState("");
@@ -1352,6 +1355,9 @@ export default function AdminChildren() {
 
   return (
     <AdminLayout title="Students">
+      {timeSheetChildId ? (
+        <TimeSheetModal kind="child" subjectId={timeSheetChildId} onClose={() => setTimeSheetChildId(null)} />
+      ) : null}
       {/* Stats Row */}
       {!loading && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
@@ -2160,6 +2166,18 @@ export default function AdminChildren() {
                           <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
                         </svg>
                         Edit
+                      </button>
+                      <button
+                        type="button"
+                        style={cardActionButton}
+                        onClick={() => setTimeSheetChildId(ch.id)}
+                        title="Time sheet"
+                        aria-label={`Time sheet for ${ch.firstName}`}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="9" />
+                          <path d="M12 7v5l3 2" />
+                        </svg>
                       </button>
                       <button
                         type="button"

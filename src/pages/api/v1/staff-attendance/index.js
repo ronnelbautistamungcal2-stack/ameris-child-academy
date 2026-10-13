@@ -1,6 +1,7 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { isSelfServiceEmployeeRole, STAFF_PORTAL_ROLES } from "@/lib/roles";
+import { editorInitials } from "@/lib/timeSheets";
 
 export default async function handler(req, res) {
   try {
@@ -94,11 +95,15 @@ async function handlePost(req, res, session) {
   const parsedClockIn = parseAttendanceTime(d, clockIn);
   const parsedClockOut = parseAttendanceTime(d, clockOut);
 
+  // Time sheets show who recorded each time.
+  const by = await editorInitials(prisma, session.user.id);
   const record = await prisma.staffAttendance.upsert({
     where: { userId_date: { userId, date: d } },
     update: {
       clockIn: parsedClockIn ?? undefined,
+      clockInBy: parsedClockIn ? by : undefined,
       clockOut: parsedClockOut ?? undefined,
+      clockOutBy: parsedClockOut ? by : undefined,
       status: status || undefined,
       lateMinutes: typeof lateMinutes === "number" ? lateMinutes : undefined,
       notes: notes !== undefined ? notes : undefined,
@@ -109,7 +114,9 @@ async function handlePost(req, res, session) {
       centerId,
       date: d,
       clockIn: parsedClockIn,
+      clockInBy: parsedClockIn ? by : null,
       clockOut: parsedClockOut,
+      clockOutBy: parsedClockOut ? by : null,
       status: status || "PRESENT",
       lateMinutes: lateMinutes || 0,
       notes: notes || null,

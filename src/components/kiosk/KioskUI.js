@@ -1,4 +1,5 @@
 import AmerisLogo from "@/components/ui/AmerisLogo";
+import { useForceLightTheme } from "@/hooks/useForceLightTheme";
 import { useEffect, useState } from "react";
 
 // Shared look of the front-desk kiosk screens (client mockups, 2026-10-02):
@@ -7,22 +8,6 @@ import { useEffect, useState } from "react";
 
 export const NAVY = "text-[#0b2f6b]";
 export const PIN_LENGTH = 6;
-
-/** Keeps the kiosk light even if this browser's app theme is dark. */
-export function useForceLightTheme() {
-  useEffect(() => {
-    const root = document.documentElement;
-    const hadDark = root.classList.contains("dark");
-    const strip = () => root.classList.contains("dark") && root.classList.remove("dark");
-    strip();
-    const observer = new MutationObserver(strip);
-    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
-    return () => {
-      observer.disconnect();
-      if (hadDark) root.classList.add("dark");
-    };
-  }, []);
-}
 
 function useNow() {
   const [now, setNow] = useState(null);

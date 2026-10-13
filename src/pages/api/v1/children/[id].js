@@ -301,6 +301,7 @@ export default async function handler(req, res) {
         await tx.progress.deleteMany({ where: { childId: id } });
         await tx.activityLog.deleteMany({ where: { childId: id } });
         await tx.attendance.deleteMany({ where: { childId: id } });
+        await tx.timeSheetAudit.deleteMany({ where: { kind: "child", childId: id } });
         await tx.childTask.deleteMany({ where: { childId: id } });
         await tx.childGuardian.deleteMany({ where: { childId: id } });
         await tx.formSubmission.deleteMany({ where: { childId: id } });

@@ -1992,3 +1992,29 @@ model KioskDevice {
 
   @@index([centerId])
 }
+
+// Time sheet audit report (client request 2026-10-02): one entry per time an
+// admin, coach or HR user changed, or per row they deleted, on a child or
+// employee time sheet, with the row's original values. recordId points at the
+// Attendance / StaffAttendance row, which may no longer exist.
+model TimeSheetAudit {
+  id                String    @id @default(uuid())
+  kind              String // "child" | "staff"
+  centerId          String
+  childId           String?
+  userId            String?
+  recordId          String
+  day               DateTime
+  originalIn        DateTime?
+  originalInBy      String?
+  originalOut       DateTime?
+  originalOutBy     String?
+  action            String // CHECK_IN_CHANGED | CHECK_OUT_CHANGED | DELETED
+  newValue          DateTime?
+  changedById       String?
+  changedByInitials String
+  changedAt         DateTime  @default(now())
+
+  @@index([kind, childId, day])
+  @@index([kind, userId, day])
+}

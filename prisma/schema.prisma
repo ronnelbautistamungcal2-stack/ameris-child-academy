@@ -1994,15 +1994,20 @@ model KioskCredential {
 // a random token in a cookie; only its hash is stored. Kiosk APIs refuse any
 // request without the cookie of an enrolled, unrevoked device.
 model KioskDevice {
-  id          String    @id @default(uuid())
-  center      Center    @relation(fields: [centerId], references: [id], onDelete: Cascade)
-  centerId    String
-  name        String
-  tokenHash   String    @unique
-  createdById String?
-  lastSeenAt  DateTime?
-  revokedAt   DateTime?
-  createdAt   DateTime  @default(now())
+  id                 String    @id @default(uuid())
+  center             Center    @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId           String
+  name               String
+  tokenHash          String    @unique
+  createdById        String?
+  lastSeenAt         DateTime?
+  revokedAt          DateTime?
+  // Wrong-PIN lockout, kept here (not in server memory) so it survives
+  // restarts and works across several app servers.
+  failedAttempts     Int       @default(0)
+  failureWindowStart DateTime?
+  lockedUntil        DateTime?
+  createdAt          DateTime  @default(now())
 
   @@index([centerId])
 }

@@ -91,35 +91,40 @@ export function readActionToken(token, deviceId) {
 }
 
 // ---- Wrong-PIN lockout --------------------------------------------------------
-// Per device, kept in memory: 5 failures within 5 minutes lock the device for
-// 5 minutes. With several app servers each would count separately.
+// 5 wrong PINs or registration numbers within 5 minutes lock the device for 5
+// minutes. Counted on the KioskDevice row, so restarts and several app servers
+// cannot reset it.
 
 const MAX_FAILURES = 5;
 const WINDOW_MS = 5 * 60 * 1000;
-const failures = new Map(); // deviceId -> timestamps
+const LOCKOUT_MS = 5 * 60 * 1000;
 
-export function lockoutRemainingMs(deviceId) {
-  const now = Date.now();
-  const recent = (failures.get(deviceId) || []).filter((t) => now - t < WINDOW_MS);
-  failures.set(deviceId, recent);
-  if (recent.length < MAX_FAILURES) return 0;
-  return WINDOW_MS - (now - recent[recent.length - MAX_FAILURES]);
+export async function recordFailure(prisma, device) {
+  const now = new Date();
+  const windowOpen = device.failureWindowStart && now - device.failureWindowStart < WINDOW_MS;
+  const failedAttempts = windowOpen ? device.failedAttempts + 1 : 1;
+  await prisma.kioskDevice.update({
+    where: { id: device.id },
+    data: {
+      failedAttempts,
+      failureWindowStart: windowOpen ? device.failureWindowStart : now,
+      lockedUntil: failedAttempts >= MAX_FAILURES ? new Date(now.getTime() + LOCKOUT_MS) : device.lockedUntil,
+    },
+  });
 }
 
-export function recordFailure(deviceId) {
-  const list = failures.get(deviceId) || [];
-  list.push(Date.now());
-  failures.set(deviceId, list.slice(-MAX_FAILURES * 2));
-}
-
-export function clearFailures(deviceId) {
-  failures.delete(deviceId);
+export async function clearFailures(prisma, device) {
+  if (!device.failedAttempts && !device.lockedUntil) return;
+  await prisma.kioskDevice.update({
+    where: { id: device.id },
+    data: { failedAttempts: 0, failureWindowStart: null, lockedUntil: null },
+  });
 }
 
 /** Sends 429 and returns true when the device is locked out. */
-export function rejectIfLockedOut(res, deviceId) {
-  const remaining = lockoutRemainingMs(deviceId);
-  if (!remaining) return false;
+export function rejectIfLockedOut(res, device) {
+  const remaining = device.lockedUntil ? device.lockedUntil.getTime() - Date.now() : 0;
+  if (remaining <= 0) return false;
   res.status(429).json({
     error: `Too many incorrect attempts. Please wait ${Math.ceil(remaining / 60000)} minute(s) and try again.`,
   });

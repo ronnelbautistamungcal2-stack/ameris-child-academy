@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   }
   const device = await deviceFromRequest(prisma, req);
   if (!device) return res.status(403).json({ error: "This device is not set up as a kiosk" });
-  if (rejectIfLockedOut(res, device.id)) return;
+  if (rejectIfLockedOut(res, device)) return;
 
   try {
     const credential = await setPinWithRegistrationCode(prisma, {
@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ name: displayName(credential) });
   } catch (error) {
     if (!(error instanceof PinError)) throw error;
-    if (error.code === "INVALID_CODE") recordFailure(device.id);
+    if (error.code === "INVALID_CODE") await recordFailure(prisma, device);
     const status = error.code === "PIN_TAKEN" ? 409 : 400;
     return res.status(status).json({ error: error.message, code: error.code });
   }

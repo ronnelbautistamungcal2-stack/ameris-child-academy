@@ -11,6 +11,7 @@ export default function AdminCenters() {
 
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
+  const [autoCheckoutTime, setAutoCheckoutTime] = useState("");
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -42,10 +43,11 @@ export default function AdminCenters() {
     try {
       await apiJson("/api/v1/centers", {
         method: "POST",
-        body: JSON.stringify({ name, address }),
+        body: JSON.stringify({ name, address, autoCheckoutTime }),
       });
       setName("");
       setAddress("");
+      setAutoCheckoutTime("");
       setShowForm(false);
       await refresh();
     } catch (e2) {
@@ -57,6 +59,7 @@ export default function AdminCenters() {
     setEditing(center);
     setName(center.name || "");
     setAddress(center.address || "");
+    setAutoCheckoutTime(center.autoCheckoutTime || "");
     setShowForm(true);
   }
 
@@ -67,11 +70,12 @@ export default function AdminCenters() {
     try {
       await apiJson(`/api/v1/centers/${editing.id}`, {
         method: "PUT",
-        body: JSON.stringify({ name, address }),
+        body: JSON.stringify({ name, address, autoCheckoutTime }),
       });
       setEditing(null);
       setName("");
       setAddress("");
+      setAutoCheckoutTime("");
       setShowForm(false);
       await refresh();
     } catch (e2) {
@@ -83,6 +87,7 @@ export default function AdminCenters() {
     setEditing(null);
     setName("");
     setAddress("");
+    setAutoCheckoutTime("");
     setShowForm(false);
   }
 
@@ -153,6 +158,21 @@ export default function AdminCenters() {
                   style={inputStyle}
                   placeholder="Street address"
                 />
+              </label>
+              {/* Moves to the Care & Schedule tab when Add/Edit Center is rebuilt. */}
+              <label style={{ display: "block" }}>
+                <div style={fieldLabelStyle}>Automatic child checkout</div>
+                <input
+                  type="time"
+                  value={autoCheckoutTime}
+                  onChange={(e) => setAutoCheckoutTime(e.target.value)}
+                  style={inputStyle}
+                  aria-label="Automatic child checkout time"
+                />
+                <div style={{ marginTop: 4, fontSize: 11, color: "var(--admin-text-muted)" }}>
+                  Children still signed in at this time are signed out automatically (shown as
+                  &quot;Admin&quot;). Staff are never signed out automatically. Leave empty to turn off.
+                </div>
               </label>
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>

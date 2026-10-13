@@ -6,7 +6,7 @@ const {
   loginAsStudentSupport,
   loginAsTeacher,
 } = require("../helpers/auth");
-const { apiGet } = require("../helpers/api");
+const { apiGet, pickDemoCenterId } = require("../helpers/api");
 
 // Kitchen, HR and Student Support staff share the staff portal with Other Staff.
 const STAFF_ROLES = [
@@ -33,7 +33,7 @@ test.describe("Staff portal roles @api", () => {
       expect(metrics.status()).not.toBe(403);
 
       const centers = await (await apiGet(request, "/api/v1/centers", cookies)).json();
-      const centerId = Array.isArray(centers) && centers[0]?.id;
+      const centerId = pickDemoCenterId(centers);
       if (centerId) {
         const today = new Date().toISOString().slice(0, 10);
         const attendance = await apiGet(

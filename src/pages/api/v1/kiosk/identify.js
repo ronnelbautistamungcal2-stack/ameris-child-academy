@@ -22,15 +22,15 @@ export default async function handler(req, res) {
   }
   const device = await deviceFromRequest(prisma, req);
   if (!device) return res.status(403).json({ error: "This device is not set up as a kiosk" });
-  if (rejectIfLockedOut(res, device.id)) return;
+  if (rejectIfLockedOut(res, device)) return;
 
   const pin = String(req.body?.pin || "");
   const credential = isValidPin(pin) ? await findByPin(prisma, pin) : null;
   if (!credential || credential.user?.disabled) {
-    recordFailure(device.id);
+    await recordFailure(prisma, device);
     return res.status(401).json({ error: "That PIN was not recognized. Please try again." });
   }
-  clearFailures(device.id);
+  await clearFailures(prisma, device);
 
   const centerId = device.centerId;
   const employee = credential.user && (await isEmployeeAt(prisma, credential.user, centerId))

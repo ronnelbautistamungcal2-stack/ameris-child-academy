@@ -2,6 +2,7 @@ import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { normalizeSubscription } from "@/lib/subscriptions";
 import { buildParentLinkedChildWhere } from "@/lib/child-parent-links";
+import { parseCheckoutTime } from "@/lib/jobs/auto-checkout";
 
 function withResolvedSubscription(center) {
   return {
@@ -69,9 +70,15 @@ export default async function handler(req, res) {
 
     const { name, address } = req.body;
     if (!name) return res.status(400).json({ error: "Name required" });
+    // Automatic child checkout time: "HH:MM", or empty to turn it off.
+    const hasCheckoutTime = Object.prototype.hasOwnProperty.call(req.body || {}, "autoCheckoutTime");
+    const autoCheckoutTime = hasCheckoutTime && req.body.autoCheckoutTime ? String(req.body.autoCheckoutTime) : null;
+    if (autoCheckoutTime && !parseCheckoutTime(autoCheckoutTime)) {
+      return res.status(400).json({ error: "Automatic checkout time must be HH:MM" });
+    }
 
     const center = await prisma.center.create({
-      data: { name, address },
+      data: { name, address, autoCheckoutTime },
       include: { users: true },
     });
 

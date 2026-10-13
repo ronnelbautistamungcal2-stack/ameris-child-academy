@@ -1,7 +1,7 @@
 // @ts-check
 const { test, expect } = require("@playwright/test");
 const { loginAsAdmin, loginAsTeacher, loginAsParent } = require("../helpers/auth");
-const { apiGet, apiPost, apiPut, apiDelete } = require("../helpers/api");
+const { apiGet, apiPost, apiPut, apiDelete, pickDemoCenterId } = require("../helpers/api");
 
 test.describe("Lessons API @api", () => {
   let centerId;
@@ -12,7 +12,7 @@ test.describe("Lessons API @api", () => {
     const res = await apiGet(request, "/api/v1/centers", cookies);
     if (res.status() === 200) {
       const centers = await res.json();
-      centerId = Array.isArray(centers) && centers.length > 0 ? centers[0].id : null;
+      centerId = pickDemoCenterId(centers);
     }
   });
 
@@ -161,7 +161,7 @@ test.describe("Lessons API prior/next steps and age @api", () => {
     const cookies = await loginAsAdmin(request);
     const res = await apiGet(request, "/api/v1/centers", cookies);
     const centers = res.status() === 200 ? await res.json() : [];
-    centerId = Array.isArray(centers) && centers.length > 0 ? centers[0].id : null;
+    centerId = pickDemoCenterId(centers);
   });
 
   test.afterAll(async ({ request }) => {

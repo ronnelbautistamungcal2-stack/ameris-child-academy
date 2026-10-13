@@ -280,7 +280,7 @@ export default function KioskPage() {
           <div className="text-lg font-semibold text-[#1e4b8f]">{person.name}</div>
         </div>
         <div className="mt-6 w-full max-w-4xl overflow-hidden rounded-2xl border border-sky-200 bg-white shadow-sm">
-          <div className="grid grid-cols-[56px_1fr_220px_170px] items-center bg-sky-50 px-4 py-3 text-base font-bold text-[#0b2f6b]">
+          <div className="grid grid-cols-[44px_minmax(0,1fr)_150px_130px] lg:grid-cols-[56px_minmax(0,1fr)_220px_170px] items-center bg-sky-50 px-4 py-3 text-base font-bold text-[#0b2f6b]">
             <input
               type="checkbox"
               aria-label="Select all children"
@@ -293,7 +293,7 @@ export default function KioskPage() {
             <span>Action</span>
           </div>
           {kids.map((kid) => (
-            <div key={kid.id} className="grid grid-cols-[56px_1fr_220px_170px] items-center border-t border-sky-100 px-4 py-3">
+            <div key={kid.id} className="grid grid-cols-[44px_minmax(0,1fr)_150px_130px] lg:grid-cols-[56px_minmax(0,1fr)_220px_170px] items-center border-t border-sky-100 px-4 py-3">
               <input
                 type="checkbox"
                 aria-label={`Select ${kid.firstName}`}
@@ -303,17 +303,17 @@ export default function KioskPage() {
                   setSelected((cur) => (e.target.checked ? [...cur, kid.id] : cur.filter((id) => id !== kid.id)))
                 }
               />
-              <div className="flex items-center gap-4">
+              <div className="flex min-w-0 items-center gap-3 lg:gap-4">
                 {kid.photoUrl ? (
-                  <img src={kid.photoUrl} alt="" className="h-14 w-14 rounded-full object-cover" />
+                  <img src={kid.photoUrl} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover lg:h-14 lg:w-14" />
                 ) : (
-                  <div className={`flex h-14 w-14 items-center justify-center rounded-full bg-sky-100 text-xl font-black ${NAVY}`}>
+                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xl font-black lg:h-14 lg:w-14 ${NAVY}`}>
                     {kid.firstName?.[0]}
                   </div>
                 )}
-                <div>
-                  <div className={`text-xl font-bold ${NAVY}`}>{kid.firstName}</div>
-                  <div className="text-sm text-[#1e4b8f]">
+                <div className="min-w-0">
+                  <div className={`truncate text-xl font-bold ${NAVY}`}>{kid.firstName}</div>
+                  <div className="truncate text-sm text-[#1e4b8f]">
                     {[kid.age ? `Age ${kid.age}` : null, kid.classroom].filter(Boolean).join(" | ")}
                   </div>
                 </div>

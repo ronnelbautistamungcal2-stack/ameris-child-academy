@@ -6,6 +6,7 @@ import { toCalendarDay } from "@/lib/calendar";
 import { TIME_OFF_TYPE_OPTIONS, groupTimeOffRequests } from "@/lib/time-off";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { TIME_OFF_CALENDAR_KINDS } from "@/lib/calendarColors";
 
 function toDateInputValue(date) {
   if (!date) return "";
@@ -77,13 +78,6 @@ const STATUS_BADGE = {
   DENIED: "border-red-200 bg-red-50 text-red-800",
   CANCELLED: "border-gray-200 bg-gray-50 text-gray-600",
 };
-
-const CALENDAR_LEGEND = [
-  { label: "Events", cls: "bg-indigo-100" },
-  { label: "Pending Requests", cls: "bg-amber-200" },
-  { label: "Approved Time Off", cls: "bg-emerald-100" },
-  { label: "Unexcused Time Off", cls: "bg-red-100" },
-];
 
 function formatHours(value) {
   const num = Number(value || 0);
@@ -650,7 +644,7 @@ export default function EmployeeTimeOffPage({
                     year={calYear}
                     month={calMonth}
                     events={monthCalEvents}
-                    legendItems={CALENDAR_LEGEND}
+                    legendKinds={TIME_OFF_CALENDAR_KINDS}
                     selectedDay={selectedDay}
                     onDayClick={setSelectedDay}
                     onMonthChange={(nextYear, nextMonth) => {

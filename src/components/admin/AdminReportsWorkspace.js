@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import { AGE_GROUPS } from "@/lib/ageUtils";
+import { STAFF_PORTAL_ROLES } from "@/lib/roles";
 
 // Lazy-load chart components (no SSR for recharts)
 const ProgressPieChart = dynamic(() => import("@/components/analytics/charts/ProgressPieChart"), { ssr: false });
@@ -1775,7 +1776,7 @@ function OtherStaffPerformanceTab({ centerId, dateFrom, dateTo }) {
   useEffect(() => {
     if (!centerId) return;
     setLoadingStaff(true);
-    apiJson(`/api/v1/users?centerId=${encodeURIComponent(centerId)}&roles=OTHER_STAFF`)
+    apiJson(`/api/v1/users?centerId=${encodeURIComponent(centerId)}&roles=${STAFF_PORTAL_ROLES.join(",")}`)
       .then((r) => {
         const arr = Array.isArray(r) ? r : [];
         setStaffList(arr);

@@ -11,13 +11,14 @@ import { useSession } from "next-auth/react";
 import AppShell, { HEADER_BANNER_SRC } from "@/components/shell/AppShell";
 import Skeleton from "@/components/ui/Skeleton";
 import { ADMIN_NAV_ITEMS } from "@/components/admin/adminNav";
-import { STAFF_NAV_ITEMS } from "@/components/staff/staffNav";
+import { buildStaffNavItems } from "@/components/staff/staffNav";
 import { TEACHER_NAV_ITEMS } from "@/components/teacher/teacherNav";
 import { PARENT_NAV_ITEMS } from "@/components/parent/parentNav";
 import { COACH_NAV_ITEMS } from "@/components/coach/coachNav";
 import { SUBSCRIBER_NAV_ITEMS } from "@/components/subscriber/subscriberNav";
 import { apiJson } from "@/lib/api";
 import { useNewMessages, useUserSocket } from "@/hooks/useSocket";
+import { isStaffPortalRole } from "@/lib/roles";
 
 const FALLBACK_NAV = [
   { href: "/dashboard", label: "Dashboard" },
@@ -27,7 +28,7 @@ const FALLBACK_NAV = [
 function navForRole(role) {
   if (role === "ADMIN") return ADMIN_NAV_ITEMS;
   if (role === "TEACHER") return TEACHER_NAV_ITEMS;
-  if (role === "OTHER_STAFF") return STAFF_NAV_ITEMS;
+  if (isStaffPortalRole(role)) return buildStaffNavItems({ role });
   if (role === "COACH") return COACH_NAV_ITEMS;
   if (role === "PARENT") return PARENT_NAV_ITEMS;
   if (role === "SUBSCRIBER") return SUBSCRIBER_NAV_ITEMS;
@@ -161,7 +162,6 @@ export default function PortalShell({ children }) {
         shellMaxWidthClassName="max-w-[1760px]"
         contentMaxWidthClassName="max-w-[1400px]"
         showBack={false}
-        sidebarVariant={isParent ? "navy" : "light"}
         bannerSrc={isParent ? HEADER_BANNER_SRC : ""}
         bannerTagline={isParent ? "From Blessings to Pillars" : ""}
       >

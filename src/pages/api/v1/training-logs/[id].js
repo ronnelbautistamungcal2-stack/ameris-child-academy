@@ -1,6 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { isEmployeeRole, isSelfServiceEmployeeRole } from "@/lib/roles";
+import { isEmployeeRole, isSelfServiceEmployeeRole, STAFF_PORTAL_ROLES } from "@/lib/roles";
 
 export default async function handler(req, res) {
   try {
@@ -59,7 +59,7 @@ async function handleDelete(req, res, session) {
   if (isSelfServiceEmployeeRole(session.user.role) && log.userId !== session.user.id) {
     return res.status(403).json({ error: "Forbidden" });
   }
-  if (!["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"].includes(session.user.role)) {
+  if (!["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "COACH"].includes(session.user.role)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 

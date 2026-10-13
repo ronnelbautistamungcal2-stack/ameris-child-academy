@@ -21,6 +21,8 @@ import {
 import { useToast } from "@/contexts/ToastContext";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import AuthorizedPickupSection from "@/components/admin/AuthorizedPickupSection";
+import TimeSheetModal from "@/components/timesheets/TimeSheetModal";
 
 function createParentContacts(value = []) {
   const source = Array.isArray(value) ? value : [];
@@ -225,6 +227,8 @@ export default function AdminChildren() {
   const [copyContactsFromChildId, setCopyContactsFromChildId] = useState("");
 
   const [editing, setEditing] = useState(null);
+  // Child Time Sheet opened from a student's clock icon.
+  const [timeSheetChildId, setTimeSheetChildId] = useState(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [birthDate, setBirthDate] = useState("");
@@ -1351,6 +1355,9 @@ export default function AdminChildren() {
 
   return (
     <AdminLayout title="Students">
+      {timeSheetChildId ? (
+        <TimeSheetModal kind="child" subjectId={timeSheetChildId} onClose={() => setTimeSheetChildId(null)} />
+      ) : null}
       {/* Stats Row */}
       {!loading && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
@@ -2162,6 +2169,18 @@ export default function AdminChildren() {
                       </button>
                       <button
                         type="button"
+                        style={cardActionButton}
+                        onClick={() => setTimeSheetChildId(ch.id)}
+                        title="Time sheet"
+                        aria-label={`Time sheet for ${ch.firstName}`}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="9" />
+                          <path d="M12 7v5l3 2" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
                         style={cardDangerButton}
                         onClick={() => setDeleteConfirmId(ch.id)}
                         title="Delete"
@@ -2683,6 +2702,14 @@ export default function AdminChildren() {
                   </Field>
                 </div>
               </>
+            ) : null}
+
+            {editing?.id ? (
+              <AuthorizedPickupSection
+                childId={editing.id}
+                centerId={editing.centerId}
+                otherChildren={children.filter((c) => c.id !== editing.id && c.centerId === editing.centerId)}
+              />
             ) : null}
 
             {/* Section: Documents */}

@@ -5,8 +5,9 @@ import { apiJson } from "@/lib/api";
 import { useToast } from "@/contexts/ToastContext";
 import NotificationPreferences from "@/components/parent/NotificationPreferences";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { STAFF_PORTAL_ROLES } from "@/lib/roles";
 
-const STAFF_ROLES = new Set(["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"]);
+const STAFF_ROLES = new Set(["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "COACH"]);
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set([
   "image/jpeg",
@@ -18,7 +19,7 @@ const ALLOWED_IMAGE_TYPES = new Set([
 export default function SettingsPage() {
   const toast = useToast();
   const { session, status, allowed, update } = useRequireRole(
-    ["ADMIN", "TEACHER", "OTHER_STAFF", "PARENT", "COACH", "SUBSCRIBER"],
+    ["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "PARENT", "COACH", "SUBSCRIBER"],
     "/login",
   );
 
@@ -524,6 +525,8 @@ export default function SettingsPage() {
               )}
             </SettingsCard>
 
+            {session?.user?.id ? <KioskPinCard userId={session.user.id} /> : null}
+
             {role === "PARENT" ? (
               <SettingsCard
                 title="Notification settings"
@@ -677,6 +680,130 @@ function AvatarUploader({
         onChange={(e) => handleFile(e.target.files?.[0])}
       />
     </div>
+  );
+}
+
+// "View PIN" (client request 2026-10-02): after re-entering their password a
+// user sees the 6-digit PIN they set at the front-desk kiosk. It cannot be
+// changed here; an administrator issues a registration number for a new one.
+const PIN_VISIBLE_MS = 30 * 1000;
+
+function KioskPinCard({ userId }) {
+  const [asking, setAsking] = useState(false);
+  const [password, setPassword] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    if (!result?.pin) return undefined;
+    const timer = setTimeout(() => setResult(null), PIN_VISIBLE_MS);
+    return () => clearTimeout(timer);
+  }, [result]);
+
+  function reset() {
+    setAsking(false);
+    setPassword("");
+    setError("");
+    setResult(null);
+  }
+
+  async function viewPin(e) {
+    e.preventDefault();
+    setChecking(true);
+    setError("");
+    try {
+      const data = await apiJson(`/api/v1/users/${encodeURIComponent(userId)}/pin`, {
+        method: "POST",
+        body: JSON.stringify({ password }),
+      });
+      setResult(data);
+      setAsking(false);
+      setPassword("");
+    } catch (err) {
+      setError(err.message || "Could not check your password");
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  return (
+    <SettingsCard
+      title="Kiosk PIN"
+      description="The 6-digit PIN you use to sign in and out at the front desk kiosk."
+    >
+      {result ? (
+        result.hasPin ? (
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="rounded-2xl border border-sky-200 bg-sky-50 px-5 py-3 font-mono text-3xl font-black tracking-[0.35em] text-sky-900 dark:border-sky-800 dark:bg-sky-900/30 dark:text-sky-100">
+              {result.pin}
+            </div>
+            <button
+              type="button"
+              onClick={reset}
+              className="rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              Hide PIN
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
+            You have not set a kiosk PIN yet. Ask your administrator for a registration number, then tap
+            Register at the kiosk to choose your PIN.
+          </div>
+        )
+      ) : asking ? (
+        <form onSubmit={viewPin} className="space-y-4">
+          <div className="max-w-sm">
+            <FormField label="Enter your password to view your PIN">
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoFocus
+                className={inputClassName}
+                disabled={checking}
+              />
+            </FormField>
+          </div>
+          {error ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+              {error}
+            </div>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="submit"
+              disabled={checking}
+              className="rounded-2xl bg-gradient-to-r from-blue-800 to-sky-600 px-5 py-2.5 text-sm font-extrabold text-white shadow-sm transition hover:from-blue-900 hover:to-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {checking ? "Checking..." : "View PIN"}
+            </button>
+            <button
+              type="button"
+              onClick={reset}
+              className="rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            Your PIN is hidden. To change it, ask your administrator for a new registration number.
+          </div>
+          <button
+            type="button"
+            onClick={() => setAsking(true)}
+            className="rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+          >
+            View PIN
+          </button>
+        </div>
+      )}
+    </SettingsCard>
   );
 }
 

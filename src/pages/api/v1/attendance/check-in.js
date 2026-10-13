@@ -2,6 +2,7 @@ import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { startOfDay } from "@/lib/attendance-classroom";
 import { teacherCanAccessChild } from "@/lib/teacherScope";
+import { editorInitials } from "@/lib/timeSheets";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -37,6 +38,8 @@ export default async function handler(req, res) {
 
   const day = startOfDay();
   const now = new Date();
+  // Time sheets show who signed the child in.
+  const by = await editorInitials(prisma, session.user.id);
 
   const existing = await prisma.attendance.findUnique({
     where: { childId_day: { childId: child.id, day } },
@@ -47,7 +50,9 @@ export default async function handler(req, res) {
         where: { id: existing.id },
         data: {
           checkedInAt: now,
+          checkInBy: by,
           checkedOutAt: null,
+          checkOutBy: null,
           classRoomId:
             existing.classRoomId !== undefined && existing.classRoomId !== null
               ? existing.classRoomId
@@ -61,6 +66,7 @@ export default async function handler(req, res) {
           day,
           classRoomId: child.classRoomId || null,
           checkedInAt: now,
+          checkInBy: by,
         },
       });
 

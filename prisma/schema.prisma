@@ -11,6 +11,9 @@ enum Role {
   ADMIN
   TEACHER
   OTHER_STAFF
+  KITCHEN_STAFF
+  HR_STAFF
+  STUDENT_SUPPORT
   PARENT
   COACH
   SUBSCRIBER
@@ -212,6 +215,9 @@ model User {
   hireDate                           DateTime?
   aboutMe                            String?
   staffDepartment                    String?
+  middleInitial                      String?
+  disabled                           Boolean                             @default(false)
+  kioskCredential                    KioskCredential?
   pictureUrl                         String?
   role                               Role                                @default(PARENT)
   roles                              Role[]                              @default([])
@@ -334,6 +340,8 @@ model Center {
   permissionPolicyConfigs     PermissionPolicyConfig[]
   supplyRequests              SupplyRequest[]
   parentFaqs                  ParentFaq[]
+  pickupPeople                PickupPerson[]
+  kioskDevices                KioskDevice[]
   createdAt                   DateTime                     @default(now())
 }
 
@@ -410,6 +418,7 @@ model Child {
   parent                        User?                              @relation(fields: [parentId], references: [id])
   parentId                      String?
   guardians                     ChildGuardian[]
+  pickupPeople                  ChildPickupPerson[]
   formSubmissions               FormSubmission[]
   enrollmentStartDate           DateTime?
   enrollmentEndDate             DateTime?
@@ -605,6 +614,9 @@ model Attendance {
   classRoomId  String?
   checkedInAt  DateTime?
   checkedOutAt DateTime?
+  // Initials of whoever signed the child in / out, e.g. "BJK" (time sheets).
+  checkInBy    String?
+  checkOutBy   String?
   notes        String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -1161,6 +1173,9 @@ model StaffAttendance {
   date         DateTime
   clockIn      DateTime?
   clockOut     DateTime?
+  // Initials of whoever recorded the clock-in / clock-out (time sheets).
+  clockInBy    String?
+  clockOutBy   String?
   status       StaffAttendanceStatus @default(PRESENT)
   lateMinutes  Int                   @default(0)
   notes        String?
@@ -1909,4 +1924,97 @@ model OtherStaffGradeConfig {
   absenceDeductionPct Float    @default(2)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+}
+
+// Someone authorized to pick up children who has no login (grandparent,
+// nanny...). They sign children in and out at the kiosk with a PIN.
+model PickupPerson {
+  id              String              @id @default(uuid())
+  center          Center              @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId        String
+  firstName       String
+  middleInitial   String?
+  lastName        String
+  phone           String?
+  children        ChildPickupPerson[]
+  kioskCredential KioskCredential?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([centerId, lastName])
+}
+
+model ChildPickupPerson {
+  child          Child        @relation(fields: [childId], references: [id], onDelete: Cascade)
+  childId        String
+  pickupPerson   PickupPerson @relation(fields: [pickupPersonId], references: [id], onDelete: Cascade)
+  pickupPersonId String
+  createdAt      DateTime     @default(now())
+
+  @@id([childId, pickupPersonId])
+  @@index([pickupPersonId])
+}
+
+// A person's kiosk PIN: a user (staff or parent) or a pickup person, never
+// both. pinLookup is a keyed hash so the kiosk can find who a PIN belongs to
+// and PINs stay unique; pinCipher is the encrypted PIN so its owner can view
+// it after re-entering their password. registrationLookup is the hash of the
+// temporary code an admin issues so the person can set a new PIN.
+model KioskCredential {
+  id                     String        @id @default(uuid())
+  user                   User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                 String?       @unique
+  pickupPerson           PickupPerson? @relation(fields: [pickupPersonId], references: [id], onDelete: Cascade)
+  pickupPersonId         String?       @unique
+  pinLookup              String?       @unique
+  pinCipher              String?
+  pinSetAt               DateTime?
+  registrationLookup     String?       @unique
+  registrationExpiresAt  DateTime?
+  registrationIssuedById String?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+}
+
+// A front-desk tablet an admin enrolled as a center's kiosk. The browser keeps
+// a random token in a cookie; only its hash is stored. Kiosk APIs refuse any
+// request without the cookie of an enrolled, unrevoked device.
+model KioskDevice {
+  id          String    @id @default(uuid())
+  center      Center    @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  name        String
+  tokenHash   String    @unique
+  createdById String?
+  lastSeenAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([centerId])
+}
+
+// Time sheet audit report (client request 2026-10-02): one entry per time an
+// admin, coach or HR user changed, or per row they deleted, on a child or
+// employee time sheet, with the row's original values. recordId points at the
+// Attendance / StaffAttendance row, which may no longer exist.
+model TimeSheetAudit {
+  id                String    @id @default(uuid())
+  kind              String // "child" | "staff"
+  centerId          String
+  childId           String?
+  userId            String?
+  recordId          String
+  day               DateTime
+  originalIn        DateTime?
+  originalInBy      String?
+  originalOut       DateTime?
+  originalOutBy     String?
+  action            String // CHECK_IN_CHANGED | CHECK_OUT_CHANGED | DELETED
+  newValue          DateTime?
+  changedById       String?
+  changedByInitials String
+  changedAt         DateTime  @default(now())
+
+  @@index([kind, childId, day])
+  @@index([kind, userId, day])
 }

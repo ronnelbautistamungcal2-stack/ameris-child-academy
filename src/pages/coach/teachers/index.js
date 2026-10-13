@@ -1,7 +1,7 @@
 import CoachLayout from "@/components/coach/CoachLayout";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
-import { roleLabel } from "@/lib/roles";
+import { isStaffPortalRole, roleLabel } from "@/lib/roles";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -120,7 +120,7 @@ export default function AdminTeachers() {
       .filter((s) => s.id !== selectedStaffMember.id)
       .filter((s) => {
         const sRoles = s.roles?.length ? s.roles : [s.role];
-        return sRoles.includes("TEACHER") || sRoles.includes("OTHER_STAFF");
+        return sRoles.some((role) => role === "TEACHER" || isStaffPortalRole(role));
       })
       .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   }, [staff, selectedIsCoach, selectedStaffMember]);

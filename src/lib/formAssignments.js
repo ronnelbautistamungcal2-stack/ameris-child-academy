@@ -30,6 +30,9 @@ export const FORM_ASSIGNMENT_VALUES = FORM_ASSIGNMENT_TYPES.map((t) => t.value);
 export const STAFF_ROLE_OPTIONS = [
   { value: "TEACHER", label: "Teachers" },
   { value: "OTHER_STAFF", label: "Other Staff" },
+  { value: "KITCHEN_STAFF", label: "Kitchen Staff" },
+  { value: "HR_STAFF", label: "HR Staff" },
+  { value: "STUDENT_SUPPORT", label: "Student Support Staff" },
   { value: "COACH", label: "Coaches" },
   { value: "ADMIN", label: "Admins" },
 ];

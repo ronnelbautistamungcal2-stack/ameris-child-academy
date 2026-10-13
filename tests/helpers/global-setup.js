@@ -38,7 +38,6 @@ const WARMUP_ROUTES = [
     [
       "/dashboard",
       "/teacher/calendar",
-      "/teacher/children",
       "/teacher/lessons",
       "/teacher/progress",
       "/teacher/training",

@@ -14,13 +14,8 @@ import { apiJson } from "@/lib/api";
 import { toCalendarDay } from "@/lib/calendar";
 import { getTimeOffTypeLabel, groupTimeOffRequests } from "@/lib/time-off";
 import { useEffect, useState, useCallback, useMemo } from "react";
-
-const TIMEOFF_CALENDAR_LEGEND = [
-  { label: "Events", cls: "bg-indigo-100" },
-  { label: "Pending Requests", cls: "bg-amber-200" },
-  { label: "Approved Time Off", cls: "bg-emerald-100" },
-  { label: "Unexcused Time Off", cls: "bg-red-100" },
-];
+import { STAFF_PORTAL_ROLES } from "@/lib/roles";
+import { TIME_OFF_CALENDAR_KINDS } from "@/lib/calendarColors";
 
 const TABS = [
   { key: "checklists", label: "Checklists", icon: "✅" },
@@ -262,7 +257,7 @@ export default function StaffManagement() {
             () => [],
           ),
           apiJson(
-            `/api/v1/users?centerId=${centerId}&roles=TEACHER,OTHER_STAFF,COACH`,
+            `/api/v1/users?centerId=${centerId}&roles=${["TEACHER", ...STAFF_PORTAL_ROLES, "COACH"].join(",")}`,
           ).catch(
             () => [],
           ),
@@ -1761,7 +1756,7 @@ function TimeOffTab({ centerId, teachers }) {
             year={calYear}
             month={calMonth}
             events={calEvents}
-            legendItems={TIMEOFF_CALENDAR_LEGEND}
+            legendKinds={TIME_OFF_CALENDAR_KINDS}
             selectedDay={selectedDay}
             onDayClick={setSelectedDay}
             onMonthChange={(nextYear, nextMonth) => {

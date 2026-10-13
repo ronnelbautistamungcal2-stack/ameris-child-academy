@@ -23,13 +23,6 @@ const RESOURCE_LINKS = [
       "The advancement steps and requirements for moving up in your role.",
     accent: "indigo",
   },
-  {
-    href: "/teacher/children",
-    title: "Children Directory",
-    description:
-      "Profiles, contacts, and enrollment details for the children in your center.",
-    accent: "amber",
-  },
 ];
 
 const ACCENT_CLASSES = {

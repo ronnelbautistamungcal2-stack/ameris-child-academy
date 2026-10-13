@@ -2,8 +2,9 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
+import { ROLE_OPTIONS } from "@/lib/roles";
 
-const ROLES = ["ADMIN", "TEACHER", "OTHER_STAFF", "PARENT", "COACH", "SUBSCRIBER"];
+const ROLES = ROLE_OPTIONS;
 
 export default function AdminForms() {
   const [templates, setTemplates] = useState([]);

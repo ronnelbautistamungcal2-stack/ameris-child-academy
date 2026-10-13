@@ -11,13 +11,6 @@ const SOURCE_BADGE = {
   birthday: "bg-pink-100 text-pink-700",
 };
 
-const LEGEND = [
-  { label: "Events", cls: "bg-indigo-100" },
-  { label: "My Shifts", cls: "bg-blue-100" },
-  { label: "My Time Off", cls: "bg-emerald-100" },
-  { label: "Birthdays", cls: "bg-pink-100" },
-];
-
 const FILTERS = [
   { key: "events", label: "Events", activeClass: "border-indigo-200 bg-indigo-50 text-indigo-700" },
   { key: "shifts", label: "My Shifts", activeClass: "border-blue-200 bg-blue-50 text-blue-700" },
@@ -139,7 +132,7 @@ export default function StaffCalendarPanel({ centerId }) {
           startDate: request.startDate,
           endDate: request.endDate,
           user: request.user,
-          label: `${request.type} (${request.status})`,
+          label: "Time Off",
           _raw: request,
         });
       }
@@ -255,7 +248,6 @@ export default function StaffCalendarPanel({ centerId }) {
                 setSelectedDay(null);
               }}
               onDayClick={setSelectedDay}
-              legendItems={LEGEND}
             />
           </div>
 

@@ -1,15 +1,18 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { pinStatusOf } from "@/lib/kioskPins";
+import { normalizeMiddleInitial } from "@/lib/personNames";
 import {
   hasEmployeeRole,
   normalizeRoles,
   normalizeStaffDepartment,
   primaryRoleFromRoles,
+  STAFF_PORTAL_ROLES,
   userRoles,
 } from "@/lib/roles";
 
-const STAFF_ROLES = ["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"];
+const STAFF_ROLES = ["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "COACH"];
 
 function parseOptionalDate(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -39,8 +42,9 @@ function parseWeeklySchedules(value) {
 
 function sanitizeUser(user) {
   if (!user) return user;
-  const { password, ...safeUser } = user;
+  const { password, kioskCredential, ...safeUser } = user;
   safeUser.roles = userRoles(safeUser);
+  safeUser.pinStatus = pinStatusOf(kioskCredential);
   return safeUser;
 }
 
@@ -79,7 +83,7 @@ export default async function handler(req, res) {
 
     const users = await prisma.user.findMany({
       where,
-      include: { centers: true, children: true, weeklySchedules: true },
+      include: { centers: true, children: true, weeklySchedules: true, kioskCredential: true },
       orderBy: [{ name: "asc" }, { email: "asc" }],
     });
     return res.status(200).json(users.map(sanitizeUser));
@@ -100,6 +104,7 @@ export default async function handler(req, res) {
       staffDepartment,
       pictureUrl,
       weeklySchedules,
+      middleInitial,
     } = req.body;
     const normalizedEmail = normalizeEmail(email);
     const normalizedCenterId = centerId ? String(centerId).trim() : "";
@@ -109,6 +114,11 @@ export default async function handler(req, res) {
     }
     if (String(password).length < 8) {
       return res.status(400).json({ error: "Password must be at least 8 characters" });
+    }
+    // Required so kiosk sign-ins show all three initials on time sheets.
+    const normalizedMiddleInitial = normalizeMiddleInitial(middleInitial);
+    if (!normalizedMiddleInitial) {
+      return res.status(400).json({ error: "Middle initial is required" });
     }
     const assignedRoles = normalizeRoles(roles || role, role || "PARENT");
     const primaryRole = primaryRoleFromRoles(assignedRoles, "PARENT");
@@ -140,6 +150,7 @@ export default async function handler(req, res) {
         data: {
           email: normalizedEmail,
           name: name ? String(name) : null,
+          middleInitial: normalizedMiddleInitial,
           password: passwordHash,
           mustChangePassword: true,
           dob: isEmployee ? parseOptionalDate(dob) : null,
@@ -159,7 +170,7 @@ export default async function handler(req, res) {
             : undefined,
           weeklySchedules: weeklyScheduleData.length ? { create: weeklyScheduleData } : undefined,
         },
-        include: { centers: true, weeklySchedules: true },
+        include: { centers: true, weeklySchedules: true, kioskCredential: true },
       });
 
       return res.status(201).json(sanitizeUser(user));

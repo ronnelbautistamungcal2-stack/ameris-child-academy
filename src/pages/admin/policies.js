@@ -9,13 +9,17 @@ import {
   POLICY_CATEGORIES,
 } from "@/lib/policy-categories";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { STAFF_PORTAL_ROLES } from "@/lib/roles";
 
-const ROLES = ["ADMIN", "TEACHER", "OTHER_STAFF", "PARENT", "COACH", "SUBSCRIBER"];
+const ROLES = ["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "PARENT", "COACH", "SUBSCRIBER"];
 
 const ROLE_COLORS = {
   ADMIN: { bg: "#DBEAFE", color: "#1E40AF", border: "#93C5FD" },
   TEACHER: { bg: "#D1FAE5", color: "#065F46", border: "#A7F3D0" },
   OTHER_STAFF: { bg: "#ECFEFF", color: "#0E7490", border: "#A5F3FC" },
+  KITCHEN_STAFF: { bg: "#FFEDD5", color: "#9A3412", border: "#FDBA74" },
+  HR_STAFF: { bg: "#E0E7FF", color: "#3730A3", border: "#A5B4FC" },
+  STUDENT_SUPPORT: { bg: "#CCFBF1", color: "#115E59", border: "#5EEAD4" },
   PARENT: { bg: "#FEF3C7", color: "#92400E", border: "#FDE68A" },
   COACH: { bg: "#EDE9FE", color: "#5B21B6", border: "#C4B5FD" },
   SUBSCRIBER: { bg: "#FCE7F3", color: "#9D174D", border: "#F9A8D4" },

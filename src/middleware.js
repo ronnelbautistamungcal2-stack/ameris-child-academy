@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { STAFF_PORTAL_ROLES } from "@/lib/roles";
 
 const PUBLIC_PATHS = new Set([
   "/",
@@ -17,6 +18,9 @@ const PUBLIC_PATHS = new Set([
 
 const PUBLIC_PREFIXES = [
   "/api/auth",
+  // Front-desk kiosk: used with no one signed in; its APIs require an enrolled
+  // device instead, and /kiosk/setup checks for an admin itself.
+  "/kiosk",
   "/_next",
   "/icons",
   "/uploads",
@@ -25,13 +29,14 @@ const PUBLIC_PREFIXES = [
   "/sw.js",
 ];
 
-const ROLE_ROUTES = {
-  ADMIN: ["/admin"],
-  TEACHER: ["/teacher"],
-  OTHER_STAFF: ["/staff"],
-  PARENT: ["/parent"],
-  COACH: ["/coach"],
-  SUBSCRIBER: ["/subscriber"],
+// Route prefix -> roles allowed there. Admins may visit every portal.
+const ROUTE_ROLES = {
+  "/admin": ["ADMIN"],
+  "/teacher": ["TEACHER"],
+  "/staff": STAFF_PORTAL_ROLES,
+  "/parent": ["PARENT"],
+  "/coach": ["COACH"],
+  "/subscriber": ["SUBSCRIBER"],
 };
 
 export async function middleware(request) {
@@ -60,6 +65,14 @@ export async function middleware(request) {
     return NextResponse.redirect(loginUrl);
   }
 
+  if (token.disabled) {
+    // Sign the disabled user out: drop the session cookie on the way to /login.
+    const response = NextResponse.redirect(new URL("/login?error=AccountDisabled", request.url));
+    response.cookies.delete("next-auth.session-token");
+    response.cookies.delete("__Secure-next-auth.session-token");
+    return response;
+  }
+
   if (token.mustChangePassword && pathname !== "/settings") {
     const settingsUrl = new URL("/settings", request.url);
     settingsUrl.searchParams.set("forcePasswordChange", "1");
@@ -67,15 +80,9 @@ export async function middleware(request) {
   }
 
   const userRole = token.role;
-  for (const [role, prefixes] of Object.entries(ROLE_ROUTES)) {
-    for (const prefix of prefixes) {
-      if (
-        pathname.startsWith(prefix) &&
-        userRole !== role &&
-        userRole !== "ADMIN"
-      ) {
-        return NextResponse.redirect(new URL("/dashboard", request.url));
-      }
+  for (const [prefix, roles] of Object.entries(ROUTE_ROLES)) {
+    if (pathname.startsWith(prefix) && !roles.includes(userRole) && userRole !== "ADMIN") {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
     }
   }
 

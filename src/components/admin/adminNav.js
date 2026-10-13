@@ -1,3 +1,5 @@
+import { otherPagesGroup } from "@/components/shell/navExtras";
+
 const icons = {
   dashboard: (
     <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
@@ -53,6 +55,7 @@ const icons = {
   ),
 };
 
+// Follows the client's Admin Navigation list (2026-10-02 requests).
 export const ADMIN_NAV_ITEMS = [
   {
     href: "/admin/dashboard",
@@ -69,11 +72,30 @@ export const ADMIN_NAV_ITEMS = [
     ],
   },
   {
+    href: "/admin/center-performance",
+    label: "Center Performance Overview",
+    icon: icons.reports,
+  },
+  {
+    href: "/admin/calendar",
+    label: "Calendar",
+    icon: icons.calendar,
+  },
+  {
+    label: "Finance",
+    icon: icons.finance,
+    children: [
+      { href: "/admin/billing", label: "Billing" },
+      { href: "/admin/classroom-budgets", label: "Classroom Budgets" },
+    ],
+  },
+  {
     label: "Profile Management",
     icon: icons.people,
     children: [
       { href: "/admin/users", label: "Users" },
-      { href: "/admin/children", label: "Students" },
+      { href: "/admin/children", label: "Student List" },
+      { href: "/admin/staff-list", label: "Staff List" },
     ],
   },
   {
@@ -81,7 +103,6 @@ export const ADMIN_NAV_ITEMS = [
     icon: icons.program,
     children: [
       { href: "/admin/lessons", label: "Curriculum" },
-      { href: "/admin/curriculum", label: "Steps of Progression" },
       { href: "/admin/parent-involvement", label: "Parent Involvement" },
       { href: "/admin/checklists", label: "Checklist Manager" },
       {
@@ -99,15 +120,7 @@ export const ADMIN_NAV_ITEMS = [
       { href: "/admin/teacher-logging-alerts", label: "Compliance Alerts" },
       { href: "/admin/form-renewals", label: "Form Renewals" },
       { href: "/admin/policies", label: "Policies & Procedures" },
-      { href: "/admin/affiliates", label: "Affiliates & Partners" },
-    ],
-  },
-  {
-    label: "Finance",
-    icon: icons.finance,
-    children: [
-      { href: "/admin/billing", label: "Billing" },
-      { href: "/admin/classroom-budgets", label: "Classroom Budgets" },
+      { href: "/admin/resources", label: "Resources" },
     ],
   },
   {
@@ -116,22 +129,21 @@ export const ADMIN_NAV_ITEMS = [
     icon: icons.reports,
   },
   {
+    href: "/admin/centers",
     label: "Center Management",
     icon: icons.centers,
-    children: [
-      { href: "/admin/centers", label: "Centers" },
-      { href: "/admin/subscriptions", label: "Subscriptions" },
-      { href: "/admin/data-archive", label: "Data Archive" },
-    ],
-  },
-  {
-    href: "/admin/calendar",
-    label: "Calendar",
-    icon: icons.calendar,
   },
   {
     href: "/admin/messages",
     label: "Messages",
     icon: icons.messages,
   },
+  otherPagesGroup([
+    // Becomes the Steps of Progression Bank tab of Curriculum.
+    { href: "/admin/curriculum", label: "Steps of Progression" },
+    { href: "/admin/affiliates", label: "Affiliates & Partners" },
+    { href: "/admin/subscriptions", label: "Subscriptions" },
+    // Not in the client's list yet; where kiosk setup lives is still open.
+    { href: "/kiosk/setup", label: "Kiosk Setup" },
+  ]),
 ];

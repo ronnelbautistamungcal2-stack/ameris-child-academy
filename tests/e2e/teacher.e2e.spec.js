@@ -6,16 +6,16 @@ test.describe("Teacher Workflows", () => {
     await loginAsTeacher(page, request);
   });
 
-  test("can navigate to children page", async ({ page }) => {
+  test("can navigate to progression tracking from Student Management", async ({ page }) => {
     await page.getByRole("button", { name: "Student Management" }).click();
-    const childrenLink = page.getByRole("link", { name: "Children", exact: true });
-    await expect(childrenLink).toBeVisible();
+    const progressLink = page.getByRole("link", { name: "Progression Tracking", exact: true });
+    await expect(progressLink).toBeVisible();
     await Promise.all([
-      page.waitForURL(/\/teacher\/children/),
-      childrenLink.click(),
+      page.waitForURL(/\/teacher\/progress/),
+      progressLink.click(),
     ]);
     await waitForLoadingDone(page);
-    await expect(page).toHaveURL(/\/teacher\/children/);
+    await expect(page).toHaveURL(/\/teacher\/progress/);
   });
 
   test("can navigate to lessons page", async ({ page }) => {

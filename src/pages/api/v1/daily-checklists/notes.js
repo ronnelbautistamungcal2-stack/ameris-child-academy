@@ -6,6 +6,7 @@ import {
 import { canUserBeAssignedChecklist } from "@/lib/dailyChecklistAssignees";
 import prisma from "@/lib/prisma";
 import { getTeacherClassIds } from "@/lib/teacherScope";
+import { isStaffPortalRole, STAFF_PORTAL_ROLES } from "@/lib/roles";
 
 function todayDateString() {
   const value = new Date();
@@ -64,7 +65,7 @@ async function assertChecklistAccess(session, checklist) {
   }
 
   if (
-    role === "OTHER_STAFF" &&
+    isStaffPortalRole(role) &&
     (hasChecklistClassroomScope(checklist) || checklist.category === "CLASSROOM")
   ) {
     return {
@@ -75,7 +76,7 @@ async function assertChecklistAccess(session, checklist) {
   }
 
   if (
-    ["TEACHER", "OTHER_STAFF"].includes(role) &&
+    ["TEACHER", ...STAFF_PORTAL_ROLES].includes(role) &&
     !canUserBeAssignedChecklist(checklist, session.user.id)
   ) {
     return {
@@ -104,7 +105,7 @@ export default async function handler(req, res) {
   if (!session) return res.status(401).json({ error: "Unauthorized" });
 
   const role = session.user.role;
-  if (!["ADMIN", "COACH", "TEACHER", "OTHER_STAFF"].includes(role)) {
+  if (!["ADMIN", "COACH", "TEACHER", ...STAFF_PORTAL_ROLES].includes(role)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -125,7 +126,7 @@ export default async function handler(req, res) {
   }
 
   if (
-    ["TEACHER", "OTHER_STAFF"].includes(role) &&
+    ["TEACHER", ...STAFF_PORTAL_ROLES].includes(role) &&
     normalizeDateInput(date) !== todayDateString()
   ) {
     return res.status(403).json({

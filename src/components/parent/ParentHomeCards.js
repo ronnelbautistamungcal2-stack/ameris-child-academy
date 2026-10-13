@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import Skeleton from "@/components/ui/Skeleton";
+import { CALENDAR_KINDS, calendarStyleOf } from "@/lib/calendarColors";
 
 const NAVY = "text-[#12386a] dark:text-slate-100";
 
@@ -238,6 +239,9 @@ function startOfDay(value) {
   return date;
 }
 
+// Parents see center events and closures.
+const PARENT_CALENDAR_KINDS = ["event", "closure"];
+
 export function CalendarCard({
   events = [],
   actionHref = "/parent/calendar",
@@ -324,6 +328,17 @@ export function CalendarCard({
         </button>
       </div>
 
+      <div className="flex flex-wrap justify-center gap-2 pb-3">
+        {PARENT_CALENDAR_KINDS.map((kind) => (
+          <span
+            key={kind}
+            className={"rounded-full border px-2.5 py-0.5 text-[11px] font-bold " + CALENDAR_KINDS[kind].pill}
+          >
+            {CALENDAR_KINDS[kind].label}
+          </span>
+        ))}
+      </div>
+
       <div className="grid grid-cols-7 border-t border-gray-100 text-center dark:border-gray-700">
         {WEEKDAY_LABELS.map((label) => (
           <div
@@ -336,7 +351,6 @@ export function CalendarCard({
 
         {cells.map((cell) => {
           const primaryEvent = cell.dayEvents[0];
-          const isClosure = primaryEvent?.type === "HOLIDAY";
           return (
             <div
               key={cell.date.toISOString()}
@@ -362,10 +376,8 @@ export function CalendarCard({
                 <span
                   title={primaryEvent.title}
                   className={[
-                    "w-full truncate px-0.5 text-[9px] font-bold leading-tight",
-                    isClosure
-                      ? "text-rose-600 dark:text-rose-400"
-                      : "text-sky-600 dark:text-sky-400",
+                    "w-full truncate rounded border px-1 text-[9px] font-bold leading-tight",
+                    calendarStyleOf({ _source: "event", type: primaryEvent.type }).pill,
                   ].join(" ")}
                 >
                   {primaryEvent.title}

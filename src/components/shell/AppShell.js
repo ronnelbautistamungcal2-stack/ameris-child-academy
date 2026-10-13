@@ -27,7 +27,9 @@ export default function AppShell({
   backLabel = "Back",
   showBack,
   showFooter = false,
-  sidebarVariant = "light",
+  // Every portal uses the navy sidebar (client request 2026-10-02); "light"
+  // remains available for a page that needs it.
+  sidebarVariant = "navy",
   bannerSrc = "",
   bannerTagline = "",
 }) {
@@ -402,7 +404,7 @@ export default function AppShell({
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50/50 to-amber-50/40 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+    <div className="min-h-screen bg-[#eef4fb] dark:bg-gradient-to-br dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
       <a href={`#${mainContentId}`} className="skip-link">
         Skip to main content
       </a>
@@ -414,7 +416,7 @@ export default function AppShell({
           <div className={["mx-auto flex w-full items-stretch", shellMaxWidthClassName].join(" ")}>
             <div className="hidden w-72 shrink-0 items-center justify-center bg-white px-3 dark:bg-gray-900 md:flex">
               <Link href="/dashboard" className="flex w-full justify-center">
-                <AmerisLogo size="lg" tight showText={false} className="max-w-full" style={{ width: "100%" }} />
+                <AmerisLogo size="lg" tight showText={false} className="max-w-full" style={{ width: "176px" }} />
               </Link>
             </div>
             <div className="relative min-w-0 flex-1 overflow-hidden">{headerBody}</div>
@@ -868,6 +870,12 @@ function getRoleDotClass(role) {
       return "bg-emerald-500";
     case "OTHER_STAFF":
       return "bg-cyan-500";
+    case "KITCHEN_STAFF":
+      return "bg-orange-500";
+    case "HR_STAFF":
+      return "bg-indigo-500";
+    case "STUDENT_SUPPORT":
+      return "bg-teal-500";
     case "COACH":
       return "bg-amber-500";
     case "PARENT":

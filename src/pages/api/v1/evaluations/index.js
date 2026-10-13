@@ -14,7 +14,7 @@ import {
   optionalString,
   requiredString,
 } from "@/lib/validation";
-import { userRoles } from "@/lib/roles";
+import { STAFF_PORTAL_ROLES, userRoles } from "@/lib/roles";
 
 const EVALUATION_STATUSES = ["DRAFT", "SUBMITTED", "ACKNOWLEDGED"];
 
@@ -81,7 +81,7 @@ export default createApiHandler(async function handler(req, res) {
   if (!session) throw unauthorized();
   if (
     req.method === "GET" &&
-    !["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"].includes(session.user.role)
+    !["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "COACH"].includes(session.user.role)
   ) {
     throw forbidden("Only employees can access evaluations");
   }
@@ -155,7 +155,7 @@ export default createApiHandler(async function handler(req, res) {
     select: { role: true, roles: true },
   });
   const targetRoles = userRoles(targetUser);
-  if (!targetRoles.some((role) => ["TEACHER", "OTHER_STAFF", "COACH"].includes(role))) {
+  if (!targetRoles.some((role) => ["TEACHER", ...STAFF_PORTAL_ROLES, "COACH"].includes(role))) {
     throw badRequest("Evaluations can only be created for staff members");
   }
 

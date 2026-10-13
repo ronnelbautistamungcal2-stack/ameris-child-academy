@@ -6,6 +6,7 @@ import {
 import { canUserBeAssignedChecklist } from "@/lib/dailyChecklistAssignees";
 import prisma from "@/lib/prisma";
 import { getTeacherClassIds } from "@/lib/teacherScope";
+import { isStaffPortalRole, STAFF_PORTAL_ROLES } from "@/lib/roles";
 
 function todayDateString() {
   const value = new Date();
@@ -117,7 +118,7 @@ export default async function handler(req, res) {
   if (!session) return res.status(401).json({ error: "Unauthorized" });
 
   const role = session.user.role;
-  if (!["ADMIN", "COACH", "TEACHER", "OTHER_STAFF"].includes(role)) {
+  if (!["ADMIN", "COACH", "TEACHER", ...STAFF_PORTAL_ROLES].includes(role)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -174,13 +175,13 @@ export default async function handler(req, res) {
       if (!ok) return res.status(403).json({ error: "Forbidden" });
     }
     if (
-      role === "OTHER_STAFF" &&
+      isStaffPortalRole(role) &&
       (hasChecklistClassroomScope(item.checklist) || item.checklist.category === "CLASSROOM")
     ) {
       return res.status(403).json({ error: "Other staff cannot complete classroom checklists" });
     }
     if (
-      ["TEACHER", "OTHER_STAFF"].includes(role) &&
+      ["TEACHER", ...STAFF_PORTAL_ROLES].includes(role) &&
       !canUserBeAssignedChecklist(item.checklist, session.user.id)
     ) {
       return res.status(403).json({ error: "This checklist is assigned to another staff member" });
@@ -193,7 +194,7 @@ export default async function handler(req, res) {
     }
 
     if (
-      ["TEACHER", "OTHER_STAFF"].includes(role) &&
+      ["TEACHER", ...STAFF_PORTAL_ROLES].includes(role) &&
       normalizeDateInput(date) !== todayDateString()
     ) {
       return res.status(403).json({

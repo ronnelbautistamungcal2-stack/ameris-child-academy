@@ -14,6 +14,16 @@ async function main() {
   const parentPassword = process.env.SEED_PARENT_PASSWORD || "parentpass";
   const coachEmail = process.env.SEED_COACH_EMAIL || "coach@demo.com";
   const coachPassword = process.env.SEED_COACH_PASSWORD || "coachpass";
+  // Staff portal roles added with the 2026-10-02 client requests.
+  const staffRoleSeeds = [
+    { role: "KITCHEN_STAFF", name: "Kitchen Staff User", envPrefix: "SEED_KITCHEN", emailDefault: "kitchen@demo.com", passwordDefault: "kitchenpass" },
+    { role: "HR_STAFF", name: "HR Staff User", envPrefix: "SEED_HR", emailDefault: "hr@demo.com", passwordDefault: "hrpass" },
+    { role: "STUDENT_SUPPORT", name: "Student Support User", envPrefix: "SEED_STUDENT_SUPPORT", emailDefault: "support@demo.com", passwordDefault: "supportpass" },
+  ].map((seed) => ({
+    ...seed,
+    email: process.env[`${seed.envPrefix}_EMAIL`] || seed.emailDefault,
+    password: process.env[`${seed.envPrefix}_PASSWORD`] || seed.passwordDefault,
+  }));
 
   if (process.env.NODE_ENV === "production") {
     const missingPasswords = [
@@ -22,6 +32,9 @@ async function main() {
       !process.env.SEED_OTHER_STAFF_PASSWORD && "SEED_OTHER_STAFF_PASSWORD",
       !process.env.SEED_PARENT_PASSWORD && "SEED_PARENT_PASSWORD",
       !process.env.SEED_COACH_PASSWORD && "SEED_COACH_PASSWORD",
+      ...staffRoleSeeds.map(
+        (seed) => !process.env[`${seed.envPrefix}_PASSWORD`] && `${seed.envPrefix}_PASSWORD`,
+      ),
     ].filter(Boolean);
 
     if (missingPasswords.length) {
@@ -121,11 +134,23 @@ async function main() {
     },
   });
 
+  const staffRoleUsers = [];
+  for (const seed of staffRoleSeeds) {
+    const hash = await bcrypt.hash(seed.password, 10);
+    const user = await prisma.user.upsert({
+      where: { email: seed.email },
+      update: { name: seed.name, password: hash, role: seed.role },
+      create: { email: seed.email, name: seed.name, password: hash, role: seed.role },
+    });
+    staffRoleUsers.push({ userId: user.id, centerId: center.id, role: seed.role });
+  }
+
   for (const membership of [
     { userId: admin.id, centerId: center.id, role: "ADMIN" },
     { userId: teacher.id, centerId: center.id, role: "TEACHER" },
     { userId: otherStaff.id, centerId: center.id, role: "OTHER_STAFF" },
     { userId: coach.id, centerId: center.id, role: "COACH" },
+    ...staffRoleUsers,
   ]) {
     await prisma.centerUser.upsert({
       where: {

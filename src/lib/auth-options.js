@@ -20,6 +20,8 @@ export const authOptions = {
             where: { email: credentials.email },
           });
           if (!user || !user.password) return null;
+          // Disabled accounts cannot sign in (Users page enable/disable).
+          if (user.disabled) return null;
           const isValid = await bcrypt.compare(
             credentials.password,
             user.password,
@@ -109,9 +111,13 @@ export const authOptions = {
           email: true,
           staffDepartment: true,
           mustChangePassword: true,
+          disabled: true,
         },
       });
       if (!dbUser) return token;
+
+      // A user disabled while signed in loses their session at the next refresh.
+      token.disabled = Boolean(dbUser.disabled);
 
       token.roles = normalizeRoles(dbUser.roles, dbUser.role);
       token.role = token.roles.includes(token.role) ? token.role : token.roles[0];
@@ -133,6 +139,7 @@ export const authOptions = {
         session.user.pictureUrl = token.pictureUrl || null;
         session.user.staffDepartment = normalizeStaffDepartment(token.staffDepartment);
         session.user.mustChangePassword = Boolean(token.mustChangePassword);
+        session.user.disabled = Boolean(token.disabled);
       }
       return session;
     },

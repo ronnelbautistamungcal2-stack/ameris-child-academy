@@ -5,6 +5,9 @@ const MESSAGE_ROLE_PATHS = {
   ADMIN: "/admin/messages",
   TEACHER: "/teacher/messages",
   OTHER_STAFF: "/staff/messages",
+  KITCHEN_STAFF: "/staff/messages",
+  HR_STAFF: "/staff/messages",
+  STUDENT_SUPPORT: "/staff/messages",
   PARENT: "/parent/messages",
   COACH: "/coach/messages",
 };

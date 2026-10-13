@@ -1,4 +1,5 @@
 import { toCalendarDay } from "@/lib/calendar";
+import { CALENDAR_KINDS, calendarStyleOf } from "@/lib/calendarColors";
 import { useMemo } from "react";
 
 const MONTH_NAMES = [
@@ -7,47 +8,8 @@ const MONTH_NAMES = [
 ];
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-const STATUS_COLORS = {
-  APPROVED: "bg-emerald-200 text-emerald-800",
-  PENDING: "bg-amber-200 text-amber-800",
-};
-
-const TYPE_COLORS = {
-  PAID: "bg-emerald-100 text-emerald-700",
-  UNPAID: "bg-gray-200 text-gray-600",
-  PTO: "bg-emerald-100 text-emerald-700",
-  Sick: "bg-red-100 text-red-700",
-  Unpaid: "bg-gray-200 text-gray-600",
-  Other: "bg-sky-100 text-sky-700",
-};
-
-const SOURCE_COLORS = {
-  event: "bg-indigo-100 text-indigo-700 border-indigo-200",
-  shift: "bg-blue-100 text-blue-700 border-blue-200",
-  timeoff: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  birthday: "bg-pink-100 text-pink-700 border-pink-200",
-};
-
-const SOURCE_DOT = {
-  event: "#6366f1",
-  shift: "#3b82f6",
-  timeoff: "#10b981",
-  "timeoff-unexcused": "#ef4444",
-  birthday: "#ec4899",
-};
-
-function isUnexcusedTimeOff(event) {
-  return event._source === "timeoff" && !!event.isUnexcused;
-}
-
-function getDotKey(event) {
-  return isUnexcusedTimeOff(event) ? "timeoff-unexcused" : event._source;
-}
-
 function getEventColor(event) {
-  if (isUnexcusedTimeOff(event)) return "bg-red-100 text-red-700 border-red-200";
-  if (event._source && SOURCE_COLORS[event._source]) return SOURCE_COLORS[event._source];
-  return TYPE_COLORS[event.type] || STATUS_COLORS[event.status] || "bg-gray-100 text-gray-600";
+  return calendarStyleOf(event).pill;
 }
 
 function sameDay(d1, d2) {
@@ -60,7 +22,19 @@ function normalizeDate(event, fieldName) {
   return toCalendarDay(event?.[fieldName], { allDay: !!event?.allDay });
 }
 
-export default function MonthlyCalendar({ year, month, events = [], onMonthChange, onDayClick, selectedDay, legendItems }) {
+/**
+ * `legendKinds` lists the CALENDAR_KINDS this calendar can show; the legend at
+ * the top uses the shared colours and labels for them.
+ */
+export default function MonthlyCalendar({
+  year,
+  month,
+  events = [],
+  onMonthChange,
+  onDayClick,
+  selectedDay,
+  legendKinds = Object.keys(CALENDAR_KINDS),
+}) {
   const today = new Date();
   const firstDay = new Date(year, month, 1);
   const startDow = firstDay.getDay();
@@ -119,10 +93,7 @@ export default function MonthlyCalendar({ year, month, events = [], onMonthChang
 
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
 
-  const legendEntries = legendItems || Object.entries(TYPE_COLORS).map(([type, cls]) => ({
-    label: type,
-    cls: cls.split(" ")[0],
-  }));
+  const legendEntries = legendKinds.map((kind) => CALENDAR_KINDS[kind]).filter(Boolean);
 
   return (
     <div>
@@ -181,6 +152,19 @@ export default function MonthlyCalendar({ year, month, events = [], onMonthChang
         </button>
       </div>
 
+      {/* Legend */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+        {legendEntries.map((item) => (
+          <span
+            key={item.label}
+            className={item.pill}
+            style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999, borderWidth: 1, borderStyle: "solid" }}
+          >
+            {item.label}
+          </span>
+        ))}
+      </div>
+
       {/* Day-of-week headers */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: "2px solid var(--admin-border)" }}>
         {DAY_LABELS.map((label, i) => (
@@ -217,9 +201,6 @@ export default function MonthlyCalendar({ year, month, events = [], onMonthChang
           const isSelected = selectedDay === cell.day;
           const isWeekend = new Date(year, month, cell.day).getDay() % 6 === 0;
 
-          // Get unique source types for dot indicators
-          const sourceDots = [...new Set(dayEvents.map(getDotKey).filter(Boolean))];
-
           return (
             <div
               key={cell.key}
@@ -251,17 +232,6 @@ export default function MonthlyCalendar({ year, month, events = [], onMonthChang
                 display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 3,
                 padding: "1px 3px", marginBottom: 2,
               }}>
-                {/* Source dot indicators */}
-                {sourceDots.length > 0 && (
-                  <div style={{ display: "flex", gap: 2, marginRight: "auto" }}>
-                    {sourceDots.map(src => (
-                      <span key={src} style={{
-                        width: 5, height: 5, borderRadius: "50%",
-                        background: SOURCE_DOT[src] || "#9ca3af",
-                      }} />
-                    ))}
-                  </div>
-                )}
                 <span style={{
                   fontSize: 12, fontWeight: isToday ? 800 : 500,
                   color: isToday ? "#fff" : isSelected ? "#2563eb" : "var(--admin-text-muted)",
@@ -293,7 +263,7 @@ export default function MonthlyCalendar({ year, month, events = [], onMonthChang
                           ? `Shift - ${evt.label}`
                           : evt._source === "birthday"
                             ? `Birthday - ${evt.label}`
-                            : `${evt.type || "Time Off"} - ${evt.user?.name || "Unknown"} (${evt.status})`}
+                            : `${calendarStyleOf(evt).label} - ${evt.user?.name || evt.label || "Unknown"}`}
                     >
                       {evt.label || evt.user?.name || "\u2014"}
                     </div>
@@ -308,19 +278,6 @@ export default function MonthlyCalendar({ year, month, events = [], onMonthChang
             </div>
           );
         })}
-      </div>
-
-      {/* Legend */}
-      <div style={{
-        display: "flex", flexWrap: "wrap", gap: 16, marginTop: 14,
-        padding: "10px 0", borderTop: "1px solid var(--admin-border-light, #f3f4f6)",
-      }}>
-        {legendEntries.map((item) => (
-          <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span className={item.cls} style={{ width: 10, height: 10, borderRadius: 3, display: "inline-block" }} />
-            <span style={{ fontSize: 11, color: "var(--admin-text-muted)", fontWeight: 600 }}>{item.label}</span>
-          </div>
-        ))}
       </div>
     </div>
   );

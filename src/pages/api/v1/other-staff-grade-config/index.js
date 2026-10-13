@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { STAFF_PORTAL_ROLES } from "@/lib/roles";
 
 const DEFAULTS = { evaluationWeight: 50, checklistWeight: 50, lateDeductionPct: 1, absenceDeductionPct: 2 };
 
@@ -7,7 +8,7 @@ export default async function handler(req, res) {
   try {
     const session = await getSession(req, res);
     if (!session) return res.status(401).json({ error: "Unauthorized" });
-    if (!["ADMIN", "OTHER_STAFF"].includes(session.user.role)) return res.status(403).json({ error: "Forbidden" });
+    if (!["ADMIN", ...STAFF_PORTAL_ROLES].includes(session.user.role)) return res.status(403).json({ error: "Forbidden" });
 
     const { centerId } = req.query;
     if (!centerId) return res.status(400).json({ error: "centerId is required" });

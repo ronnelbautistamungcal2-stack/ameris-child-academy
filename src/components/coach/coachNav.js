@@ -1,3 +1,5 @@
+import { otherPagesGroup } from "@/components/shell/navExtras";
+
 const icons = {
   dashboard: (
     <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
@@ -30,13 +32,32 @@ const icons = {
       <path fillRule="evenodd" d="M10 2c-2.236 0-4.43.18-6.57.524C1.993 2.755 1 4.014 1 5.426v5.148c0 1.413.993 2.67 2.43 2.902.848.137 1.705.248 2.57.331v3.443a.75.75 0 001.28.53l3.58-3.579a.78.78 0 01.527-.224 41.202 41.202 0 005.183-.5c1.437-.232 2.43-1.49 2.43-2.903V5.426c0-1.413-.993-2.67-2.43-2.902A41.289 41.289 0 0010 2zm0 7a1 1 0 100-2 1 1 0 000 2zM8 8a1 1 0 11-2 0 1 1 0 012 0zm5 1a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
     </svg>
   ),
-  settings: (
+};
+
+const extraIcons = {
+  performance: (
     <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
-      <path fillRule="evenodd" d="M7.84 1.804A1 1 0 018.82 1h2.36a1 1 0 01.98.804l.331 1.652a6.993 6.993 0 011.929 1.115l1.598-.54a1 1 0 011.186.447l1.18 2.044a1 1 0 01-.205 1.251l-1.267 1.113a7.047 7.047 0 010 2.228l1.267 1.113a1 1 0 01.206 1.25l-1.18 2.045a1 1 0 01-1.187.447l-1.598-.54a6.993 6.993 0 01-1.929 1.115l-.33 1.652a1 1 0 01-.98.804H8.82a1 1 0 01-.98-.804l-.331-1.652a6.993 6.993 0 01-1.929-1.115l-1.598.54a1 1 0 01-1.186-.447l-1.18-2.044a1 1 0 01.205-1.251l1.267-1.114a7.05 7.05 0 010-2.227L1.821 7.773a1 1 0 01-.206-1.25l1.18-2.045a1 1 0 011.187-.447l1.598.54A6.993 6.993 0 017.51 3.456l.33-1.652zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+      <path d="M15.5 2A1.5 1.5 0 0014 3.5v13a1.5 1.5 0 003 0v-13A1.5 1.5 0 0015.5 2zM10 6.5A1.5 1.5 0 008.5 8v8.5a1.5 1.5 0 003 0V8A1.5 1.5 0 0010 6.5zM4.5 11A1.5 1.5 0 003 12.5v4a1.5 1.5 0 003 0v-4A1.5 1.5 0 004.5 11z" />
+    </svg>
+  ),
+  students: (
+    <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
+      <path d="M10 9a3 3 0 100-6 3 3 0 000 6zM6 8a2 2 0 11-4 0 2 2 0 014 0zM1.49 15.326a.78.78 0 01-.358-.442 3 3 0 014.308-3.516 6.484 6.484 0 00-1.905 3.959c-.023.222-.014.442.025.654a4.97 4.97 0 01-2.07-.655zM16.44 15.98a4.97 4.97 0 002.07-.654.78.78 0 00.357-.442 3 3 0 00-4.308-3.517 6.484 6.484 0 011.907 3.96 2.32 2.32 0 01-.026.654zM18 8a2 2 0 11-4 0 2 2 0 014 0zM5.304 16.19a.844.844 0 01-.277-.71 5 5 0 019.947 0 .843.843 0 01-.277.71A6.975 6.975 0 0110 18a6.974 6.974 0 01-4.696-1.81z" />
+    </svg>
+  ),
+  reports: (
+    <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
+      <path fillRule="evenodd" d="M4.5 2A1.5 1.5 0 003 3.5v13A1.5 1.5 0 004.5 18h11a1.5 1.5 0 001.5-1.5V7.621a1.5 1.5 0 00-.44-1.06l-4.12-4.122A1.5 1.5 0 0011.378 2H4.5zm2.25 8.5a.75.75 0 000 1.5h6.5a.75.75 0 000-1.5h-6.5zm0 3a.75.75 0 000 1.5h6.5a.75.75 0 000-1.5h-6.5z" clipRule="evenodd" />
+    </svg>
+  ),
+  calendar: (
+    <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
+      <path fillRule="evenodd" d="M5.75 2a.75.75 0 01.75.75V4h7V2.75a.75.75 0 011.5 0V4h.25A2.75 2.75 0 0118 6.75v8.5A2.75 2.75 0 0115.25 18H4.75A2.75 2.75 0 012 15.25v-8.5A2.75 2.75 0 014.75 4H5V2.75A.75.75 0 015.75 2zm-1 5.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-6.5c0-.69-.56-1.25-1.25-1.25H4.75z" clipRule="evenodd" />
     </svg>
   ),
 };
 
+// Follows the client's Coach Navigation list (2026-10-02 requests).
 export const COACH_NAV_ITEMS = [
   {
     href: "/coach/dashboard",
@@ -44,54 +65,80 @@ export const COACH_NAV_ITEMS = [
     icon: icons.dashboard,
   },
   {
-    label: "Oversight",
-    icon: icons.oversight,
+    label: "My Performance",
+    icon: extraIcons.performance,
     children: [
-      { href: "/coach/compliance", label: "Compliance" },
-      { href: "/coach/checklists", label: "Checklists" },
-      { href: "/coach/observations", label: "Observations" },
-      { href: "/coach/follow-ups", label: "Follow-ups" },
-      { href: "/coach/permission-policies", label: "Family Permission Policies" },
+      { href: "/coach/my-checklist", label: "Checklist" },
+      { href: "/coach/my-performance", label: "Performance" },
+      { href: "/coach/my-time-off", label: "My Time Off" },
     ],
   },
   {
     label: "Staff Management",
     icon: icons.staff,
     children: [
-      { href: "/coach/teachers", label: "Staff" },
-      { href: "/coach/staff-management", label: "Staff Management" },
-      { href: "/coach/shifts", label: "Shift Schedules" },
+      { href: "/coach/staff-management", label: "Staff Daily Management" },
+      { href: "/coach/staff-performance", label: "Staff Performance Report" },
+      { href: "/coach/training", label: "Staff Training" },
+      { href: "/coach/professional-development", label: "Staff Professional Development" },
+      { href: "/coach/teachers", label: "Staff Positions" },
     ],
   },
   {
-    label: "Classroom Operations",
+    label: "Classroom Management",
     icon: icons.classroom,
     children: [
       { href: "/coach/classes", label: "Classroom List" },
-      { href: "/coach/progress", label: "Progression Tracking" },
-      { href: "/coach/activity-overrides", label: "Log Activity" },
+      { href: "/coach/checklist-manager", label: "Checklist Manager" },
       { href: "/coach/supply-lists", label: "Supply Lists" },
+      { href: "/coach/classroom-budgets", label: "Classroom Budgets" },
+      { href: "/coach/class-performance", label: "Classroom Performance Report" },
     ],
   },
   {
-    label: "Reports & Resources",
+    label: "Student Management",
+    icon: extraIcons.students,
+    children: [
+      { href: "/coach/students", label: "Student List" },
+      { href: "/coach/progress", label: "Progression Tracking" },
+      { href: "/coach/activity-overrides", label: "Daily Log" },
+      { href: "/coach/parent-fees", label: "Parent Fees" },
+      { href: "/coach/student-performance", label: "Student Performance Report" },
+    ],
+  },
+  {
+    href: "/coach/reports",
+    label: "Reports",
+    icon: extraIcons.reports,
+  },
+  {
+    label: "Resources",
     icon: icons.resources,
     children: [
-      { href: "/coach/reports", label: "Reports" },
-      { href: "/coach/feeding-plans-report", label: "Feeding Plans Report" },
-      { href: "/coach/carpool-report", label: "Carpool Report" },
-      { href: "/coach/policies", label: "Policies" },
-      { href: "/coach/training", label: "Training" },
+      { href: "/coach/policies", label: "Policies & Procedures" },
+      { href: "/coach/resources", label: "Additional Resources" },
     ],
+  },
+  {
+    href: "/coach/calendar",
+    label: "Calendar",
+    icon: extraIcons.calendar,
   },
   {
     href: "/coach/messages",
     label: "Messages",
     icon: icons.messages,
   },
-  {
-    href: "/settings",
-    label: "Account Settings",
-    icon: icons.settings,
-  },
+  otherPagesGroup([
+    // Become tabs of Staff Daily Management (Checklist Review, Shift Schedules).
+    { href: "/coach/checklists", label: "Daily Checklists" },
+    { href: "/coach/shifts", label: "Shift Schedules" },
+    { href: "/coach/compliance", label: "Compliance" },
+    { href: "/coach/observations", label: "Observations" },
+    { href: "/coach/follow-ups", label: "Follow-ups" },
+    { href: "/coach/permission-policies", label: "Family Permission Policies" },
+    // Move into Reports.
+    { href: "/coach/feeding-plans-report", label: "Feeding Plans Report" },
+    { href: "/coach/carpool-report", label: "Carpool Report" },
+  ]),
 ];

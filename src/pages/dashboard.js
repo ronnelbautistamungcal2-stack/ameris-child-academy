@@ -16,6 +16,7 @@ import { toDateKey, todaysMenuRows } from "@/lib/menuPlan";
 import { buildParentNotices } from "@/lib/parentNotices";
 import { ParentButton } from "@/components/parent/ParentUI";
 import { useShellTitle } from "@/components/shell/PortalShell";
+import { isStaffPortalRole } from "@/lib/roles";
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
@@ -47,7 +48,7 @@ export default function Dashboard() {
     if (session?.user?.role === "TEACHER") {
       router.replace("/teacher/dashboard");
     }
-    if (session?.user?.role === "OTHER_STAFF") {
+    if (isStaffPortalRole(session?.user?.role)) {
       router.replace("/staff/dashboard");
     }
     if (session?.user?.role === "COACH") {
@@ -263,7 +264,7 @@ export default function Dashboard() {
                     </Link>
                   ) : role === "TEACHER" ? (
                     <Link
-                      href="/teacher/children"
+                      href="/teacher/classroom"
                       className="text-sm font-semibold text-blue-600 hover:text-blue-700"
                     >
                       View All

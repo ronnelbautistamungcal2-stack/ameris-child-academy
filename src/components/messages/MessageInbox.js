@@ -114,6 +114,12 @@ function roleBadgeColor(role) {
       "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
     OTHER_STAFF:
       "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300",
+    KITCHEN_STAFF:
+      "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+    HR_STAFF:
+      "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",
+    STUDENT_SUPPORT:
+      "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300",
     PARENT:
       "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
     COACH:

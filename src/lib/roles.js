@@ -1,18 +1,33 @@
-export const ROLE_OPTIONS = ["ADMIN", "TEACHER", "OTHER_STAFF", "PARENT", "COACH", "SUBSCRIBER"];
+export const ROLE_OPTIONS = [
+  "ADMIN",
+  "TEACHER",
+  "OTHER_STAFF",
+  "KITCHEN_STAFF",
+  "HR_STAFF",
+  "STUDENT_SUPPORT",
+  "PARENT",
+  "COACH",
+  "SUBSCRIBER",
+];
 
-export const EMPLOYEE_ROLES = ["ADMIN", "TEACHER", "OTHER_STAFF", "COACH"];
+/**
+ * Roles that sign in to the staff portal (/staff). They share its
+ * self-service pages (checklist, performance, time off, resources, messages)
+ * and differ only in their extra sections.
+ */
+export const STAFF_PORTAL_ROLES = ["OTHER_STAFF", "KITCHEN_STAFF", "HR_STAFF", "STUDENT_SUPPORT"];
+
+export const EMPLOYEE_ROLES = ["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "COACH"];
 
 export const MANAGER_ROLES = ["ADMIN", "COACH"];
 
+// Kitchen is a role now (KITCHEN_STAFF), not a department.
 export const STAFF_DEPARTMENTS = [
-  "Kitchen",
   "Front Office",
   "Facilities",
   "Transportation",
   "Other",
 ];
-
-export const KITCHEN_DEPARTMENT = "Kitchen";
 
 export function normalizeStaffDepartment(value) {
   const raw = String(value || "").trim();
@@ -23,11 +38,12 @@ export function normalizeStaffDepartment(value) {
   return match || raw;
 }
 
+export function isStaffPortalRole(role) {
+  return STAFF_PORTAL_ROLES.includes(String(role || "").toUpperCase());
+}
+
 export function isKitchenStaff(user) {
-  return (
-    normalizeStaffDepartment(user?.staffDepartment).toLowerCase() ===
-    KITCHEN_DEPARTMENT.toLowerCase()
-  );
+  return userRoles(user).includes("KITCHEN_STAFF");
 }
 
 export function normalizeRoles(value, fallback = "PARENT") {
@@ -87,6 +103,9 @@ export function roleHomePath(role) {
     case "TEACHER":
       return "/teacher/dashboard";
     case "OTHER_STAFF":
+    case "KITCHEN_STAFF":
+    case "HR_STAFF":
+    case "STUDENT_SUPPORT":
       return "/staff/dashboard";
     case "COACH":
       return "/coach/dashboard";
@@ -99,7 +118,14 @@ export function roleHomePath(role) {
   }
 }
 
+const ROLE_LABELS = {
+  HR_STAFF: "HR Staff",
+  STUDENT_SUPPORT: "Student Support Staff",
+};
+
 export function roleLabel(role) {
+  const label = ROLE_LABELS[String(role || "").toUpperCase()];
+  if (label) return label;
   const value = String(role || "").toLowerCase().replace(/_/g, " ");
   return value.replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

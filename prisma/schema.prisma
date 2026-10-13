@@ -294,6 +294,10 @@ model Center {
   id                          String                       @id @default(uuid())
   name                        String
   address                     String?
+  // "HH:MM" in the center's local time. Children still signed in then are
+  // signed out automatically, shown as "Admin" on their time sheet. Staff are
+  // never signed out automatically. Null turns it off.
+  autoCheckoutTime            String?
   users                       CenterUser[]
   classes                     ClassRoom[]
   children                    Child[]

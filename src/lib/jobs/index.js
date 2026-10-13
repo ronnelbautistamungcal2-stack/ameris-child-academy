@@ -1,5 +1,6 @@
 const { runComplianceAlerts } = require("./compliance-alerts");
 const { runFormRenewalCheck } = require("./form-renewals");
+const { runAutoCheckout } = require("./auto-checkout");
 
 const jobState = new Map();
 const runningTimers = [];
@@ -37,6 +38,12 @@ const JOB_DEFINITIONS = [
     name: "compliance-alerts",
     intervalMs: Number(process.env.COMPLIANCE_JOB_INTERVAL_MS || 6 * 60 * 60 * 1000),
     run: () => runComplianceAlerts({ initiatedBy: "scheduler" }),
+  },
+  {
+    // Checks every minute so children are signed out at the center's chosen time.
+    name: "auto-checkout",
+    intervalMs: Number(process.env.AUTO_CHECKOUT_JOB_INTERVAL_MS || 60 * 1000),
+    run: () => runAutoCheckout(),
   },
 ];
 

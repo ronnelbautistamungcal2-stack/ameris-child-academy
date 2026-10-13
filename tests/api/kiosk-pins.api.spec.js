@@ -1,10 +1,9 @@
 // @ts-check
 const { test, expect } = require("@playwright/test");
 const { loginAsAdmin, loginAsTeacher, loginAsParent, loginAsHrStaff } = require("../helpers/auth");
-const { apiGet, apiPost, apiPut, apiDelete } = require("../helpers/api");
+const { apiGet, apiPost, apiPut, apiDelete, pickDemoCenterId } = require("../helpers/api");
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3000";
-const DEMO_CENTER_NAME = "Demo Center";
 
 // Signs in from a fresh, cookie-free context and returns who the session belongs
 // to (null when sign-in was refused). The shared helpers cache cookies, which
@@ -33,7 +32,7 @@ test.describe("Kiosk PINs, disabled users and authorized pickups @api", () => {
   test.beforeAll(async ({ request }) => {
     const cookies = await loginAsAdmin(request);
     const centers = await (await apiGet(request, "/api/v1/centers", cookies)).json();
-    centerId = (centers.find((c) => c.name === DEMO_CENTER_NAME) || centers[0])?.id;
+    centerId = pickDemoCenterId(centers);
   });
 
   test.afterAll(async ({ request }) => {

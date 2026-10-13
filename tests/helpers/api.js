@@ -44,4 +44,15 @@ async function apiDelete(request, path, cookies) {
   });
 }
 
-module.exports = { apiGet, apiPost, apiPut, apiPatch, apiDelete };
+/**
+ * The seeded "Demo Center" from a /api/v1/centers response, falling back to the
+ * first center. Tests must not take centers[0] blindly: the list has no fixed
+ * order, and other specs create (and then delete) temporary centers while the
+ * suite runs in parallel.
+ */
+function pickDemoCenterId(centers) {
+  const list = Array.isArray(centers) ? centers : [];
+  return (list.find((c) => c.name === "Demo Center") || list[0])?.id || null;
+}
+
+module.exports = { apiGet, apiPost, apiPut, apiPatch, apiDelete, pickDemoCenterId };

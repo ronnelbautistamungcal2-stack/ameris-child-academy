@@ -1,7 +1,7 @@
 // @ts-check
 const { test, expect } = require("@playwright/test");
 const { loginAsAdmin, loginAsTeacher } = require("../helpers/auth");
-const { apiGet, apiPost, apiDelete } = require("../helpers/api");
+const { apiGet, apiPost, apiDelete, pickDemoCenterId } = require("../helpers/api");
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3000";
 
@@ -26,7 +26,7 @@ test.describe("Front-desk kiosk @api", () => {
   test.beforeAll(async ({ request, playwright }) => {
     const admin = await loginAsAdmin(request);
     const centers = await (await apiGet(request, "/api/v1/centers", admin)).json();
-    centerId = (centers.find((c) => c.name === "Demo Center") || centers[0]).id;
+    centerId = pickDemoCenterId(centers);
 
     // Enroll a fresh browser context as this center's kiosk. The admin cookie
     // is only needed for the enrollment call itself.

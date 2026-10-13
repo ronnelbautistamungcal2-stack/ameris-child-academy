@@ -3,7 +3,7 @@ const { test, expect } = require("@playwright/test");
 const XLSX = require("xlsx");
 const { PrismaClient } = require("@prisma/client");
 const { loginAsAdmin, loginAsTeacher } = require("../helpers/auth");
-const { apiGet, apiPost, apiPut } = require("../helpers/api");
+const { apiGet, apiPost, apiPut, pickDemoCenterId } = require("../helpers/api");
 
 const prisma = new PrismaClient();
 
@@ -20,7 +20,7 @@ test.describe("Staff Management API @api", () => {
     const centersRes = await apiGet(request, "/api/v1/centers", cookies);
     if (centersRes.status() === 200) {
       const centers = await centersRes.json();
-      centerId = Array.isArray(centers) && centers.length > 0 ? centers[0].id : null;
+      centerId = pickDemoCenterId(centers);
     }
 
     // Get teacher user

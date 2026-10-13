@@ -1,7 +1,7 @@
 // @ts-check
 const { test, expect } = require("@playwright/test");
 const { loginAsAdmin, loginAsTeacher, loginAsCoach, loginAsHrStaff, loginAsParent } = require("../helpers/auth");
-const { apiGet, apiPost, apiPut, apiDelete } = require("../helpers/api");
+const { apiGet, apiPost, apiPut, apiDelete, pickDemoCenterId } = require("../helpers/api");
 
 // A local date N days ago at the given time, as an ISO string. Time sheets
 // store days in the server's local time, so build local times here too.
@@ -29,7 +29,7 @@ test.describe("Time sheets and audit @api", () => {
   test.beforeAll(async ({ request }) => {
     const admin = await loginAsAdmin(request);
     const centers = await (await apiGet(request, "/api/v1/centers", admin)).json();
-    centerId = (centers.find((c) => c.name === "Demo Center") || centers[0]).id;
+    centerId = pickDemoCenterId(centers);
 
     child = await (
       await apiPost(request, "/api/v1/children", { firstName: "Timesheet", lastName: "Kid", centerId }, admin)

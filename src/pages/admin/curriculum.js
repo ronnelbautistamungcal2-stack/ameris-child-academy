@@ -2,6 +2,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { formatTermDaysLabel, lessonOptionLabel, normalizeTermDaySelections, TERM_DAY_OPTIONS } from "@/lib/lessonScheduling";
+import { formatStepAge, STEP_AGE_MONTH_OPTIONS, STEP_AGE_YEAR_OPTIONS } from "@/lib/progressionSteps";
 import { useEffect, useMemo, useState } from "react";
 
 const TABS = [
@@ -38,9 +39,9 @@ export default function CurriculumManager() {
     <AdminLayout title="Steps of Progression">
       <div className="space-y-5">
         {/* Page Header */}
-        <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-6">
-          <div className="absolute -right-6 -top-6 h-32 w-32 rounded-full bg-indigo-100/40 blur-2xl" />
-          <div className="absolute -bottom-8 -left-8 h-24 w-24 rounded-full bg-sky-100/40 blur-2xl" />
+        <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-6 dark:from-gray-900 dark:via-gray-900 dark:to-slate-800">
+          <div className="absolute -right-6 -top-6 h-32 w-32 rounded-full bg-indigo-100/40 blur-2xl dark:bg-indigo-500/10" />
+          <div className="absolute -bottom-8 -left-8 h-24 w-24 rounded-full bg-sky-100/40 blur-2xl dark:bg-sky-500/10" />
           <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 shadow-lg shadow-indigo-200">
@@ -417,6 +418,10 @@ function LessonsTab({ centerId }) {
     lessonSlot: "",
     reference: "",
     linkedLessonId: "",
+    ageYears: "",
+    ageMonths: "",
+    priorStepId: "",
+    nextStepId: "",
     media: [],
     supplies: [],
   });
@@ -497,6 +502,10 @@ function LessonsTab({ centerId }) {
       lessonSlot: "",
       reference: "",
       linkedLessonId: "",
+      ageYears: "",
+      ageMonths: "",
+      priorStepId: "",
+      nextStepId: "",
       media: [],
       supplies: [],
     });
@@ -515,6 +524,10 @@ function LessonsTab({ centerId }) {
       lessonSlot: lesson.lessonSlot || "",
       reference: lesson.reference || "",
       linkedLessonId: lesson.linkedLessonId || "",
+      ageYears: lesson.ageYears ?? "",
+      ageMonths: lesson.ageMonths ?? "",
+      priorStepId: lesson.priorStepId || "",
+      nextStepId: lesson.nextStepId || "",
       media: lesson.media || [],
       supplies: (lesson.supplies || []).map((s) => ({
         name: s.name || "",
@@ -607,6 +620,10 @@ function LessonsTab({ centerId }) {
         media: form.media,
         categoryId: form.categoryId || null,
         linkedLessonId: form.linkedLessonId || null,
+        ageYears: form.ageYears === "" ? null : Number(form.ageYears),
+        ageMonths: form.ageMonths === "" ? null : Number(form.ageMonths),
+        priorStepId: form.priorStepId || null,
+        nextStepId: form.nextStepId || null,
         supplies: form.supplies.filter((s) => s.name.trim()),
       };
 
@@ -763,12 +780,49 @@ function LessonsTab({ centerId }) {
                 <FormField label="Reference">
                   <input className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} placeholder="Reference code" />
                 </FormField>
-                <FormField label="Linked Lesson">
-                  <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={form.linkedLessonId} onChange={(e) => setForm({ ...form, linkedLessonId: e.target.value })}>
-                    <option value="">None</option>
-                    {lessons.filter((lesson) => lesson.id !== editing).map((lesson) => <option key={lesson.id} value={lesson.id}>{lessonOptionLabel(lesson)}</option>)}
-                  </select>
-                </FormField>
+                <StepPicker
+                  label="Linked Lesson"
+                  lessons={lessons}
+                  value={form.linkedLessonId}
+                  onChange={(id) => setForm((prev) => ({ ...prev, linkedLessonId: id }))}
+                  excludeIds={[editing]}
+                  categoryId={form.categoryId}
+                />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField label="Age (Years)">
+                    <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={form.ageYears} onChange={(e) => setForm({ ...form, ageYears: e.target.value })}>
+                      <option value="">-</option>
+                      {STEP_AGE_YEAR_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </FormField>
+                  <FormField label="Age (Months)">
+                    <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={form.ageMonths} onChange={(e) => setForm({ ...form, ageMonths: e.target.value })}>
+                      <option value="">-</option>
+                      {STEP_AGE_MONTH_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </FormField>
+                </div>
+                <div className="rounded-xl border border-indigo-100 bg-white/70 p-3 md:col-span-2">
+                  <div className="mb-2 text-xs text-gray-500">Link this step to the steps before and after it. Progression tracking falls back to the prior step and advances to the next step.</div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <StepPicker
+                      label="Prior Step"
+                      lessons={lessons}
+                      value={form.priorStepId}
+                      onChange={(id) => setForm((prev) => ({ ...prev, priorStepId: id }))}
+                      excludeIds={[editing, form.nextStepId]}
+                      categoryId={form.categoryId}
+                    />
+                    <StepPicker
+                      label="Next Step"
+                      lessons={lessons}
+                      value={form.nextStepId}
+                      onChange={(id) => setForm((prev) => ({ ...prev, nextStepId: id }))}
+                      excludeIds={[editing, form.priorStepId]}
+                      categoryId={form.categoryId}
+                    />
+                  </div>
+                </div>
                 <FormField label="Term Days" className="md:col-span-2">
                   <div className="flex flex-wrap gap-2">
                     {TERM_DAY_OPTIONS.map((option) => {
@@ -1016,6 +1070,21 @@ function LessonsTab({ centerId }) {
                         {lesson.linkedLesson && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-0.5 text-[11px] font-semibold text-violet-700">
                             Linked: {lesson.linkedLesson.title}
+                          </span>
+                        )}
+                        {formatStepAge(lesson) && (
+                          <span className="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700">
+                            Age: {formatStepAge(lesson)}
+                          </span>
+                        )}
+                        {lesson.priorStep && (
+                          <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700">
+                            Prior: {lesson.priorStep.title}
+                          </span>
+                        )}
+                        {lesson.nextStep && (
+                          <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700">
+                            Next: {lesson.nextStep.title}
                           </span>
                         )}
                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
@@ -1638,6 +1707,90 @@ function FormField({ label, required, className, children }) {
       </div>
       {children}
     </label>
+  );
+}
+
+// Centers carry thousands of steps, so linking one step to another is a
+// type-to-search picker rather than a select. Steps in the same category sort first.
+const STEP_PICKER_LIMIT = 30;
+
+function StepPicker({ label, lessons, value, onChange, excludeIds, categoryId }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const selected = value ? lessons.find((lesson) => lesson.id === value) : null;
+
+  const { matches, total } = useMemo(() => {
+    if (!open) return { matches: [], total: 0 };
+    const q = query.trim().toLowerCase();
+    const all = lessons
+      .filter((lesson) => !excludeIds.includes(lesson.id))
+      .filter((lesson) =>
+        !q ||
+        [lesson.title, lesson.reference, lesson.subCategory, lesson.category?.name]
+          .some((field) => (field || "").toLowerCase().includes(q)),
+      )
+      .sort((a, b) => {
+        const rank = (lesson) => (categoryId && lesson.categoryId === categoryId ? 0 : 1);
+        return rank(a) - rank(b) || (a.title || "").localeCompare(b.title || "");
+      });
+    return { matches: all.slice(0, STEP_PICKER_LIMIT), total: all.length };
+  }, [open, query, lessons, excludeIds, categoryId]);
+
+  function pick(id) {
+    onChange(id);
+    setQuery("");
+    setOpen(false);
+  }
+
+  return (
+    <div className="block">
+      <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-gray-400">{label}</div>
+      {selected ? (
+        <div className="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm">
+          <span className="min-w-0 flex-1 truncate font-semibold text-indigo-800">{lessonOptionLabel(selected)}</span>
+          {selected.reference && <span className="shrink-0 font-mono text-[11px] text-indigo-500">{selected.reference}</span>}
+          <button type="button" className="shrink-0 rounded-md px-1.5 text-xs font-semibold text-indigo-500 transition hover:bg-indigo-100 hover:text-indigo-700" onClick={() => onChange("")}>
+            Clear
+          </button>
+        </div>
+      ) : (
+        <div className="relative">
+          <input
+            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            placeholder="Search by step, ref ID, or subject..."
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setOpen(false)}
+          />
+          {open && (
+            <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+              {matches.length === 0 ? (
+                <div className="px-4 py-2 text-xs text-gray-400">No matching steps</div>
+              ) : (
+                matches.map((lesson) => (
+                  <button
+                    key={lesson.id}
+                    type="button"
+                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 transition hover:bg-indigo-50"
+                    // mousedown, not click: the input's blur would close the list first.
+                    onMouseDown={(e) => { e.preventDefault(); pick(lesson.id); }}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{lessonOptionLabel(lesson)}</span>
+                    {lesson.reference && <span className="shrink-0 font-mono text-[11px] text-gray-400">{lesson.reference}</span>}
+                  </button>
+                ))
+              )}
+              {total > matches.length && (
+                <div className="border-t border-gray-100 px-4 py-1.5 text-[11px] text-gray-400">
+                  Showing {matches.length} of {total}. Keep typing to narrow it down.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

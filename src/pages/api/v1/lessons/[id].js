@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import { normalizeLessonSlot, normalizeTermDaySelections } from "@/lib/lessonScheduling";
 import prisma from "@/lib/prisma";
+import { parseStepAge, validateStepLinks } from "@/lib/progressionSteps";
 
 const LESSON_INCLUDE = {
   category: true,
@@ -16,6 +17,8 @@ const LESSON_INCLUDE = {
       reference: true,
     },
   },
+  priorStep: { select: { id: true, title: true, reference: true } },
+  nextStep: { select: { id: true, title: true, reference: true } },
 };
 
 export default async function handler(req, res) {
@@ -54,8 +57,22 @@ export default async function handler(req, res) {
       categoryId,
       policyDocumentId,
       linkedLessonId,
+      priorStepId,
+      nextStepId,
       supplies,
     } = req.body;
+
+    const current = await prisma.lesson.findUnique({ where: { id }, select: { centerId: true } });
+    if (!current) return res.status(404).json({ error: "Lesson not found" });
+    const age = parseStepAge(req.body);
+    if (age.error) return res.status(400).json({ error: age.error });
+    const linkError = await validateStepLinks(prisma, {
+      lessonId: id,
+      centerId: current.centerId,
+      priorStepId,
+      nextStepId,
+    });
+    if (linkError) return res.status(400).json({ error: linkError });
 
     const lesson = await prisma.$transaction(async (tx) => {
       const existing = await tx.lesson.findUnique({ where: { id }, select: { title: true } });
@@ -116,6 +133,15 @@ export default async function handler(req, res) {
           linkedLessonId:
             Object.prototype.hasOwnProperty.call(req.body, "linkedLessonId")
               ? linkedLessonId || null
+              : undefined,
+          ...age.data,
+          priorStepId:
+            Object.prototype.hasOwnProperty.call(req.body, "priorStepId")
+              ? priorStepId || null
+              : undefined,
+          nextStepId:
+            Object.prototype.hasOwnProperty.call(req.body, "nextStepId")
+              ? nextStepId || null
               : undefined,
         },
         include: LESSON_INCLUDE,

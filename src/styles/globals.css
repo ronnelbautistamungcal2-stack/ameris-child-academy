@@ -617,3 +617,8 @@ main {
   body.printing-menu .menu-no-print { display: none !important; }
   body.printing-menu .menu-print-area table { min-width: 0; }
 }
+
+/* Protected curriculum lesson files never go to the printer. */
+@media print {
+  .protected-lesson { display: none !important; }
+}

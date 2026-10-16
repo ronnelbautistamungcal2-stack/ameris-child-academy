@@ -64,22 +64,12 @@ export default async function handler(req, res) {
     resource,
     additionalResources,
     lessonAttachment,
+    lessonDocument,
     lessonImage,
     notes,
     link,
-    essentialQuestions,
-    keyVocabulary,
-    notesToTeacher,
-    introduction,
-    instructionalSetting,
-    learningActivities,
-    accommodations,
-    timeRequired,
     supplies,
   } = req.body || {};
-
-  const step = normalizeSpaces(progressionStep);
-  if (!step) return res.status(400).json({ error: "progressionStep is required" });
 
   const existing = await prisma.lessonGoal.findUnique({
     where: { id: goalId },
@@ -88,6 +78,17 @@ export default async function handler(req, res) {
   if (!existing) return res.status(404).json({ error: "Record not found" });
 
   const previousPc = getPassingCriteriaObject(existing.passingCriteria);
+  // The form no longer edits the progression step, so keep the one an
+  // imported record already has and fall back to the lesson title. A step
+  // that was only ever a copy of the title follows the title when it changes.
+  const previousStep = normalizeSpaces(previousPc.stepOfProgression);
+  const stepWasTitle = !previousStep || previousStep === normalizeSpaces(previousPc.lesson);
+  const step =
+    normalizeSpaces(progressionStep) ||
+    (stepWasTitle ? normalizeSpaces(lessonTitle) : previousStep) ||
+    previousStep ||
+    existing.title;
+  if (!step) return res.status(400).json({ error: "lessonTitle is required" });
   const sheet = normalizeSpaces(previousPc.sheet) || "Manual";
   const hasTestingQuestion = Object.prototype.hasOwnProperty.call(
     req.body || {},
@@ -101,6 +102,10 @@ export default async function handler(req, res) {
   const hasLessonAttachment = Object.prototype.hasOwnProperty.call(
     req.body || {},
     "lessonAttachment",
+  );
+  const hasLessonDocument = Object.prototype.hasOwnProperty.call(
+    req.body || {},
+    "lessonDocument",
   );
   const hasLessonImage = Object.prototype.hasOwnProperty.call(
     req.body || {},
@@ -119,6 +124,9 @@ export default async function handler(req, res) {
   const nextLessonAttachment = hasLessonAttachment
     ? normalizeResourceList(lessonAttachment)
     : normalizeResourceList(previousPc.lessonAttachment);
+  const nextLessonDocument = hasLessonDocument
+    ? normalizeResourceList(lessonDocument)
+    : normalizeResourceList(previousPc.lessonDocument);
   const nextLessonImage = hasLessonImage
     ? normalizeResourceList(lessonImage)
     : normalizeResourceList(previousPc.lessonImage);
@@ -160,6 +168,7 @@ export default async function handler(req, res) {
           resource: nextResource,
           additionalResources: nextAdditionalResources,
           lessonAttachment: nextLessonAttachment,
+          lessonDocument: nextLessonDocument,
           lessonImage: nextLessonImage,
           notes: normalizeSpaces(notes),
           age: normalizeSpaces(childAge),
@@ -170,14 +179,6 @@ export default async function handler(req, res) {
           }),
           sheet,
           link: normalizeSpaces(link),
-          essentialQuestions: normalizeSpaces(essentialQuestions),
-          keyVocabulary: normalizeSpaces(keyVocabulary),
-          notesToTeacher: normalizeSpaces(notesToTeacher),
-          introduction: normalizeSpaces(introduction),
-          instructionalSetting: normalizeSpaces(instructionalSetting),
-          learningActivities: normalizeSpaces(learningActivities),
-          accommodations: normalizeSpaces(accommodations),
-          timeRequired: normalizeSpaces(timeRequired),
         },
       },
       include: {

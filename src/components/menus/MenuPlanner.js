@@ -10,6 +10,7 @@ import {
   formatWeekRange,
   getMeal,
   lineKey,
+  parseDateKey,
   requirementsFor,
   toDateKey,
   weekDays,
@@ -49,33 +50,52 @@ const TAB_ACTIVE = {
 };
 
 /**
- * Weekly Menu Planner: meal tabs across the top, Monday–Friday columns and
- * one row per age group. With `editable` the component lines are text inputs
- * the admin fills in and saves; otherwise it shows the posted items.
+ * Weekly Menu Planner for one center: meal tabs across the top (the meals the
+ * center provides), Monday–Friday columns and one row per age group.
+ *
+ * mode "admin"   – the planned menu lines are inputs, with copy buttons.
+ * mode "kitchen" – the planned menu is read-only and each card gets an
+ *                  "Actually Served" block the kitchen fills in.
+ * mode "view"    – the planned menu, read-only (parents).
  */
-export default function MenuPlanner({ editable = false, title = "Menu Planner", subtitle }) {
+export default function MenuPlanner({ editable = false, mode: modeProp, title = "Menu Planner", subtitle }) {
+  const mode = modeProp || (editable ? "admin" : "view");
+  const editKind = mode === "admin" ? "PLANNED" : mode === "kitchen" ? "SERVED" : null;
+  const canEdit = Boolean(editKind);
   const router = useRouter();
   const [weekStart, setWeekStart] = useState(() => weekStartOf(new Date()));
   const [mealKey, setMealKey] = useState("breakfast");
+  const [centerId, setCenterId] = useState("");
+  const [centers, setCenters] = useState([]);
+  const [mealKeys, setMealKeys] = useState(() => MEALS.map((m) => m.key));
+  const [ageGroups, setAgeGroups] = useState(AGE_GROUPS);
   const [saved, setSaved] = useState({});
   const [edits, setEdits] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [copying, setCopying] = useState(false);
   const [notice, setNotice] = useState("");
 
   const days = useMemo(() => weekDays(weekStart), [weekStart]);
   const dayKeys = useMemo(() => days.map(toDateKey), [days]);
+  const meals = useMemo(() => MEALS.filter((m) => mealKeys.includes(m.key)), [mealKeys]);
   const meal = getMeal(mealKey);
 
-  const loadWeek = useCallback(async (monday) => {
+  const loadWeek = useCallback(async (monday, center) => {
     const start = toDateKey(monday);
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/v1/menus?start=${start}&days=5`);
+      const query = new URLSearchParams({ start, days: "5" });
+      if (center) query.set("centerId", center);
+      const res = await fetch(`/api/v1/menus?${query}`);
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Request failed");
       const data = await res.json();
+      setCenters(data.centers || []);
+      if (data.center && data.center.id !== center) setCenterId(data.center.id);
+      setMealKeys(data.meals || []);
+      setAgeGroups(data.ageGroups?.length ? data.ageGroups : AGE_GROUPS);
       const weekKeys = new Set(weekDays(monday).map(toDateKey));
       setSaved((prev) => {
         const next = {};
@@ -83,7 +103,7 @@ export default function MenuPlanner({ editable = false, title = "Menu Planner", 
           if (!weekKeys.has(key.slice(0, 10))) next[key] = value;
         }
         for (const i of data.items || []) {
-          next[lineKey(i.date, i.meal, i.ageGroup, i.component)] = i.item;
+          next[lineKey(i.date, i.meal, i.ageGroup, i.component, i.kind)] = i.item;
         }
         return next;
       });
@@ -95,8 +115,13 @@ export default function MenuPlanner({ editable = false, title = "Menu Planner", 
   }, []);
 
   useEffect(() => {
-    loadWeek(weekStart);
-  }, [loadWeek, weekStart]);
+    loadWeek(weekStart, centerId);
+  }, [loadWeek, weekStart, centerId]);
+
+  // Stay on a meal the center provides.
+  useEffect(() => {
+    if (mealKeys.length && !mealKeys.includes(mealKey)) setMealKey(mealKeys[0]);
+  }, [mealKey, mealKeys]);
 
   // Edits made on other tabs or weeks are kept until saved.
   const changedLines = useMemo(
@@ -104,18 +129,18 @@ export default function MenuPlanner({ editable = false, title = "Menu Planner", 
       Object.entries(edits)
         .filter(([key, value]) => value.trim() !== (saved[key] || ""))
         .map(([key, value]) => {
-          const [date, lineMeal, ageGroup, component] = key.split("|");
-          return { date, meal: lineMeal, ageGroup, component, item: value.trim() };
+          const [date, lineMeal, ageGroup, component, kind] = key.split("|");
+          return { date, meal: lineMeal, ageGroup, component, kind, item: value.trim() };
         }),
     [edits, saved],
   );
   const dirty = changedLines.length > 0;
 
   const dirtyRef = useRef(false);
-  dirtyRef.current = editable && dirty;
+  dirtyRef.current = canEdit && dirty;
 
   useEffect(() => {
-    if (!editable) return undefined;
+    if (!canEdit) return undefined;
     const beforeUnload = (e) => {
       if (!dirtyRef.current) return;
       e.preventDefault();
@@ -133,7 +158,7 @@ export default function MenuPlanner({ editable = false, title = "Menu Planner", 
       window.removeEventListener("beforeunload", beforeUnload);
       router.events.off("routeChangeStart", routeChange);
     };
-  }, [editable, router.events]);
+  }, [canEdit, router.events]);
 
   const valueFor = (key) => (key in edits ? edits[key] : saved[key] || "");
 
@@ -151,13 +176,17 @@ export default function MenuPlanner({ editable = false, title = "Menu Planner", 
       const res = await fetch("/api/v1/menus", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: changedLines }),
+        body: JSON.stringify({
+          centerId,
+          kind: editKind,
+          items: changedLines.map(({ kind, ...line }) => line),
+        }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Save failed");
       setSaved((prev) => {
         const next = { ...prev };
         for (const line of changedLines) {
-          const key = lineKey(line.date, line.meal, line.ageGroup, line.component);
+          const key = lineKey(line.date, line.meal, line.ageGroup, line.component, line.kind);
           if (line.item) next[key] = line.item;
           else delete next[key];
         }
@@ -172,6 +201,43 @@ export default function MenuPlanner({ editable = false, title = "Menu Planner", 
     }
   }
 
+  async function copyFrom(from) {
+    setCopying(true);
+    setError("");
+    setNotice("");
+    try {
+      const res = await fetch("/api/v1/menus/copy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ centerId, start: toDateKey(weekStart), from }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Copy failed");
+      const range = `${shortDate(data.sourceStart)} – ${shortDate(data.sourceEnd)}`;
+      setNotice(
+        data.found === 0
+          ? `There is no menu for ${range} to copy.`
+          : data.copied === 0
+            ? `Every line from ${range} is already filled in this week.`
+            : `Copied ${data.copied} line${data.copied === 1 ? "" : "s"} from ${range}. Lines already filled in were kept.`,
+      );
+      await loadWeek(weekStart, centerId);
+    } catch (e) {
+      setError(e.message || "Could not copy the menu.");
+    } finally {
+      setCopying(false);
+    }
+  }
+
+  function changeCenter(next) {
+    if (next === centerId) return;
+    if (dirty && !window.confirm("You have unsaved menu changes. Switch centers without saving?")) return;
+    setEdits({});
+    setSaved({});
+    setNotice("");
+    setCenterId(next);
+  }
+
   function printMenu() {
     const done = () => {
       document.body.classList.remove("printing-menu");
@@ -183,7 +249,8 @@ export default function MenuPlanner({ editable = false, title = "Menu Planner", 
   }
 
   const weekIsEmpty =
-    !loading && !Object.keys(saved).some((key) => dayKeys.includes(key.slice(0, 10)));
+    !loading &&
+    !Object.keys(saved).some((key) => dayKeys.includes(key.slice(0, 10)) && key.endsWith("|PLANNED"));
   const today = toDateKey(new Date());
 
   return (
@@ -193,7 +260,8 @@ export default function MenuPlanner({ editable = false, title = "Menu Planner", 
         <div>
           <h1 className={`text-2xl font-black uppercase tracking-tight ${NAVY}`}>{title}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {subtitle || (editable ? "Plan Meals" : "Planned Meals")} – {meal.label}
+            {subtitle || (mode === "admin" ? "Plan Meals" : mode === "kitchen" ? "Plan and Record Meals" : "Planned Meals")}
+            {meal && mealKeys.includes(mealKey) ? ` – ${meal.label}` : ""}
           </p>
         </div>
 
@@ -227,8 +295,44 @@ export default function MenuPlanner({ editable = false, title = "Menu Planner", 
           )}
         </div>
 
-        <div className="menu-no-print flex items-center gap-2">
-          {editable && (
+        <div className="menu-no-print flex flex-wrap items-center gap-2">
+          {centers.length > 1 && (
+            <select
+              value={centerId}
+              onChange={(e) => changeCenter(e.target.value)}
+              aria-label="Center"
+              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+            >
+              {centers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
+          {mode === "admin" && meals.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => copyFrom("week")}
+                disabled={dirty || copying || loading}
+                title={dirty ? "Save your changes before copying" : "Fill empty lines from the previous week"}
+                className="rounded-md bg-[#1d4f6e] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#245d80] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Copy Previous Week
+              </button>
+              <button
+                type="button"
+                onClick={() => copyFrom("month")}
+                disabled={dirty || copying || loading}
+                title={dirty ? "Save your changes before copying" : "Fill empty lines from the same week last month"}
+                className="rounded-md bg-[#1d4f6e] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#245d80] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Copy Previous Month
+              </button>
+            </>
+          )}
+          {canEdit && (
             <button
               type="button"
               onClick={save}
@@ -264,7 +368,7 @@ export default function MenuPlanner({ editable = false, title = "Menu Planner", 
       {/* Meal tabs */}
       <div className="menu-no-print overflow-x-auto">
         <div role="tablist" className="inline-flex min-w-max rounded-xl border border-gray-200 dark:border-gray-700">
-          {MEALS.map((m) => {
+          {meals.map((m) => {
             const active = m.key === mealKey;
             return (
               <button
@@ -287,7 +391,15 @@ export default function MenuPlanner({ editable = false, title = "Menu Planner", 
         </div>
       </div>
 
-      {!editable && weekIsEmpty && !error && (
+      {!loading && meals.length === 0 && !error && (
+        <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
+          {centers.length === 0
+            ? "You are not linked to a center yet."
+            : "This center does not provide any meals yet. Meals are chosen on the center's Care & Schedule tab."}
+        </p>
+      )}
+
+      {mode !== "admin" && meals.length > 0 && weekIsEmpty && !error && (
         <p className="menu-no-print rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
           The menu for this week has not been posted yet.
         </p>
@@ -322,8 +434,8 @@ export default function MenuPlanner({ editable = false, title = "Menu Planner", 
             </tr>
           </thead>
           <tbody>
-            {AGE_GROUPS.map((group) => {
-              const tone = TONES[group.tone];
+            {ageGroups.map((group) => {
+              const tone = TONES[group.tone] || TONES.green;
               const components = componentsFor(mealKey, group.key);
               return (
                 <tr key={group.key}>
@@ -336,44 +448,62 @@ export default function MenuPlanner({ editable = false, title = "Menu Planner", 
                   </th>
                   {dayKeys.map((date) => (
                     <td key={date} className="border border-gray-200 p-1.5 align-top dark:border-gray-700">
-                      <div className={`h-full overflow-hidden rounded-lg border ${tone.card}`}>
-                        <div className={`px-2 py-1.5 text-[10px] font-black uppercase tracking-wide ${tone.head}`}>
-                          Planned Menu
-                        </div>
-                        <div className="space-y-1.5 px-2 py-2">
-                          {components.map((component) => {
-                            const key = lineKey(date, mealKey, group.key, component);
-                            const label = COMPONENTS[component];
-                            const value = valueFor(key);
-                            return (
-                              <label key={component} className="flex items-end gap-1.5 text-[11px] text-gray-700 dark:text-gray-300">
-                                <span className="w-[52%] shrink-0 leading-tight">{label}</span>
-                                {editable ? (
-                                  <input
-                                    type="text"
-                                    value={value}
-                                    maxLength={MAX_ITEM_LENGTH}
-                                    onChange={(e) => setValue(key, e.target.value)}
-                                    aria-label={`${meal.label}, ${group.label}, ${date}: ${label}`}
-                                    className={`min-w-0 flex-1 border-0 border-b bg-transparent px-0.5 py-0 text-[11px] font-semibold text-[#0b2a5b] focus:border-blue-600 focus:outline-none focus:ring-0 dark:text-blue-100 ${
-                                      key in edits && edits[key].trim() !== (saved[key] || "")
-                                        ? "border-amber-500"
-                                        : "border-gray-300 dark:border-gray-600"
-                                    }`}
-                                  />
-                                ) : (
-                                  <span
-                                    className={`min-w-0 flex-1 border-b border-gray-200 px-0.5 font-semibold dark:border-gray-700 ${
-                                      value ? "text-[#0b2a5b] dark:text-blue-100" : "text-gray-300 dark:text-gray-600"
-                                    }`}
-                                  >
-                                    {value || "—"}
-                                  </span>
-                                )}
-                              </label>
-                            );
-                          })}
-                        </div>
+                      <div className="space-y-1.5">
+                        {(mode === "kitchen" ? ["PLANNED", "SERVED"] : ["PLANNED"]).map((kind) => (
+                          <div key={kind} className={`overflow-hidden rounded-lg border ${tone.card}`}>
+                            <div className={`px-2 py-1.5 text-[10px] font-black uppercase tracking-wide ${tone.head}`}>
+                              {kind === "SERVED" ? "Actually Served" : "Planned Menu"}
+                            </div>
+                            <div className="space-y-1.5 px-2 py-2">
+                              {components.map((component) => {
+                                const key = lineKey(date, mealKey, group.key, component, kind);
+                                const label = COMPONENTS[component];
+                                const value = valueFor(key);
+                                const planned = saved[lineKey(date, mealKey, group.key, component, "PLANNED")] || "";
+                                const lineLabel = `${meal?.label}, ${group.label}, ${date}: ${label}${kind === "SERVED" ? " (served)" : ""}`;
+                                return (
+                                  <label key={component} className="flex items-end gap-1.5 text-[11px] text-gray-700 dark:text-gray-300">
+                                    <span className="w-[48%] shrink-0 leading-tight">{label}</span>
+                                    {kind === editKind ? (
+                                      <input
+                                        type="text"
+                                        value={value}
+                                        maxLength={MAX_ITEM_LENGTH}
+                                        onChange={(e) => setValue(key, e.target.value)}
+                                        aria-label={lineLabel}
+                                        className={`min-w-0 flex-1 border-0 border-b bg-transparent px-0.5 py-0 text-[11px] font-semibold text-[#0b2a5b] focus:border-blue-600 focus:outline-none focus:ring-0 dark:text-blue-100 ${
+                                          key in edits && edits[key].trim() !== (saved[key] || "")
+                                            ? "border-amber-500"
+                                            : "border-gray-300 dark:border-gray-600"
+                                        }`}
+                                      />
+                                    ) : (
+                                      <span
+                                        className={`min-w-0 flex-1 border-b border-gray-200 px-0.5 font-semibold dark:border-gray-700 ${
+                                          value ? "text-[#0b2a5b] dark:text-blue-100" : "text-gray-300 dark:text-gray-600"
+                                        }`}
+                                      >
+                                        {value || "—"}
+                                      </span>
+                                    )}
+                                    {kind === "SERVED" && kind === editKind && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setValue(key, planned)}
+                                        disabled={!planned || value === planned}
+                                        title={planned ? `Copy planned: ${planned}` : "Nothing planned for this line"}
+                                        aria-label={`Copy planned to ${lineLabel}`}
+                                        className="menu-no-print shrink-0 rounded p-0.5 text-gray-500 hover:bg-gray-100 hover:text-blue-700 disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-gray-700"
+                                      >
+                                        <CopyIcon />
+                                      </button>
+                                    )}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </td>
                   ))}
@@ -385,6 +515,7 @@ export default function MenuPlanner({ editable = false, title = "Menu Planner", 
       </div>
 
       {/* Quick reference */}
+      {meal && meals.length > 0 && (
       <div className="flex gap-3 rounded-xl bg-blue-50 px-4 py-3 dark:bg-blue-900/20">
         <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white">
           i
@@ -401,8 +532,13 @@ export default function MenuPlanner({ editable = false, title = "Menu Planner", 
           <div className="mt-0.5">Follow USDA CACFP meal pattern requirements for portion sizes and age groups.</div>
         </div>
       </div>
+      )}
     </div>
   );
+}
+
+function shortDate(dateKey) {
+  return dateKey ? parseDateKey(dateKey).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
 }
 
 // ---- Icons ---------------------------------------------------------------
@@ -420,6 +556,15 @@ function CalendarIcon() {
     <Svg>
       <rect x="3" y="5" width="18" height="16" rx="2" />
       <path d="M16 3v4M8 3v4M3 10h18M8 14h2M14 14h2M8 17h2M14 17h2" />
+    </Svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <Svg className="h-3.5 w-3.5">
+      <rect x="8" y="8" width="12" height="12" rx="2" />
+      <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
     </Svg>
   );
 }
@@ -481,7 +626,7 @@ function MealIcon({ name }) {
 }
 
 function AgeIcon({ group }) {
-  if (group === "children") {
+  if (String(group).startsWith("children")) {
     return (
       <Svg className="h-10 w-10">
         <circle cx="12" cy="6" r="3" />

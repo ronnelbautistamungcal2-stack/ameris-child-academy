@@ -26,11 +26,11 @@ export default function StaffKitchenMenusPage() {
         <WorkspaceHero
           eyebrow="Kitchen"
           title="Menus"
-          description="The weekly menu planned by the center admin."
+          description="The planned menu from the center admin, and what the kitchen actually served."
           meta={<WorkspacePill tone="amber">Kitchen staff only</WorkspacePill>}
         />
 
-        <MenuPlanner title="Menu" />
+        <MenuPlanner mode="kitchen" title="Menu Planner" />
       </div>
     </StaffLayout>
   );

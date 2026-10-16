@@ -371,6 +371,7 @@ model Center {
   pickupPeople                PickupPerson[]
   kioskDevices                KioskDevice[]
   createdAt                   DateTime                     @default(now())
+  menuItems                   MenuItem[]
 }
 
 model CenterUser {
@@ -992,12 +993,16 @@ model MenuItem {
   ageGroup    String
   component   String
   item        String
+  // PLANNED is the admin's menu; SERVED is what the kitchen actually served.
+  kind        String   @default("PLANNED")
+  centerId    String
+  center      Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
   updatedById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
 
-  @@unique([date, meal, ageGroup, component])
-  @@index([date])
+  @@unique([centerId, date, meal, ageGroup, component, kind])
+  @@index([centerId, date])
 }
 
 model AuditLog {

@@ -6,7 +6,14 @@
  * MenuItem table (one row per filled line). Which lines a meal shows depends
  * on the meal pattern and the age group, following the USDA CACFP patterns
  * the center's mockups use. No line is required.
+ *
+ * Menus are per center. The infant rows are fixed; the children rows follow
+ * the center's meal age groups (Care & Schedule tab), and the meal tabs follow
+ * the meals the center provides. Each line is either PLANNED (admin) or
+ * SERVED (what the kitchen actually served).
  */
+
+export const MENU_KINDS = ["PLANNED", "SERVED"];
 
 export const AGE_GROUPS = [
   { key: "youngerInfants", label: "Younger Infants", range: "0–5 months", tone: "purple" },
@@ -87,9 +94,46 @@ export function getMeal(mealKey) {
   return MEALS.find((m) => m.key === mealKey) || null;
 }
 
+/** Children rows ("children-12-36") use the children pattern. */
+function patternGroup(ageGroupKey) {
+  return /^children(-\d+-\d+)?$/.test(String(ageGroupKey)) ? "children" : ageGroupKey;
+}
+
 export function componentsFor(mealKey, ageGroupKey) {
   const meal = getMeal(mealKey);
-  return (meal && PATTERNS[meal.pattern][ageGroupKey]) || [];
+  return (meal && PATTERNS[meal.pattern][patternGroup(ageGroupKey)]) || [];
+}
+
+function ageLabel(months) {
+  if (months % 12 === 0) return `${months / 12}`;
+  return `${months} mo`;
+}
+
+/** "1–3 Years", "18 mo–3 Years". */
+function childRangeLabel(fromMonths, toMonths) {
+  return `${ageLabel(fromMonths)}–${ageLabel(toMonths)} Years`;
+}
+
+/**
+ * The age group rows for a center: the two infant rows, then one children
+ * row per meal age group that reaches 12 months or older (the default is a
+ * single "1–12 Years" row when the center has none set up).
+ */
+export function ageGroupsFor(center) {
+  const infants = AGE_GROUPS.filter((g) => g.key !== "children");
+  const groups = (Array.isArray(center?.mealAgeGroups) ? center.mealAgeGroups : [])
+    .filter((g) => Number.isInteger(g?.fromMonths) && Number.isInteger(g?.toMonths) && g.toMonths >= 12)
+    .map((g) => {
+      const from = Math.max(g.fromMonths, 12);
+      return { key: `children-${from}-${g.toMonths}`, label: childRangeLabel(from, g.toMonths), range: "", tone: "green" };
+    });
+  return [...infants, ...(groups.length ? groups : AGE_GROUPS.filter((g) => g.key === "children"))];
+}
+
+/** The meal keys whose menus a center shows: the provided ones, or all six before Meals is set up. */
+export function mealKeysFor(center) {
+  if (!center?.meals || typeof center.meals !== "object") return MEALS.map((m) => m.key);
+  return MEALS.map((m) => m.key).filter((key) => center.meals[key]?.provided);
 }
 
 export function requirementsFor(mealKey) {
@@ -102,8 +146,14 @@ export function isValidLine(mealKey, ageGroupKey, componentKey) {
 }
 
 /** Key for one line of the planner, used on both client and server. */
-export function lineKey(date, meal, ageGroup, component) {
-  return `${date}|${meal}|${ageGroup}|${component}`;
+export function lineKey(date, meal, ageGroup, component, kind = "PLANNED") {
+  return `${date}|${meal}|${ageGroup}|${component}|${kind}`;
+}
+
+/** Same weekday 4 weeks earlier, or 5 when 4 is still in the same month. */
+export function sameDayPreviousMonth(date) {
+  const four = addDays(date, -28);
+  return four.getMonth() === date.getMonth() ? addDays(date, -35) : four;
 }
 
 // ---- Dates -------------------------------------------------------------
@@ -157,15 +207,16 @@ export function formatWeekRange(monday) {
 
 /**
  * Today's planned menu for the dashboard card, as one row per meal with the
- * 1–12 Years items joined. `items` is the API response for that day.
+ * first children row's items joined. `data` is the API response for that day.
  */
-export function todaysMenuRows(items) {
-  const rows = MEALS.map((meal) => {
-    const text = componentsFor(meal.key, "children")
+export function todaysMenuRows(data) {
+  const items = (data?.items || []).filter((i) => (i.kind || "PLANNED") === "PLANNED");
+  const meals = Array.isArray(data?.meals) ? data.meals : MEALS.map((m) => m.key);
+  const group = (data?.ageGroups || []).find((g) => patternGroup(g.key) === "children")?.key || "children";
+  const rows = MEALS.filter((meal) => meals.includes(meal.key)).map((meal) => {
+    const text = componentsFor(meal.key, group)
       .map((component) =>
-        items.find(
-          (i) => i.meal === meal.key && i.ageGroup === "children" && i.component === component,
-        ),
+        items.find((i) => i.meal === meal.key && i.ageGroup === group && i.component === component),
       )
       .filter(Boolean)
       .map((i) => i.item)

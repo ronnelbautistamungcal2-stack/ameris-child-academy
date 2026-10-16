@@ -1,4 +1,6 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import ProtectedLessonViewer from "@/components/lessons/ProtectedLessonViewer";
+import ResourceLinks, { resourceLabel } from "@/components/lessons/ResourceLinks";
 import { apiJson } from "@/lib/api";
 import { AGE_GROUPS } from "@/lib/ageUtils";
 import { canonicalizeLessonCategoryName } from "@/lib/lessonCategoryNormalization.mjs";
@@ -241,14 +243,6 @@ function byReferenceId(a, b) {
   return naturalCollator.compare(pa.raw, pb.raw);
 }
 
-function isProbablyLink(value) {
-  const s = String(value || "").trim();
-  if (!s) return false;
-  return (
-    s.startsWith("http://") || s.startsWith("https://") || s.startsWith("/")
-  );
-}
-
 function isImageUrl(value) {
   const s = String(value || "").trim();
   if (!s) return false;
@@ -305,7 +299,7 @@ function fileToBase64(file) {
   });
 }
 
-async function uploadFiles(files) {
+async function uploadFiles(files, { protected: isProtected = false } = {}) {
   const arr = Array.isArray(files) ? files : [];
   const out = [];
   for (const f of arr) {
@@ -316,6 +310,7 @@ async function uploadFiles(files) {
         filename: f.name,
         mimeType: f.type,
         dataBase64,
+        protected: isProtected,
       }),
     });
     out.push({ ...uploaded, uploadedAt: new Date().toISOString() });
@@ -823,6 +818,7 @@ export default function AdminLessons() {
   const [importing, setImporting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingResource, setUploadingResource] = useState(false);
+  const [uploadingLessonDocument, setUploadingLessonDocument] = useState(false);
   const [error, setError] = useState("");
   const [importResult, setImportResult] = useState(null);
 
@@ -845,19 +841,11 @@ export default function AdminLessons() {
   const [editCategory, setEditCategory] = useState("");
   const [editSubject, setEditSubject] = useState("");
   const [editReference, setEditReference] = useState("");
-  const [editStep, setEditStep] = useState("");
   const [editTestingQuestion, setEditTestingQuestion] = useState("");
   const [editResource, setEditResource] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editLink, setEditLink] = useState("");
-  const [editEssentialQuestions, setEditEssentialQuestions] = useState("");
-  const [editKeyVocabulary, setEditKeyVocabulary] = useState("");
-  const [editNotesToTeacher, setEditNotesToTeacher] = useState("");
-  const [editIntroduction, setEditIntroduction] = useState("");
-  const [editInstructionalSetting, setEditInstructionalSetting] = useState("");
-  const [editLearningActivities, setEditLearningActivities] = useState("");
-  const [editAccommodations, setEditAccommodations] = useState("");
-  const [editTimeRequired, setEditTimeRequired] = useState("");
+  const [editLessonDocument, setEditLessonDocument] = useState("");
   const [editSupplyRows, setEditSupplyRows] = useState([]);
 
   const [toast, setToast] = useState(null);
@@ -871,19 +859,11 @@ export default function AdminLessons() {
   const [newCategory, setNewCategory] = useState("");
   const [newSubject, setNewSubject] = useState("");
   const [newReference, setNewReference] = useState("");
-  const [newStep, setNewStep] = useState("");
   const [newTestingQuestion, setNewTestingQuestion] = useState("");
   const [newResource, setNewResource] = useState("");
   const [newNotes, setNewNotes] = useState("");
   const [newLink, setNewLink] = useState("");
-  const [newEssentialQuestions, setNewEssentialQuestions] = useState("");
-  const [newKeyVocabulary, setNewKeyVocabulary] = useState("");
-  const [newNotesToTeacher, setNewNotesToTeacher] = useState("");
-  const [newIntroduction, setNewIntroduction] = useState("");
-  const [newInstructionalSetting, setNewInstructionalSetting] = useState("");
-  const [newLearningActivities, setNewLearningActivities] = useState("");
-  const [newAccommodations, setNewAccommodations] = useState("");
-  const [newTimeRequired, setNewTimeRequired] = useState("");
+  const [newLessonDocument, setNewLessonDocument] = useState("");
   const [newSupplyRows, setNewSupplyRows] = useState([]);
 
   const loading = loadingCenters || loadingLessons;
@@ -988,17 +968,10 @@ export default function AdminLessons() {
           resource: String(pc.resource ?? ""),
           additionalResources: String(pc.additionalResources ?? ""),
           lessonAttachment: String(pc.lessonAttachment ?? pc.resource ?? ""),
+          lessonDocument: String(pc.lessonDocument ?? ""),
           notes: String(pc.notes ?? ""),
           sheet: String(pc.sheet ?? ""),
           link: String(pc.link ?? ""),
-          essentialQuestions: String(pc.essentialQuestions ?? ""),
-          keyVocabulary: String(pc.keyVocabulary ?? ""),
-          notesToTeacher: String(pc.notesToTeacher ?? ""),
-          introduction: String(pc.introduction ?? ""),
-          instructionalSetting: String(pc.instructionalSetting ?? ""),
-          learningActivities: String(pc.learningActivities ?? ""),
-          accommodations: String(pc.accommodations ?? ""),
-          timeRequired: String(pc.timeRequired ?? ""),
           supplies: Array.isArray(lesson?.supplies) ? lesson.supplies : [],
         });
       }
@@ -1240,19 +1213,11 @@ export default function AdminLessons() {
     setEditCategory(normalizeLessonCategory(rec?.category || ""));
     setEditSubject(String(rec?.subject || ""));
     setEditReference(String(rec?.refId || ""));
-    setEditStep(String(rec?.progressionStep || ""));
     setEditTestingQuestion(String(rec?.testingQuestion || ""));
     setEditResource(String(rec?.lessonAttachment || ""));
+    setEditLessonDocument(String(rec?.lessonDocument || ""));
     setEditNotes(String(rec?.notes || ""));
     setEditLink(String(rec?.link || ""));
-    setEditEssentialQuestions(String(rec?.essentialQuestions || ""));
-    setEditKeyVocabulary(String(rec?.keyVocabulary || ""));
-    setEditNotesToTeacher(String(rec?.notesToTeacher || ""));
-    setEditIntroduction(String(rec?.introduction || ""));
-    setEditInstructionalSetting(String(rec?.instructionalSetting || ""));
-    setEditLearningActivities(String(rec?.learningActivities || ""));
-    setEditAccommodations(String(rec?.accommodations || ""));
-    setEditTimeRequired(String(rec?.timeRequired || ""));
     setEditSupplyRows(supplyRowsFromLesson(rec));
     setEditOpen(true);
   }, []);
@@ -1296,19 +1261,11 @@ export default function AdminLessons() {
     setNewCategory("");
     setNewSubject("");
     setNewReference("");
-    setNewStep("");
     setNewTestingQuestion("");
     setNewResource("");
+    setNewLessonDocument("");
     setNewNotes("");
     setNewLink("");
-    setNewEssentialQuestions("");
-    setNewKeyVocabulary("");
-    setNewNotesToTeacher("");
-    setNewIntroduction("");
-    setNewInstructionalSetting("");
-    setNewLearningActivities("");
-    setNewAccommodations("");
-    setNewTimeRequired("");
     setNewSupplyRows([]);
     setCreateOpen(true);
   }, []);
@@ -1320,26 +1277,20 @@ export default function AdminLessons() {
   const openDuplicate = useCallback((rec) => {
     if (!rec) return;
     setError("");
-    setNewLessonTitle(String(rec.lessonTitle || ""));
+    // A copy gets its own title so it becomes its own lesson rather than a
+    // second, identically named entry under the original.
+    const title = normalizeSpaces(rec.lessonTitle || "");
+    setNewLessonTitle(title ? `${title} (Copy)` : "");
     setNewChildAge(String(rec.childAge || ""));
     setNewTerm(normalizeLessonTerm(rec.term || ""));
     setNewCategory(normalizeLessonCategory(rec.category || ""));
     setNewSubject(String(rec.subject || ""));
     setNewReference("");
-    const step = normalizeSpaces(rec.progressionStep || "");
-    setNewStep(step ? `${step} (Copy)` : "");
     setNewTestingQuestion(String(rec.testingQuestion || ""));
     setNewResource(String(rec.lessonAttachment || ""));
+    setNewLessonDocument(String(rec.lessonDocument || ""));
     setNewNotes(String(rec.notes || ""));
     setNewLink(String(rec.link || ""));
-    setNewEssentialQuestions(String(rec.essentialQuestions || ""));
-    setNewKeyVocabulary(String(rec.keyVocabulary || ""));
-    setNewNotesToTeacher(String(rec.notesToTeacher || ""));
-    setNewIntroduction(String(rec.introduction || ""));
-    setNewInstructionalSetting(String(rec.instructionalSetting || ""));
-    setNewLearningActivities(String(rec.learningActivities || ""));
-    setNewAccommodations(String(rec.accommodations || ""));
-    setNewTimeRequired(String(rec.timeRequired || ""));
     setNewSupplyRows(supplyRowsFromLesson(rec));
     setCreateOpen(true);
   }, []);
@@ -1348,9 +1299,8 @@ export default function AdminLessons() {
     async (e) => {
       e.preventDefault();
       if (!mainCenter?.id) return;
-      const step = normalizeSpaces(newStep);
-      if (!step) {
-        setError("Progression step is required.");
+      if (!normalizeSpaces(newLessonTitle)) {
+        setError("Lesson title is required.");
         return;
       }
 
@@ -1370,18 +1320,10 @@ export default function AdminLessons() {
               refId: normalizeSpaces(newReference),
             }),
             reference: normalizeSpaces(newReference),
-            progressionStep: step,
             lessonAttachment: String(newResource || ""),
+            lessonDocument: String(newLessonDocument || ""),
             notes: String(newNotes || ""),
             link: normalizeSpaces(newLink),
-            essentialQuestions: String(newEssentialQuestions || ""),
-            keyVocabulary: String(newKeyVocabulary || ""),
-            notesToTeacher: String(newNotesToTeacher || ""),
-            introduction: String(newIntroduction || ""),
-            instructionalSetting: normalizeSpaces(newInstructionalSetting),
-            learningActivities: String(newLearningActivities || ""),
-            accommodations: String(newAccommodations || ""),
-            timeRequired: normalizeSpaces(newTimeRequired),
             supplies: newSupplyRows.filter((s) => normalizeSpaces(s.name)),
           }),
         });
@@ -1397,25 +1339,17 @@ export default function AdminLessons() {
     },
     [
       mainCenter?.id,
-      newAccommodations,
       newCategory,
       newChildAge,
-      newEssentialQuestions,
-      newIntroduction,
-      newInstructionalSetting,
-      newKeyVocabulary,
-      newLearningActivities,
+      newLessonDocument,
       newLessonTitle,
       newLink,
       newNotes,
-      newNotesToTeacher,
       newReference,
       newResource,
-      newStep,
       newSubject,
       newSupplyRows,
       newTerm,
-      newTimeRequired,
       refreshLessons,
     ],
   );
@@ -1424,9 +1358,8 @@ export default function AdminLessons() {
     async (e) => {
       e.preventDefault();
       if (!editRecord?.id) return;
-      const step = normalizeSpaces(editStep);
-      if (!step) {
-        setError("Progression step is required.");
+      if (!normalizeSpaces(editLessonTitle)) {
+        setError("Lesson title is required.");
         return;
       }
 
@@ -1447,18 +1380,10 @@ export default function AdminLessons() {
                 refId: normalizeSpaces(editReference),
               }),
               reference: normalizeSpaces(editReference),
-              progressionStep: step,
               lessonAttachment: String(editResource || ""),
+              lessonDocument: String(editLessonDocument || ""),
               notes: String(editNotes || ""),
               link: normalizeSpaces(editLink),
-              essentialQuestions: String(editEssentialQuestions || ""),
-              keyVocabulary: String(editKeyVocabulary || ""),
-              notesToTeacher: String(editNotesToTeacher || ""),
-              introduction: String(editIntroduction || ""),
-              instructionalSetting: normalizeSpaces(editInstructionalSetting),
-              learningActivities: String(editLearningActivities || ""),
-              accommodations: String(editAccommodations || ""),
-              timeRequired: normalizeSpaces(editTimeRequired),
               supplies: editSupplyRows.filter((s) => normalizeSpaces(s.name)),
             }),
           },
@@ -1475,38 +1400,30 @@ export default function AdminLessons() {
       }
     },
     [
-      editAccommodations,
       editCategory,
       editChildAge,
-      editEssentialQuestions,
-      editIntroduction,
-      editInstructionalSetting,
-      editKeyVocabulary,
-      editLearningActivities,
+      editLessonDocument,
       editLessonTitle,
       editLink,
       editNotes,
-      editNotesToTeacher,
       editRecord?.id,
       editReference,
       editResource,
-      editStep,
       editSubject,
       editSupplyRows,
       editTerm,
-      editTimeRequired,
       refreshLessons,
     ],
   );
 
   const uploadAndAppendToField = useCallback(
-    async (files, currentValue, setValue, setUploading) => {
+    async (files, currentValue, setValue, setUploading, uploadOptions) => {
       const arr = Array.from(files || []);
       if (!arr.length) return;
       setUploading(true);
       setError("");
       try {
-        const uploaded = await uploadFiles(arr);
+        const uploaded = await uploadFiles(arr, uploadOptions);
         const urls = uploaded.map((u) => u?.url).filter(Boolean);
         const existing = splitResources(currentValue);
         const next = [...existing, ...urls].join("\n");
@@ -1578,21 +1495,14 @@ export default function AdminLessons() {
                   headers: [
                     "Ref ID",
                     "Lesson Title",
-                    "Subject",
+                    "Subcategory",
                     "Child Age",
                     "Term",
                     "Category",
                     "Progression Step",
                     "Link",
-                    "Time Required",
-                    "Instructional Setting",
-                    "Introduction",
-                    "Essential Questions",
-                    "Key Vocabulary",
-                    "Learning Activities",
-                    "Accommodations/Modifications",
-                    "Notes to Teacher",
                     "Additional Resources",
+                    "Lesson",
                     "Notes",
                     "Sheet",
                   ],
@@ -1605,15 +1515,8 @@ export default function AdminLessons() {
                     r.category,
                     r.progressionStep,
                     r.link,
-                    r.timeRequired,
-                    r.instructionalSetting,
-                    r.introduction,
-                    r.essentialQuestions,
-                    r.keyVocabulary,
-                    r.learningActivities,
-                    r.accommodations,
-                    r.notesToTeacher,
                     r.lessonAttachment,
+                    r.lessonDocument,
                     r.notes,
                     r.sheet,
                   ]),
@@ -1806,7 +1709,7 @@ export default function AdminLessons() {
 
             <label className="block">
               <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Subject
+                Subcategory
               </div>
               <select
                 className={`w-full rounded-xl border px-3 py-2 text-sm focus:border-blue-300 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-colors ${subject ? "border-blue-300 bg-blue-50/50 font-medium text-blue-900" : "border-gray-200"}`}
@@ -1814,7 +1717,7 @@ export default function AdminLessons() {
                 onChange={(e) => setSubject(e.target.value)}
                 disabled={loading}
               >
-                <option value="">All Subjects</option>
+                <option value="">All Subcategories</option>
                 {subjectOptions.map((s) => (
                   <option key={s} value={s}>
                     {s}
@@ -1883,7 +1786,7 @@ export default function AdminLessons() {
                     Lesson Title
                   </th>
                   <th className="px-4 py-3 text-left text-[11px] font-extrabold uppercase tracking-wide text-gray-500">
-                    Subject
+                    Subcategory
                   </th>
                   <th className="whitespace-nowrap px-4 py-3 text-left text-[11px] font-extrabold uppercase tracking-wide text-gray-500">
                     Child Age
@@ -2094,9 +1997,7 @@ export default function AdminLessons() {
       {detailsOpen ? (
         <Modal
           title={
-            detailsRecord?.progressionStep
-              ? `${detailsRecord.progressionStep}`
-              : "Lesson Details"
+            detailsRecord?.lessonTitle || detailsRecord?.progressionStep || "Lesson Details"
           }
           onClose={closeDetails}
         >
@@ -2169,11 +2070,9 @@ export default function AdminLessons() {
                 </div>
                 <div className="mt-3 space-y-2.5">
                   {[
-                    { label: "Subject", value: detailsRecord?.subject },
+                    { label: "Subcategory", value: detailsRecord?.subject },
                     { label: "Term", value: detailsRecord?.term },
                     { label: "Sheet", value: detailsRecord?.sheet },
-                    { label: "Time Required", value: detailsRecord?.timeRequired },
-                    { label: "Setting", value: detailsRecord?.instructionalSetting },
                   ].map(({ label, value }) => (
                     <div key={label} className="flex items-baseline gap-2 text-sm">
                       <span className="flex-shrink-0 text-xs font-semibold text-gray-500 w-24">{label}</span>
@@ -2210,29 +2109,6 @@ export default function AdminLessons() {
           </div>
 
           <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
-              Teacher Guide
-            </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {[
-                { label: "Introduction", value: detailsRecord?.introduction },
-                { label: "Essential Questions", value: detailsRecord?.essentialQuestions },
-                { label: "Key Vocabulary", value: detailsRecord?.keyVocabulary },
-                { label: "Learning Activities", value: detailsRecord?.learningActivities },
-                { label: "Accommodations/Modifications", value: detailsRecord?.accommodations },
-                { label: "Notes to Teacher", value: detailsRecord?.notesToTeacher },
-              ].map(({ label, value }) => (
-                <div key={label}>
-                  <div className="text-xs font-semibold text-gray-700">{label}</div>
-                  <div className="mt-1 whitespace-pre-wrap text-sm text-gray-800">
-                    {value || <span className="text-gray-500">—</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
             <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
               Lesson Assets
             </div>
@@ -2241,24 +2117,21 @@ export default function AdminLessons() {
                 Additional Resources
               </div>
               {detailsRecord?.lessonAttachment ? (
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-                  {splitResources(detailsRecord.lessonAttachment).map((r) => (
-                    <li key={r}>
-                      {isProbablyLink(r) ? (
-                        <a
-                          href={r}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-blue-600 hover:text-blue-700"
-                        >
-                          {r}
-                        </a>
-                      ) : (
-                        <span className="text-gray-800">{r}</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                <ResourceLinks
+                  value={detailsRecord.lessonAttachment}
+                  className="mt-2 list-disc space-y-1 pl-5 text-sm"
+                />
+              ) : (
+                <div className="mt-2 text-sm text-gray-600">—</div>
+              )}
+            </div>
+            <div className="mt-4">
+              <div className="text-xs font-semibold text-gray-700">Lesson</div>
+              {detailsRecord?.lessonDocument ? (
+                <ProtectedLessonViewer
+                  className="mt-2"
+                  urls={splitResources(detailsRecord.lessonDocument)}
+                />
               ) : (
                 <div className="mt-2 text-sm text-gray-600">—</div>
               )}
@@ -2296,17 +2169,18 @@ export default function AdminLessons() {
       {editOpen ? (
         <Modal
           title={
-            editRecord?.progressionStep
-              ? `Edit ${editRecord.progressionStep}`
+            editRecord?.lessonTitle || editRecord?.progressionStep
+              ? `Edit ${editRecord.lessonTitle || editRecord.progressionStep}`
               : "Edit Curriculum Lesson"
           }
           onClose={closeEdit}
         >
           <form onSubmit={saveEditRecord} className="space-y-4">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <Field label="Lesson Title">
+              <Field label="Lesson Title (required)">
                 <input
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  required
                   value={editLessonTitle}
                   onChange={(e) => setEditLessonTitle(e.target.value)}
                   placeholder="e.g. Sensory Exploration - Water"
@@ -2381,13 +2255,13 @@ export default function AdminLessons() {
             </div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <Field label="Subject (optional)">
+              <Field label="Subcategory (optional)">
                 <input
                   list="edit-subject-options"
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   value={editSubject}
                   onChange={(e) => setEditSubject(e.target.value)}
-                  placeholder="Type a subject"
+                  placeholder="Type a subcategory"
                   disabled={saving}
                 />
                 <datalist id="edit-subject-options">
@@ -2396,19 +2270,6 @@ export default function AdminLessons() {
                   ))}
                 </datalist>
               </Field>
-              <Field label="Progression Step (required)">
-                <input
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  value={editStep}
-                  onChange={(e) => setEditStep(e.target.value)}
-                  placeholder="e.g. Fine Motor Skills 1A"
-                  required
-                  disabled={saving}
-                />
-              </Field>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <Field label="Link (optional)">
                 <input
                   type="url"
@@ -2416,86 +2277,6 @@ export default function AdminLessons() {
                   value={editLink}
                   onChange={(e) => setEditLink(e.target.value)}
                   placeholder="https://…"
-                  disabled={saving}
-                />
-              </Field>
-              <Field label="Time Required (optional)">
-                <input
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  value={editTimeRequired}
-                  onChange={(e) => setEditTimeRequired(e.target.value)}
-                  placeholder="e.g. 30 minutes"
-                  disabled={saving}
-                />
-              </Field>
-              <Field label="Instructional Setting (optional)">
-                <input
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  value={editInstructionalSetting}
-                  onChange={(e) => setEditInstructionalSetting(e.target.value)}
-                  placeholder="e.g. Small group"
-                  disabled={saving}
-                />
-              </Field>
-            </div>
-
-            <Field label="Introduction (optional)">
-              <textarea
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                value={editIntroduction}
-                onChange={(e) => setEditIntroduction(e.target.value)}
-                rows={2}
-                disabled={saving}
-              />
-            </Field>
-
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <Field label="Essential Questions (optional)">
-                <textarea
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  value={editEssentialQuestions}
-                  onChange={(e) => setEditEssentialQuestions(e.target.value)}
-                  rows={2}
-                  disabled={saving}
-                />
-              </Field>
-              <Field label="Key Vocabulary (optional)">
-                <textarea
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  value={editKeyVocabulary}
-                  onChange={(e) => setEditKeyVocabulary(e.target.value)}
-                  rows={2}
-                  disabled={saving}
-                />
-              </Field>
-            </div>
-
-            <Field label="Learning Activities (optional)">
-              <textarea
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                value={editLearningActivities}
-                onChange={(e) => setEditLearningActivities(e.target.value)}
-                rows={3}
-                disabled={saving}
-              />
-            </Field>
-
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <Field label="Accommodations/Modifications (optional)">
-                <textarea
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  value={editAccommodations}
-                  onChange={(e) => setEditAccommodations(e.target.value)}
-                  rows={2}
-                  disabled={saving}
-                />
-              </Field>
-              <Field label="Notes to Teacher (optional)">
-                <textarea
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  value={editNotesToTeacher}
-                  onChange={(e) => setEditNotesToTeacher(e.target.value)}
-                  rows={2}
                   disabled={saving}
                 />
               </Field>
@@ -2526,7 +2307,7 @@ export default function AdminLessons() {
                   {splitResources(editResource).map((r, i) => (
                     <li key={`${r}-${i}`} className="flex items-center justify-between gap-2">
                       <a href={r} target="_blank" rel="noreferrer" className="truncate text-xs text-blue-600 hover:text-blue-700">
-                        {r}
+                        {resourceLabel(r, i)}
                       </a>
                       <button
                         type="button"
@@ -2545,6 +2326,56 @@ export default function AdminLessons() {
                 </ul>
               ) : null}
               {uploadingResource && (
+                <div className="text-xs text-gray-500 mt-1">Uploading...</div>
+              )}
+            </Field>
+
+            <Field label="Lesson (view only — teachers cannot download, copy, or print it)">
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.png,.jpg,.jpeg,.webp"
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm disabled:opacity-60"
+                disabled={saving || uploadingLessonDocument}
+                onChange={async (e) => {
+                  const files = e.target.files;
+                  await uploadAndAppendToField(
+                    files,
+                    editLessonDocument,
+                    setEditLessonDocument,
+                    setUploadingLessonDocument,
+                    { protected: true },
+                  );
+                  e.target.value = "";
+                }}
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                PDF or image. Opens automatically when a teacher clicks this lesson in the weekly plan.
+              </p>
+              {editLessonDocument ? (
+                <ul className="mt-2 space-y-1">
+                  {splitResources(editLessonDocument).map((r, i) => (
+                    <li key={`${r}-${i}`} className="flex items-center justify-between gap-2">
+                      <a href={r} target="_blank" rel="noreferrer" className="truncate text-xs text-blue-600 hover:text-blue-700">
+                        {resourceLabel(r, i)}
+                      </a>
+                      <button
+                        type="button"
+                        className="shrink-0 text-xs text-red-600 hover:text-red-700"
+                        disabled={saving || uploadingLessonDocument}
+                        onClick={() => {
+                          const list = splitResources(editLessonDocument);
+                          list.splice(i, 1);
+                          setEditLessonDocument(list.join("\n"));
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {uploadingLessonDocument && (
                 <div className="text-xs text-gray-500 mt-1">Uploading...</div>
               )}
             </Field>
@@ -2584,7 +2415,7 @@ export default function AdminLessons() {
         <Modal title="Create Curriculum Lesson" onClose={closeCreate}>
           <form onSubmit={saveNewRecord} className="space-y-4">
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
-              Creates a new progression step (goal) under a lesson for{" "}
+              Creates a new curriculum lesson for{" "}
               <span className="font-semibold text-gray-900">
                 {mainCenter?.name || "—"}
               </span>
@@ -2592,9 +2423,10 @@ export default function AdminLessons() {
             </div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <Field label="Lesson Title">
+              <Field label="Lesson Title (required)">
                 <input
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  required
                   value={newLessonTitle}
                   onChange={(e) => setNewLessonTitle(e.target.value)}
                   placeholder="e.g. Sensory Exploration - Water"
@@ -2669,13 +2501,13 @@ export default function AdminLessons() {
             </div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <Field label="Subject (optional)">
+              <Field label="Subcategory (optional)">
                 <input
                   list="new-subject-options"
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   value={newSubject}
                   onChange={(e) => setNewSubject(e.target.value)}
-                  placeholder="Type a subject"
+                  placeholder="Type a subcategory"
                   disabled={saving}
                 />
                 <datalist id="new-subject-options">
@@ -2684,19 +2516,6 @@ export default function AdminLessons() {
                   ))}
                 </datalist>
               </Field>
-              <Field label="Progression Step (required)">
-                <input
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  value={newStep}
-                  onChange={(e) => setNewStep(e.target.value)}
-                  placeholder="e.g. Fine Motor Skills 1A"
-                  required
-                  disabled={saving}
-                />
-              </Field>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <Field label="Link (optional)">
                 <input
                   type="url"
@@ -2704,86 +2523,6 @@ export default function AdminLessons() {
                   value={newLink}
                   onChange={(e) => setNewLink(e.target.value)}
                   placeholder="https://…"
-                  disabled={saving}
-                />
-              </Field>
-              <Field label="Time Required (optional)">
-                <input
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  value={newTimeRequired}
-                  onChange={(e) => setNewTimeRequired(e.target.value)}
-                  placeholder="e.g. 30 minutes"
-                  disabled={saving}
-                />
-              </Field>
-              <Field label="Instructional Setting (optional)">
-                <input
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  value={newInstructionalSetting}
-                  onChange={(e) => setNewInstructionalSetting(e.target.value)}
-                  placeholder="e.g. Small group"
-                  disabled={saving}
-                />
-              </Field>
-            </div>
-
-            <Field label="Introduction (optional)">
-              <textarea
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                value={newIntroduction}
-                onChange={(e) => setNewIntroduction(e.target.value)}
-                rows={2}
-                disabled={saving}
-              />
-            </Field>
-
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <Field label="Essential Questions (optional)">
-                <textarea
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  value={newEssentialQuestions}
-                  onChange={(e) => setNewEssentialQuestions(e.target.value)}
-                  rows={2}
-                  disabled={saving}
-                />
-              </Field>
-              <Field label="Key Vocabulary (optional)">
-                <textarea
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  value={newKeyVocabulary}
-                  onChange={(e) => setNewKeyVocabulary(e.target.value)}
-                  rows={2}
-                  disabled={saving}
-                />
-              </Field>
-            </div>
-
-            <Field label="Learning Activities (optional)">
-              <textarea
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                value={newLearningActivities}
-                onChange={(e) => setNewLearningActivities(e.target.value)}
-                rows={3}
-                disabled={saving}
-              />
-            </Field>
-
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <Field label="Accommodations/Modifications (optional)">
-                <textarea
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  value={newAccommodations}
-                  onChange={(e) => setNewAccommodations(e.target.value)}
-                  rows={2}
-                  disabled={saving}
-                />
-              </Field>
-              <Field label="Notes to Teacher (optional)">
-                <textarea
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  value={newNotesToTeacher}
-                  onChange={(e) => setNewNotesToTeacher(e.target.value)}
-                  rows={2}
                   disabled={saving}
                 />
               </Field>
@@ -2814,7 +2553,7 @@ export default function AdminLessons() {
                   {splitResources(newResource).map((r, i) => (
                     <li key={`${r}-${i}`} className="flex items-center justify-between gap-2">
                       <a href={r} target="_blank" rel="noreferrer" className="truncate text-xs text-blue-600 hover:text-blue-700">
-                        {r}
+                        {resourceLabel(r, i)}
                       </a>
                       <button
                         type="button"
@@ -2833,6 +2572,56 @@ export default function AdminLessons() {
                 </ul>
               ) : null}
               {uploadingResource && (
+                <div className="text-xs text-gray-500 mt-1">Uploading...</div>
+              )}
+            </Field>
+
+            <Field label="Lesson (view only — teachers cannot download, copy, or print it)">
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.png,.jpg,.jpeg,.webp"
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm disabled:opacity-60"
+                disabled={saving || uploadingLessonDocument}
+                onChange={async (e) => {
+                  const files = e.target.files;
+                  await uploadAndAppendToField(
+                    files,
+                    newLessonDocument,
+                    setNewLessonDocument,
+                    setUploadingLessonDocument,
+                    { protected: true },
+                  );
+                  e.target.value = "";
+                }}
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                PDF or image. Opens automatically when a teacher clicks this lesson in the weekly plan.
+              </p>
+              {newLessonDocument ? (
+                <ul className="mt-2 space-y-1">
+                  {splitResources(newLessonDocument).map((r, i) => (
+                    <li key={`${r}-${i}`} className="flex items-center justify-between gap-2">
+                      <a href={r} target="_blank" rel="noreferrer" className="truncate text-xs text-blue-600 hover:text-blue-700">
+                        {resourceLabel(r, i)}
+                      </a>
+                      <button
+                        type="button"
+                        className="shrink-0 text-xs text-red-600 hover:text-red-700"
+                        disabled={saving || uploadingLessonDocument}
+                        onClick={() => {
+                          const list = splitResources(newLessonDocument);
+                          list.splice(i, 1);
+                          setNewLessonDocument(list.join("\n"));
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {uploadingLessonDocument && (
                 <div className="text-xs text-gray-500 mt-1">Uploading...</div>
               )}
             </Field>

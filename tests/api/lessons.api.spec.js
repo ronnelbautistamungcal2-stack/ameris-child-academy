@@ -1,7 +1,7 @@
 // @ts-check
 const { test, expect } = require("@playwright/test");
 const { loginAsAdmin, loginAsTeacher, loginAsParent } = require("../helpers/auth");
-const { apiGet, apiPost, apiPut, apiDelete, pickDemoCenterId } = require("../helpers/api");
+const { apiGet, apiPost, apiPut, apiPatch, apiDelete, pickDemoCenterId } = require("../helpers/api");
 
 test.describe("Lessons API @api", () => {
   let centerId;
@@ -143,6 +143,104 @@ test.describe("Lessons API @api", () => {
     const cookies = await loginAsAdmin(request);
     const res = await apiDelete(request, `/api/v1/lessons/${createdLessonId}`, cookies);
     expect(res.status()).toBe(204);
+  });
+});
+
+test.describe("Curriculum protected lesson file @api", () => {
+  // Smallest PDF that parses: enough to round-trip through upload and serving.
+  const PDF_BASE64 = Buffer.from(
+    "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n",
+  ).toString("base64");
+  let centerId;
+
+  test.beforeAll(async ({ request }) => {
+    const cookies = await loginAsAdmin(request);
+    const res = await apiGet(request, "/api/v1/centers", cookies);
+    centerId = pickDemoCenterId(res.status() === 200 ? await res.json() : []);
+  });
+
+  test("only admins upload protected files, and only PDFs or images", async ({ request }) => {
+    const teacher = await loginAsTeacher(request);
+    const asTeacher = await apiPost(
+      request,
+      "/api/v1/uploads",
+      { filename: "lesson.pdf", mimeType: "application/pdf", dataBase64: PDF_BASE64, protected: true },
+      teacher,
+    );
+    expect(asTeacher.status()).toBe(403);
+
+    const admin = await loginAsAdmin(request);
+    const wrongType = await apiPost(
+      request,
+      "/api/v1/uploads",
+      { filename: "lesson.docx", dataBase64: PDF_BASE64, protected: true },
+      admin,
+    );
+    expect(wrongType.status()).toBe(400);
+  });
+
+  test("a lesson saved without a progression step serves its file to staff only", async ({ request, playwright, baseURL }) => {
+    if (!centerId) test.skip();
+    const admin = await loginAsAdmin(request);
+    const upload = await apiPost(
+      request,
+      "/api/v1/uploads",
+      { filename: "lesson.pdf", mimeType: "application/pdf", dataBase64: PDF_BASE64, protected: true },
+      admin,
+    );
+    expect(upload.status()).toBe(200);
+    const { url } = await upload.json();
+    expect(url).toMatch(/^\/api\/v1\/protected-files\/[0-9a-f-]+\.pdf$/);
+
+    const suffix = Date.now();
+    const created = await apiPost(
+      request,
+      "/api/v1/curriculum/records",
+      {
+        centerId,
+        lessonTitle: `QA Protected Lesson ${suffix}`,
+        subject: "Cognitive",
+        lessonAttachment: "/uploads/qa-extra.pdf",
+        lessonDocument: url,
+      },
+      admin,
+    );
+    expect(created.status()).toBe(201);
+    const { goal, lesson } = await created.json();
+    expect(goal.title).toBe(`QA Protected Lesson ${suffix}`);
+    expect(goal.passingCriteria.lessonDocument).toBe(url);
+    expect(goal.passingCriteria.lessonAttachment).toBe("/uploads/qa-extra.pdf");
+
+    const renamed = await apiPatch(
+      request,
+      `/api/v1/curriculum/records/${goal.id}`,
+      { lessonTitle: `QA Protected Lesson ${suffix} v2`, subject: "Cognitive" },
+      admin,
+    );
+    expect(renamed.status()).toBe(200);
+    const renamedGoal = (await renamed.json()).goal;
+    expect(renamedGoal.title).toBe(`QA Protected Lesson ${suffix} v2`);
+    // Omitting the field keeps the file that was already attached.
+    expect(renamedGoal.passingCriteria.lessonDocument).toBe(url);
+
+    const teacher = await loginAsTeacher(request);
+    const file = await apiGet(request, url, teacher);
+    expect(file.status()).toBe(200);
+    expect(file.headers()["content-type"]).toBe("application/pdf");
+    expect(file.headers()["content-disposition"]).toBe("inline");
+    expect(file.headers()["cache-control"]).toContain("no-store");
+
+    expect((await apiGet(request, url, await loginAsParent(request))).status()).toBe(403);
+    // A fresh context: `request` still carries the session cookies set above.
+    const anonymous = await playwright.request.newContext({ baseURL });
+    expect((await apiGet(anonymous, url)).status()).toBe(401);
+    await anonymous.dispose();
+    const name = url.split("/").pop();
+    expect((await apiGet(request, `/uploads/${name}`, teacher)).status()).toBe(404);
+    expect((await apiGet(request, "/api/v1/protected-files/..%2F..%2Fpackage.json", teacher)).status()).toBe(404);
+
+    await apiDelete(request, `/api/v1/curriculum/records/${goal.id}`, admin);
+    await apiDelete(request, `/api/v1/lessons/${lesson.id}`, admin);
   });
 });
 

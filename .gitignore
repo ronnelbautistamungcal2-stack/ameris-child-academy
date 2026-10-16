@@ -25,6 +25,7 @@ cookies.txt
 admin_cookies.txt
 ameris_backup.sql
 backups/
+storage/
 *.dump
 planner-fix-ledger*.json
 .tmp-homepage*.png

@@ -106,23 +106,18 @@ export default async function handler(req, res) {
     resource,
     additionalResources,
     lessonAttachment,
+    lessonDocument,
     lessonImage,
     notes,
     link,
-    essentialQuestions,
-    keyVocabulary,
-    notesToTeacher,
-    introduction,
-    instructionalSetting,
-    learningActivities,
-    accommodations,
-    timeRequired,
     supplies,
   } = req.body || {};
 
-  const step = normalizeSpaces(progressionStep);
+  // The form no longer asks for a progression step; the lesson title stands
+  // in for it so the goal still has a title.
+  const step = normalizeSpaces(progressionStep) || normalizeSpaces(lessonTitle);
   if (!centerId) return res.status(400).json({ error: "centerId is required" });
-  if (!step) return res.status(400).json({ error: "progressionStep is required" });
+  if (!step) return res.status(400).json({ error: "lessonTitle is required" });
 
   const center = await prisma.center.findUnique({ where: { id: centerId } });
   if (!center) return res.status(404).json({ error: "Center not found" });
@@ -171,6 +166,7 @@ export default async function handler(req, res) {
           ? normalizeSpaces(additionalResources)
           : "",
         lessonAttachment: normalizeResourceList(lessonAttachment),
+        lessonDocument: normalizeResourceList(lessonDocument),
         lessonImage: normalizeResourceList(lessonImage),
         notes: normalizeSpaces(notes),
         age: normalizeSpaces(childAge),
@@ -181,14 +177,6 @@ export default async function handler(req, res) {
         }),
         sheet: "Manual",
         link: normalizeSpaces(link),
-        essentialQuestions: normalizeSpaces(essentialQuestions),
-        keyVocabulary: normalizeSpaces(keyVocabulary),
-        notesToTeacher: normalizeSpaces(notesToTeacher),
-        introduction: normalizeSpaces(introduction),
-        instructionalSetting: normalizeSpaces(instructionalSetting),
-        learningActivities: normalizeSpaces(learningActivities),
-        accommodations: normalizeSpaces(accommodations),
-        timeRequired: normalizeSpaces(timeRequired),
       },
     },
   });

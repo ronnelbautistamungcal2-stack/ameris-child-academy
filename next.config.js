@@ -9,6 +9,9 @@ const nextConfig = {
     if (dev) {
       config.cache = false;
     }
+    // pdf.js (protected lesson viewer) references the Node-only "canvas"
+    // package on a server code path the browser never takes.
+    config.resolve.alias = { ...config.resolve.alias, canvas: false };
     return config;
   },
 

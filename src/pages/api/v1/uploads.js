@@ -2,6 +2,7 @@ import { getSession } from "@/lib/auth";
 import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
+import { PROTECTED_DIR, PROTECTED_EXTENSIONS } from "@/lib/protectedFiles";
 
 const MAX_BYTES = 25 * 1024 * 1024; // 25MB
 
@@ -34,9 +35,12 @@ export default async function handler(req, res) {
     return res.status(405).end();
   }
 
-  const { filename, mimeType, dataBase64 } = req.body || {};
+  const { filename, mimeType, dataBase64, protected: isProtected } = req.body || {};
   if (!dataBase64 || typeof dataBase64 !== "string") {
     return res.status(400).json({ error: "dataBase64 is required" });
+  }
+  if (isProtected && session.user.role !== "ADMIN") {
+    return res.status(403).json({ error: "Forbidden" });
   }
 
   let buffer;
@@ -55,6 +59,22 @@ export default async function handler(req, res) {
   const ext = path.extname(base).slice(0, 10);
   const id = crypto.randomUUID();
   const outName = `${id}${ext || ""}`;
+
+  // Protected lesson files stay out of public/ so there is no URL anyone can
+  // download from; they are only served through /api/v1/protected-files.
+  if (isProtected) {
+    if (!PROTECTED_EXTENSIONS.has(ext.toLowerCase())) {
+      return res.status(400).json({ error: "Lesson files must be a PDF or an image (PNG, JPG, WEBP)" });
+    }
+    await fs.mkdir(PROTECTED_DIR, { recursive: true });
+    await fs.writeFile(path.join(PROTECTED_DIR, outName.toLowerCase()), buffer);
+    return res.status(200).json({
+      url: `/api/v1/protected-files/${outName.toLowerCase()}`,
+      originalName: base,
+      mimeType: typeof mimeType === "string" ? mimeType : null,
+      size: buffer.length,
+    });
+  }
 
   const uploadsDir = path.join(process.cwd(), "public", "uploads");
   await fs.mkdir(uploadsDir, { recursive: true });

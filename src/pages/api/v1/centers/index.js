@@ -2,7 +2,7 @@ import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { normalizeSubscription } from "@/lib/subscriptions";
 import { buildParentLinkedChildWhere } from "@/lib/child-parent-links";
-import { parseCheckoutTime } from "@/lib/jobs/auto-checkout";
+import { directorError, parseCenterInput } from "@/lib/centerSettings";
 
 function withResolvedSubscription(center) {
   return {
@@ -20,7 +20,13 @@ export default async function handler(req, res) {
     let centers;
     if (session.user.role === "ADMIN") {
       centers = await prisma.center.findMany({
-        include: { users: true, classes: true, subscription: true },
+        include: {
+          users: true,
+          classes: true,
+          subscription: true,
+          director: { select: { id: true, name: true, email: true } },
+          _count: { select: { children: true } },
+        },
       });
     } else if (session.user.role === "PARENT") {
       const children = await prisma.child.findMany({
@@ -68,17 +74,13 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Only admins can create centers" });
     }
 
-    const { name, address } = req.body;
-    if (!name) return res.status(400).json({ error: "Name required" });
-    // Automatic child checkout time: "HH:MM", or empty to turn it off.
-    const hasCheckoutTime = Object.prototype.hasOwnProperty.call(req.body || {}, "autoCheckoutTime");
-    const autoCheckoutTime = hasCheckoutTime && req.body.autoCheckoutTime ? String(req.body.autoCheckoutTime) : null;
-    if (autoCheckoutTime && !parseCheckoutTime(autoCheckoutTime)) {
-      return res.status(400).json({ error: "Automatic checkout time must be HH:MM" });
-    }
+    const parsed = parseCenterInput(req.body || {});
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const badDirector = await directorError(prisma, parsed.data.directorId);
+    if (badDirector) return res.status(400).json({ error: badDirector });
 
     const center = await prisma.center.create({
-      data: { name, address, autoCheckoutTime },
+      data: parsed.data,
       include: { users: true },
     });
 

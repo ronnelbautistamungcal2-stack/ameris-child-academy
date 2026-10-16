@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import CurriculumTabs from "@/components/curriculum/CurriculumTabs";
 import ProtectedLessonViewer from "@/components/lessons/ProtectedLessonViewer";
 import ResourceLinks, { resourceLabel } from "@/components/lessons/ResourceLinks";
 import { apiJson } from "@/lib/api";
@@ -1465,6 +1466,7 @@ export default function AdminLessons() {
   return (
     <AdminLayout title="Curriculum">
       <div className="space-y-5">
+        <CurriculumTabs active="bank" />
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-3">

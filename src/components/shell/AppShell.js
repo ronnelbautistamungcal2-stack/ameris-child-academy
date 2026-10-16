@@ -523,7 +523,7 @@ export default function AppShell({
 }
 
 function NavGroup({ label, icon, items, isActive, activePath, navy = false }) {
-  const hasActiveChild = items.some((i) => i.href && isActive(i.href));
+  const hasActiveChild = items.some((i) => i.href && (isActive(i.href) || i.alsoActive?.some(isActive)));
   const [open, setOpen] = useState(hasActiveChild);
 
   // Auto-open when navigating into this group
@@ -591,7 +591,8 @@ function NavGroup({ label, icon, items, isActive, activePath, navy = false }) {
         >
           {items.map((child) => {
             if (!child?.href) return null;
-            const active = isActive(child.href);
+            // alsoActive: other paths that belong to this item (e.g. Curriculum tabs).
+            const active = isActive(child.href) || Boolean(child.alsoActive?.some(isActive));
             return (
               <Link
                 key={child.href}

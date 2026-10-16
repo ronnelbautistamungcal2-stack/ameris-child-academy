@@ -1,20 +1,26 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import CurriculumTabs from "@/components/curriculum/CurriculumTabs";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { formatTermDaysLabel, lessonOptionLabel, normalizeTermDaySelections, TERM_DAY_OPTIONS } from "@/lib/lessonScheduling";
 import { formatStepAge, STEP_AGE_MONTH_OPTIONS, STEP_AGE_YEAR_OPTIONS } from "@/lib/progressionSteps";
+import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 
+// Categories and Steps of Progression are tabs of the Curriculum bar
+// (CurriculumTabs); Remediations sits beside Steps of Progression.
 const TABS = [
-  { key: "categories", label: "Categories", icon: TabIconCategories },
   { key: "lessons", label: "Steps of Progression", icon: TabIconLessons },
   { key: "remediations", label: "Remediations", icon: TabIconRemediations },
 ];
+const TAB_KEYS = ["categories", "lessons", "remediations"];
 
 const SUPPLY_CATEGORIES = ["General", "Art", "Science", "Craft", "Outdoor", "Music", "Math", "Other"];
 
 export default function CurriculumManager() {
-  const [tab, setTab] = useState("categories");
+  const router = useRouter();
+  const tab = TAB_KEYS.includes(router.query.tab) ? router.query.tab : "categories";
+  const setTab = (key) => router.replace({ pathname: router.pathname, query: { ...router.query, tab: key } }, undefined, { shallow: true });
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -36,8 +42,9 @@ export default function CurriculumManager() {
   }, []);
 
   return (
-    <AdminLayout title="Steps of Progression">
+    <AdminLayout title="Curriculum">
       <div className="space-y-5">
+        <CurriculumTabs active={tab === "categories" ? "categories" : "steps"} />
         {/* Page Header */}
         <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-6 dark:from-gray-900 dark:via-gray-900 dark:to-slate-800">
           <div className="absolute -right-6 -top-6 h-32 w-32 rounded-full bg-indigo-100/40 blur-2xl dark:bg-indigo-500/10" />
@@ -88,7 +95,8 @@ export default function CurriculumManager() {
 
         {centerId && (
           <>
-            {/* Tabs */}
+            {/* Steps of Progression / Remediations */}
+            {tab !== "categories" && (
             <div className="flex gap-1 rounded-2xl border border-gray-200 bg-gray-100/80 p-1.5 shadow-sm">
               {TABS.map((t) => {
                 const Icon = t.icon;
@@ -110,6 +118,7 @@ export default function CurriculumManager() {
                 );
               })}
             </div>
+            )}
 
             {tab === "categories" && <CategoriesTab centerId={centerId} />}
             {tab === "lessons" && <LessonsTab centerId={centerId} />}

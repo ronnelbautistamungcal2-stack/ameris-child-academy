@@ -372,6 +372,10 @@ model Center {
   kioskDevices                KioskDevice[]
   createdAt                   DateTime                     @default(now())
   menuItems                   MenuItem[]
+  lessonCalendarAnchors       LessonCalendarAnchor[]
+  lessonClosedDays            LessonClosedDay[]
+  lessonPlanners              LessonPlanner[]
+  lessonPlanCells             LessonPlanCell[]
 }
 
 model CenterUser {
@@ -402,6 +406,10 @@ model ClassRoom {
   milestoneChecklistPlans   MilestoneChecklistPlan[]
   lessonPlanRows            LessonPlanRow[]
   supplyRequests            SupplyRequest[]
+  lessonCalendarAnchors     LessonCalendarAnchor[]
+  lessonPlanner             LessonPlanner?
+  lessonPlanCells           LessonPlanCell[]
+  lessonUsedMarks           LessonUsedMark[]
 }
 
 model TeacherClass {
@@ -534,6 +542,8 @@ model Lesson {
   supplies                LessonSupply[]
   dailyChecklistItems     DailyChecklistItem[]
   supplyRequests          SupplyRequest[]
+  planCells               LessonPlanCell[]
+  usedMarks               LessonUsedMark[]
 
   @@index([policyDocumentId])
   @@index([linkedLessonId])
@@ -555,6 +565,81 @@ model LessonTermCalendar {
 
   @@unique([centerId, term])
   @@index([centerId, startDate, endDate])
+}
+
+// Lesson Calendar (client request 2026-10-02): school days are numbered
+// Day 1, Day 2, ... from a start day. Each anchor restarts the count on its
+// date for one classroom; closed days apply to the whole center and are
+// skipped. Edits only ever touch today or later, so past numbers never move.
+model LessonCalendarAnchor {
+  id          String    @id @default(uuid())
+  center      Center    @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  classRoom   ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+  classRoomId String
+  startDate   DateTime  @db.Date
+  dayNumber   Int
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([classRoomId, startDate])
+  @@index([centerId])
+}
+
+model LessonClosedDay {
+  id        String   @id @default(uuid())
+  center    Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId  String
+  date      DateTime @db.Date
+  createdAt DateTime @default(now())
+
+  @@unique([centerId, date])
+}
+
+// Lesson Planner: one per classroom. Columns are day numbers (1..dayCount),
+// rows are the classroom's LessonPlanRow categories (by rowIndex).
+model LessonPlanner {
+  id          String    @id @default(uuid())
+  center      Center    @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  classRoom   ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+  classRoomId String    @unique
+  theme       String?
+  dayCount    Int       @default(10)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model LessonPlanCell {
+  id          String    @id @default(uuid())
+  center      Center    @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  classRoom   ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+  classRoomId String
+  day         Int
+  rowIndex    Int
+  lesson      Lesson?   @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  lessonId    String?
+  title       String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([classRoomId, day, rowIndex])
+  @@index([lessonId])
+}
+
+// Lessons ticked as used in a classroom's Lesson Bank.
+model LessonUsedMark {
+  id          String    @id @default(uuid())
+  classRoom   ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+  classRoomId String
+  lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lessonId    String
+  createdAt   DateTime  @default(now())
+
+  @@unique([classRoomId, lessonId])
+  @@index([lessonId])
 }
 
 model LessonGoal {

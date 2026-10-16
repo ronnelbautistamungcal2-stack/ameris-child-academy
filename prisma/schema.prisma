@@ -218,6 +218,7 @@ model User {
   middleInitial                      String?
   disabled                           Boolean                             @default(false)
   kioskCredential                    KioskCredential?
+  directedCenters                    Center[]                            @relation("CenterDirector")
   pictureUrl                         String?
   role                               Role                                @default(PARENT)
   roles                              Role[]                              @default([])
@@ -298,6 +299,29 @@ model Center {
   // signed out automatically, shown as "Admin" on their time sheet. Staff are
   // never signed out automatically. Null turns it off.
   autoCheckoutTime            String?
+  // Add/Edit Center (client request 2026-10-02). Basic Information:
+  centerType                  String?
+  status                      String                       @default("ACTIVE") // ACTIVE | UNDER_REVIEW | INACTIVE
+  photoUrl                    String?
+  city                        String?
+  state                       String?
+  zip                         String?
+  director                    User?                        @relation("CenterDirector", fields: [directorId], references: [id], onDelete: SetNull)
+  directorId                  String?
+  contactEmail                String?
+  phone                       String?
+  classroomCount              Int?
+  capacity                    Int?
+  region                      String?
+  notes                       String?
+  // Care & Schedule, Ages & Rates and Roles, validated by src/lib/centerSettings.js:
+  careSchedule                Json? // { monday: { open, start, end }, ... }
+  mealAgeGroups               Json? // [{ fromMonths, toMonths }] served the same foods
+  meals                       Json? // { breakfast: { provided, catered }, ... }
+  ageRates                    Json? // [{ label, monthly, weekly, daily, hourly }]
+  enrollmentFee               Float?
+  // Roles tab: saved for a future access structure; not enforced yet.
+  roleAccess                  Role[]                       @default([])
   users                       CenterUser[]
   classes                     ClassRoom[]
   children                    Child[]
@@ -347,6 +371,7 @@ model Center {
   pickupPeople                PickupPerson[]
   kioskDevices                KioskDevice[]
   createdAt                   DateTime                     @default(now())
+  menuItems                   MenuItem[]
 }
 
 model CenterUser {
@@ -968,12 +993,16 @@ model MenuItem {
   ageGroup    String
   component   String
   item        String
+  // PLANNED is the admin's menu; SERVED is what the kitchen actually served.
+  kind        String   @default("PLANNED")
+  centerId    String
+  center      Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
   updatedById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
 
-  @@unique([date, meal, ageGroup, component])
-  @@index([date])
+  @@unique([centerId, date, meal, ageGroup, component, kind])
+  @@index([centerId, date])
 }
 
 model AuditLog {

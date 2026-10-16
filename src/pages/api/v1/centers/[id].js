@@ -1,7 +1,7 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { normalizeSubscription } from "@/lib/subscriptions";
-import { parseCheckoutTime } from "@/lib/jobs/auto-checkout";
+import { directorError, parseCenterInput } from "@/lib/centerSettings";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -23,6 +23,7 @@ export default async function handler(req, res) {
         classes: true,
         subscription: true,
         children: true,
+        director: { select: { id: true, name: true, email: true } },
       },
     });
     if (!center) return res.status(404).json({ error: "Center not found" });
@@ -37,16 +38,13 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Only admins can update centers" });
     }
 
-    const { name, address } = req.body;
-    // Automatic child checkout time: "HH:MM", or empty to turn it off.
-    const hasCheckoutTime = Object.prototype.hasOwnProperty.call(req.body || {}, "autoCheckoutTime");
-    const autoCheckoutTime = hasCheckoutTime && req.body.autoCheckoutTime ? String(req.body.autoCheckoutTime) : null;
-    if (autoCheckoutTime && !parseCheckoutTime(autoCheckoutTime)) {
-      return res.status(400).json({ error: "Automatic checkout time must be HH:MM" });
-    }
+    const parsed = parseCenterInput(req.body || {}, { partial: true });
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const badDirector = await directorError(prisma, parsed.data.directorId);
+    if (badDirector) return res.status(400).json({ error: badDirector });
     const center = await prisma.center.update({
       where: { id },
-      data: { name, address, ...(hasCheckoutTime ? { autoCheckoutTime } : {}) },
+      data: parsed.data,
       include: { users: true, classes: true },
     });
     return res.status(200).json(center);

@@ -625,7 +625,7 @@ function ParentDashboard({ centers, children, loading, error, submissions }) {
     (async () => {
       try {
         const data = await apiJson(`/api/v1/menus?start=${toDateKey(new Date())}&days=1`);
-        if (!cancelled) setMenuRows(todaysMenuRows(data?.items || []));
+        if (!cancelled) setMenuRows(todaysMenuRows(data));
       } catch {
         if (!cancelled) setMenuRows(null);
       }

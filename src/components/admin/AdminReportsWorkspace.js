@@ -59,6 +59,13 @@ export const ADMIN_REPORTS = [
       "Checklist and training performance for non-teaching staff.",
   },
   {
+    key: "infant-feeding-plan",
+    label: "Infant Feeding Plan",
+    icon: "🍼",
+    description:
+      "Every infant's feeding plan on one printable sheet, straight from their profiles.",
+  },
+  {
     key: "query",
     label: "Custom Query",
     icon: "🔎",

@@ -138,7 +138,6 @@ export const COACH_NAV_ITEMS = [
     { href: "/coach/follow-ups", label: "Follow-ups" },
     { href: "/coach/permission-policies", label: "Family Permission Policies" },
     // Move into Reports.
-    { href: "/coach/feeding-plans-report", label: "Feeding Plans Report" },
     { href: "/coach/carpool-report", label: "Carpool Report" },
   ]),
 ];

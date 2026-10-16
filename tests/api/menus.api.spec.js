@@ -24,17 +24,24 @@ test.describe("Menus API @api", () => {
   test.beforeAll(async ({ request }) => {
     const admin = await loginAsAdmin(request);
     centerId = pickDemoCenterId(await (await apiGet(request, "/api/v1/centers", admin)).json());
+    await clearTestWeeks(request);
   });
 
-  test.afterAll(async ({ request }) => {
+  // Clears every line in the test weeks, planned and served.
+  async function clearTestWeeks(request) {
     const admin = await loginAsAdmin(request);
-    const items = [WEEK, NEXT_WEEK, MONTH_LATER].flatMap((date) =>
-      ["vegetable", "fruit"].map((component) => line({ date, component, item: "" })),
-    );
-    items.push(line({ date: "2099-06-03", meal: "breakfast", ageGroup: "olderInfants", component: "grain", item: "" }));
-    await apiPut(request, "/api/v1/menus", { centerId, items }, admin);
-    await apiPut(request, "/api/v1/menus", { centerId, kind: "SERVED", items: [line({ item: "" })] }, admin);
+    for (const start of [WEEK, NEXT_WEEK, MONTH_LATER]) {
+      const { items } = await (await apiGet(request, `/api/v1/menus?centerId=${centerId}&start=${start}`, admin)).json();
+      for (const kind of ["PLANNED", "SERVED"]) {
+        const lines = items.filter((i) => i.kind === kind).map(({ kind: _kind, ...i }) => ({ ...i, item: "" }));
+        if (lines.length) await apiPut(request, "/api/v1/menus", { centerId, kind, items: lines }, admin);
+      }
+    }
     if (tempCenterId) await apiDelete(request, `/api/v1/centers/${tempCenterId}`, admin);
+  }
+
+  test.afterAll(async ({ request }) => {
+    await clearTestWeeks(request);
   });
 
   test("GET /api/v1/menus returns 401 without auth", async ({ request }) => {

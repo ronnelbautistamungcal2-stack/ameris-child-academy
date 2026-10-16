@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import CoachLayout from "@/components/coach/CoachLayout";
+import Link from "next/link";
 import {
   CoachBadge,
   CoachMetricCard,
@@ -153,6 +154,16 @@ export default function CoachReports() {
         {error ? (
           <CoachPanel title="Report error" description={error} tone="rose" />
         ) : null}
+
+        <CoachPanel title="More reports" description="Printable sheets for the centers you support.">
+          <Link
+            href="/coach/feeding-plans-report"
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-900 hover:border-sky-300 hover:text-sky-800"
+          >
+            <span aria-hidden="true">{"\u{1F37C}"}</span>
+            Infant Feeding Plan
+          </Link>
+        </CoachPanel>
 
         <CoachPanel
           title="Activity summary"

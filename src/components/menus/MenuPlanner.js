@@ -9,8 +9,11 @@ import {
   componentsFor,
   formatWeekRange,
   getMeal,
+  formatMonth,
   lineKey,
+  monthOfWeek,
   parseDateKey,
+  toMonthKey,
   requirementsFor,
   toDateKey,
   weekDays,
@@ -202,6 +205,16 @@ export default function MenuPlanner({ editable = false, mode: modeProp, title = 
   }
 
   async function copyFrom(from) {
+    const month = monthOfWeek(weekStart);
+    const previous = toMonthKey(new Date(Number(month.slice(0, 4)), Number(month.slice(5)) - 2, 1));
+    if (
+      from === "month" &&
+      !window.confirm(
+        `Copy the ${formatMonth(previous)} menu into ${formatMonth(month)}? Lines already filled in ${formatMonth(month)} are kept.`,
+      )
+    ) {
+      return;
+    }
     setCopying(true);
     setError("");
     setNotice("");
@@ -209,17 +222,18 @@ export default function MenuPlanner({ editable = false, mode: modeProp, title = 
       const res = await fetch("/api/v1/menus/copy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ centerId, start: toDateKey(weekStart), from }),
+        body: JSON.stringify(from === "month" ? { centerId, from, month } : { centerId, from, start: toDateKey(weekStart) }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Copy failed");
-      const range = `${shortDate(data.sourceStart)} – ${shortDate(data.sourceEnd)}`;
+      const range = from === "month" ? formatMonth(previous) : `${shortDate(data.sourceStart)} – ${shortDate(data.sourceEnd)}`;
+      const into = from === "month" ? formatMonth(month) : "this week";
       setNotice(
         data.found === 0
           ? `There is no menu for ${range} to copy.`
           : data.copied === 0
-            ? `Every line from ${range} is already filled in this week.`
-            : `Copied ${data.copied} line${data.copied === 1 ? "" : "s"} from ${range}. Lines already filled in were kept.`,
+            ? `Every line from ${range} is already filled in ${into}.`
+            : `Copied ${data.copied} line${data.copied === 1 ? "" : "s"} from ${range} into ${into}. Lines already filled in were kept.`,
       );
       await loadWeek(weekStart, centerId);
     } catch (e) {
@@ -325,7 +339,7 @@ export default function MenuPlanner({ editable = false, mode: modeProp, title = 
                 type="button"
                 onClick={() => copyFrom("month")}
                 disabled={dirty || copying || loading}
-                title={dirty ? "Save your changes before copying" : "Fill empty lines from the same week last month"}
+                title={dirty ? "Save your changes before copying" : "Fill this whole month's empty lines from last month"}
                 className="rounded-md bg-[#1d4f6e] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#245d80] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Copy Previous Month

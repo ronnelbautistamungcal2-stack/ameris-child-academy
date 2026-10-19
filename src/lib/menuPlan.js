@@ -150,10 +150,47 @@ export function lineKey(date, meal, ageGroup, component, kind = "PLANNED") {
   return `${date}|${meal}|${ageGroup}|${component}|${kind}`;
 }
 
-/** Same weekday 4 weeks earlier, or 5 when 4 is still in the same month. */
-export function sameDayPreviousMonth(date) {
-  const four = addDays(date, -28);
-  return four.getMonth() === date.getMonth() ? addDays(date, -35) : four;
+/** "YYYY-MM" for a date. */
+export function toMonthKey(date) {
+  return toDateKey(date).slice(0, 7);
+}
+
+/** The month a planner week belongs to: the month its Wednesday falls in. */
+export function monthOfWeek(monday) {
+  return toMonthKey(addDays(monday, 2));
+}
+
+export function formatMonth(monthKey) {
+  const [y, m] = monthKey.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+function weekdaysOfMonth(year, monthIndex) {
+  const out = [];
+  for (let d = new Date(year, monthIndex, 1); d.getMonth() === monthIndex; d = addDays(d, 1)) {
+    if (d.getDay() >= 1 && d.getDay() <= 5) out.push(d);
+  }
+  return out;
+}
+
+/**
+ * "Copy Previous Month": [sourceKey, targetKey] for every weekday of the
+ * month `monthKey`. Each day copies the same weekday in the same week of the
+ * previous month (1st Monday from 1st Monday); a 5th weekday with no match
+ * copies the previous month's last one.
+ */
+export function previousMonthPairs(monthKey) {
+  const [y, m] = monthKey.split("-").map(Number);
+  const target = weekdaysOfMonth(y, m - 1);
+  const source = weekdaysOfMonth(m === 1 ? y - 1 : y, m === 1 ? 11 : m - 2);
+  const byWeekday = {};
+  for (const d of source) (byWeekday[d.getDay()] ||= []).push(d);
+  const seen = {};
+  return target.map((d) => {
+    const n = (seen[d.getDay()] = (seen[d.getDay()] || 0) + 1);
+    const options = byWeekday[d.getDay()] || [];
+    return [toDateKey(options[Math.min(n, options.length) - 1]), toDateKey(d)];
+  });
 }
 
 // ---- Dates -------------------------------------------------------------

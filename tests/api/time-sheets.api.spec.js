@@ -141,4 +141,42 @@ test.describe("Time sheets and audit @api", () => {
     expect(rows[0].outBy).toBe("HU");
     expect(rows[0].label).toBe("Teacher");
   });
+
+  test("Staff Attendance screen edits go on the same audit; new days and blank times filled in do not", async ({ request }) => {
+    const admin = await loginAsAdmin(request);
+    const date = localDate(3);
+    const audit = async () =>
+      (await (await apiGet(request, `/api/v1/time-sheets/staff/${staffer.id}/audit`, admin)).json()).entries.filter(
+        (e) => new Date(e.day).getTime() === new Date(`${date}T00:00:00`).getTime(),
+      );
+    const save = (body) => apiPost(request, "/api/v1/staff-attendance", { userId: staffer.id, centerId, date, ...body }, admin);
+
+    // A new day, then filling in its blank clock-out: neither is audited.
+    expect((await save({ clockIn: "08:00" })).status()).toBe(201);
+    const filled = await save({ clockOut: "16:00" });
+    expect(filled.status()).toBe(201);
+    const recordId = (await filled.json()).id;
+    expect(await audit()).toHaveLength(0);
+
+    // Saving the same time again is not a change either.
+    await save({ clockIn: "08:00" });
+    expect(await audit()).toHaveLength(0);
+
+    // Changing a recorded time is audited, from either Staff Attendance endpoint.
+    expect((await save({ clockIn: "08:20" })).status()).toBe(201);
+    const newOut = new Date(`${date}T16:45:00`).toISOString();
+    expect((await apiPut(request, `/api/v1/staff-attendance/${recordId}`, { clockOut: newOut }, admin)).status()).toBe(200);
+
+    const entries = await audit();
+    expect(entries.map((e) => e.action)).toEqual(["CHECK_IN_CHANGED", "CHECK_OUT_CHANGED"]);
+    expect(new Date(entries[0].originalIn).getHours()).toBe(8);
+    expect(new Date(entries[0].originalIn).getMinutes()).toBe(0);
+    expect(entries[0].changedByInitials).toBe("AU");
+    expect(new Date(entries[1].newValue).toISOString()).toBe(newOut);
+
+    // The time sheet's By columns show who changed each time.
+    const row = (await (await apiGet(request, `/api/v1/time-sheets/staff/${staffer.id}`, admin)).json()).rows.find((r) => r.id === recordId);
+    expect(row.inBy).toBe("AU");
+    expect(row.outBy).toBe("AU");
+  });
 });

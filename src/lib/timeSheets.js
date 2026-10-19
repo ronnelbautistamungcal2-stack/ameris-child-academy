@@ -9,8 +9,9 @@ import { roleLabel } from "@/lib/roles";
 //
 // Admin edits keep the "By" honest (it becomes the editor's initials) and every
 // edited time or deleted record is written to TimeSheetAudit with the original
-// values, which the audit report lists. New rows are not audited: the client
-// asked for changes and deletions only.
+// values, which the audit report lists. New rows, and filling in a time that
+// was blank, are not audited: the client asked for changes to existing times
+// and deletions only (answered 2026-10-19), on whichever screen they happen.
 
 export const TIME_SHEET_KINDS = {
   child: {
@@ -233,9 +234,31 @@ function auditBase(kind, config, row, subject, editorUserId, editor) {
   };
 }
 
+const sameTime = (a, b) => (a ? new Date(a).getTime() : null) === (b ? new Date(b).getTime() : null);
+
 /**
- * Changes a row's in and/or out time. Each time that actually changes becomes
- * one audit entry and takes the editor's initials in its By column.
+ * Audit entries for an existing row whose times are about to change. A time
+ * that was blank and is now filled in is not an audited change. Pass
+ * undefined for a time that is not being changed. Used by the time sheets and
+ * by every other screen that edits staff or child times.
+ */
+export function timeChangeAudits(kind, row, { nextIn, nextOut }, { editor, editorUserId }) {
+  const config = TIME_SHEET_KINDS[kind];
+  const base = auditBase(kind, config, row, { id: row[config.subjectField] }, editorUserId, editor);
+  const audits = [];
+  if (nextIn !== undefined && row[config.inField] && !sameTime(nextIn, row[config.inField])) {
+    audits.push({ ...base, action: "CHECK_IN_CHANGED", newValue: nextIn });
+  }
+  if (nextOut !== undefined && row[config.outField] && !sameTime(nextOut, row[config.outField])) {
+    audits.push({ ...base, action: "CHECK_OUT_CHANGED", newValue: nextOut });
+  }
+  return audits;
+}
+
+/**
+ * Changes a row's in and/or out time. Each time that actually changes takes
+ * the editor's initials in its By column; changes to existing times are
+ * audited.
  */
 export async function updateRow(prisma, kind, access, recordId, { timeIn, timeOut, editor, editorUserId }) {
   const { config, subject } = access;
@@ -245,24 +268,20 @@ export async function updateRow(prisma, kind, access, recordId, { timeIn, timeOu
   validateTimes(nextIn, nextOut);
   if (!nextIn) throw new TimeSheetError(400, "A row needs a time in. Delete the row instead.");
 
-  const same = (a, b) => (a ? a.getTime() : null) === (b ? b.getTime() : null);
   const data = {};
-  const audits = [];
-  const base = auditBase(kind, config, row, subject, editorUserId, editor);
-  if (!same(nextIn, row[config.inField])) {
+  if (!sameTime(nextIn, row[config.inField])) {
     data[config.inField] = nextIn;
     data[config.inByField] = editor;
-    if (!same(startOfLocalDay(nextIn), row[config.dayField])) {
+    if (!sameTime(startOfLocalDay(nextIn), row[config.dayField])) {
       throw new TimeSheetError(400, "The time in must stay on the same day. Delete the row and add the right day instead.");
     }
-    audits.push({ ...base, action: "CHECK_IN_CHANGED", newValue: nextIn });
   }
-  if (!same(nextOut, row[config.outField])) {
+  if (!sameTime(nextOut, row[config.outField])) {
     data[config.outField] = nextOut;
     data[config.outByField] = nextOut ? editor : null;
-    audits.push({ ...base, action: "CHECK_OUT_CHANGED", newValue: nextOut });
   }
-  if (!audits.length) return row;
+  if (!Object.keys(data).length) return row;
+  const audits = timeChangeAudits(kind, row, { nextIn, nextOut }, { editor, editorUserId });
 
   const [updated] = await prisma.$transaction([
     prisma[config.model].update({ where: { id: row.id }, data }),

@@ -376,6 +376,7 @@ model Center {
   lessonClosedDays            LessonClosedDay[]
   lessonPlanners              LessonPlanner[]
   lessonPlanCells             LessonPlanCell[]
+  curriculumOptions           CurriculumOption[]
 }
 
 model CenterUser {
@@ -532,6 +533,9 @@ model Lesson {
   nextStep                Lesson?                  @relation("LessonNextStep", fields: [nextStepId], references: [id], onDelete: SetNull)
   nextStepId              String?
   nextStepOf              Lesson[]                 @relation("LessonNextStep")
+  // Steps of Progression: Exposure / Competency / Mastery criteria and notes.
+  criteria                Json?
+  notes                   String?
   media                   String[]                 @default([])
   goals                   LessonGoal[]
   progress                Progress[]
@@ -640,6 +644,20 @@ model LessonUsedMark {
 
   @@unique([classRoomId, lessonId])
   @@index([lessonId])
+}
+
+// Curriculum > Categories tab (client mockup 2026-10-02): the lists the lesson
+// and step forms offer in their dropdowns. Removing an entry only removes it
+// from the dropdowns; lessons that already use it keep their value.
+model CurriculumOption {
+  id        String   @id @default(uuid())
+  center    Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId  String
+  kind      String // CATEGORY | SUBJECT | AGE_RANGE | TYPE
+  name      String
+  createdAt DateTime @default(now())
+
+  @@unique([centerId, kind, name])
 }
 
 model LessonGoal {

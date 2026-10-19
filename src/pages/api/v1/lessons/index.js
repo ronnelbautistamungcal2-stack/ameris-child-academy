@@ -1,7 +1,7 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import { normalizeLessonSlot, normalizeTermDaySelections } from "@/lib/lessonScheduling";
 import prisma from "@/lib/prisma";
-import { parseStepAge, validateStepLinks } from "@/lib/progressionSteps";
+import { parseStepAge, parseStepDetails, validateStepLinks } from "@/lib/progressionSteps";
 
 const LESSON_INCLUDE = {
   category: true,
@@ -97,6 +97,7 @@ export default async function handler(req, res) {
         ageMonths: age.data.ageMonths ?? null,
         priorStepId: priorStepId || null,
         nextStepId: nextStepId || null,
+        ...parseStepDetails(req.body),
         supplies: supplies && Array.isArray(supplies) && supplies.length
           ? {
               create: supplies.map((s) => ({

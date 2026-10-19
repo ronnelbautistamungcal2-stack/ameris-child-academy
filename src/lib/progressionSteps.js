@@ -44,6 +44,29 @@ export async function validateStepLinks(db, { lessonId, centerId, priorStepId, n
   return null;
 }
 
+export const STEP_CRITERIA_LEVELS = [
+  { key: "exposure", label: "Exposure" },
+  { key: "competency", label: "Competency" },
+  { key: "mastery", label: "Mastery" },
+];
+
+/**
+ * Add Step pop-up extras: the Exposure / Competency / Mastery criteria and
+ * Additional Notes. Fields left out of the body stay undefined (unchanged).
+ */
+export function parseStepDetails(body) {
+  const has = (key) => Object.prototype.hasOwnProperty.call(body || {}, key);
+  const text = (value, max) => String(value ?? "").trim().slice(0, max) || null;
+  const data = {};
+  if (has("criteria")) {
+    const source = body.criteria && typeof body.criteria === "object" ? body.criteria : {};
+    const criteria = Object.fromEntries(STEP_CRITERIA_LEVELS.map(({ key }) => [key, text(source[key], 500)]));
+    data.criteria = criteria;
+  }
+  if (has("notes")) data.notes = text(body.notes, 2000);
+  return data;
+}
+
 export function formatStepAge(lesson) {
   const parts = [];
   if (lesson?.ageYears != null) parts.push(`${lesson.ageYears} yr`);

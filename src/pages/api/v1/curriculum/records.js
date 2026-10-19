@@ -109,6 +109,7 @@ export default async function handler(req, res) {
     lessonDocument,
     lessonImage,
     notes,
+    theme,
     link,
     supplies,
   } = req.body || {};
@@ -169,6 +170,7 @@ export default async function handler(req, res) {
         lessonDocument: normalizeResourceList(lessonDocument),
         lessonImage: normalizeResourceList(lessonImage),
         notes: normalizeSpaces(notes),
+        theme: normalizeSpaces(theme).slice(0, 120),
         age: normalizeSpaces(childAge),
         category: normalizeSpaces(category),
         subject: normalizeSubjectForRef({

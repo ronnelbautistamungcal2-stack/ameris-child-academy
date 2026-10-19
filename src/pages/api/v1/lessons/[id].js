@@ -1,7 +1,7 @@
 import { getSession } from "@/lib/auth";
 import { normalizeLessonSlot, normalizeTermDaySelections } from "@/lib/lessonScheduling";
 import prisma from "@/lib/prisma";
-import { parseStepAge, validateStepLinks } from "@/lib/progressionSteps";
+import { parseStepAge, parseStepDetails, validateStepLinks } from "@/lib/progressionSteps";
 
 const LESSON_INCLUDE = {
   category: true,
@@ -143,6 +143,7 @@ export default async function handler(req, res) {
             Object.prototype.hasOwnProperty.call(req.body, "nextStepId")
               ? nextStepId || null
               : undefined,
+          ...parseStepDetails(req.body),
         },
         include: LESSON_INCLUDE,
       });

@@ -67,6 +67,7 @@ export default async function handler(req, res) {
     lessonDocument,
     lessonImage,
     notes,
+    theme,
     link,
     supplies,
   } = req.body || {};
@@ -171,6 +172,10 @@ export default async function handler(req, res) {
           lessonDocument: nextLessonDocument,
           lessonImage: nextLessonImage,
           notes: normalizeSpaces(notes),
+          // Keep the stored theme when an older client leaves it out.
+          theme: Object.prototype.hasOwnProperty.call(req.body || {}, "theme")
+            ? normalizeSpaces(theme).slice(0, 120)
+            : previousPc.theme || "",
           age: normalizeSpaces(childAge),
           category: normalizeSpaces(category),
           subject: normalizeSubjectForRef({

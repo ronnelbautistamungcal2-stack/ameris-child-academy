@@ -710,6 +710,13 @@ model Progress {
   lessonGoal     LessonGoal?     @relation(fields: [lessonGoalId], references: [id], onDelete: SetNull)
   lessonGoalId   String?
   achievedAt     DateTime?
+  // SOP Tracking (client request 2026-10-02): an active goal shows on the
+  // teacher's Progression Tracking and the Student Performance Report.
+  // Levels map onto status: NOT_STARTED, IN_PROGRESS = Exposure,
+  // COMPLETED = Competency, PASSED = Mastery (see src/lib/sop.js).
+  active         Boolean         @default(false)
+  notes          String?
+  assessedAt     DateTime?
   nextGoals      Progress[]      @relation("GoalProgression")
   previousGoal   Progress?       @relation("GoalProgression", fields: [previousGoalId], references: [id])
   previousGoalId String?
@@ -720,6 +727,7 @@ model Progress {
   @@unique([childId, lessonId, goalIndex])
   @@index([childId, status])
   @@index([lessonId, status])
+  @@index([childId, active])
 }
 
 model ProgressEntry {

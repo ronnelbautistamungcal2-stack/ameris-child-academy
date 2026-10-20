@@ -85,6 +85,7 @@ const ROLE_SECTIONS = {
       children: [
         { href: "/staff/student-support/progress-plans", label: "Individual Progress Plans" },
         { href: "/staff/student-support/developmental-assessment", label: "Initial Developmental Assessment" },
+        { href: "/staff/student-support/progression-tracking", label: "Progression Tracking" },
         { href: "/staff/student-support/student-performance", label: "Student Performance Report" },
       ],
     },

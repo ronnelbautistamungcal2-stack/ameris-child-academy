@@ -179,7 +179,12 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Only admins can delete lessons" });
     }
 
-    await prisma.lesson.delete({ where: { id } });
+    // Children's progress on the lesson goes with it (its entries cascade);
+    // without this the delete fails once anyone has progress on a step.
+    await prisma.$transaction([
+      prisma.progress.deleteMany({ where: { lessonId: id } }),
+      prisma.lesson.delete({ where: { id } }),
+    ]);
     return res.status(204).end();
   }
 

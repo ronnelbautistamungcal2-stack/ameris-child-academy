@@ -1,5 +1,6 @@
 import LessonDetailView from "@/components/lessons/LessonDetailView";
 import { apiJson } from "@/lib/api";
+import { DEFAULT_ROW_LABELS } from "@/lib/lessonPlanRows";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const SUGGESTION_LIMIT = 30;
@@ -7,18 +8,6 @@ const SUGGESTION_LIMIT = 30;
 const ROW_COUNT = 10;
 const DEFAULT_PLAN_TITLE = "Lesson Planner";
 
-const DEFAULT_ROW_LABELS = [
-  "Hymn",
-  "Large Group 1",
-  "Small Group 1",
-  "Small Group 2",
-  "Outdoor Time 1",
-  "Transition Activity 1",
-  "Transition Activity 2",
-  "Large Group 2",
-  "Small Group 3",
-  "Small Group 4",
-];
 
 function startOfDay(date) {
   const d = new Date(date);
@@ -124,6 +113,11 @@ export default function WeeklyLessonPlanner({
   const [viewLesson, setViewLesson] = useState(null);
   const [viewLessonLoading, setViewLessonLoading] = useState(false);
   const [viewLessonError, setViewLessonError] = useState("");
+
+  // Lesson Calendar day numbers for this week (teacher/coach): dateKey →
+  // { day, closed }. When the classroom has a start day, the lessons come from
+  // the Lesson Planner for that day number instead of the date-based plans.
+  const [calendarDays, setCalendarDays] = useState({});
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -240,6 +234,29 @@ export default function WeeklyLessonPlanner({
         }
         return next;
       });
+
+      if (mode !== "admin") {
+        const week = await apiJson(
+          `/api/v1/lesson-planner/week?${new URLSearchParams({ centerId, classRoomId: classId, start: toDateKey(weekStart) })}`,
+        ).catch(() => null);
+        if (abortRef.current.aborted) return;
+        const dayInfo = {};
+        if (week?.planned) {
+          const titles = {};
+          const lessonIds = {};
+          for (const day of week.days) {
+            dayInfo[day.date] = { day: day.day, closed: day.closed };
+            for (const row of week.rows) {
+              const cell = day.cells[row.rowIndex];
+              titles[`${day.date}:${row.rowIndex}`] = cell?.title || "";
+              lessonIds[`${day.date}:${row.rowIndex}`] = cell?.lessonId || null;
+            }
+          }
+          setCellDrafts((prev) => ({ ...prev, ...titles }));
+          setCellLessonIds((prev) => ({ ...prev, ...lessonIds }));
+        }
+        setCalendarDays(dayInfo);
+      }
     } catch (e) {
       if (!abortRef.current.aborted) setError(e.message || "Failed to load plans");
     } finally {
@@ -577,6 +594,7 @@ export default function WeeklyLessonPlanner({
               </button>
               <span className="min-w-[92px] text-center text-xs font-semibold text-gray-700">
                 {formatDayHeader(weekDays[selectedDayIndex])}
+                <CalendarDayTag info={calendarDays[toDateKey(weekDays[selectedDayIndex])]} />
               </span>
               <button
                 type="button"
@@ -649,6 +667,7 @@ export default function WeeklyLessonPlanner({
                     className="border-b border-r border-gray-200 px-3 py-2 text-center text-xs font-semibold text-gray-700"
                   >
                     {formatDayHeader(d)}
+                    <CalendarDayTag info={calendarDays[toDateKey(d)]} />
                   </th>
                 ))}
               </tr>
@@ -668,7 +687,7 @@ export default function WeeklyLessonPlanner({
                   }`}
                 >
                   {/* Category label cell */}
-                  <td className="border-b border-r border-gray-200 px-2 py-1.5 align-middle bg-gray-50/80">
+                  <td className="border-b border-r border-gray-200 px-2 py-1.5 align-middle bg-gray-50/80 dark:bg-gray-800/60">
                     {mode === "admin" ? (
                       <div className="flex items-center gap-1">
                         {rows.length > 1 ? (
@@ -888,5 +907,14 @@ export default function WeeklyLessonPlanner({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function CalendarDayTag({ info }) {
+  if (!info || (!info.day && !info.closed)) return null;
+  return (
+    <span className={`block text-[11px] font-bold ${info.closed ? "text-gray-500" : "text-blue-700"}`}>
+      {info.closed ? "Closed" : `Day ${info.day}`}
+    </span>
   );
 }

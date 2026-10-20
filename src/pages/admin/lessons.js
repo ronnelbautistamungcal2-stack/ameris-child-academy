@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import CurriculumTabs from "@/components/curriculum/CurriculumTabs";
 import ProtectedLessonViewer from "@/components/lessons/ProtectedLessonViewer";
 import ResourceLinks, { resourceLabel } from "@/components/lessons/ResourceLinks";
 import { apiJson } from "@/lib/api";
@@ -844,6 +845,7 @@ export default function AdminLessons() {
   const [editTestingQuestion, setEditTestingQuestion] = useState("");
   const [editResource, setEditResource] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [editTheme, setEditTheme] = useState("");
   const [editLink, setEditLink] = useState("");
   const [editLessonDocument, setEditLessonDocument] = useState("");
   const [editSupplyRows, setEditSupplyRows] = useState([]);
@@ -862,6 +864,10 @@ export default function AdminLessons() {
   const [newTestingQuestion, setNewTestingQuestion] = useState("");
   const [newResource, setNewResource] = useState("");
   const [newNotes, setNewNotes] = useState("");
+  const [newTheme, setNewTheme] = useState("");
+  // Curriculum > Categories lists that feed the form dropdowns.
+  const [listOptions, setListOptions] = useState(null);
+  const [sortBy, setSortBy] = useState({ key: "refId", dir: 1 });
   const [newLink, setNewLink] = useState("");
   const [newLessonDocument, setNewLessonDocument] = useState("");
   const [newSupplyRows, setNewSupplyRows] = useState([]);
@@ -903,7 +909,7 @@ export default function AdminLessons() {
     setError("");
     try {
       const data = await apiJson(
-        `/api/v1/lessons?centerId=${encodeURIComponent(mainCenter.id)}`,
+        `/api/v1/lessons?centerId=${encodeURIComponent(mainCenter.id)}&kind=lesson`,
       );
       setLessons(Array.isArray(data) ? data : []);
     } catch (e) {
@@ -942,6 +948,23 @@ export default function AdminLessons() {
     refreshLessonCategories();
   }, [refreshLessonCategories]);
 
+  useEffect(() => {
+    if (!mainCenter?.id) return;
+    apiJson(`/api/v1/curriculum-options?centerId=${encodeURIComponent(mainCenter.id)}`)
+      .then((data) => setListOptions(data))
+      .catch(() => setListOptions(null));
+  }, [mainCenter?.id]);
+
+  // With the Categories lists set up, the form dropdowns offer those (plus the
+  // record's current value); otherwise they fall back to the values in use.
+  const listNames = useCallback(
+    (kind, current) => {
+      const names = (listOptions?.[kind] || []).map((o) => o.name);
+      return names.length ? mergeSelectOptions(names, [current].map(normalizeSpaces).filter(Boolean)) : null;
+    },
+    [listOptions],
+  );
+
   const records = useMemo(() => {
     const out = [];
     for (const lesson of Array.isArray(lessons) ? lessons : []) {
@@ -970,6 +993,7 @@ export default function AdminLessons() {
           lessonAttachment: String(pc.lessonAttachment ?? pc.resource ?? ""),
           lessonDocument: String(pc.lessonDocument ?? ""),
           notes: String(pc.notes ?? ""),
+          theme: String(pc.theme ?? ""),
           sheet: String(pc.sheet ?? ""),
           link: String(pc.link ?? ""),
           supplies: Array.isArray(lesson?.supplies) ? lesson.supplies : [],
@@ -1005,8 +1029,8 @@ export default function AdminLessons() {
     const baseAgeOptions = managedAgeOptions.length
       ? managedAgeOptions
       : DEFAULT_LESSON_AGE_OPTIONS;
-    return mergeSelectOptions(baseAgeOptions, options.ages);
-  }, [lessonCategories, options.ages]);
+    return listNames("AGE_RANGE", editChildAge || newChildAge) || mergeSelectOptions(baseAgeOptions, options.ages);
+  }, [lessonCategories, options.ages, listNames, editChildAge, newChildAge]);
 
   const lessonTermOptions = useMemo(() => {
     return mergeSelectOptions(DEFAULT_LESSON_TERM_OPTIONS, options.terms);
@@ -1029,6 +1053,8 @@ export default function AdminLessons() {
   }, [options.subjects]);
 
   const editCategoryOptions = useMemo(() => {
+    const fromList = listNames("CATEGORY", editCategory);
+    if (fromList) return fromList;
     const scoped = collectManagerCategoryOptions(lessonCategories, {
       childAge: editChildAge,
     });
@@ -1037,9 +1063,11 @@ export default function AdminLessons() {
       scoped.length ? scoped : lessonCategoryOptions,
       current ? [current] : [],
     );
-  }, [lessonCategories, editChildAge, lessonCategoryOptions, editCategory]);
+  }, [listNames, lessonCategories, editChildAge, lessonCategoryOptions, editCategory]);
 
   const newCategoryOptions = useMemo(() => {
+    const fromList = listNames("CATEGORY", newCategory);
+    if (fromList) return fromList;
     const scoped = collectManagerCategoryOptions(lessonCategories, {
       childAge: newChildAge,
     });
@@ -1048,9 +1076,11 @@ export default function AdminLessons() {
       scoped.length ? scoped : lessonCategoryOptions,
       current ? [current] : [],
     );
-  }, [lessonCategories, newChildAge, lessonCategoryOptions, newCategory]);
+  }, [listNames, lessonCategories, newChildAge, lessonCategoryOptions, newCategory]);
 
   const editSubjectOptions = useMemo(() => {
+    const fromList = listNames("SUBJECT", editSubject);
+    if (fromList) return fromList;
     const scoped = collectSubjectOptions(records, {
       childAge: editChildAge,
       category: editCategory,
@@ -1061,7 +1091,7 @@ export default function AdminLessons() {
       scoped.length ? scoped : allLessonSubjectOptions,
       current ? [current] : [],
     );
-  }, [
+  }, [listNames, 
     records,
     editChildAge,
     editCategory,
@@ -1071,6 +1101,8 @@ export default function AdminLessons() {
   ]);
 
   const newSubjectOptions = useMemo(() => {
+    const fromList = listNames("SUBJECT", newSubject);
+    if (fromList) return fromList;
     const scoped = collectSubjectOptions(records, {
       childAge: newChildAge,
       category: newCategory,
@@ -1081,7 +1113,7 @@ export default function AdminLessons() {
       scoped.length ? scoped : allLessonSubjectOptions,
       current ? [current] : [],
     );
-  }, [
+  }, [listNames, 
     records,
     newChildAge,
     newCategory,
@@ -1146,10 +1178,17 @@ export default function AdminLessons() {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
+  const sorted = useMemo(() => {
+    const key = sortBy.key;
+    return [...filtered].sort(
+      (a, b) => String(a[key] || "").localeCompare(String(b[key] || ""), undefined, { numeric: true }) * sortBy.dir,
+    );
+  }, [filtered, sortBy]);
+
   const paged = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, page, pageSize]);
+    return sorted.slice(start, start + pageSize);
+  }, [sorted, page, pageSize]);
 
   const stats = useMemo(() => {
     const termSet = new Set();
@@ -1217,6 +1256,7 @@ export default function AdminLessons() {
     setEditResource(String(rec?.lessonAttachment || ""));
     setEditLessonDocument(String(rec?.lessonDocument || ""));
     setEditNotes(String(rec?.notes || ""));
+    setEditTheme(String(rec?.theme || ""));
     setEditLink(String(rec?.link || ""));
     setEditSupplyRows(supplyRowsFromLesson(rec));
     setEditOpen(true);
@@ -1265,6 +1305,7 @@ export default function AdminLessons() {
     setNewResource("");
     setNewLessonDocument("");
     setNewNotes("");
+    setNewTheme("");
     setNewLink("");
     setNewSupplyRows([]);
     setCreateOpen(true);
@@ -1290,6 +1331,7 @@ export default function AdminLessons() {
     setNewResource(String(rec.lessonAttachment || ""));
     setNewLessonDocument(String(rec.lessonDocument || ""));
     setNewNotes(String(rec.notes || ""));
+    setNewTheme(String(rec.theme || ""));
     setNewLink(String(rec.link || ""));
     setNewSupplyRows(supplyRowsFromLesson(rec));
     setCreateOpen(true);
@@ -1323,6 +1365,7 @@ export default function AdminLessons() {
             lessonAttachment: String(newResource || ""),
             lessonDocument: String(newLessonDocument || ""),
             notes: String(newNotes || ""),
+            theme: normalizeSpaces(newTheme),
             link: normalizeSpaces(newLink),
             supplies: newSupplyRows.filter((s) => normalizeSpaces(s.name)),
           }),
@@ -1345,6 +1388,7 @@ export default function AdminLessons() {
       newLessonTitle,
       newLink,
       newNotes,
+      newTheme,
       newReference,
       newResource,
       newSubject,
@@ -1383,6 +1427,7 @@ export default function AdminLessons() {
               lessonAttachment: String(editResource || ""),
               lessonDocument: String(editLessonDocument || ""),
               notes: String(editNotes || ""),
+              theme: normalizeSpaces(editTheme),
               link: normalizeSpaces(editLink),
               supplies: editSupplyRows.filter((s) => normalizeSpaces(s.name)),
             }),
@@ -1406,6 +1451,7 @@ export default function AdminLessons() {
       editLessonTitle,
       editLink,
       editNotes,
+      editTheme,
       editRecord?.id,
       editReference,
       editResource,
@@ -1465,6 +1511,7 @@ export default function AdminLessons() {
   return (
     <AdminLayout title="Curriculum">
       <div className="space-y-5">
+        <CurriculumTabs active="bank" />
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-3">
@@ -1472,8 +1519,8 @@ export default function AdminLessons() {
                 <IconBook className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="text-xl font-extrabold text-gray-900">
-                  Curriculum Lessons
+                <h1 className="text-3xl font-black text-[#0b2a5b] dark:text-blue-100">
+                  Lesson Bank
                 </h1>
                 <p className="text-sm text-gray-500">
                   Manage early childhood development modules and tracking
@@ -1652,25 +1699,6 @@ export default function AdminLessons() {
 
             <label className="block">
               <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Child Age
-              </div>
-              <select
-                className={`w-full rounded-xl border px-3 py-2 text-sm focus:border-blue-300 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-colors ${age ? "border-blue-300 bg-blue-50/50 font-medium text-blue-900" : "border-gray-200"}`}
-                value={age}
-                onChange={(e) => setAge(e.target.value)}
-                disabled={loading}
-              >
-                <option value="">All Ages</option>
-                {options.ages.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block">
-              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Category
               </div>
               <select
@@ -1690,6 +1718,44 @@ export default function AdminLessons() {
 
             <label className="block">
               <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Subject
+              </div>
+              <select
+                className={`w-full rounded-xl border px-3 py-2 text-sm focus:border-blue-300 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-colors ${subject ? "border-blue-300 bg-blue-50/50 font-medium text-blue-900" : "border-gray-200"}`}
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                disabled={loading}
+              >
+                <option value="">All Subjects</option>
+                {subjectOptions.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Child Age
+              </div>
+              <select
+                className={`w-full rounded-xl border px-3 py-2 text-sm focus:border-blue-300 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-colors ${age ? "border-blue-300 bg-blue-50/50 font-medium text-blue-900" : "border-gray-200"}`}
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                disabled={loading}
+              >
+                <option value="">All Ages</option>
+                {options.ages.map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Term
               </div>
               <select
@@ -1702,25 +1768,6 @@ export default function AdminLessons() {
                 {options.terms.map((t) => (
                   <option key={t} value={t}>
                     {t}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block">
-              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Subcategory
-              </div>
-              <select
-                className={`w-full rounded-xl border px-3 py-2 text-sm focus:border-blue-300 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-colors ${subject ? "border-blue-300 bg-blue-50/50 font-medium text-blue-900" : "border-gray-200"}`}
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                disabled={loading}
-              >
-                <option value="">All Subcategories</option>
-                {subjectOptions.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
                   </option>
                 ))}
               </select>
@@ -1779,27 +1826,28 @@ export default function AdminLessons() {
             <table className="min-w-full border-separate border-spacing-0">
               <thead>
                 <tr className="bg-gray-50">
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-[11px] font-extrabold uppercase tracking-wide text-gray-500">
-                    Ref ID
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-extrabold uppercase tracking-wide text-gray-500">
-                    Lesson Title
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-extrabold uppercase tracking-wide text-gray-500">
-                    Subcategory
-                  </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-[11px] font-extrabold uppercase tracking-wide text-gray-500">
-                    Child Age
-                  </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-[11px] font-extrabold uppercase tracking-wide text-gray-500">
-                    Term
-                  </th>
-                  <th className="whitespace-nowrap px-4 py-3 text-left text-[11px] font-extrabold uppercase tracking-wide text-gray-500">
-                    Category
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-extrabold uppercase tracking-wide text-gray-500">
-                    Progression Step
-                  </th>
+                  {[
+                    ["refId", "Ref ID"],
+                    ["lessonTitle", "Lesson Title"],
+                    ["category", "Category"],
+                    ["subject", "Subject"],
+                    ["childAge", "Child Age"],
+                    ["term", "Term"],
+                  ].map(([key, label]) => (
+                    <th key={key} className="whitespace-nowrap px-4 py-3 text-left text-[11px] font-extrabold uppercase tracking-wide text-gray-500">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 uppercase"
+                        onClick={() => setSortBy((prev) => ({ key, dir: prev.key === key ? -prev.dir : 1 }))}
+                        aria-label={`Sort by ${label}`}
+                      >
+                        {label}
+                        <span aria-hidden className="text-[10px] text-gray-400">
+                          {sortBy.key === key ? (sortBy.dir === 1 ? "\u25B2" : "\u25BC") : "\u2195"}
+                        </span>
+                      </button>
+                    </th>
+                  ))}
                   <th className="whitespace-nowrap px-4 py-3 text-right text-[11px] font-extrabold uppercase tracking-wide text-gray-500">
                     Actions
                   </th>
@@ -1816,7 +1864,7 @@ export default function AdminLessons() {
                   </>
                 ) : paged.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-16 text-center">
+                    <td colSpan={7} className="px-4 py-16 text-center">
                       <div className="flex flex-col items-center gap-3">
                         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
                           <IconBook className="h-8 w-8 text-gray-400" />
@@ -1858,6 +1906,16 @@ export default function AdminLessons() {
                           {r.lessonTitle || "—"}
                         </div>
                       </td>
+                      <td className="border-t border-gray-100 px-4 py-3.5 align-top">
+                        <span
+                          className={[
+                            "inline-flex max-w-[160px] items-center truncate whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold leading-tight ring-1 ring-inset",
+                            categoryBadgeClass(r.category),
+                          ].join(" ")}
+                        >
+                          {displayCategory(r.category) || "—"}
+                        </span>
+                      </td>
                       <td className="border-t border-gray-100 px-4 py-3.5 align-top text-sm text-gray-600">
                         {r.subject || "—"}
                       </td>
@@ -1877,23 +1935,8 @@ export default function AdminLessons() {
                           {r.term || "—"}
                         </span>
                       </td>
-                      <td className="border-t border-gray-100 px-4 py-3.5 align-top">
-                        <span
-                          className={[
-                            "inline-flex max-w-[160px] items-center truncate whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold leading-tight ring-1 ring-inset",
-                            categoryBadgeClass(r.category),
-                          ].join(" ")}
-                        >
-                          {displayCategory(r.category) || "—"}
-                        </span>
-                      </td>
-                      <td className="border-t border-gray-100 px-4 py-3.5 align-top text-sm text-gray-700">
-                        <div className="max-w-[200px] truncate" title={r.progressionStep}>
-                          {r.progressionStep || "—"}
-                        </div>
-                      </td>
                       <td className="border-t border-gray-100 px-4 py-3.5 align-top text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-end gap-1 transition-opacity">
                           <button
                             type="button"
                             className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-60 transition-colors"
@@ -2216,10 +2259,9 @@ export default function AdminLessons() {
                 </select>
                 <p className="mt-1 text-xs text-gray-500">
                   Manage age groups in{" "}
-                  <a href="/admin/curriculum" className="font-semibold text-sky-700 hover:text-sky-800">
-                    Steps of Progression
-                  </a>
-                  {" "}under Categories.
+                  <a href="/admin/curriculum?tab=categories" className="font-semibold text-sky-700 hover:text-sky-800">
+                    Curriculum &gt; Categories
+                  </a>.
                 </p>
               </Field>
               <Field label="Term">
@@ -2254,14 +2296,14 @@ export default function AdminLessons() {
               </Field>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <Field label="Subcategory (optional)">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <Field label="Subject (optional)">
                 <input
                   list="edit-subject-options"
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   value={editSubject}
                   onChange={(e) => setEditSubject(e.target.value)}
-                  placeholder="Type a subcategory"
+                  placeholder="Type a subject"
                   disabled={saving}
                 />
                 <datalist id="edit-subject-options">
@@ -2269,6 +2311,16 @@ export default function AdminLessons() {
                     <option key={subjectOption} value={subjectOption} />
                   ))}
                 </datalist>
+              </Field>
+              <Field label="Theme (optional)">
+                <input
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={editTheme}
+                  onChange={(e) => setEditTheme(e.target.value)}
+                  placeholder="e.g. Fall"
+                  maxLength={120}
+                  disabled={saving}
+                />
               </Field>
               <Field label="Link (optional)">
                 <input
@@ -2462,10 +2514,9 @@ export default function AdminLessons() {
                 </select>
                 <p className="mt-1 text-xs text-gray-500">
                   Manage age groups in{" "}
-                  <a href="/admin/curriculum" className="font-semibold text-sky-700 hover:text-sky-800">
-                    Steps of Progression
-                  </a>
-                  {" "}under Categories.
+                  <a href="/admin/curriculum?tab=categories" className="font-semibold text-sky-700 hover:text-sky-800">
+                    Curriculum &gt; Categories
+                  </a>.
                 </p>
               </Field>
               <Field label="Term">
@@ -2500,14 +2551,14 @@ export default function AdminLessons() {
               </Field>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <Field label="Subcategory (optional)">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <Field label="Subject (optional)">
                 <input
                   list="new-subject-options"
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   value={newSubject}
                   onChange={(e) => setNewSubject(e.target.value)}
-                  placeholder="Type a subcategory"
+                  placeholder="Type a subject"
                   disabled={saving}
                 />
                 <datalist id="new-subject-options">
@@ -2515,6 +2566,16 @@ export default function AdminLessons() {
                     <option key={subjectOption} value={subjectOption} />
                   ))}
                 </datalist>
+              </Field>
+              <Field label="Theme (optional)">
+                <input
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={newTheme}
+                  onChange={(e) => setNewTheme(e.target.value)}
+                  placeholder="e.g. Fall"
+                  maxLength={120}
+                  disabled={saving}
+                />
               </Field>
               <Field label="Link (optional)">
                 <input

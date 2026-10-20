@@ -6,7 +6,6 @@ const { apiGet, apiPost, apiPut, apiDelete, pickDemoCenterId } = require("../hel
 // Mondays far in the future so the tests never touch a real week's menu.
 const WEEK = "2099-06-01";
 const NEXT_WEEK = "2099-06-08";
-const MONTH_LATER = "2099-07-06";
 const line = (overrides = {}) => ({
   date: WEEK,
   meal: "lunch",
@@ -27,11 +26,11 @@ test.describe("Menus API @api", () => {
     await clearTestWeeks(request);
   });
 
-  // Clears every line in the test weeks, planned and served.
+  // Clears every line in June and July 2099, planned and served.
   async function clearTestWeeks(request) {
     const admin = await loginAsAdmin(request);
-    for (const start of [WEEK, NEXT_WEEK, MONTH_LATER]) {
-      const { items } = await (await apiGet(request, `/api/v1/menus?centerId=${centerId}&start=${start}`, admin)).json();
+    for (const start of ["2099-06-01", "2099-07-01"]) {
+      const { items } = await (await apiGet(request, `/api/v1/menus?centerId=${centerId}&start=${start}&days=31`, admin)).json();
       for (const kind of ["PLANNED", "SERVED"]) {
         const lines = items.filter((i) => i.kind === kind).map(({ kind: _kind, ...i }) => ({ ...i, item: "" }));
         if (lines.length) await apiPut(request, "/api/v1/menus", { centerId, kind, items: lines }, admin);
@@ -139,10 +138,17 @@ test.describe("Menus API @api", () => {
     );
     expect(byComponent).toEqual({ vegetable: "E2E Carrots", fruit: "E2E Pears" });
 
-    // Four weeks before Monday July 6 is Monday June 8, in the previous month.
-    const month = await apiPost(request, "/api/v1/menus/copy", { centerId, start: MONTH_LATER, from: "month" }, admin);
+    // The whole of June copies into July, weekday by weekday: July 1 is the
+    // first Wednesday, so it copies June 3; the 1st and 2nd Mondays of July
+    // (6th, 13th) copy June's (1st, 8th).
+    const month = await apiPost(request, "/api/v1/menus/copy", { centerId, from: "month", month: "2099-07" }, admin);
     expect(month.status()).toBe(200);
-    expect((await month.json()).sourceStart).toBe(NEXT_WEEK);
+    expect(await month.json()).toMatchObject({ sourceStart: "2099-06-03", targetStart: "2099-07-01", targetEnd: "2099-07-31" });
+    const july = await (await apiGet(request, `/api/v1/menus?centerId=${centerId}&start=2099-07-01&days=31`, admin)).json();
+    const julyVeg = Object.fromEntries(july.items.filter((i) => i.component === "vegetable").map((i) => [i.date, i.item]));
+    expect(julyVeg).toEqual({ "2099-07-06": "E2E Steamed Broccoli", "2099-07-13": "E2E Carrots" });
+    expect(july.items.some((i) => i.date === "2099-07-01" && i.item === "E2E Oat Cereal")).toBe(true);
+    expect((await apiPost(request, "/api/v1/menus/copy", { centerId, from: "month", month: "2099-13" }, admin)).status()).toBe(400);
 
     const bad = await apiPost(request, "/api/v1/menus/copy", { centerId, start: "2099-06-02", from: "week" }, admin);
     expect(bad.status()).toBe(400);

@@ -122,6 +122,8 @@ enum BehaviorPlanStatus {
   CLOSED
   COMPLETED
   ARCHIVED
+  UNDER_REVIEW
+  NEEDS_UPDATE
 }
 
 enum ObservationType {
@@ -372,6 +374,11 @@ model Center {
   kioskDevices                KioskDevice[]
   createdAt                   DateTime                     @default(now())
   menuItems                   MenuItem[]
+  lessonCalendarAnchors       LessonCalendarAnchor[]
+  lessonClosedDays            LessonClosedDay[]
+  lessonPlanners              LessonPlanner[]
+  lessonPlanCells             LessonPlanCell[]
+  curriculumOptions           CurriculumOption[]
 }
 
 model CenterUser {
@@ -402,6 +409,10 @@ model ClassRoom {
   milestoneChecklistPlans   MilestoneChecklistPlan[]
   lessonPlanRows            LessonPlanRow[]
   supplyRequests            SupplyRequest[]
+  lessonCalendarAnchors     LessonCalendarAnchor[]
+  lessonPlanner             LessonPlanner?
+  lessonPlanCells           LessonPlanCell[]
+  lessonUsedMarks           LessonUsedMark[]
 }
 
 model TeacherClass {
@@ -524,6 +535,12 @@ model Lesson {
   nextStep                Lesson?                  @relation("LessonNextStep", fields: [nextStepId], references: [id], onDelete: SetNull)
   nextStepId              String?
   nextStepOf              Lesson[]                 @relation("LessonNextStep")
+  // Steps of Progression: true for rows in the Steps of Progression Bank,
+  // false for Lesson Bank lessons. Exposure / Competency / Mastery criteria
+  // and notes.
+  isStep                  Boolean                  @default(false)
+  criteria                Json?
+  notes                   String?
   media                   String[]                 @default([])
   goals                   LessonGoal[]
   progress                Progress[]
@@ -534,6 +551,8 @@ model Lesson {
   supplies                LessonSupply[]
   dailyChecklistItems     DailyChecklistItem[]
   supplyRequests          SupplyRequest[]
+  planCells               LessonPlanCell[]
+  usedMarks               LessonUsedMark[]
 
   @@index([policyDocumentId])
   @@index([linkedLessonId])
@@ -541,6 +560,7 @@ model Lesson {
   @@index([nextStepId])
   @@index([centerId, term])
   @@index([centerId, lessonSlot])
+  @@index([centerId, isStep])
 }
 
 model LessonTermCalendar {
@@ -555,6 +575,95 @@ model LessonTermCalendar {
 
   @@unique([centerId, term])
   @@index([centerId, startDate, endDate])
+}
+
+// Lesson Calendar (client request 2026-10-02): school days are numbered
+// Day 1, Day 2, ... from a start day. Each anchor restarts the count on its
+// date for one classroom; closed days apply to the whole center and are
+// skipped. Edits only ever touch today or later, so past numbers never move.
+model LessonCalendarAnchor {
+  id          String    @id @default(uuid())
+  center      Center    @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  classRoom   ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+  classRoomId String
+  startDate   DateTime  @db.Date
+  dayNumber   Int
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([classRoomId, startDate])
+  @@index([centerId])
+}
+
+model LessonClosedDay {
+  id        String   @id @default(uuid())
+  center    Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId  String
+  date      DateTime @db.Date
+  createdAt DateTime @default(now())
+
+  @@unique([centerId, date])
+}
+
+// Lesson Planner: one per classroom. Columns are day numbers (1..dayCount),
+// rows are the classroom's LessonPlanRow categories (by rowIndex).
+model LessonPlanner {
+  id          String    @id @default(uuid())
+  center      Center    @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  classRoom   ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+  classRoomId String    @unique
+  theme       String?
+  dayCount    Int       @default(10)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model LessonPlanCell {
+  id          String    @id @default(uuid())
+  center      Center    @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  classRoom   ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+  classRoomId String
+  day         Int
+  rowIndex    Int
+  lesson      Lesson?   @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  lessonId    String?
+  title       String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([classRoomId, day, rowIndex])
+  @@index([lessonId])
+}
+
+// Lessons ticked as used in a classroom's Lesson Bank.
+model LessonUsedMark {
+  id          String    @id @default(uuid())
+  classRoom   ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+  classRoomId String
+  lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lessonId    String
+  createdAt   DateTime  @default(now())
+
+  @@unique([classRoomId, lessonId])
+  @@index([lessonId])
+}
+
+// Curriculum > Categories tab (client mockup 2026-10-02): the lists the lesson
+// and step forms offer in their dropdowns. Removing an entry only removes it
+// from the dropdowns; lessons that already use it keep their value.
+model CurriculumOption {
+  id        String   @id @default(uuid())
+  center    Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId  String
+  kind      String // CATEGORY | SUBJECT | AGE_RANGE | TYPE
+  name      String
+  createdAt DateTime @default(now())
+
+  @@unique([centerId, kind, name])
 }
 
 model LessonGoal {
@@ -1126,57 +1235,124 @@ model NotificationPreference {
 }
 
 model BehaviorPlan {
-  id                  String             @id @default(uuid())
-  child               Child              @relation(fields: [childId], references: [id], onDelete: Cascade)
+  id                  String                 @id @default(uuid())
+  child               Child                  @relation(fields: [childId], references: [id], onDelete: Cascade)
   childId             String
-  center              Center             @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  center              Center                 @relation(fields: [centerId], references: [id], onDelete: Cascade)
   centerId            String
   title               String
   description         String?
-  status              BehaviorPlanStatus @default(ACTIVE)
+  status              BehaviorPlanStatus     @default(ACTIVE)
   teacherTactics      String?
   parentTactics       String?
   coachTactics        String?
   disciplinaryAction  String?
+  // Individual Progress Plan (client request 2026-10-02, IPP sheet).
+  planType            String?
+  focusArea           String?
+  reviewSchedule      String?
+  measurableOutcomes  String?
+  updatedByName       String?
+  documents           BehaviorPlanDocument[]
+  logs                BehaviorPlanLog[]
   goals               BehaviorPlanGoal[]
-  createdBy           User?              @relation("BehaviorPlansCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy           User?                  @relation("BehaviorPlansCreated", fields: [createdById], references: [id], onDelete: SetNull)
   createdById         String?
-  startDate           DateTime           @default(now())
+  startDate           DateTime               @default(now())
   endDate             DateTime?
   reviewDate          DateTime?
   notes               String?
   closedAt            DateTime?
-  closedBy            User?              @relation("BehaviorPlansClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  closedBy            User?                  @relation("BehaviorPlansClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
   closedById          String?
-  parentApproved      Boolean            @default(false)
+  parentApproved      Boolean                @default(false)
   parentApprovedAt    DateTime?
   parentSignatureName String?
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
 
   @@index([childId, status])
   @@index([centerId, status])
   @@index([createdById])
 }
 
+// IPP strategies and supports for one goal (who does it, how often).
+model BehaviorPlanStrategy {
+  id        String           @id @default(uuid())
+  goal      BehaviorPlanGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  goalId    String
+  sortOrder Int              @default(0)
+  kind      String           @default("STRATEGY") // STRATEGY | SUPPORT
+  text      String
+  role      String?
+  frequency String?
+  notes     String?
+  // [{ name, url }]
+  documents Json             @default("[]")
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([goalId, sortOrder])
+}
+
+// IPP Documents & Notes tab.
+model BehaviorPlanDocument {
+  id             String       @id @default(uuid())
+  plan           BehaviorPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planId         String
+  name           String
+  url            String
+  fileType       String?
+  notes          String?
+  uploadedById   String?
+  uploadedByName String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([planId])
+}
+
+// IPP Log tab: a tactic used toward a goal and what was observed.
+model BehaviorPlanLog {
+  id            String            @id @default(uuid())
+  plan          BehaviorPlan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planId        String
+  goal          BehaviorPlanGoal? @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  goalId        String?
+  date          DateTime          @db.Date
+  tactic        String
+  tacticDetail  String?
+  observation   String?
+  enteredById   String?
+  enteredByName String
+  createdAt     DateTime          @default(now())
+
+  @@index([planId, date])
+}
+
 model BehaviorPlanGoal {
-  id           String             @id @default(uuid())
-  plan         BehaviorPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
-  planId       String
-  sortOrder    Int                @default(0)
-  domain       String
-  title        String
-  description  String?
-  targetScore  Int?
-  currentScore Int?
-  status       BehaviorGoalStatus @default(NOT_STARTED)
-  strategies   String[]           @default([])
-  lesson       Lesson?            @relation(fields: [lessonId], references: [id], onDelete: SetNull)
-  lessonId     String?
-  achievedAt   DateTime?
-  notes        String?
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
+  id            String                 @id @default(uuid())
+  plan          BehaviorPlan           @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planId        String
+  sortOrder     Int                    @default(0)
+  domain        String
+  title         String
+  description   String?
+  targetScore   Int?
+  currentScore  Int?
+  status        BehaviorGoalStatus     @default(NOT_STARTED)
+  strategies    String[]               @default([])
+  lesson        Lesson?                @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  lessonId      String?
+  targetDate    DateTime?
+  // IPP goal progress, 0-100.
+  progress      Int                    @default(0)
+  ippStrategies BehaviorPlanStrategy[]
+  logs          BehaviorPlanLog[]
+  achievedAt    DateTime?
+  notes         String?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
 
   @@index([planId, sortOrder])
   @@index([planId, status])

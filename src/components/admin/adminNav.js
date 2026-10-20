@@ -102,7 +102,7 @@ export const ADMIN_NAV_ITEMS = [
     label: "Program Setup",
     icon: icons.program,
     children: [
-      { href: "/admin/lessons", label: "Curriculum" },
+      { href: "/admin/curriculum/calendar", label: "Curriculum", alsoActive: ["/admin/curriculum", "/admin/lessons"] },
       { href: "/admin/parent-involvement", label: "Parent Involvement" },
       { href: "/admin/checklists", label: "Checklist Manager" },
       {
@@ -139,8 +139,6 @@ export const ADMIN_NAV_ITEMS = [
     icon: icons.messages,
   },
   otherPagesGroup([
-    // Becomes the Steps of Progression Bank tab of Curriculum.
-    { href: "/admin/curriculum", label: "Steps of Progression" },
     { href: "/admin/affiliates", label: "Affiliates & Partners" },
     { href: "/admin/subscriptions", label: "Subscriptions" },
     // Not in the client's list yet; where kiosk setup lives is still open.

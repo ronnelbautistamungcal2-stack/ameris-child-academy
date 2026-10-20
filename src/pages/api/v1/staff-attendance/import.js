@@ -2,6 +2,7 @@ import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import XLSX from "xlsx";
 import { STAFF_PORTAL_ROLES } from "@/lib/roles";
+import { editorInitials, timeChangeAudits } from "@/lib/timeSheets";
 
 export const config = {
   api: {
@@ -232,6 +233,7 @@ export default async function handler(req, res) {
       }
     }
 
+    const importerInitials = await editorInitials(prisma, session.user.id);
     let createdCount = 0;
     let updatedCount = 0;
     let skippedCount = 0;
@@ -298,7 +300,6 @@ export default async function handler(req, res) {
             date,
           },
         },
-        select: { id: true },
       });
 
       if (existing && !overwriteExisting) {
@@ -306,6 +307,11 @@ export default async function handler(req, res) {
         continue;
       }
 
+      // Overwriting a day's recorded times goes on the time sheet audit report.
+      const audits = existing
+        ? timeChangeAudits("staff", existing, { nextIn: clockIn, nextOut: clockOut }, { editor: importerInitials, editorUserId: session.user.id })
+        : [];
+      if (audits.length) await prisma.timeSheetAudit.createMany({ data: audits });
       await prisma.staffAttendance.upsert({
         where: {
           userId_date: {

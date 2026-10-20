@@ -1,7 +1,7 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { isSelfServiceEmployeeRole, STAFF_PORTAL_ROLES } from "@/lib/roles";
-import { editorInitials } from "@/lib/timeSheets";
+import { editorInitials, timeChangeAudits } from "@/lib/timeSheets";
 
 export default async function handler(req, res) {
   try {
@@ -95,15 +95,27 @@ async function handlePost(req, res, session) {
   const parsedClockIn = parseAttendanceTime(d, clockIn);
   const parsedClockOut = parseAttendanceTime(d, clockOut);
 
-  // Time sheets show who recorded each time.
+  // Time sheets show who recorded each time, and changes to times that were
+  // already recorded go on the time sheet audit report.
   const by = await editorInitials(prisma, session.user.id);
-  const record = await prisma.staffAttendance.upsert({
+  const existing = await prisma.staffAttendance.findUnique({ where: { userId_date: { userId, date: d } } });
+  const audits = existing
+    ? timeChangeAudits(
+        "staff",
+        existing,
+        { nextIn: parsedClockIn ?? undefined, nextOut: parsedClockOut ?? undefined },
+        { editor: by, editorUserId: session.user.id },
+      )
+    : [];
+  const unchangedIn = existing && parsedClockIn && existing.clockIn?.getTime() === parsedClockIn.getTime();
+  const unchangedOut = existing && parsedClockOut && existing.clockOut?.getTime() === parsedClockOut.getTime();
+  const upsert = prisma.staffAttendance.upsert({
     where: { userId_date: { userId, date: d } },
     update: {
       clockIn: parsedClockIn ?? undefined,
-      clockInBy: parsedClockIn ? by : undefined,
+      clockInBy: parsedClockIn && !unchangedIn ? by : undefined,
       clockOut: parsedClockOut ?? undefined,
-      clockOutBy: parsedClockOut ? by : undefined,
+      clockOutBy: parsedClockOut && !unchangedOut ? by : undefined,
       status: status || undefined,
       lateMinutes: typeof lateMinutes === "number" ? lateMinutes : undefined,
       notes: notes !== undefined ? notes : undefined,
@@ -126,6 +138,7 @@ async function handlePost(req, res, session) {
       user: { select: { id: true, name: true, email: true } },
     },
   });
+  const [record] = await prisma.$transaction([upsert, ...audits.map((data) => prisma.timeSheetAudit.create({ data }))]);
 
   return res.status(201).json(record);
 }

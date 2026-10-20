@@ -1,4 +1,5 @@
 import { getSession } from "@/lib/auth";
+import { hasAnyRole } from "@/lib/roles";
 import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
@@ -25,8 +26,9 @@ export default async function handler(req, res) {
   if (!session) return res.status(401).json({ error: "Unauthorized" });
 
   // Parents upload the documents their required forms ask for (immunization
-  // records, signed handbooks), so they belong here too.
-  if (!["ADMIN", "COACH", "TEACHER", "PARENT"].includes(session.user.role)) {
+  // records, signed handbooks), so they belong here too. Student Support
+  // uploads documents for Individual Progress Plans.
+  if (!hasAnyRole(session.user, ["ADMIN", "COACH", "TEACHER", "PARENT", "STUDENT_SUPPORT"])) {
     return res.status(403).json({ error: "Forbidden" });
   }
 

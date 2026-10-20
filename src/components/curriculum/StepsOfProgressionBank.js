@@ -1,13 +1,22 @@
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { GoalEditor, MediaPreview, StepPicker } from "@/components/curriculum/stepParts";
 import { apiJson } from "@/lib/api";
-import { formatStepAge, STEP_AGE_MONTH_OPTIONS, STEP_AGE_YEAR_OPTIONS, STEP_CRITERIA_LEVELS } from "@/lib/progressionSteps";
+import {
+  formatStepAge,
+  normalizeStepTerm,
+  readStepSheet,
+  STEP_AGE_MONTH_OPTIONS,
+  STEP_AGE_YEAR_OPTIONS,
+  STEP_CRITERIA_LEVELS,
+  STEP_IMPORT_COLUMNS,
+} from "@/lib/progressionSteps";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 
 // Steps of Progression Bank (client mockups 2026-10-02): a sortable,
-// filterable table of steps and the Add Step of Progression pop-up. A step is
-// a Lesson row; Category, Subject and Age Range come from Curriculum >
-// Categories. The goals editor stays available from each row.
+// filterable table of steps, the Add Step of Progression pop-up and an
+// Excel/CSV import. A step is a Lesson row with isStep set, so Lesson Bank
+// lessons never show here; Category, Subject and Age Range come from
+// Curriculum > Categories. The goals editor stays available from each row.
 
 const NAVY = "text-[#0b2a5b] dark:text-blue-100";
 const TERMS = ["Term 1", "Term 2", "Term 3", "Term 4", "Term 5"];
@@ -45,7 +54,8 @@ function distinct(values) {
 }
 
 export default function StepsOfProgressionBank({ centerId }) {
-  const [lessons, setLessons] = useState([]);
+  const [lessons, setLessons] = useState([]); // steps
+  const [bankLessons, setBankLessons] = useState([]); // Lesson Bank, for Related Lesson
   const [categories, setCategories] = useState([]);
   const [options, setOptions] = useState({ CATEGORY: [], SUBJECT: [], AGE_RANGE: [] });
   const [loading, setLoading] = useState(true);
@@ -58,18 +68,21 @@ export default function StepsOfProgressionBank({ centerId }) {
   const [editing, setEditing] = useState(null); // "new" | lesson
   const [goalsFor, setGoalsFor] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  const [importing, setImporting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const q = encodeURIComponent(centerId);
-      const [l, cats, opts] = await Promise.all([
-        apiJson(`/api/v1/lessons?centerId=${q}`),
+      const [l, bank, cats, opts] = await Promise.all([
+        apiJson(`/api/v1/lessons?centerId=${q}&kind=step`),
+        apiJson(`/api/v1/lessons?centerId=${q}&kind=lesson`),
         apiJson(`/api/v1/lesson-categories?centerId=${q}`),
         apiJson(`/api/v1/curriculum-options?centerId=${q}`).catch(() => null),
       ]);
       setLessons(Array.isArray(l) ? l : []);
+      setBankLessons(Array.isArray(bank) ? bank : []);
       setCategories(Array.isArray(cats) ? cats : []);
       if (opts) setOptions(opts);
     } catch (e) {
@@ -171,7 +184,13 @@ export default function StepsOfProgressionBank({ centerId }) {
         >
           Clear Filters
         </button>
-        <button type="button" onClick={() => setEditing("new")} className="ml-auto rounded-lg bg-[#0b2a5b] px-4 py-2 text-sm font-bold text-white hover:bg-[#123a78]">
+        <button type="button" onClick={downloadStepTemplate} className="ml-auto rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50 dark:border-gray-600 dark:bg-gray-800 dark:text-blue-200">
+          Download Template
+        </button>
+        <button type="button" onClick={() => setImporting(true)} className="rounded-lg border border-[#0b2a5b] bg-white px-3 py-2 text-sm font-bold text-[#0b2a5b] hover:bg-blue-50 dark:border-blue-300 dark:bg-gray-800 dark:text-blue-100">
+          Import Steps
+        </button>
+        <button type="button" onClick={() => setEditing("new")} className="rounded-lg bg-[#0b2a5b] px-4 py-2 text-sm font-bold text-white hover:bg-[#123a78]">
           + Add Step
         </button>
       </div>
@@ -279,6 +298,7 @@ export default function StepsOfProgressionBank({ centerId }) {
           centerId={centerId}
           step={editing === "new" ? null : editing}
           lessons={lessons}
+          bankLessons={bankLessons}
           categories={categories}
           options={options}
           onClose={() => setEditing(null)}
@@ -288,6 +308,7 @@ export default function StepsOfProgressionBank({ centerId }) {
           }}
         />
       )}
+      {importing && <ImportStepsDialog centerId={centerId} onClose={() => setImporting(false)} onImported={load} />}
       <ConfirmDialog
         open={Boolean(deleting)}
         title="Delete this step?"
@@ -351,7 +372,7 @@ function withCurrent(list, value) {
   return value && !names.includes(value) ? [value, ...names] : names;
 }
 
-function StepDialog({ centerId, step, lessons, categories, options, onClose, onSaved }) {
+function StepDialog({ centerId, step, lessons, bankLessons, categories, options, onClose, onSaved }) {
   const [form, setForm] = useState(() => emptyForm(step));
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -428,7 +449,7 @@ function StepDialog({ centerId, step, lessons, categories, options, onClose, onS
       if (step) {
         await apiJson(`/api/v1/lessons/${encodeURIComponent(step.id)}`, { method: "PUT", body: JSON.stringify(payload) });
       } else {
-        await apiJson("/api/v1/lessons", { method: "POST", body: JSON.stringify({ centerId, ...payload }) });
+        await apiJson("/api/v1/lessons", { method: "POST", body: JSON.stringify({ centerId, isStep: true, ...payload }) });
       }
       onSaved();
     } catch (e) {
@@ -496,7 +517,7 @@ function StepDialog({ centerId, step, lessons, categories, options, onClose, onS
             </select>
           </label>
           <div className="md:col-span-8">
-            <StepPicker label="Related Lesson (Optional)" lessons={others} value={form.linkedLessonId} onChange={(id) => set({ linkedLessonId: id || "" })} excludeIds={[]} />
+            <StepPicker label="Related Lesson (Optional)" lessons={bankLessons} value={form.linkedLessonId} onChange={(id) => set({ linkedLessonId: id || "" })} excludeIds={[]} />
             <p className="mt-1 text-xs text-gray-500">Linking a lesson helps teachers see which lesson supports this step.</p>
           </div>
         </div>
@@ -604,3 +625,169 @@ function StepDialog({ centerId, step, lessons, categories, options, onClose, onS
   );
 }
 
+async function loadXlsx() {
+  const mod = await import("xlsx");
+  return mod.default || mod;
+}
+
+async function downloadStepTemplate() {
+  const XLSX = await loadXlsx();
+  const example = {
+    reference: "SP-001",
+    title: "Rolls from tummy to back",
+    category: "Physical Development",
+    subject: "Gross Motor",
+    ageYears: 0,
+    ageMonths: 4,
+    term: "Term 1",
+    description: "Can the child roll over without help?",
+    exposure: "Rolls with help",
+    competency: "Rolls on their own sometimes",
+    mastery: "Rolls on their own every time",
+    buildsOn: "",
+    leadsTo: "SP-002",
+    notes: "",
+  };
+  const sheet = XLSX.utils.aoa_to_sheet([STEP_IMPORT_COLUMNS.map((c) => c.header), STEP_IMPORT_COLUMNS.map((c) => example[c.key])]);
+  sheet["!cols"] = STEP_IMPORT_COLUMNS.map((c) => ({ wch: Math.max(12, c.header.length + 2) }));
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, sheet, "Steps");
+  XLSX.writeFile(book, "steps-of-progression-template.xlsx");
+}
+
+function ImportStepsDialog({ centerId, onClose, onImported }) {
+  const [file, setFile] = useState(null); // { name, rows, missing }
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+
+  async function choose(e) {
+    const picked = e.target.files?.[0];
+    e.target.value = "";
+    if (!picked) return;
+    setError("");
+    setResult(null);
+    try {
+      const XLSX = await loadXlsx();
+      const book = XLSX.read(await picked.arrayBuffer(), { type: "array" });
+      const sheet = book.Sheets[book.SheetNames[0]];
+      setFile({ name: picked.name, ...readStepSheet(XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" })) });
+    } catch {
+      setFile(null);
+      setError("That file could not be read. Use an Excel (.xlsx, .xls) or CSV file.");
+    }
+  }
+
+  async function runImport() {
+    setBusy(true);
+    setError("");
+    try {
+      const summary = await apiJson("/api/v1/lessons/import-steps", { method: "POST", body: JSON.stringify({ centerId, rows: file.rows }) });
+      setResult(summary);
+      setFile(null);
+      await onImported();
+    } catch (e) {
+      setError(e.message || "The import failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const problems = result
+    ? [...result.skipped.map((p) => ({ ...p, kind: "Skipped" })), ...result.warnings.map((p) => ({ ...p, kind: "Not linked" }))]
+    : [];
+  const preview = file?.rows.slice(0, 5) || [];
+  const plural = (n) => `${n} step${n === 1 ? "" : "s"}`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="import-steps-title">
+      <div className="my-6 w-full max-w-3xl rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-900">
+        <div className="flex items-center justify-between">
+          <h2 id="import-steps-title" className={`text-2xl font-black ${NAVY}`}>Import Steps of Progression</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-2xl text-[#0b2a5b] dark:text-blue-100">&times;</button>
+        </div>
+        <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+          Upload an Excel or CSV file with one step per row, using the template&apos;s columns. Only Ref ID and Step Description are required. A
+          Ref ID that is already in the bank updates that step instead of adding a copy.{" "}
+          <button type="button" onClick={downloadStepTemplate} className="font-semibold text-blue-700 underline dark:text-blue-300">
+            Download the template
+          </button>
+        </p>
+
+        <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 px-3 py-5 text-center text-sm text-[#0b2a5b] hover:bg-blue-50 dark:border-gray-600 dark:text-blue-100 dark:hover:bg-gray-800">
+          <span className="font-semibold">{file ? file.name : "Click to choose a file"}</span>
+          <span className="text-xs text-gray-500">.xlsx, .xls or .csv</span>
+          <input type="file" accept=".xlsx,.xls,.csv" className="sr-only" onChange={choose} disabled={busy} aria-label="Steps file" />
+        </label>
+
+        {file?.missing.length > 0 && (
+          <div role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            Couldn&apos;t find a {file.missing.join(" or ")} column. Check that the header row matches the template.
+          </div>
+        )}
+        {file && !file.missing.length && (
+          <div className="mt-3">
+            <p className={`text-sm font-semibold ${NAVY}`}>
+              {plural(file.rows.length)} found{file.rows.length > preview.length ? ` (first ${preview.length} shown)` : ""}.
+            </p>
+            <div className="mt-2 overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+              <table className="w-full min-w-[640px] text-left text-xs">
+                <thead className={`bg-blue-50 font-bold dark:bg-gray-800 ${NAVY}`}>
+                  <tr>
+                    {["Ref ID", "Step Description", "Category", "Subject", "Age", "Term"].map((h) => (
+                      <th key={h} className="px-2 py-1.5">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.map((r) => (
+                    <tr key={r.line} className="border-t border-gray-100 dark:border-gray-800">
+                      <td className="px-2 py-1 font-mono">{r.reference || "—"}</td>
+                      <td className="px-2 py-1">{r.title || "—"}</td>
+                      <td className="px-2 py-1">{r.category || "—"}</td>
+                      <td className="px-2 py-1">{r.subject || "—"}</td>
+                      <td className="px-2 py-1">
+                        {formatStepAge({ ageYears: r.ageYears === "" ? null : r.ageYears, ageMonths: r.ageMonths === "" ? null : r.ageMonths }) || "—"}
+                      </td>
+                      <td className="px-2 py-1">{normalizeStepTerm(r.term) || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {result && (
+          <div role="status" className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-900/30 dark:text-green-200">
+            Import finished: {result.created} added, {result.updated} updated{result.skipped.length ? `, ${result.skipped.length} skipped` : ""}.
+          </div>
+        )}
+        {problems.length > 0 && (
+          <ul className="mt-2 max-h-40 overflow-y-auto rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-900/30 dark:text-amber-100">
+            {problems.map((p, i) => (
+              <li key={i}>
+                Row {p.line}: {p.kind}. {p.reason}.
+              </li>
+            ))}
+          </ul>
+        )}
+        {error && <div role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <button type="button" onClick={onClose} className="rounded-lg border border-blue-700 py-2.5 text-sm font-bold text-blue-800 dark:text-blue-200">
+            {result ? "Done" : "Cancel"}
+          </button>
+          <button
+            type="button"
+            onClick={runImport}
+            disabled={busy || !file || file.missing.length > 0 || !file.rows.length}
+            className="rounded-lg bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
+          >
+            {busy ? "Importing..." : file?.rows.length ? `Import ${plural(file.rows.length)}` : "Import"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

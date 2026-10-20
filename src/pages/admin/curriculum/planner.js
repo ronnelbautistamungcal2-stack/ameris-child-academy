@@ -93,7 +93,7 @@ export default function LessonPlannerPage() {
 
   useEffect(() => {
     if (!centerId) return;
-    apiJson(`/api/v1/lessons?centerId=${encodeURIComponent(centerId)}`)
+    apiJson(`/api/v1/lessons?centerId=${encodeURIComponent(centerId)}&kind=lesson`)
       .then((data) => setLessons(Array.isArray(data) ? data : []))
       .catch(() => setLessons([]));
   }, [centerId]);

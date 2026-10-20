@@ -25,7 +25,7 @@ export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
 
-  const { centerId } = req.query;
+  const { centerId, kind } = req.query;
 
   if (req.method === "GET") {
     // Teachers/admins/coaches can view lessons
@@ -42,8 +42,13 @@ export default async function handler(req, res) {
       if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
     }
 
+    // kind=step: Steps of Progression Bank rows; kind=lesson: Lesson Bank
+    // lessons; no kind: both.
+    const where = centerId ? { centerId } : {};
+    if (kind === "step") where.isStep = true;
+    if (kind === "lesson") where.isStep = false;
     const lessons = await prisma.lesson.findMany({
-      where: centerId ? { centerId } : {},
+      where,
       include: LESSON_INCLUDE,
     });
     return res.status(200).json(lessons);
@@ -89,6 +94,7 @@ export default async function handler(req, res) {
         lessonSlot: normalizeLessonSlot(lessonSlot),
         reference: reference || null,
         centerId: cId,
+        isStep: req.body.isStep === true,
         media: media || [],
         categoryId: categoryId || null,
         policyDocumentId: policyDocumentId || null,

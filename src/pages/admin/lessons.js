@@ -909,7 +909,7 @@ export default function AdminLessons() {
     setError("");
     try {
       const data = await apiJson(
-        `/api/v1/lessons?centerId=${encodeURIComponent(mainCenter.id)}`,
+        `/api/v1/lessons?centerId=${encodeURIComponent(mainCenter.id)}&kind=lesson`,
       );
       setLessons(Array.isArray(data) ? data : []);
     } catch (e) {

@@ -73,3 +73,59 @@ export function formatStepAge(lesson) {
   if (lesson?.ageMonths != null) parts.push(`${lesson.ageMonths} mo`);
   return parts.join(" ");
 }
+
+// Steps of Progression import (Excel or CSV). One column per Add Step field;
+// headers are matched loosely (case, spaces and brackets ignored), so
+// "Age (Years)", "age years" and "AgeYears" all work.
+export const STEP_IMPORT_COLUMNS = [
+  { key: "reference", header: "Ref ID", aliases: ["ref", "refid", "reference", "referenceid"] },
+  { key: "title", header: "Step Description", aliases: ["stepdescription", "stepofprogression", "step", "title"] },
+  { key: "category", header: "Category", aliases: ["category"] },
+  { key: "subject", header: "Subject", aliases: ["subject"] },
+  { key: "ageYears", header: "Age (Years)", aliases: ["ageyears", "years", "ageyrs"] },
+  { key: "ageMonths", header: "Age (Months)", aliases: ["agemonths", "months", "agemos"] },
+  { key: "term", header: "Term", aliases: ["term"] },
+  { key: "description", header: "Assessment Question", aliases: ["assessmentquestion", "question"] },
+  { key: "exposure", header: "Exposure", aliases: ["exposure"] },
+  { key: "competency", header: "Competency", aliases: ["competency"] },
+  { key: "mastery", header: "Mastery", aliases: ["mastery"] },
+  { key: "buildsOn", header: "Builds On (Ref ID)", aliases: ["buildson", "buildsonrefid", "buildsonpreviousstep", "previousstep", "priorstep"] },
+  { key: "leadsTo", header: "Leads To (Ref ID)", aliases: ["leadsto", "leadstorefid", "leadstonextstep", "nextstep"] },
+  { key: "notes", header: "Notes", aliases: ["notes", "additionalnotes"] },
+];
+
+const headerKey = (value) => String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * Turns sheet rows (arrays of cell values) into step objects. The header row
+ * is the first one with a Ref ID or Step Description column. Returns
+ * { rows: [{ line, ...fields }], missing: [header labels not found] }.
+ */
+export function readStepSheet(sheetRows) {
+  const byAlias = new Map(STEP_IMPORT_COLUMNS.flatMap((c) => c.aliases.map((a) => [a, c.key])));
+  const headerIndex = sheetRows.findIndex((row) =>
+    (row || []).some((cell) => ["reference", "title"].includes(byAlias.get(headerKey(cell)))),
+  );
+  if (headerIndex < 0) return { rows: [], missing: ["Ref ID", "Step Description"] };
+  const columns = (sheetRows[headerIndex] || []).map((cell) => byAlias.get(headerKey(cell)) || null);
+  const found = new Set(columns.filter(Boolean));
+  const rows = [];
+  sheetRows.slice(headerIndex + 1).forEach((cells, i) => {
+    const row = { line: headerIndex + i + 2 };
+    columns.forEach((key, c) => {
+      if (key && row[key] === undefined) row[key] = String(cells?.[c] ?? "").trim();
+    });
+    if (STEP_IMPORT_COLUMNS.some(({ key }) => row[key])) rows.push(row);
+  });
+  return {
+    rows,
+    missing: STEP_IMPORT_COLUMNS.filter((c) => ["reference", "title"].includes(c.key) && !found.has(c.key)).map((c) => c.header),
+  };
+}
+
+// "1", "term 1" and "Term 1" all become "Term 1"; anything else is kept.
+export function normalizeStepTerm(value) {
+  const text = String(value ?? "").trim();
+  const match = text.match(/^(?:term\s*)?(\d+)$/i);
+  return match ? `Term ${match[1]}` : text;
+}

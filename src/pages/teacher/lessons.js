@@ -53,7 +53,7 @@ export default function TeacherLessons() {
       setError("");
       try {
         const l = await apiJson(
-          `/api/v1/lessons?centerId=${encodeURIComponent(centerId)}`,
+          `/api/v1/lessons?centerId=${encodeURIComponent(centerId)}&kind=lesson`,
         );
         setLessons(Array.isArray(l) ? l : []);
       } catch (e) {

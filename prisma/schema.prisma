@@ -122,6 +122,8 @@ enum BehaviorPlanStatus {
   CLOSED
   COMPLETED
   ARCHIVED
+  UNDER_REVIEW
+  NEEDS_UPDATE
 }
 
 enum ObservationType {
@@ -533,7 +535,10 @@ model Lesson {
   nextStep                Lesson?                  @relation("LessonNextStep", fields: [nextStepId], references: [id], onDelete: SetNull)
   nextStepId              String?
   nextStepOf              Lesson[]                 @relation("LessonNextStep")
-  // Steps of Progression: Exposure / Competency / Mastery criteria and notes.
+  // Steps of Progression: true for rows in the Steps of Progression Bank,
+  // false for Lesson Bank lessons. Exposure / Competency / Mastery criteria
+  // and notes.
+  isStep                  Boolean                  @default(false)
   criteria                Json?
   notes                   String?
   media                   String[]                 @default([])
@@ -555,6 +560,7 @@ model Lesson {
   @@index([nextStepId])
   @@index([centerId, term])
   @@index([centerId, lessonSlot])
+  @@index([centerId, isStep])
 }
 
 model LessonTermCalendar {
@@ -1229,57 +1235,124 @@ model NotificationPreference {
 }
 
 model BehaviorPlan {
-  id                  String             @id @default(uuid())
-  child               Child              @relation(fields: [childId], references: [id], onDelete: Cascade)
+  id                  String                 @id @default(uuid())
+  child               Child                  @relation(fields: [childId], references: [id], onDelete: Cascade)
   childId             String
-  center              Center             @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  center              Center                 @relation(fields: [centerId], references: [id], onDelete: Cascade)
   centerId            String
   title               String
   description         String?
-  status              BehaviorPlanStatus @default(ACTIVE)
+  status              BehaviorPlanStatus     @default(ACTIVE)
   teacherTactics      String?
   parentTactics       String?
   coachTactics        String?
   disciplinaryAction  String?
+  // Individual Progress Plan (client request 2026-10-02, IPP sheet).
+  planType            String?
+  focusArea           String?
+  reviewSchedule      String?
+  measurableOutcomes  String?
+  updatedByName       String?
+  documents           BehaviorPlanDocument[]
+  logs                BehaviorPlanLog[]
   goals               BehaviorPlanGoal[]
-  createdBy           User?              @relation("BehaviorPlansCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy           User?                  @relation("BehaviorPlansCreated", fields: [createdById], references: [id], onDelete: SetNull)
   createdById         String?
-  startDate           DateTime           @default(now())
+  startDate           DateTime               @default(now())
   endDate             DateTime?
   reviewDate          DateTime?
   notes               String?
   closedAt            DateTime?
-  closedBy            User?              @relation("BehaviorPlansClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  closedBy            User?                  @relation("BehaviorPlansClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
   closedById          String?
-  parentApproved      Boolean            @default(false)
+  parentApproved      Boolean                @default(false)
   parentApprovedAt    DateTime?
   parentSignatureName String?
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
 
   @@index([childId, status])
   @@index([centerId, status])
   @@index([createdById])
 }
 
+// IPP strategies and supports for one goal (who does it, how often).
+model BehaviorPlanStrategy {
+  id        String           @id @default(uuid())
+  goal      BehaviorPlanGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  goalId    String
+  sortOrder Int              @default(0)
+  kind      String           @default("STRATEGY") // STRATEGY | SUPPORT
+  text      String
+  role      String?
+  frequency String?
+  notes     String?
+  // [{ name, url }]
+  documents Json             @default("[]")
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([goalId, sortOrder])
+}
+
+// IPP Documents & Notes tab.
+model BehaviorPlanDocument {
+  id             String       @id @default(uuid())
+  plan           BehaviorPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planId         String
+  name           String
+  url            String
+  fileType       String?
+  notes          String?
+  uploadedById   String?
+  uploadedByName String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([planId])
+}
+
+// IPP Log tab: a tactic used toward a goal and what was observed.
+model BehaviorPlanLog {
+  id            String            @id @default(uuid())
+  plan          BehaviorPlan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planId        String
+  goal          BehaviorPlanGoal? @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  goalId        String?
+  date          DateTime          @db.Date
+  tactic        String
+  tacticDetail  String?
+  observation   String?
+  enteredById   String?
+  enteredByName String
+  createdAt     DateTime          @default(now())
+
+  @@index([planId, date])
+}
+
 model BehaviorPlanGoal {
-  id           String             @id @default(uuid())
-  plan         BehaviorPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
-  planId       String
-  sortOrder    Int                @default(0)
-  domain       String
-  title        String
-  description  String?
-  targetScore  Int?
-  currentScore Int?
-  status       BehaviorGoalStatus @default(NOT_STARTED)
-  strategies   String[]           @default([])
-  lesson       Lesson?            @relation(fields: [lessonId], references: [id], onDelete: SetNull)
-  lessonId     String?
-  achievedAt   DateTime?
-  notes        String?
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
+  id            String                 @id @default(uuid())
+  plan          BehaviorPlan           @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planId        String
+  sortOrder     Int                    @default(0)
+  domain        String
+  title         String
+  description   String?
+  targetScore   Int?
+  currentScore  Int?
+  status        BehaviorGoalStatus     @default(NOT_STARTED)
+  strategies    String[]               @default([])
+  lesson        Lesson?                @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  lessonId      String?
+  targetDate    DateTime?
+  // IPP goal progress, 0-100.
+  progress      Int                    @default(0)
+  ippStrategies BehaviorPlanStrategy[]
+  logs          BehaviorPlanLog[]
+  achievedAt    DateTime?
+  notes         String?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
 
   @@index([planId, sortOrder])
   @@index([planId, status])

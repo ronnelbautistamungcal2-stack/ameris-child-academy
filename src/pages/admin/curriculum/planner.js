@@ -205,7 +205,6 @@ export default function LessonPlannerPage() {
           <LessonBank
             entries={bank}
             used={usedSet}
-            onToggleUsed={(lessonId, used) => change({ action: "markUsed", lessonId, used })}
             onDragStart={(e, entry) => dragData(e, { type: "lesson", lessonId: entry.id })}
             disabled={!classRoomId}
           />
@@ -214,7 +213,7 @@ export default function LessonPlannerPage() {
             <h2 className={`text-2xl font-black ${NAVY}`}>{"\u{1F4CB}"} Lesson Planner</h2>
             <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
               <div className="flex flex-wrap items-end gap-3">
-                <ClassroomPicker picker={picker} />
+                <ClassroomPicker picker={picker} classroomLabel="Age Group" />
                 <label className={`text-xs font-semibold ${NAVY}`}>
                   Theme
                   <input
@@ -456,7 +455,7 @@ export default function LessonPlannerPage() {
   );
 }
 
-function LessonBank({ entries, used, onToggleUsed, onDragStart, disabled }) {
+function LessonBank({ entries, used, onDragStart, disabled }) {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({ term: "", age: "", category: "", subject: "" });
   const [descending, setDescending] = useState(false);
@@ -542,19 +541,16 @@ function LessonBank({ entries, used, onToggleUsed, onDragStart, disabled }) {
               >
                 <span aria-hidden className="text-gray-400">{"∷"}</span>
                 <span className="flex-1 truncate">{entry.title}</span>
-                <button
-                  type="button"
-                  onClick={() => onToggleUsed(entry.id, !isUsed)}
-                  disabled={disabled}
-                  aria-pressed={isUsed}
-                  aria-label={isUsed ? `Unmark ${entry.title} as used` : `Mark ${entry.title} as used`}
-                  title={isUsed ? "Used — click to unmark" : "Mark as used"}
-                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-black ${
-                    isUsed ? "bg-green-600 text-white" : "border border-gray-300 text-transparent hover:border-green-600 hover:text-green-600"
-                  }`}
-                >
-                  {"✓"}
-                </button>
+                {isUsed && (
+                  <span
+                    role="img"
+                    aria-label="Used in this planner"
+                    title="Used in this planner"
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-green-600 text-[11px] font-black text-white"
+                  >
+                    {"✓"}
+                  </span>
+                )}
               </li>
             );
           })}

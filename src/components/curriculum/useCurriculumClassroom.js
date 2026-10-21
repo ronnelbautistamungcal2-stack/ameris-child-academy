@@ -72,8 +72,11 @@ export default function useCurriculumClassroom() {
   return { centers, centerId, setCenterId, classrooms, classRoomId, setClassRoomId, loading, error };
 }
 
-/** Center (when there is more than one) and classroom dropdowns. */
-export function ClassroomPicker({ picker, className = "" }) {
+/**
+ * Center (when there is more than one) and classroom dropdowns. classroomLabel
+ * renames the classroom field (the Lesson Planner calls it "Age Group").
+ */
+export function ClassroomPicker({ picker, className = "", classroomLabel = "Classroom" }) {
   const select =
     "rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100";
   return (
@@ -89,7 +92,7 @@ export function ClassroomPicker({ picker, className = "" }) {
         </label>
       )}
       <label className="text-xs font-semibold text-[#0b2a5b] dark:text-blue-100">
-        Classroom
+        {classroomLabel}
         <select
           className={`${select} mt-1 block w-48`}
           value={picker.classRoomId}

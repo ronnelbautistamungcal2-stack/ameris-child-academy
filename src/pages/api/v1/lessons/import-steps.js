@@ -6,6 +6,7 @@ import { normalizeStepTerm, parseStepAge, STEP_CRITERIA_LEVELS } from "@/lib/pro
 // posts its rows here. A row whose Ref ID matches a step already in the bank
 // updates that step; any other row adds a step. Builds On / Leads To are Ref
 // IDs, linked once every row is saved so a row can point at a later one.
+// Related Lesson names a Lesson Bank lesson by its Ref ID or its title.
 
 const MAX_ROWS = 2000;
 const text = (value, max) => String(value ?? "").trim().replace(/\s+/g, " ").slice(0, max);
@@ -72,6 +73,33 @@ export default async function handler(req, res) {
       return categoryIds.get(key);
     }
 
+    // Lesson Bank lessons for Related Lesson: by Ref ID (on the lesson or its
+    // goals, where the bank keeps it) and by title.
+    const bankRows = await prisma.$queryRaw`
+      SELECT l.id, l.title, l.reference, g."passingCriteria"->>'reference' AS "goalRef"
+      FROM "Lesson" l LEFT JOIN "LessonGoal" g ON g."lessonId" = l.id
+      WHERE l."centerId" = ${centerId} AND l."isStep" = false`;
+    const lessonsByRef = new Map();
+    const lessonsByTitle = new Map();
+    const remember = (map, key, id) => {
+      if (!key) return;
+      if (!map.has(key)) map.set(key, new Set());
+      map.get(key).add(id);
+    };
+    for (const l of bankRows) {
+      remember(lessonsByRef, lower(l.reference), l.id);
+      remember(lessonsByRef, lower(l.goalRef), l.id);
+      remember(lessonsByTitle, lower(l.title), l.id);
+    }
+    function relatedLessonFor(row) {
+      const value = lower(row.raw.relatedLesson);
+      if (!value) return { id: null };
+      const matches = lessonsByRef.get(value) || lessonsByTitle.get(value);
+      if (!matches) return { warning: `Related Lesson: no Lesson Bank lesson with Ref ID or title "${text(row.raw.relatedLesson, 120)}"` };
+      if (matches.size > 1) return { warning: `Related Lesson: "${text(row.raw.relatedLesson, 120)}" matches more than one lesson; use its Ref ID` };
+      return { id: [...matches][0] };
+    }
+
     const existing = await prisma.lesson.findMany({ where: { centerId, isStep: true }, select: { id: true, reference: true } });
     const idByRef = new Map(existing.filter((s) => s.reference).map((s) => [s.reference.trim().toLowerCase(), s.id]));
 
@@ -96,7 +124,11 @@ export default async function handler(req, res) {
         description: String(raw.description ?? "").trim().slice(0, 2000) || null,
         criteria,
         notes: String(raw.notes ?? "").trim().slice(0, 2000) || null,
+        type: text(raw.type, 80) || null,
       };
+      const related = relatedLessonFor(row);
+      if (related.warning) warnings.push({ line: row.line, reason: related.warning });
+      else data.linkedLessonId = related.id;
       const id = idByRef.get(row.reference.toLowerCase());
       if (id) {
         // Columns missing from the file leave those fields as they are.
@@ -109,6 +141,8 @@ export default async function handler(req, res) {
           description: ["description"],
           criteria: STEP_CRITERIA_LEVELS.map(({ key }) => key),
           notes: ["notes"],
+          type: ["type"],
+          linkedLessonId: ["relatedLesson"],
         };
         for (const [field, columns] of Object.entries(sources)) {
           if (columns.every((column) => raw[column] === undefined)) delete data[field];

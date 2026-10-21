@@ -412,7 +412,6 @@ model ClassRoom {
   lessonCalendarAnchors     LessonCalendarAnchor[]
   lessonPlanner             LessonPlanner?
   lessonPlanCells           LessonPlanCell[]
-  lessonUsedMarks           LessonUsedMark[]
 }
 
 model TeacherClass {
@@ -541,6 +540,8 @@ model Lesson {
   isStep                  Boolean                  @default(false)
   criteria                Json?
   notes                   String?
+  // Optional Type from Curriculum > Categories (e.g. Regular, DCCS), on lessons and steps.
+  type                    String?
   media                   String[]                 @default([])
   goals                   LessonGoal[]
   progress                Progress[]
@@ -552,7 +553,6 @@ model Lesson {
   dailyChecklistItems     DailyChecklistItem[]
   supplyRequests          SupplyRequest[]
   planCells               LessonPlanCell[]
-  usedMarks               LessonUsedMark[]
 
   @@index([policyDocumentId])
   @@index([linkedLessonId])
@@ -636,19 +636,6 @@ model LessonPlanCell {
   updatedAt   DateTime  @updatedAt
 
   @@unique([classRoomId, day, rowIndex])
-  @@index([lessonId])
-}
-
-// Lessons ticked as used in a classroom's Lesson Bank.
-model LessonUsedMark {
-  id          String    @id @default(uuid())
-  classRoom   ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
-  classRoomId String
-  lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  lessonId    String
-  createdAt   DateTime  @default(now())
-
-  @@unique([classRoomId, lessonId])
   @@index([lessonId])
 }
 

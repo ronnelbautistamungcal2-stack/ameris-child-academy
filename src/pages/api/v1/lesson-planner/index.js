@@ -18,16 +18,16 @@ function plannerFor(classRoom) {
 }
 
 async function snapshot(classRoom) {
-  const [planner, cells, used] = await Promise.all([
+  const [planner, cells] = await Promise.all([
     plannerFor(classRoom),
     prisma.lessonPlanCell.findMany({ where: { classRoomId: classRoom.id }, orderBy: [{ day: "asc" }, { rowIndex: "asc" }] }),
-    prisma.lessonUsedMark.findMany({ where: { classRoomId: classRoom.id }, select: { lessonId: true } }),
   ]);
   return {
     theme: planner.theme || "",
     dayCount: planner.dayCount,
     cells: cells.map(cellOut),
-    usedLessonIds: used.map((u) => u.lessonId),
+    // A bank lesson is checked as used once it is in this classroom's planner.
+    usedLessonIds: [...new Set(cells.map((c) => c.lessonId).filter(Boolean))],
   };
 }
 
@@ -42,11 +42,11 @@ function slot(value, dayCount) {
 /**
  * GET /api/v1/lesson-planner?centerId=&classRoomId=
  *     The classroom's Lesson Planner: theme, number of day columns, the lesson
- *     in each Day × category cell, and the lessons ticked as used.
+ *     in each Day × category cell, and the bank lessons it uses.
  * PUT /api/v1/lesson-planner  { centerId, classRoomId, action, ... }  (admin)
  *     setCell { day, rowIndex, lessonId?, title? }  blank clears the cell
  *     moveCell { from: {day,rowIndex}, to: {day,rowIndex} }  swaps if taken
- *     setTheme { theme }, addDay, deleteDay { day }, markUsed { lessonId, used }
+ *     setTheme { theme }, addDay, deleteDay { day }
  *     Responds with the whole planner.
  */
 export default async function handler(req, res) {
@@ -136,21 +136,6 @@ export default async function handler(req, res) {
         ops.push(prisma.lessonPlanCell.update({ where: { id: source.id }, data: to }));
         if (target) ops.push(prisma.lessonPlanCell.update({ where: { id: target.id }, data: from }));
         await prisma.$transaction(ops);
-        break;
-      }
-      case "markUsed": {
-        const lessonId = String(body.lessonId || "");
-        const lesson = await prisma.lesson.findFirst({ where: { id: lessonId, centerId: classRoom.centerId }, select: { id: true } });
-        if (!lesson) return bad("That lesson is not in this center's bank");
-        if (body.used) {
-          await prisma.lessonUsedMark.upsert({
-            where: { classRoomId_lessonId: { classRoomId, lessonId } },
-            create: { classRoomId, lessonId },
-            update: {},
-          });
-        } else {
-          await prisma.lessonUsedMark.deleteMany({ where: { classRoomId, lessonId } });
-        }
         break;
       }
       default:

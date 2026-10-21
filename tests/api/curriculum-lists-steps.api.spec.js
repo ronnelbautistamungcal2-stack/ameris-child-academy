@@ -99,4 +99,59 @@ test.describe("Curriculum lists, steps and lesson theme @api", () => {
     const after = await (await apiGet(request, `/api/v1/lessons?centerId=${centerId}`, admin)).json();
     expect(after.find((l) => l.id === collage.id).goals[0].passingCriteria.theme).toBe("Autumn");
   });
+
+  test("lessons and steps take an optional Type, kept when an edit leaves it out", async ({ request }) => {
+    const admin = await loginAsAdmin(request);
+    const rec = await apiPost(
+      request,
+      "/api/v1/curriculum/records",
+      { centerId, lessonTitle: "QA Counting Bears", reference: "LS-777", category: "Math", childAge: "4 Years", type: "DCCS" },
+      admin,
+    );
+    expect(rec.status(), await rec.text()).toBeLessThan(300);
+    let lessons = await (await apiGet(request, `/api/v1/lessons?centerId=${centerId}&kind=lesson`, admin)).json();
+    const bears = lessons.find((l) => l.title === "QA Counting Bears");
+    expect(bears.type).toBe("DCCS");
+    await apiPatch(request, `/api/v1/curriculum/records/${bears.goals[0].id}`, { lessonTitle: "QA Counting Bears", reference: "LS-777", category: "Math", childAge: "4 Years" }, admin);
+    lessons = await (await apiGet(request, `/api/v1/lessons?centerId=${centerId}&kind=lesson`, admin)).json();
+    expect(lessons.find((l) => l.id === bears.id).type).toBe("DCCS");
+
+    const step = await (await apiPost(request, "/api/v1/lessons", { centerId, isStep: true, title: "QA Typed Step", reference: "SP-T1", type: "Regular" }, admin)).json();
+    expect(step.type).toBe("Regular");
+    const cleared = await (await apiPut(request, `/api/v1/lessons/${step.id}`, { title: "QA Typed Step", media: [], type: "" }, admin)).json();
+    expect(cleared.type).toBeNull();
+  });
+
+  test("the steps import links Related Lesson by Ref ID or title", async ({ request }) => {
+    const admin = await loginAsAdmin(request);
+    const res = await apiPost(
+      request,
+      "/api/v1/lessons/import-steps",
+      {
+        centerId,
+        rows: [
+          { line: 2, reference: "SP-R1", title: "Counts to five", relatedLesson: "LS-777", type: "DCCS" },
+          { line: 3, reference: "SP-R2", title: "Glues leaves", relatedLesson: "qa leaf collage" },
+          { line: 4, reference: "SP-R3", title: "Sorts colors", relatedLesson: "No Such Lesson" },
+        ],
+      },
+      admin,
+    );
+    expect(res.status(), await res.text()).toBe(200);
+    const result = await res.json();
+    expect(result.created).toBe(3);
+    expect(result.warnings).toEqual([expect.objectContaining({ line: 4, reason: expect.stringContaining("Related Lesson") })]);
+
+    const all = await (await apiGet(request, `/api/v1/lessons?centerId=${centerId}`, admin)).json();
+    const byTitle = Object.fromEntries(all.map((l) => [l.title, l]));
+    expect(byTitle["Counts to five"].linkedLessonId).toBe(byTitle["QA Counting Bears"].id);
+    expect(byTitle["Counts to five"].type).toBe("DCCS");
+    expect(byTitle["Glues leaves"].linkedLessonId).toBe(byTitle["QA Leaf Collage"].id);
+    expect(byTitle["Sorts colors"].linkedLessonId).toBeNull();
+
+    // A re-import without the column leaves the link alone.
+    await apiPost(request, "/api/v1/lessons/import-steps", { centerId, rows: [{ line: 2, reference: "SP-R1", title: "Counts to five" }] }, admin);
+    const again = await (await apiGet(request, `/api/v1/lessons?centerId=${centerId}&kind=step`, admin)).json();
+    expect(again.find((l) => l.reference === "SP-R1").linkedLessonId).toBe(byTitle["QA Counting Bears"].id);
+  });
 });

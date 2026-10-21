@@ -1,14 +1,13 @@
-import { useSession } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 
 // Shows the protected "Lesson" file(s) of a curriculum lesson. Files are
 // drawn onto <canvas> elements, so there is no browser PDF toolbar, no
 // selectable text and no image to "Save as". Copy, right-click, drag, print
-// and save shortcuts are blocked, every page carries the viewer's name as a
-// watermark, and the pages blur while the window is not focused.
+// and save shortcuts are blocked, and the pages blur while the window is not
+// focused. There is no watermark: the client found it distracting
+// (2026-10-21).
 //
-// None of this can stop a phone camera or every screen-capture tool; the
-// watermark is what makes a leaked copy traceable.
+// None of this can stop a phone camera or every screen-capture tool.
 
 let pdfjsPromise = null;
 function loadPdfJs() {
@@ -30,27 +29,6 @@ function isPdf(url, contentType) {
   return /pdf/i.test(contentType || "") || /\.pdf($|\?)/i.test(url);
 }
 
-function drawWatermark(ctx, width, height, text) {
-  if (!text) return;
-  const fontSize = Math.max(14, Math.round(width / 38));
-  ctx.save();
-  ctx.globalAlpha = 0.13;
-  ctx.fillStyle = "#1e3a8a";
-  ctx.font = `600 ${fontSize}px sans-serif`;
-  ctx.translate(width / 2, height / 2);
-  ctx.rotate(-Math.PI / 6);
-  const stepX = ctx.measureText(text).width + fontSize * 4;
-  const stepY = fontSize * 6;
-  const span = Math.hypot(width, height);
-  for (let y = -span; y < span; y += stepY) {
-    const offset = (Math.round(y / stepY) % 2) * (stepX / 2);
-    for (let x = -span; x < span; x += stepX) {
-      ctx.fillText(text, x + offset, y);
-    }
-  }
-  ctx.restore();
-}
-
 function newCanvas(cssWidth, pixelWidth, pixelHeight) {
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(pixelWidth);
@@ -64,7 +42,7 @@ function newCanvas(cssWidth, pixelWidth, pixelHeight) {
   return canvas;
 }
 
-async function renderFile({ url, container, cssWidth, watermark, isCancelled }) {
+async function renderFile({ url, container, cssWidth, isCancelled }) {
   const res = await fetch(url, { credentials: "same-origin", cache: "no-store" });
   if (!res.ok) throw new Error("This lesson file could not be loaded.");
   const contentType = res.headers.get("content-type") || "";
@@ -84,7 +62,6 @@ async function renderFile({ url, container, cssWidth, watermark, isCancelled }) 
         const canvas = newCanvas(cssWidth, viewport.width, viewport.height);
         const ctx = canvas.getContext("2d");
         await page.render({ canvasContext: ctx, viewport }).promise;
-        drawWatermark(ctx, canvas.width, canvas.height, watermark);
         if (isCancelled()) return;
         container.appendChild(canvas);
       }
@@ -99,23 +76,17 @@ async function renderFile({ url, container, cssWidth, watermark, isCancelled }) 
   const canvas = newCanvas(cssWidth, bitmap.width * scale, bitmap.height * scale);
   const ctx = canvas.getContext("2d");
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  drawWatermark(ctx, canvas.width, canvas.height, watermark);
   if (!isCancelled()) container.appendChild(canvas);
 }
 
 const blockEvent = (e) => e.preventDefault();
 
 export default function ProtectedLessonViewer({ urls, className = "" }) {
-  const { data: session } = useSession();
   const pagesRef = useRef(null);
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState("");
   const [obscured, setObscured] = useState(false);
 
-  const viewer = session?.user?.name || session?.user?.email || "";
-  const watermark = viewer
-    ? `${viewer} · ${new Date().toLocaleDateString()} · Ameris Academy`
-    : "Ameris Academy · Do not copy";
   const urlKey = (urls || []).join("\n");
 
   useEffect(() => {
@@ -135,7 +106,6 @@ export default function ProtectedLessonViewer({ urls, className = "" }) {
             url,
             container,
             cssWidth,
-            watermark,
             isCancelled: () => cancelled,
           });
         }
@@ -152,7 +122,7 @@ export default function ProtectedLessonViewer({ urls, className = "" }) {
       cancelled = true;
       container.replaceChildren();
     };
-  }, [urlKey, watermark]);
+  }, [urlKey]);
 
   useEffect(() => {
     function onKeyDown(e) {

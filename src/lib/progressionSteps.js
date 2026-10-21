@@ -64,6 +64,8 @@ export function parseStepDetails(body) {
     data.criteria = criteria;
   }
   if (has("notes")) data.notes = text(body.notes, 2000);
+  // Optional Type (Curriculum > Categories), on steps and lessons alike.
+  if (has("type")) data.type = text(body.type, 80);
   return data;
 }
 
@@ -91,6 +93,8 @@ export const STEP_IMPORT_COLUMNS = [
   { key: "mastery", header: "Mastery", aliases: ["mastery"] },
   { key: "buildsOn", header: "Builds On (Ref ID)", aliases: ["buildson", "buildsonrefid", "buildsonpreviousstep", "previousstep", "priorstep"] },
   { key: "leadsTo", header: "Leads To (Ref ID)", aliases: ["leadsto", "leadstorefid", "leadstonextstep", "nextstep"] },
+  { key: "relatedLesson", header: "Related Lesson", aliases: ["relatedlesson", "relatedlessonrefid", "relatedlessonoptional", "linkedlesson"] },
+  { key: "type", header: "Type", aliases: ["type", "typeoptional"] },
   { key: "notes", header: "Notes", aliases: ["notes", "additionalnotes"] },
 ];
 

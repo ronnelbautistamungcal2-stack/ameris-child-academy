@@ -1,3 +1,4 @@
+import StatusMixBar from "@/components/sop/StatusMixBar";
 import Pager from "@/components/ui/Pager";
 import { apiJson } from "@/lib/api";
 import { SOP_LEVELS, SOP_STATUSES } from "@/lib/sop";
@@ -17,20 +18,6 @@ function StatusPill({ status }) {
   const meta = SOP_STATUSES.find((s) => s.value === status);
   if (!meta) return <span className="text-xs text-gray-400">{"—"}</span>;
   return <span className={`inline-block min-w-[90px] rounded-md px-3 py-1 text-center text-xs font-bold ${meta.pill}`}>{meta.label}</span>;
-}
-
-function Distribution({ distribution }) {
-  return (
-    <div className="flex w-full max-w-md overflow-hidden rounded" aria-label="Goal status mix">
-      {SOP_STATUSES.map((s) => (
-        <div key={s.value} className="flex-1 text-center">
-          <div className={`h-3 ${s.bar}`} />
-          <div className="text-[10px] font-bold text-gray-700 dark:text-gray-300">{distribution?.[s.value] ?? 0}%</div>
-          <div className="text-[9px] text-gray-500">{s.label}</div>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function ageText(birthDate) {
@@ -256,7 +243,7 @@ export default function ProgressionTracking({ profileHref }) {
                         </span>
                         <span className="block text-xs text-gray-500">{goals.length} Active Goals</span>
                       </span>
-                      <Distribution distribution={detail.categories?.[name]?.distribution} />
+                      <StatusMixBar distribution={detail.categories?.[name]?.distribution} className="max-w-md flex-1" />
                     </button>
                     {isOpen && (
                       <div className="border-t border-gray-100 p-3 dark:border-gray-800">

@@ -3,6 +3,7 @@ import { apiJson } from "@/lib/api";
 import { useToast } from "@/contexts/ToastContext";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { BEHAVIOR_LEVEL_OPTIONS, BEHAVIOR_TYPE_OPTIONS, CHARACTER_HIGHLIGHT_TYPE_OPTIONS } from "@/lib/dailyLogOptions";
 
 const TYPE_LABELS = {
   DIAPER_CHANGE: "Diaper Change",
@@ -35,16 +36,7 @@ const PORTION_OPTIONS = [
   { value: "NONE", label: "None" },
 ];
 
-const BEHAVIOR_TYPE_OPTIONS = [
-  { value: "PHYSICAL_VIOLENCE", label: "Physical violence" },
-  { value: "VIRTUE", label: "Virtue" },
-  { value: "RESPECT", label: "Respect" },
-  { value: "OBEDIENCE", label: "Obedience" },
-  { value: "HONESTY", label: "Honesty" },
-  { value: "OTHER", label: "Other" },
-];
 
-const BEHAVIOR_LEVEL_OPTIONS = ["1", "2", "3", "4"];
 
 const DIAPER_TYPE_OPTIONS = [
   { value: "BM", label: "BM" },
@@ -58,15 +50,6 @@ const TOILETING_TYPE_OPTIONS = [
   { value: "ACCIDENT", label: "Accident" },
 ];
 
-const CHARACTER_HIGHLIGHT_TYPE_OPTIONS = [
-  { value: "BROTHERS_KEEPER", label: "Brother's Keeper" },
-  { value: "CHAMPION_OF_VIRTUE", label: "Champion of Virtue" },
-  { value: "FULL_REPENTANCE", label: "Full Repentance" },
-  { value: "CHAMPION_OF_OBEDIENCE", label: "Champion of Obedience" },
-  { value: "CHAMPION_OF_RESPECT", label: "Champion of Respect" },
-  { value: "CHAMPION_OF_HONESTY", label: "Champion of Honesty" },
-  { value: "OTHER", label: "Other" },
-];
 
 function supportsBehaviorDetails(type) {
   return type === "BEHAVIOR";

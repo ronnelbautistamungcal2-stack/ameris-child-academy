@@ -41,7 +41,7 @@ const reached = (level) => level === "COMPETENCY" || level === "MASTERY";
 
 export const SOP_STATUSES = [
   { value: "CRITICAL", label: "Critical", bar: "bg-red-400", pill: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200" },
-  { value: "AT_RISK", label: "At Risk", bar: "bg-orange-300", pill: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200" },
+  { value: "AT_RISK", label: "At Risk", bar: "bg-orange-400", pill: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200" },
   { value: "ON_TRACK", label: "On Track", bar: "bg-yellow-300", pill: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200" },
   { value: "AHEAD", label: "Ahead", bar: "bg-green-300", pill: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200" },
   { value: "EXCELLING", label: "Excelling", bar: "bg-green-700", pill: "bg-emerald-200 text-emerald-900 dark:bg-emerald-900/50 dark:text-emerald-200" },

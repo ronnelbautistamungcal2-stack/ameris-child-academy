@@ -1,7 +1,7 @@
 import ParentLayout from "@/components/parent/ParentLayout";
 import { ParentEmpty, ParentSurface } from "@/components/parent/ParentUI";
 import ChildSnapshotDialog from "@/components/parent/ChildSnapshotDialog";
-import StudentPerformanceReportPanel from "@/components/reports/StudentPerformanceReportPanel";
+import StudentPerformance from "@/components/reports/StudentPerformance";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { ageInYears, formatAgeLong } from "@/lib/ageUtils";
@@ -252,19 +252,7 @@ export default function ParentChildren() {
               onEditSnapshot={() => setEditingSnapshot(true)}
             />
 
-            <ParentSurface>
-              <div className="flex items-center gap-2.5 border-b border-gray-100 pb-4 dark:border-gray-700">
-                <span aria-hidden="true" className="shrink-0 text-blue-600 dark:text-sky-400">
-                  <ChartIcon />
-                </span>
-                <h2 className="text-lg font-black tracking-tight text-[#12386a] dark:text-gray-100">
-                  Student Performance Report
-                </h2>
-              </div>
-              <div className="pt-4">
-                <StudentPerformanceReportPanel childId={selectedChildId} />
-              </div>
-            </ParentSurface>
+            <StudentPerformance childId={selectedChildId} />
           </div>
         ) : null}
       </div>
@@ -433,16 +421,6 @@ function UsersIcon() {
       <path strokeLinecap="round" strokeLinejoin="round" d="M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19" />
       <circle cx="10" cy="8" r="3" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M20 19v-1.5a3.5 3.5 0 0 0-2.6-3.38M15.5 5.2a3 3 0 0 1 0 5.6" />
-    </svg>
-  );
-}
-
-function ChartIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6">
-      <rect x="3.5" y="12" width="4" height="8.5" rx="1" />
-      <rect x="10" y="4" width="4" height="16.5" rx="1" />
-      <rect x="16.5" y="8" width="4" height="12.5" rx="1" />
     </svg>
   );
 }

@@ -6,6 +6,7 @@ import {
   getChecklistAssignedUserIds,
   getChecklistAssignedUsers,
 } from "@/lib/dailyChecklistAssignees";
+import { isLogActivityLink } from "@/lib/checklistLinks";
 
 function buildCompletionInclude(date) {
   if (!date) return false;
@@ -28,7 +29,8 @@ function buildNotesInclude(date) {
   };
 }
 
-export function buildDailyChecklistInclude(date) {
+// viewerId: whose Log Activity visits to load for the date.
+export function buildDailyChecklistInclude(date, viewerId = "") {
   const completionInclude = buildCompletionInclude(date);
   const notesInclude = buildNotesInclude(date);
 
@@ -80,6 +82,9 @@ export function buildDailyChecklistInclude(date) {
           },
         },
         ...(completionInclude ? { completions: completionInclude } : {}),
+        ...(date && viewerId
+          ? { linkVisits: { where: { date: new Date(date), userId: viewerId }, select: { id: true } } }
+          : {}),
       },
     },
     classRoom: { select: { id: true, name: true, ageRange: true } },
@@ -113,9 +118,17 @@ export function serializeDailyChecklist(checklist) {
     assignedUsers,
   });
   const { classrooms, assignees, ...rest } = checklist;
+  const items = Array.isArray(checklist.items)
+    ? checklist.items.map(({ linkVisits, ...item }) => ({
+        ...item,
+        logActivityLink: isLogActivityLink(item.directLink),
+        logActivityVisited: Array.isArray(linkVisits) && linkVisits.length > 0,
+      }))
+    : checklist.items;
 
   return {
     ...rest,
+    items,
     classRoomId: checklist.classRoomId || classRoomIds[0] || null,
     classRoom: checklist.classRoom || classRooms[0] || null,
     classRoomIds,

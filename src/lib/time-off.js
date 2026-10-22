@@ -24,15 +24,10 @@ export function isUnexcusedType(value) {
   return normalizeRawType(value) === "UNEXCUSED";
 }
 
+// Paid and unpaid time off were dropped (client decision 2026-10-22): a
+// request is just time off, unless a coach recorded it as unexcused.
 export function getTimeOffTypeLabel(value) {
-  const normalized = normalizeRawType(value);
-  if (normalized === "PAID" || normalized === "PTO") return "Paid";
-  if (normalized === "UNPAID") return "Unpaid";
-  if (normalized === "UNEXCUSED") return "Unexcused";
-  if (normalized === "SICK") return "Sick";
-  if (normalized === "OTHER") return "Other";
-  if (!normalized) return "Paid";
-  return normalized.charAt(0) + normalized.slice(1).toLowerCase();
+  return normalizeRawType(value) === "UNEXCUSED" ? "Unexcused" : "Time Off";
 }
 
 export function calculateTimeOffHours(startDate, endDate) {

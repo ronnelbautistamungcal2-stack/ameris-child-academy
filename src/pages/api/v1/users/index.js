@@ -1,8 +1,9 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { pinStatusOf } from "@/lib/kioskPins";
 import { normalizeMiddleInitial } from "@/lib/personNames";
+import { EMPLOYED_WHERE } from "@/lib/employment";
 import {
   hasEmployeeRole,
   normalizeRoles,
@@ -48,8 +49,36 @@ function sanitizeUser(user) {
   return safeUser;
 }
 
+// Coaches and HR can list the currently employed staff of a center they
+// belong to (names and roles only), e.g. to assign checklists or schedule
+// shifts.
+async function coachStaffList(req, res, session) {
+  const centerId = String(req.query.centerId || "");
+  if (!centerId || !(await hasAccessToCenter(session.user.id, centerId))) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  const requested = String(req.query.roles || req.query.role || "")
+    .split(",")
+    .map((value) => value.trim().toUpperCase())
+    .filter((value) => STAFF_ROLES.includes(value));
+  const roleFilter = requested.length ? requested : STAFF_ROLES;
+  const users = await prisma.user.findMany({
+    where: {
+      centers: { some: { centerId } },
+      ...EMPLOYED_WHERE,
+      OR: [{ role: { in: roleFilter } }, { roles: { hasSome: roleFilter } }],
+    },
+    select: { id: true, name: true, email: true, role: true, roles: true, staffDepartment: true, pictureUrl: true },
+    orderBy: [{ name: "asc" }, { email: "asc" }],
+  });
+  return res.status(200).json(users.map((user) => ({ ...user, roles: userRoles(user) })));
+}
+
 export default async function handler(req, res) {
   const session = await getSession(req, res);
+  if (["COACH", "HR_STAFF"].includes(session?.user.role) && req.method === "GET") {
+    return coachStaffList(req, res, session);
+  }
   if (!session || session.user.role !== "ADMIN") {
     return res.status(403).json({ error: "Only admins can manage users" });
   }

@@ -39,5 +39,5 @@ export default function PrintableReport({ title, subtitle, header, generatedAt, 
 }
 
 export const reportTable = "w-full border-collapse text-sm text-black";
-export const reportTh = "border border-gray-300 bg-gray-100 px-2 py-1.5 text-center font-semibold text-black";
+export const reportTh = "border border-gray-300 bg-[#f3f4f6] px-2 py-1.5 text-center font-semibold text-black";
 export const reportTd = "border border-gray-300 px-2 py-1 text-center text-black";

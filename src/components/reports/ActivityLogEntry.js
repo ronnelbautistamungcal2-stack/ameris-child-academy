@@ -5,7 +5,7 @@ import { useState } from "react";
 // this on My Children before the Student Performance Report was rebuilt and
 // the client asked to keep it as it is.
 
-const ACTIVITY_TYPE_LABELS = {
+export const ACTIVITY_TYPE_LABELS = {
   DIAPER_CHANGE: "Diaper Change",
   NAP: "Nap",
   BOTTLE: "Bottle",
@@ -124,12 +124,13 @@ const ACTIVITY_PILL = {
   DEFAULT: "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200",
 };
 
+export const ACTIVITY_ICONS = {
+  NAP: "💤", BOTTLE: "🍼", MEAL: "🍽️", SNACK: "🥨",
+  DIAPER_CHANGE: "🧷", ACTIVITY: "🎨", CITIZENSHIP: "⭐",
+  ACCOMPLISHMENT: "🏆", INCIDENT: "⚠️", BEHAVIOR: "📋",
+  TASK_CHECKLIST: "✅", TOILETING: "🚽", CHARACTER_HIGHLIGHT: "🏅", OTHER: "📝",
+};
+
 function ActivityIcon({ type }) {
-  const icons = {
-    NAP: "💤", BOTTLE: "🍼", MEAL: "🍽️", SNACK: "🥨",
-    DIAPER_CHANGE: "🧷", ACTIVITY: "🎨", CITIZENSHIP: "⭐",
-    ACCOMPLISHMENT: "🏆", INCIDENT: "⚠️", BEHAVIOR: "📋",
-    TASK_CHECKLIST: "✅", TOILETING: "🚽", OTHER: "📝",
-  };
-  return <span className="text-base">{icons[type] || "📄"}</span>;
+  return <span className="text-base">{ACTIVITY_ICONS[type] || "📄"}</span>;
 }

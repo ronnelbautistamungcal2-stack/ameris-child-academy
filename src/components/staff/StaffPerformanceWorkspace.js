@@ -952,13 +952,11 @@ function StaffPerformanceReport({ centerId }) {
 
           {/* HR */}
           <WorkspaceSection title="HR" description="">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {[
                 { label: "Hours Worked", value: report.hr?.hoursWorked ?? "—" },
                 { label: "Lates", value: report.hr?.lates ?? "—" },
                 { label: "Absences", value: report.hr?.absences ?? "—" },
-                { label: "PTO Avail. (hrs)", value: report.hr?.ptoAvailable ?? "—" },
-                { label: "UTO Avail. (hrs)", value: report.hr?.utoAvailable ?? "—" },
               ].map((s) => (
                 <WorkspaceStat key={s.label} label={s.label} value={String(s.value)} />
               ))}

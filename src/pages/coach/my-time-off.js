@@ -1,10 +1,13 @@
 import CoachLayout from "@/components/coach/CoachLayout";
-import ComingSoon from "@/components/shell/ComingSoon";
+import EmployeeTimeOffPage from "@/components/timeoff/EmployeeTimeOffPage";
 
-export default function MyTimeOffPage() {
+export default function CoachMyTimeOff() {
   return (
-    <CoachLayout title="My Time Off">
-      <ComingSoon title="My Time Off" />
-    </CoachLayout>
+    <EmployeeTimeOffPage
+      LayoutComponent={CoachLayout}
+      title="My Time Off Request"
+      description="Submit time-off requests and view your attendance summary."
+      requestHelpText="Approvals are managed from Staff Management."
+    />
   );
 }

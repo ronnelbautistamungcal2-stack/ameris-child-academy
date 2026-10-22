@@ -1,12 +1,8 @@
+import StaffAttendanceOverview from "@/components/attendance/StaffAttendanceOverview";
 import StaffLayout from "@/components/staff/StaffLayout";
-import ComingSoon from "@/components/shell/ComingSoon";
 
 const ROLES = ["HR_STAFF"];
 
-export default function StaffAttendancePage() {
-  return (
-    <StaffLayout title="Staff Attendance Overview" roles={ROLES}>
-      <ComingSoon title="Staff Attendance Overview" />
-    </StaffLayout>
-  );
+export default function HrStaffAttendancePage() {
+  return <StaffAttendanceOverview Layout={StaffLayout} layoutProps={{ roles: ROLES }} />;
 }

@@ -180,10 +180,9 @@ export default function CalendarPage() {
         from: staffSummaryFrom,
         to: staffSummaryTo,
       });
-      const [attendance, requests, balances] = await Promise.all([
+      const [attendance, requests] = await Promise.all([
         apiJson(`/api/v1/staff-attendance/summary?${qs.toString()}`),
         apiJson(`/api/v1/time-off?centerId=${centerId}&userId=${selectedUserId}`),
-        apiJson(`/api/v1/time-off/balances?centerId=${centerId}&userId=${selectedUserId}`),
       ]);
       const filteredRequests = (Array.isArray(requests) ? requests : []).filter((request) => {
         const requestStart = toDateInput(request.startDate);
@@ -193,7 +192,6 @@ export default function CalendarPage() {
       setStaffSummary({
         attendance,
         requests: filteredRequests,
-        balanceSummary: balances?.summary || null,
       });
     } catch {
       setStaffSummary(null);
@@ -702,7 +700,7 @@ export default function CalendarPage() {
                   Employee Summary
                 </div>
                 <div style={{ marginTop: 4, fontSize: 13, color: "var(--admin-text-muted)" }}>
-                  View time off, paid and unpaid hours available, lates, and absences for a specific staff member.
+                  View time off, lates, and absences for a specific staff member.
                 </div>
               </div>
               <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", width: "min(720px, 100%)" }}>
@@ -756,8 +754,6 @@ export default function CalendarPage() {
                   <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--admin-text-muted)" }}>Time Off</div>
                   <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
                     <SummaryStat label="Requests" value={staffSummary.requests.length} />
-                    <SummaryStat label="Paid Available" value={staffSummary.balanceSummary?.paidAvailable ?? 0} />
-                    <SummaryStat label="Unpaid Available" value={staffSummary.balanceSummary?.unpaidAvailable ?? 0} />
                   </div>
                 </div>
 

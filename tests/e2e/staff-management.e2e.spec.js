@@ -159,9 +159,12 @@ test.describe("Staff management browser QA", () => {
   });
 
   test("selected-staff shift copy only copies the chosen staff", async ({ page, request }) => {
-    const currentWeekStart = getMonday();
-    const previousWeekStart = addDays(currentWeekStart, -7);
-    const currentWeekEnd = addDays(currentWeekStart, 6);
+    // Shift dates are stored at UTC midnight of the local calendar day.
+    const utcDay = (d) => new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const localMonday = getMonday();
+    const currentWeekStart = utcDay(localMonday);
+    const previousWeekStart = utcDay(addDays(localMonday, -7));
+    const currentWeekEnd = utcDay(addDays(localMonday, 6));
 
     await prisma.shiftSchedule.deleteMany({
       where: {
@@ -214,8 +217,8 @@ test.describe("Staff management browser QA", () => {
 
     await page.getByRole("button", { name: "Copy selected staff (1)" }).click();
     await expect(page.getByText("Copied 1 shifts from the previous week for the selected staff")).toBeVisible();
-    await expect(teacherRow).toContainText("07:13-11:47");
-    await expect(coachRow).not.toContainText("12:19-16:33");
+    await expect(teacherRow).toContainText("7:13 AM - 11:47 AM");
+    await expect(coachRow).not.toContainText("12:19 PM - 4:33 PM");
 
     const qaShifts = await prisma.shiftSchedule.findMany({
       where: {

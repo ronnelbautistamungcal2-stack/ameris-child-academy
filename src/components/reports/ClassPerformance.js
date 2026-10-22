@@ -5,25 +5,12 @@ import { apiJson } from "@/lib/api";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 
-// Class Performance Report (client mockups 2026-10-02): goal totals,
-// Citizenship Grade (class average), Milestones Grade, Course Correction and
+// Class Performance Report (client mockups 2026-10-02): Citizenship Grade (class average), Milestones Grade, Course Correction and
 // Character Highlight charts, Students on an Individual Plan, Students on Red
 // Flag and the class's Student Activity Log.
 
 const CitizenshipChart = dynamic(() => import("@/components/reports/CitizenshipChart"), { ssr: false });
 const CountsBarChart = dynamic(() => import("@/components/reports/CountsBarChart"), { ssr: false });
-
-function Stat({ icon, value, label, tone }) {
-  return (
-    <div className="flex items-center gap-3 px-4 py-2">
-      <span aria-hidden className={`text-3xl ${tone}`}>{icon}</span>
-      <div>
-        <div className={`text-2xl font-black ${NAVY}`}>{value}</div>
-        <div className="text-xs font-semibold uppercase tracking-widest text-gray-500">{label}</div>
-      </div>
-    </div>
-  );
-}
 
 function counts(entries, types, inRange) {
   const tally = Object.fromEntries(types.map((t) => [t.value, 0]));
@@ -108,12 +95,6 @@ export default function ClassPerformance({ classRoomId, header = null }) {
         <h2 className={`flex items-center gap-2 text-2xl font-black ${NAVY}`}>
           <span aria-hidden>{"\u{1F4CA}"}</span> Class Performance Report
         </h2>
-        <div className="mt-3 grid grid-cols-2 divide-gray-200 border-t border-gray-100 pt-3 md:grid-cols-4 md:divide-x dark:divide-gray-700 dark:border-gray-800">
-          <Stat icon={"\u{1F4CB}"} value={data.goals.total} label="Total Goals" tone="text-gray-500" />
-          <Stat icon={"✅"} value={data.goals.completed} label="Completed" tone="text-green-600" />
-          <Stat icon={"❌"} value={data.goals.failed} label="Failed" tone="text-red-600" />
-          <Stat icon={"◴"} value={`${data.goals.completionRate}%`} label="Completion Rate" tone="text-blue-500" />
-        </div>
       </section>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">

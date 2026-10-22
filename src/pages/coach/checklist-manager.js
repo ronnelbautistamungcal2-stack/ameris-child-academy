@@ -1,10 +1,6 @@
 import CoachLayout from "@/components/coach/CoachLayout";
-import ComingSoon from "@/components/shell/ComingSoon";
+import ChecklistManagerPage from "@/components/checklists/ChecklistManagerPage";
 
-export default function ChecklistManagerPage() {
-  return (
-    <CoachLayout title="Checklist Manager">
-      <ComingSoon title="Checklist Manager" />
-    </CoachLayout>
-  );
+export default function CoachChecklistManagerPage() {
+  return <ChecklistManagerPage Layout={CoachLayout} />;
 }

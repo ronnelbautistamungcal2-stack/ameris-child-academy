@@ -270,9 +270,10 @@ test.describe.serial("Admin Teachers Page", () => {
         pressed: false,
       }),
     ).toBeVisible();
+    // Classrooms stay listed (client request 2026-10-02); B's is no longer picked.
     await expect(
-      page.getByRole("button", { name: fixture.classBName, exact: true }),
-    ).toHaveCount(0);
+      page.getByRole("button", { name: fixture.classBName, exact: true, pressed: false }),
+    ).toBeVisible();
 
     await page.getByRole("button", { name: "Save Assignments" }).click();
     await expect(
@@ -295,12 +296,10 @@ test.describe.serial("Admin Teachers Page", () => {
       exact: true,
       pressed: true,
     }).click();
+    // Deselecting the last center unpicks its classrooms but keeps them listed.
     await expect(
-      page.getByText("Select at least one center to choose classrooms."),
+      page.getByRole("button", { name: fixture.classAName, exact: true, pressed: false }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: fixture.classAName, exact: true }),
-    ).toHaveCount(0);
 
   });
 });

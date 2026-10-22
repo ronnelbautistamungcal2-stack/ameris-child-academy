@@ -78,6 +78,10 @@ export const COACH_NAV_ITEMS = [
     icon: icons.staff,
     children: [
       { href: "/coach/staff-management", label: "Staff Daily Management" },
+      { href: "/coach/checklist-review", label: "Checklist Review" },
+      { href: "/coach/staff-attendance", label: "Attendance" },
+      { href: "/coach/shifts", label: "Shift Schedules" },
+        { href: "/coach/time-off", label: "Time Off" },
       { href: "/coach/staff-performance", label: "Staff Performance Report" },
       { href: "/coach/training", label: "Staff Training" },
       { href: "/coach/professional-development", label: "Staff Professional Development" },
@@ -130,9 +134,6 @@ export const COACH_NAV_ITEMS = [
     icon: icons.messages,
   },
   otherPagesGroup([
-    // Become tabs of Staff Daily Management (Checklist Review, Shift Schedules).
-    { href: "/coach/checklists", label: "Daily Checklists" },
-    { href: "/coach/shifts", label: "Shift Schedules" },
     { href: "/coach/compliance", label: "Compliance" },
     { href: "/coach/observations", label: "Observations" },
     { href: "/coach/follow-ups", label: "Follow-ups" },

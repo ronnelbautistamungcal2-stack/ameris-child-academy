@@ -99,12 +99,6 @@ export default function AdminTeachers() {
       .map((c) => c.id);
   }, [classes, selectedCenterIds]);
 
-  const availableClasses = useMemo(() => {
-    if (!availableClassIds.length) return [];
-    const availableClassIdSet = new Set(availableClassIds);
-    return classes.filter((c) => availableClassIdSet.has(c.id));
-  }, [availableClassIds, classes]);
-
   useEffect(() => {
     setSelectedClassIds((current) => {
       if (!current.length) return current;
@@ -182,7 +176,8 @@ export default function AdminTeachers() {
   }
 
   return (
-    <CoachLayout title="Staff">
+    <CoachLayout title="Staff Positions">
+      <h1 className="mb-4 text-3xl font-black text-[#0b2a5b] dark:text-blue-100">Staff Positions</h1>
       {/* Toast */}
       {toast && (
         <div className="fixed right-6 top-6 z-50 flex items-center gap-2 rounded-2xl border border-green-200 bg-green-50 px-5 py-3 text-sm font-semibold text-green-800 shadow-lg animate-in fade-in">
@@ -453,40 +448,46 @@ export default function AdminTeachers() {
                     )}
                   </div>
                   <p className="mt-1 text-xs text-gray-400">
-                    {selectedCenterIds.length
-                      ? "Showing classrooms for selected centers."
-                      : "Select centers above to filter classrooms."}
+                    Picking a classroom also adds its center.
                   </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {availableClasses.map((cl) => {
-                      const active = selectedClassIds.includes(cl.id);
+                  <div className="mt-2 space-y-3">
+                    {centers.map((center) => {
+                      const rooms = classes.filter((cl) => cl.centerId === center.id);
+                      if (!rooms.length) return null;
                       return (
-                        <button
-                          key={cl.id}
-                          type="button"
-                          aria-pressed={active}
-                          className={[
-                            "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-sm font-semibold transition",
-                            active
-                              ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                              : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
-                          ].join(" ")}
-                          onClick={() =>
-                            setSelectedClassIds((cur) => toggleInList(cur, cl.id))
-                          }
-                        >
-                          {active && (
-                            <CheckCircleIcon className="h-4 w-4 text-emerald-600" />
-                          )}
-                          {cl.name}
-                        </button>
+                        <div key={center.id}>
+                          <div className="mb-1 text-xs font-semibold text-gray-500">{center.name}</div>
+                          <div className="flex flex-wrap gap-2">
+                            {rooms.map((cl) => {
+                              const active = selectedClassIds.includes(cl.id);
+                              return (
+                                <button
+                                  key={cl.id}
+                                  type="button"
+                                  aria-pressed={active}
+                                  className={[
+                                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-sm font-semibold transition",
+                                    active
+                                      ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                                      : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                                  ].join(" ")}
+                                  onClick={() => {
+                                    if (!active && !selectedCenterIds.includes(cl.centerId)) {
+                                      setSelectedCenterIds((cur) => [...cur, cl.centerId]);
+                                    }
+                                    setSelectedClassIds((cur) => toggleInList(cur, cl.id));
+                                  }}
+                                >
+                                  {active && <CheckCircleIcon className="h-4 w-4 text-emerald-600" />}
+                                  {cl.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
                       );
                     })}
-                    {selectedCenterIds.length === 0 ? (
-                      <p className="text-xs text-gray-500">Select at least one center to choose classrooms.</p>
-                    ) : availableClasses.length === 0 && (
-                      <p className="text-xs text-gray-500">No classrooms available.</p>
-                    )}
+                    {classes.length === 0 && <p className="text-xs text-gray-500">No classrooms available.</p>}
                   </div>
                 </div>
               )}

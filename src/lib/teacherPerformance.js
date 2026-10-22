@@ -4,6 +4,7 @@
 // Teacher Performance report and Center Performance (server only).
 
 import { getTimeOffBalanceSummary } from "@/lib/time-off";
+import { checklistCompletionForRange } from "@/lib/checklistReview";
 
 /**
  * Returns the report object, or null when the teacher does not exist.
@@ -133,32 +134,12 @@ export async function teacherPerformance(prisma, { teacherId, centerId, dateFrom
     ? evaluations[evaluations.length - 1].overallScore
     : null;
 
-  // ── Checklist Grade (% of daily checklist items completed by this teacher) ──
-  const totalChecklistItems = await prisma.dailyChecklistCompletion.count({
-    where: {
-      completedById: teacherId,
-      date: { gte: dateFrom, lte: dateTo },
-      item: { checklist: { centerId } },
-    },
-  });
-  const assignedChecklistItems = await prisma.dailyChecklistItem.count({
-    where: {
-      checklist: {
-        centerId,
-        active: true,
-        OR: [
-          { assignedUserId: teacherId },
-          { assignees: { some: { userId: teacherId } } },
-        ],
-      },
-    },
-  });
-  // Days in range
-  const dayRange = Math.max(1, Math.round((dateTo - dateFrom) / (1000 * 60 * 60 * 24)));
-  const expectedItems = assignedChecklistItems * dayRange;
-  const checklistPct = expectedItems > 0
-    ? Math.min(100, Math.round((totalChecklistItems / expectedItems) * 100))
-    : null;
+  // ── Checklist Grade: % of due checklist items ticked on the days worked;
+  // teachers count only the checklist they picked each day.
+  const checklistStats = await checklistCompletionForRange(prisma, { userId: teacherId, centerId, dateFrom, dateTo });
+  const totalChecklistItems = checklistStats.completedCount;
+  const assignedChecklistItems = checklistStats.assignedCount;
+  const checklistPct = checklistStats.pct;
 
   // ── HR: Hours Worked, Lates, Absences, PTO/UTO ──
   const staffAttendances = await prisma.staffAttendance.findMany({

@@ -3,10 +3,13 @@ import { SkeletonTable } from "@/components/ui/Skeleton";
 import MonthlyCalendar from "@/components/calendar/MonthlyCalendar";
 import { apiJson } from "@/lib/api";
 import { toCalendarDay } from "@/lib/calendar";
-import { TIME_OFF_TYPE_OPTIONS, groupTimeOffRequests } from "@/lib/time-off";
+import { groupTimeOffRequests } from "@/lib/time-off";
 import { useSession } from "next-auth/react";
+import Link from "next/link";
+import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { TIME_OFF_CALENDAR_KINDS } from "@/lib/calendarColors";
+import { TIME_OFF_CALENDAR_KINDS, calendarStyleOf } from "@/lib/calendarColors";
+import { NAVY } from "@/components/reports/reportUi";
 
 function toDateInputValue(date) {
   if (!date) return "";
@@ -72,18 +75,6 @@ function fmtRange(start, end) {
   return `${fmtDateTime(start)} - ${fmtDateTime(end)}`;
 }
 
-const STATUS_BADGE = {
-  PENDING: "border-amber-200 bg-amber-50 text-amber-800",
-  APPROVED: "border-emerald-200 bg-emerald-50 text-emerald-800",
-  DENIED: "border-red-200 bg-red-50 text-red-800",
-  CANCELLED: "border-gray-200 bg-gray-50 text-gray-600",
-};
-
-function formatHours(value) {
-  const num = Number(value || 0);
-  return Number.isFinite(num) ? num.toFixed(num % 1 === 0 ? 0 : 2) : "0";
-}
-
 export default function EmployeeTimeOffPage({
   LayoutComponent,
   title = "Time Off",
@@ -92,13 +83,15 @@ export default function EmployeeTimeOffPage({
 }) {
   const { data: session } = useSession();
   const userId = session?.user?.id || "";
+  const router = useRouter();
+  // Each portal has its own My Time Sheet page (e.g. /teacher/time-sheet).
+  const timeSheetHref = `/${String(router.pathname || "").split("/").filter(Boolean)[0] || "staff"}/time-sheet`;
 
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
 
   const [requests, setRequests] = useState([]);
   const [attendanceSummary, setAttendanceSummary] = useState(null);
-  const [balanceSummary, setBalanceSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -108,11 +101,11 @@ export default function EmployeeTimeOffPage({
   const [endDate, setEndDate] = useState(toDateInputValue(new Date()));
   const [startTime, setStartTime] = useState(toTimeInputValue(new Date()) || "08:00");
   const [endTime, setEndTime] = useState("17:00");
-  const [requestType, setRequestType] = useState("PAID");
   const [reason, setReason] = useState("");
   const [cancelTarget, setCancelTarget] = useState(null);
-  const [warningState, setWarningState] = useState(null);
   const [expandedGroups, setExpandedGroups] = useState({});
+  const [requestsOpen, setRequestsOpen] = useState(true);
+  const [showPast, setShowPast] = useState(false);
 
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
@@ -161,26 +154,19 @@ export default function EmployeeTimeOffPage({
   useEffect(() => {
     if (!centerId || !userId) {
       setAttendanceSummary(null);
-      setBalanceSummary(null);
       return;
     }
 
     (async () => {
       try {
         const yearStart = `${new Date().getFullYear()}-01-01`;
-        const [attendance, balanceData] = await Promise.all([
-          apiJson(
+        setAttendanceSummary(
+          await apiJson(
             `/api/v1/staff-attendance/summary?centerId=${encodeURIComponent(centerId)}&userId=${encodeURIComponent(userId)}&from=${yearStart}&to=${toDateInputValue(new Date())}`,
           ),
-          apiJson(
-            `/api/v1/time-off/balances?centerId=${encodeURIComponent(centerId)}&userId=${encodeURIComponent(userId)}`,
-          ),
-        ]);
-        setAttendanceSummary(attendance);
-        setBalanceSummary(balanceData?.summary || null);
+        );
       } catch {
         setAttendanceSummary(null);
-        setBalanceSummary(null);
       }
     })();
   }, [centerId, userId]);
@@ -208,7 +194,7 @@ export default function EmployeeTimeOffPage({
     loadCalendarEvents();
   }, [loadCalendarEvents]);
 
-  async function submitRequest({ overrideBalanceWarning = false } = {}) {
+  async function submitRequest() {
     if (!centerId) {
       setError("Select a center first.");
       return;
@@ -230,16 +216,13 @@ export default function EmployeeTimeOffPage({
         method: "POST",
         body: JSON.stringify({
           centerId,
-          type: requestType,
           startDate: start.toISOString(),
           endDate: end.toISOString(),
           reason: reason || null,
-          overrideBalanceWarning,
         }),
       });
 
       setReason("");
-      setWarningState(null);
       setSuccess(
         Array.isArray(result?.requests) && result.requests.length > 1
           ? `Time-off request submitted for ${result.requests.length} weekdays.`
@@ -248,18 +231,6 @@ export default function EmployeeTimeOffPage({
       await loadRequests();
       await loadCalendarEvents();
     } catch (nextError) {
-      if (nextError?.status === 409 && nextError?.data?.code === "TIME_OFF_BALANCE_WARNING") {
-        setWarningState({
-          startDate,
-          endDate,
-          startTime,
-          endTime,
-          requestType,
-          reason,
-          warning: nextError.data.warning || null,
-        });
-        return;
-      }
       setError(nextError.message || "Failed to submit request");
     } finally {
       setSaving(false);
@@ -309,20 +280,6 @@ export default function EmployeeTimeOffPage({
     });
   }, [monthCalEvents, calYear, calMonth, selectedDay]);
 
-  const pending = useMemo(() => requests.filter((row) => row.status === "PENDING"), [requests]);
-  const approved = useMemo(
-    () => requests.filter((row) => row.status === "APPROVED" && !row.isUnexcused),
-    [requests],
-  );
-  const unexcused = useMemo(
-    () => requests.filter((row) => row.status === "APPROVED" && row.isUnexcused),
-    [requests],
-  );
-  const other = useMemo(
-    () => requests.filter((row) => row.status !== "PENDING" && row.status !== "APPROVED"),
-    [requests],
-  );
-
   const fullGroupSizeByKey = useMemo(() => {
     const map = new Map();
     for (const request of requests) {
@@ -332,18 +289,20 @@ export default function EmployeeTimeOffPage({
     return map;
   }, [requests]);
 
-  const pendingGroups = useMemo(
-    () => groupTimeOffRequests(pending, fullGroupSizeByKey),
-    [pending, fullGroupSizeByKey],
-  );
-  const approvedGroups = useMemo(
-    () => groupTimeOffRequests(approved, fullGroupSizeByKey),
-    [approved, fullGroupSizeByKey],
-  );
-  const otherGroups = useMemo(
-    () => groupTimeOffRequests(other, fullGroupSizeByKey),
-    [other, fullGroupSizeByKey],
-  );
+  // One card per request (multi-day requests grouped), per status. Past
+  // requests are hidden unless asked for (client request 2026-10-02).
+  const requestGroups = useMemo(() => {
+    const byStatus = {};
+    for (const request of requests) {
+      const kind = request.status === "APPROVED" && request.isUnexcused ? "UNEXCUSED" : request.status;
+      (byStatus[kind] ||= []).push(request);
+    }
+    const now = Date.now();
+    return Object.entries(byStatus)
+      .flatMap(([kind, list]) => groupTimeOffRequests(list, fullGroupSizeByKey).map((group) => ({ ...group, kind })))
+      .filter((group) => showPast || new Date(group.rangeEnd).getTime() >= now)
+      .sort((a, b) => new Date(a.rangeStart).getTime() - new Date(b.rangeStart).getTime());
+  }, [requests, fullGroupSizeByKey, showPast]);
 
   const toggleGroupExpanded = useCallback((key) => {
     setExpandedGroups((current) => ({ ...current, [key]: !current[key] }));
@@ -352,377 +311,195 @@ export default function EmployeeTimeOffPage({
   return (
     <LayoutComponent title={title}>
       <div className="space-y-4">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-          <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white" aria-hidden>
+              <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+              </svg>
+            </span>
             <div>
-              <h2 className="text-lg font-extrabold text-gray-900">{title}</h2>
-              <p className="mt-1 text-sm text-gray-600">{description}</p>
-              <p className="mt-1 text-xs text-gray-500">{requestHelpText}</p>
+              <h1 className={`text-3xl font-black ${NAVY}`}>{title}</h1>
+              <p className="text-sm text-blue-700 dark:text-blue-300">{description}</p>
+              <p className="text-xs text-gray-500">{requestHelpText}</p>
             </div>
-
-            <label className="block">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Center</div>
-              <select
-                value={centerId}
-                onChange={(event) => setCenterId(event.target.value)}
-                className="mt-1 w-72 max-w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                disabled={loading}
-              >
-                <option value="">Select a center...</option>
-                {centers.map((center) => (
-                  <option key={center.id} value={center.id}>
-                    {center.name}
-                  </option>
-                ))}
-              </select>
-            </label>
           </div>
-
-          {error ? (
-            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {error}
-            </div>
-          ) : null}
-          {success ? (
-            <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-              {success}
-            </div>
-          ) : null}
-
-          {loading ? (
-            <div className="mt-4">
-              <SkeletonTable rows={5} cols={4} />
-            </div>
-          ) : !centerId ? (
-            <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-              Select a center to submit requests and review your schedule.
-            </div>
-          ) : (
-            <div className="mt-4 space-y-4">
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <MiniSummaryCard label="Late" value={attendanceSummary?.late ?? 0} />
-                <MiniSummaryCard label="Absent" value={attendanceSummary?.absent ?? 0} />
-                <MiniSummaryCard label="Paid Hours Available" value={balanceSummary?.paidAvailable ?? 0} />
-                <MiniSummaryCard label="Unpaid Hours Available" value={balanceSummary?.unpaidAvailable ?? 0} />
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Submit request</div>
-                  <form onSubmit={submit} className="mt-3 space-y-3">
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <label className="block">
-                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Start date</div>
-                        <input
-                          type="date"
-                          value={startDate}
-                          onChange={(event) => setStartDate(event.target.value)}
-                          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                          required
-                        />
-                      </label>
-                      <label className="block">
-                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">End date</div>
-                        <input
-                          type="date"
-                          value={endDate}
-                          onChange={(event) => setEndDate(event.target.value)}
-                          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                          required
-                        />
-                      </label>
-                      <label className="block">
-                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Start time</div>
-                        <input
-                          type="time"
-                          value={startTime}
-                          onChange={(event) => setStartTime(event.target.value)}
-                          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                          required
-                        />
-                      </label>
-                      <label className="block">
-                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">End time</div>
-                        <input
-                          type="time"
-                          value={endTime}
-                          onChange={(event) => setEndTime(event.target.value)}
-                          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                          required
-                        />
-                      </label>
-                    </div>
-
-                    <label className="block">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Type</div>
-                      <select
-                        value={requestType}
-                        onChange={(event) => setRequestType(event.target.value)}
-                        className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                      >
-                        {TIME_OFF_TYPE_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label className="block">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Reason</div>
-                      <input
-                        value={reason}
-                        onChange={(event) => setReason(event.target.value)}
-                        className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                        placeholder="Short note"
-                      />
-                    </label>
-
-                    <button
-                      type="submit"
-                      disabled={saving}
-                      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {saving ? "Submitting..." : "Submit request"}
-                    </button>
-                  </form>
-                </div>
-
-                <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">My requests</div>
-                  <p className="mt-1 text-sm text-gray-600">Your request history and current approval status.</p>
-
-                  {requests.length === 0 ? (
-                    <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                      No time-off requests submitted yet.
-                    </div>
-                  ) : (
-                    <div className="mt-3 space-y-2">
-                      {approvedGroups.length > 0 ? (
-                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                          <div className="mb-1 text-xs font-semibold text-emerald-700">Approved time off</div>
-                          {approvedGroups.map((group) => {
-                            const request = group.items[0];
-                            return (
-                              <div key={group.key} className="text-sm text-emerald-800">
-                                {request.typeLabel || request.type} - {fmtRange(group.rangeStart, group.rangeEnd)}
-                                {group.isGrouped ? (
-                                  <span className="ml-1 text-emerald-700">
-                                    ({group.items.length} of {group.fullGroupSize} day
-                                    {group.fullGroupSize === 1 ? "" : "s"} approved)
-                                  </span>
-                                ) : null}
-                                {request.reason ? <span className="ml-1 text-emerald-700">({request.reason})</span> : null}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : null}
-
-                      {unexcused.length > 0 ? (
-                        <div className="rounded-xl border border-red-200 bg-red-50 p-3">
-                          <div className="mb-1 text-xs font-semibold text-red-700">Unexcused time off</div>
-                          {unexcused.map((request) => (
-                            <div key={request.id} className="text-sm text-red-800">
-                              {fmtRange(request.startDate, request.endDate)}
-                              {request.coverageName ? (
-                                <span className="ml-1 text-red-700">(Cover: {request.coverageName})</span>
-                              ) : null}
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-
-                      {pendingGroups.map((group) => {
-                        const request = group.items[0];
-                        const expanded = !!expandedGroups[group.key];
-                        return (
-                          <div key={group.key} className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="text-sm font-extrabold text-gray-900">{request.typeLabel || request.type || "Time off"}</div>
-                                <div className="mt-1 text-sm text-gray-700">
-                                  {fmtRange(group.rangeStart, group.rangeEnd)}
-                                  {group.isGrouped ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => toggleGroupExpanded(group.key)}
-                                      className="ml-2 text-xs font-semibold text-amber-700 underline decoration-dotted"
-                                    >
-                                      {group.items.length} of {group.fullGroupSize} day
-                                      {group.fullGroupSize === 1 ? "" : "s"} pending
-                                      {expanded ? " (hide days)" : " (show days)"}
-                                    </button>
-                                  ) : null}
-                                </div>
-                                {request.reason ? <div className="mt-1 text-xs text-gray-600">{request.reason}</div> : null}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="rounded-full border border-amber-200 bg-white px-2 py-1 text-[11px] font-extrabold text-amber-700">
-                                  PENDING
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => setCancelTarget(group.items.map((item) => item.id))}
-                                  className="rounded-lg border border-red-200 px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50"
-                                >
-                                  {group.isGrouped ? "Cancel all" : "Cancel"}
-                                </button>
-                              </div>
-                            </div>
-                            {group.isGrouped && expanded ? (
-                              <div className="mt-2 space-y-1 border-t border-amber-200 pt-2">
-                                {group.items.map((item) => (
-                                  <div key={item.id} className="flex items-center justify-between gap-2 text-xs text-gray-700">
-                                    <span>{fmtRange(item.startDate, item.endDate)}</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => setCancelTarget([item.id])}
-                                      className="font-semibold text-red-600 hover:underline"
-                                    >
-                                      Cancel this day
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null}
-                          </div>
-                        );
-                      })}
-
-                      {otherGroups.map((group) => {
-                        const request = group.items[0];
-                        const expanded = !!expandedGroups[group.key];
-                        return (
-                          <div key={group.key} className={`rounded-xl border p-3 ${STATUS_BADGE[request.status] || STATUS_BADGE.CANCELLED}`}>
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="text-sm font-extrabold text-gray-900">{request.typeLabel || request.type || "Time off"}</div>
-                              <span className="rounded-full border border-gray-200 bg-white px-2 py-1 text-[11px] font-extrabold text-gray-700">
-                                {request.status}
-                              </span>
-                            </div>
-                            <div className="mt-1 text-sm text-gray-700">
-                              {fmtRange(group.rangeStart, group.rangeEnd)}
-                              {group.isGrouped ? (
-                                <button
-                                  type="button"
-                                  onClick={() => toggleGroupExpanded(group.key)}
-                                  className="ml-2 text-xs font-semibold text-gray-600 underline decoration-dotted"
-                                >
-                                  {group.items.length} of {group.fullGroupSize} day
-                                  {group.fullGroupSize === 1 ? "" : "s"} {request.status.toLowerCase()}
-                                  {expanded ? " (hide days)" : " (show days)"}
-                                </button>
-                              ) : null}
-                            </div>
-                            {request.reason ? <div className="mt-1 text-xs text-gray-600">{request.reason}</div> : null}
-                            {request.reviewNotes ? <div className="mt-1 text-xs italic text-gray-500">Review: {request.reviewNotes}</div> : null}
-                            {group.isGrouped && expanded ? (
-                              <div className="mt-2 space-y-1 border-t border-gray-200 pt-2">
-                                {group.items.map((item) => (
-                                  <div key={item.id} className="text-xs text-gray-600">
-                                    {fmtRange(item.startDate, item.endDate)}
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-gray-200 bg-white p-5">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Calendar view</div>
-                <p className="mt-1 text-sm text-gray-600">
-                  Center events plus pending and approved time-off requests appear here so you can avoid conflicts before submitting.
-                </p>
-                <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_minmax(0,280px)]">
-                  <MonthlyCalendar
-                    year={calYear}
-                    month={calMonth}
-                    events={monthCalEvents}
-                    legendKinds={TIME_OFF_CALENDAR_KINDS}
-                    selectedDay={selectedDay}
-                    onDayClick={setSelectedDay}
-                    onMonthChange={(nextYear, nextMonth) => {
-                      setCalYear(nextYear);
-                      setCalMonth(nextMonth);
-                      setSelectedDay(null);
-                    }}
-                  />
-
-                  {selectedDay ? (
-                    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-sm font-extrabold text-gray-900">
-                          {new Date(calYear, calMonth, selectedDay).toLocaleDateString(undefined, {
-                            weekday: "short",
-                            month: "short",
-                            day: "numeric",
-                          })}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedDay(null)}
-                          aria-label="Close day detail"
-                          className="text-gray-400 hover:text-gray-600"
-                        >
-                          &#10005;
-                        </button>
-                      </div>
-
-                      {dayItems.length === 0 ? (
-                        <div className="mt-3 text-sm text-gray-500">No items this day.</div>
-                      ) : (
-                        <div className="mt-3 space-y-2">
-                          {dayItems.map((item) => (
-                            <div key={item.id} className="rounded-xl border border-gray-200 bg-white p-3">
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
-                                    item._source === "event"
-                                      ? "bg-indigo-100 text-indigo-700"
-                                      : item.isUnexcused
-                                        ? "bg-red-100 text-red-700"
-                                        : "bg-emerald-100 text-emerald-700"
-                                  }`}
-                                >
-                                  {item._source === "event"
-                                    ? "EVENT"
-                                    : item.isUnexcused
-                                      ? "UNEXCUSED"
-                                      : "TIME OFF"}
-                                </span>
-                                <span className="text-sm font-semibold text-gray-900">{item.label}</span>
-                              </div>
-                              {item._source === "event" && item.description ? (
-                                <div className="mt-1 text-xs text-gray-600">{item.description}</div>
-                              ) : null}
-                              {item._source === "timeoff" ? (
-                                <>
-                                  <div className="mt-1 text-xs text-gray-600">Status: {item.status}</div>
-                                  <div className="mt-1 text-xs text-gray-600">
-                                    {fmtRange(item.startDate, item.endDate)}
-                                  </div>
-                                  <div className="mt-1 text-xs text-gray-600">
-                                    Cover: {item.coverageName || "Unassigned"}
-                                  </div>
-                                </>
-                              ) : null}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          )}
+          <div className="flex flex-wrap items-end gap-2">
+          <Link href={timeSheetHref} className="rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 dark:bg-gray-800">
+            My Time Sheet
+          </Link>
+          <label className="block">
+            <span className={`text-sm font-bold ${NAVY}`}>Center</span>
+            <select
+              value={centerId}
+              onChange={(event) => setCenterId(event.target.value)}
+              className="mt-1 block w-64 max-w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800"
+              disabled={loading}
+              aria-label="Center"
+            >
+              <option value="">Select a center...</option>
+              {centers.map((center) => (
+                <option key={center.id} value={center.id}>
+                  {center.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          </div>
         </div>
+
+        {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div> : null}
+        {success ? <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">{success}</div> : null}
+
+        {loading ? (
+          <SkeletonTable rows={5} cols={4} />
+        ) : !centerId ? (
+          <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900">
+            Select a center to submit requests and review your schedule.
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <SummaryCard label="Late" value={attendanceSummary?.late ?? 0} tone="sky" icon="clock" />
+              <SummaryCard label="Absent" value={attendanceSummary?.absent ?? 0} tone="green" icon="calendar" />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className={card}>
+                <h2 className={`text-lg font-black ${NAVY}`}>Submit Time Off Request</h2>
+                <form onSubmit={submit} className="mt-3 space-y-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className="block">
+                      <span className={labelClass}>Start Date</span>
+                      <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className={inputClass} required />
+                    </label>
+                    <label className="block">
+                      <span className={labelClass}>End Date</span>
+                      <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className={inputClass} required />
+                    </label>
+                    <label className="block">
+                      <span className={labelClass}>Start Time</span>
+                      <input type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} className={inputClass} required />
+                    </label>
+                    <label className="block">
+                      <span className={labelClass}>End Time</span>
+                      <input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} className={inputClass} required />
+                    </label>
+                  </div>
+                  <label className="block">
+                    <span className={labelClass}>Reason</span>
+                    <textarea
+                      value={reason}
+                      onChange={(event) => setReason(event.target.value.slice(0, 250))}
+                      rows={3}
+                      className={inputClass}
+                      placeholder="Enter a short note (optional)..."
+                    />
+                    <span className="block text-right text-xs text-gray-500">{reason.length}/250</span>
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving ? "Submitting..." : "Submit Request"}
+                  </button>
+                </form>
+              </div>
+
+              <div className={card}>
+                <button
+                  type="button"
+                  onClick={() => setRequestsOpen((open) => !open)}
+                  aria-expanded={requestsOpen}
+                  className="flex w-full items-start justify-between gap-3 text-left"
+                >
+                  <div>
+                    <h2 className={`text-lg font-black ${NAVY}`}>My Requests</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Your request history and current approval status.</p>
+                  </div>
+                  <span className="mt-1 text-gray-500">{requestsOpen ? "▲" : "▼"}</span>
+                </button>
+                {requestsOpen ? (
+                  <div className="mt-3 space-y-2">
+                    {requestGroups.length === 0 ? (
+                      <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800">
+                        {showPast ? "No time-off requests submitted yet." : "No upcoming time-off requests."}
+                      </div>
+                    ) : (
+                      requestGroups.map((group) => (
+                        <RequestCard
+                          key={`${group.kind}:${group.key}`}
+                          group={group}
+                          expanded={!!expandedGroups[group.key]}
+                          onToggle={() => toggleGroupExpanded(group.key)}
+                          onCancel={(ids) => setCancelTarget(ids)}
+                        />
+                      ))
+                    )}
+                    <button type="button" onClick={() => setShowPast((v) => !v)} className="text-xs font-semibold text-blue-700 hover:underline">
+                      {showPast ? "Hide past requests" : "Show past requests"}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className={card}>
+              <div className={`grid grid-cols-1 gap-4 ${selectedDay ? "lg:grid-cols-[1fr_minmax(0,280px)]" : ""}`}>
+                <MonthlyCalendar
+                  year={calYear}
+                  month={calMonth}
+                  events={monthCalEvents}
+                  legendKinds={TIME_OFF_CALENDAR_KINDS}
+                  selectedDay={selectedDay}
+                  onDayClick={setSelectedDay}
+                  onMonthChange={(nextYear, nextMonth) => {
+                    setCalYear(nextYear);
+                    setCalMonth(nextMonth);
+                    setSelectedDay(null);
+                  }}
+                />
+                {selectedDay ? (
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className={`text-sm font-extrabold ${NAVY}`}>
+                        {new Date(calYear, calMonth, selectedDay).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                      </div>
+                      <button type="button" onClick={() => setSelectedDay(null)} aria-label="Close day detail" className="text-gray-400 hover:text-gray-600">
+                        &#10005;
+                      </button>
+                    </div>
+                    {dayItems.length === 0 ? (
+                      <div className="mt-3 text-sm text-gray-500">No items this day.</div>
+                    ) : (
+                      <div className="mt-3 space-y-2">
+                        {dayItems.map((item) => (
+                          <div key={item.id} className="rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
+                            <div className="flex items-center gap-2">
+                              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-extrabold ${calendarStyleOf(item).pill}`}>
+                                {item._source === "event" ? "EVENT" : item.isUnexcused ? "UNEXCUSED" : "TIME OFF"}
+                              </span>
+                              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{item.label}</span>
+                            </div>
+                            {item._source === "event" && item.description ? <div className="mt-1 text-xs text-gray-600">{item.description}</div> : null}
+                            {item._source === "timeoff" ? (
+                              <>
+                                <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">Status: {item.status}</div>
+                                <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">{fmtRange(item.startDate, item.endDate)}</div>
+                                <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">Cover: {item.coverageName || "Unassigned"}</div>
+                              </>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </>
+        )}
       </div>
       <ConfirmDialog
         open={!!cancelTarget}
@@ -737,27 +514,94 @@ export default function EmployeeTimeOffPage({
         onConfirm={() => cancelRequests(cancelTarget)}
         onCancel={() => setCancelTarget(null)}
       />
-      <ConfirmDialog
-        open={!!warningState}
-        title="Proceed With Overage?"
-        message={
-          warningState?.warning
-            ? `This ${String(warningState.warning.balanceType || "").toLowerCase()} request uses ${formatHours(warningState.warning.requestedHours)} hours, but only ${formatHours(warningState.warning.availableHours)} hour${Number(warningState.warning.availableHours) === 1 ? "" : "s"} are available. Submit it anyway?`
-            : "This request exceeds the available time-off balance. Submit it anyway?"
-        }
-        confirmLabel="Submit Anyway"
-        onConfirm={() => submitRequest({ overrideBalanceWarning: true })}
-        onCancel={() => setWarningState(null)}
-      />
     </LayoutComponent>
   );
 }
 
-function MiniSummaryCard({ label, value }) {
+const card = "rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900";
+const labelClass = "text-sm font-semibold text-gray-700 dark:text-gray-300";
+const inputClass = "mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800";
+
+const REQUEST_STYLES = {
+  APPROVED: { box: "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/40", badge: "bg-emerald-100 text-emerald-800", label: "Approved" },
+  UNEXCUSED: { box: "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40", badge: "bg-red-100 text-red-800", label: "Unexcused" },
+  PENDING: { box: "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40", badge: "bg-amber-100 text-amber-800", label: "Pending" },
+  DENIED: { box: "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40", badge: "bg-red-100 text-red-800", label: "Denied" },
+  CANCELLED: { box: "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800", badge: "bg-gray-200 text-gray-700", label: "Cancelled" },
+};
+
+function RequestCard({ group, expanded, onToggle, onCancel }) {
+  const request = group.items[0];
+  const style = REQUEST_STYLES[group.kind] || REQUEST_STYLES.CANCELLED;
+  const heading = `${style.label} Time Off`;
+  const created = request.createdAt ? new Date(request.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
   return (
-    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{label}</div>
-      <div className="mt-1 text-2xl font-extrabold text-gray-900">{value}</div>
+    <div className={`rounded-xl border p-3 ${style.box}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">{heading}</div>
+          <div className="text-sm text-gray-800 dark:text-gray-200">{fmtRange(group.rangeStart, group.rangeEnd)}</div>
+          <div className="text-xs text-gray-600 dark:text-gray-400">
+            {request.reason}
+          </div>
+          {group.isGrouped ? (
+            <button type="button" onClick={onToggle} className="mt-1 text-xs font-semibold text-gray-600 underline decoration-dotted">
+              {group.items.length} of {group.fullGroupSize} day{group.fullGroupSize === 1 ? "" : "s"}
+              {expanded ? " (hide days)" : " (show days)"}
+            </button>
+          ) : null}
+          {request.coverageName ? <div className="text-xs text-gray-600">Cover: {request.coverageName}</div> : null}
+          {request.reviewNotes ? <div className="text-xs italic text-gray-500">Review: {request.reviewNotes}</div> : null}
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${style.badge}`}>{style.label}</span>
+          <span className="text-xs text-gray-500">{created}</span>
+          {group.kind === "PENDING" ? (
+            <button type="button" onClick={() => onCancel(group.items.map((item) => item.id))} className="text-xs font-semibold text-red-600 hover:underline">
+              {group.isGrouped ? "Cancel all" : "Cancel"}
+            </button>
+          ) : null}
+        </div>
+      </div>
+      {group.isGrouped && expanded ? (
+        <div className="mt-2 space-y-1 border-t border-black/10 pt-2">
+          {group.items.map((item) => (
+            <div key={item.id} className="flex items-center justify-between gap-2 text-xs text-gray-700 dark:text-gray-300">
+              <span>{fmtRange(item.startDate, item.endDate)}</span>
+              {group.kind === "PENDING" ? (
+                <button type="button" onClick={() => onCancel([item.id])} className="font-semibold text-red-600 hover:underline">
+                  Cancel this day
+                </button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+const SUMMARY_TONES = {
+  sky: "bg-sky-50 text-sky-600 dark:bg-sky-950/40",
+  green: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40",
+};
+const SUMMARY_ICONS = {
+  clock: "M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z",
+  calendar: "M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5",
+};
+
+function SummaryCard({ label, value, tone, icon }) {
+  return (
+    <div className={`flex items-center gap-3 rounded-xl border border-gray-200 p-4 dark:border-gray-700 ${SUMMARY_TONES[tone]}`}>
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white dark:bg-gray-900" aria-hidden>
+        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d={SUMMARY_ICONS[icon]} />
+        </svg>
+      </span>
+      <div>
+        <div className={`text-sm font-semibold ${NAVY}`}>{label}</div>
+        <div className={`text-2xl font-black ${NAVY}`}>{value}</div>
+      </div>
     </div>
   );
 }

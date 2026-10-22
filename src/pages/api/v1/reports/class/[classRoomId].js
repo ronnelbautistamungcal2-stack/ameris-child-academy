@@ -23,7 +23,7 @@ function shortName(child) {
 
 /**
  * GET /api/v1/reports/class/:classRoomId[?logDate=YYYY-MM-DD]
- * Goal totals and Milestones (from SOP Tracking), the class's Citizenship
+ * Milestones (from SOP Tracking), the class's Citizenship
  * Grade average by day, Course Correction and Character Highlight entries
  * (the page counts them for its date range), Students on an Individual
  * Plan, Students on Red Flag (an allergy, or a course correction of level 3
@@ -79,15 +79,11 @@ export default async function handler(req, res) {
       }),
     ]);
 
-    // Goals and milestones
-    const counts = { total: 0, completed: 0, failed: 0 };
+    // Milestones
     const categories = new Map();
     for (const p of progress) {
       const level = levelForStatus(p.status);
       const status = statusForOffset(goalOffsetDays(p.lesson, level, byId[p.childId]?.birthDate));
-      counts.total += 1;
-      if (level === "MASTERY") counts.completed += 1;
-      if (status === "CRITICAL") counts.failed += 1;
       const cat = p.lesson.category?.name || "General";
       if (!categories.has(cat)) categories.set(cat, { CRITICAL: 0, AT_RISK: 0, ON_TRACK: 0, AHEAD: 0, EXCELLING: 0, n: 0 });
       const c = categories.get(cat);
@@ -132,7 +128,6 @@ export default async function handler(req, res) {
         teacher: room.teachers.map((t) => t.teacher.name || t.teacher.email).join(", "),
         students: children.length,
       },
-      goals: { ...counts, completionRate: counts.total ? Math.round((counts.completed * 100) / counts.total) : 0 },
       milestones,
       citizenship: [...grades.entries()]
         .sort(([a], [b]) => a.localeCompare(b))

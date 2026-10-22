@@ -5,9 +5,9 @@ export default function StaffTimeOff() {
   return (
     <EmployeeTimeOffPage
       LayoutComponent={StaffLayout}
-      title="Time Off"
-      description="Submit and track your own time-off requests from the staff portal."
-      requestHelpText="Approvals are managed by administrators from Staff Management."
+      title="My Time Off Request"
+      description="Submit time-off requests and view your attendance summary."
+      requestHelpText="Approvals are managed from Staff Management."
     />
   );
 }

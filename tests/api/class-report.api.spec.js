@@ -48,7 +48,7 @@ test.describe("Class Performance Report @api", () => {
     if (centerId) await apiDelete(request, `/api/v1/centers/${centerId}`, admin);
   });
 
-  test("the report totals goals and lists citizenship, charts, plans and red flags", async ({ request }) => {
+  test("the report lists milestones, citizenship, charts, plans and red flags", async ({ request }) => {
     const admin = await loginAsAdmin(request);
     const classes = await (await apiGet(request, "/api/v1/reports/classes", admin)).json();
     expect(classes.some((c) => c.id === classRoomId)).toBe(true);
@@ -58,7 +58,7 @@ test.describe("Class Performance Report @api", () => {
     const r = await res.json();
     expect(r.classroom).toMatchObject({ name: "QA Toddlers", students: 2 });
     // Ana mastered walking; Ben (about 20 months, walking expected at 15) is a month behind.
-    expect(r.goals).toEqual({ total: 2, completed: 1, failed: 1, completionRate: 50 });
+    expect(r.goals).toBeUndefined();
     expect(r.milestones[0].distribution).toMatchObject({ CRITICAL: 50, EXCELLING: 0 });
     expect(r.citizenship).toEqual([expect.objectContaining({ score: 7 })]);
     expect(r.courseCorrections.map((c) => c.type).sort()).toEqual(["PHYSICAL_VIOLENCE", "RESPECT"]);

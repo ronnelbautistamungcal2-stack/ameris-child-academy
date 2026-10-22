@@ -1,701 +1,171 @@
 // @ts-check
 const { test, expect } = require("@playwright/test");
-const XLSX = require("xlsx");
 const { PrismaClient } = require("@prisma/client");
-const { loginAsAdmin, loginAsTeacher } = require("../helpers/auth");
-const { apiGet, apiPost, apiPut, pickDemoCenterId } = require("../helpers/api");
+const { loginAsAdmin, loginAsCoach, loginAsHrStaff, loginAsTeacher, getAuthCookie } = require("../helpers/auth");
+const { apiDelete, apiGet, apiPost, apiPut } = require("../helpers/api");
 
 const prisma = new PrismaClient();
 
-test.describe("Staff Management API @api", () => {
-  let centerId;
-  let teacherUserId;
-  let teacherUserName;
-  let teacherUserEmail;
+function key(d) {
+  return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0")].join("-");
+}
+
+// Phase 6b on a throwaway center: employment status, shift schedules for HR,
+// Staff Attendance Overview with Move Today, time-off calendar labels and the
+// employee time sheet e-signature.
+test.describe("Staff management (Phase 6b) @api", () => {
+  test.describe.configure({ mode: "serial" });
+  const today = key(new Date());
+  const password = "Password123!";
+  let center;
+  let roomA;
+  let roomB;
+  let alice; // teacher, stays employed
+  let bob; // teacher, quits
+  let hr;
+  let coach;
+  let teacher;
 
   test.beforeAll(async ({ request }) => {
-    const cookies = await loginAsAdmin(request);
+    const admin = await loginAsAdmin(request);
+    [hr, coach, teacher] = await Promise.all(
+      ["hr@demo.com", "coach@demo.com", "teacher@demo.com"].map((email) => prisma.user.findUnique({ where: { email } })),
+    );
+    center = await (await apiPost(request, "/api/v1/centers", { name: `QA Staff Mgmt ${Date.now()}` }, admin)).json();
+    await prisma.centerUser.createMany({
+      data: [
+        { userId: hr.id, centerId: center.id, role: "HR_STAFF" },
+        { userId: coach.id, centerId: center.id, role: "COACH" },
+      ],
+    });
+    const make = async (name) => {
+      const res = await apiPost(request, "/api/v1/users", { email: `${name.toLowerCase()}-${Date.now()}@example.com`, name: `${name} QA`, middleInitial: "Q", password, roles: ["TEACHER"], centerId: center.id }, admin);
+      expect(res.status(), await res.text()).toBeLessThan(300);
+      return res.json();
+    };
+    alice = await make("Alice");
+    bob = await make("Bob");
+    roomA = await (await apiPost(request, "/api/v1/classes", { centerId: center.id, name: "QA Room A" }, admin)).json();
+    roomB = await (await apiPost(request, "/api/v1/classes", { centerId: center.id, name: "QA Room B" }, admin)).json();
+    await prisma.teacherClass.create({ data: { teacherId: alice.id, classId: roomA.id } });
 
-    // Get center
-    const centersRes = await apiGet(request, "/api/v1/centers", cookies);
-    if (centersRes.status() === 200) {
-      const centers = await centersRes.json();
-      centerId = pickDemoCenterId(centers);
-    }
-
-    // Get teacher user
-    if (centerId) {
-      const usersRes = await apiGet(request, `/api/v1/users?centerId=${centerId}&role=TEACHER`, cookies);
-      if (usersRes.status() === 200) {
-        const users = await usersRes.json();
-        const teacherList = Array.isArray(users) ? users : [];
-        // loginAsTeacher() authenticates as teacher@demo.com. Tests that pair
-        // teacherUserId with teacher cookies (time off balances, request
-        // ownership) only make sense when both point at the same account, so
-        // prefer that user over whoever happens to sort first by name.
-        const demoTeacher =
-          teacherList.find((u) => u.email === "teacher@demo.com") || teacherList[0] || null;
-        teacherUserId = demoTeacher ? demoTeacher.id : null;
-        teacherUserName = demoTeacher ? demoTeacher.name : null;
-        teacherUserEmail = demoTeacher ? demoTeacher.email : null;
-      }
-    }
+    // Alice worked 8h and 7.5h, Bob 4h in the current fortnight.
+    const at = (k, h, m) => new Date(`${k}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`);
+    const day = new Date(`${today}T00:00:00`);
+    await prisma.staffAttendance.createMany({
+      data: [
+        { userId: alice.id, centerId: center.id, date: day, clockIn: at(today, 8, 0), clockOut: at(today, 16, 0) },
+        { userId: bob.id, centerId: center.id, date: day, clockIn: at(today, 9, 0), clockOut: at(today, 13, 0) },
+      ],
+    });
   });
 
-  // Evaluations and training logs are created through the API, which has no
-  // delete endpoint for them, so nothing removed them between runs. They pile up
-  // and break anything that asserts on a count -- the teacher evaluation
-  // visibility e2e spec started seeing five submitted evaluations instead of the
-  // one it had just created.
-  test.afterAll(async () => {
-    await prisma.teacherEvaluation.deleteMany({
-      where: { notes: { in: ["API filter coverage", "Created by E2E test"] } },
-    });
-    await prisma.trainingLog.deleteMany({
-      where: { topic: "E2E Test Training", description: "Created by E2E test" },
-    });
+  test.afterAll(async ({ request }) => {
+    if (center) {
+      await prisma.teacherClass.deleteMany({ where: { classRoom: { centerId: center.id } } });
+      const admin = await loginAsAdmin(request);
+      for (const user of [alice, bob]) if (user?.id) await apiDelete(request, `/api/v1/users/${user.id}`, admin);
+      await apiDelete(request, `/api/v1/centers/${center.id}`, admin);
+    }
     await prisma.$disconnect();
   });
 
-  // ── Staff Attendance ──────────────────────────────────────────
+  test("employment status history; former staff drop off staff lists", async ({ request }) => {
+    const hrCookies = await loginAsHrStaff(request);
+    expect((await apiPut(request, `/api/v1/users/${bob.id}/employment`, { entries: [{ date: today, status: "QUIT" }] }, await loginAsTeacher(request))).status()).toBe(403);
+    expect((await apiPut(request, `/api/v1/users/${bob.id}/employment`, { entries: [{ date: today, status: "RETIRED" }] }, hrCookies)).status()).toBe(400);
 
-  test.describe("Staff Attendance", () => {
-    test("GET /api/v1/staff-attendance returns 401 without auth", async ({ request }) => {
-      const res = await apiGet(request, "/api/v1/staff-attendance?centerId=fake");
-      expect(res.status()).toBe(401);
-    });
+    const res = await apiPut(
+      request,
+      `/api/v1/users/${bob.id}/employment`,
+      { entries: [{ date: "2026-01-05", status: "CURRENTLY_EMPLOYED", notes: "Initial hire." }, { date: today, status: "QUIT", notes: "Moved away" }] },
+      hrCookies,
+    );
+    expect(res.status(), await res.text()).toBe(200);
+    const body = await res.json();
+    expect(body.status).toBe("QUIT");
+    expect(body.entries.map((e) => e.status)).toEqual(["CURRENTLY_EMPLOYED", "QUIT"]);
+    expect(body.entries[1].recordedByName).toBeTruthy();
 
-    test("GET /api/v1/staff-attendance returns records for admin", async ({ request }) => {
-      if (!centerId) test.skip();
-      const cookies = await loginAsAdmin(request);
-      const today = new Date().toISOString().split("T")[0];
-      const res = await apiGet(
-        request,
-        `/api/v1/staff-attendance?centerId=${centerId}&from=${today}&to=${today}`,
-        cookies,
-      );
-      expect(res.status()).toBe(200);
-      const data = await res.json();
-      expect(Array.isArray(data)).toBe(true);
-    });
-
-    test("POST /api/v1/staff-attendance creates a record", async ({ request }) => {
-      if (!centerId || !teacherUserId) test.skip();
-      const cookies = await loginAsAdmin(request);
-      const today = new Date().toISOString().split("T")[0];
-      const res = await apiPost(
-        request,
-        "/api/v1/staff-attendance",
-        {
-          centerId,
-          userId: teacherUserId,
-          date: today,
-          status: "PRESENT",
-          clockIn: "08:00",
-          clockOut: "17:00",
-          lateMinutes: 0,
-          notes: "E2E test attendance",
-        },
-        cookies,
-      );
-      expect([200, 201]).toContain(res.status());
-    });
-
-    test("POST /api/v1/staff-attendance/import imports a workbook", async ({ request }) => {
-      if (!centerId || (!teacherUserEmail && !teacherUserName)) test.skip();
-      const cookies = await loginAsAdmin(request);
-      const today = new Date().toISOString().split("T")[0];
-
-      const workbook = XLSX.utils.book_new();
-      const sheet = XLSX.utils.json_to_sheet([
-        {
-          "Employee Email": teacherUserEmail || "",
-          "Employee Name": teacherUserName || "",
-          Date: today,
-          "Clock In": "08:15",
-          "Clock Out": "17:05",
-          Status: "PRESENT",
-          "Late Minutes": 0,
-          Notes: "Imported by API test",
-        },
-      ]);
-      XLSX.utils.book_append_sheet(workbook, sheet, "Timesheet");
-
-      const fileBase64 = XLSX.write(workbook, {
-        type: "buffer",
-        bookType: "xlsx",
-      }).toString("base64");
-
-      const res = await apiPost(
-        request,
-        "/api/v1/staff-attendance/import",
-        {
-          centerId,
-          fileBase64,
-          overwriteExisting: true,
-        },
-        cookies,
-      );
-      expect(res.status()).toBe(200);
-      const data = await res.json();
-      expect(data.importedCount).toBeGreaterThan(0);
-      expect(data.errorCount).toBe(0);
-    });
-
-    test("GET /api/v1/staff-attendance/summary returns monthly summary", async ({ request }) => {
-      if (!centerId || !teacherUserId) test.skip();
-      const cookies = await loginAsAdmin(request);
-      const now = new Date();
-      const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-      const res = await apiGet(
-        request,
-        `/api/v1/staff-attendance/summary?centerId=${centerId}&userId=${teacherUserId}&from=${from}`,
-        cookies,
-      );
-      expect(res.status()).toBe(200);
-      const data = await res.json();
-      expect(data).toHaveProperty("totalDays");
-    });
-
-    test("teacher can view own attendance", async ({ request }) => {
-      if (!centerId) test.skip();
-      const cookies = await loginAsTeacher(request);
-      const today = new Date().toISOString().split("T")[0];
-      const res = await apiGet(
-        request,
-        `/api/v1/staff-attendance?centerId=${centerId}&from=${today}&to=${today}`,
-        cookies,
-      );
-      expect(res.status()).toBe(200);
-    });
+    const coachCookies = await loginAsCoach(request);
+    const positions = await (await apiGet(request, "/api/v1/teachers", coachCookies)).json();
+    expect(positions.some((u) => u.id === alice.id)).toBe(true);
+    expect(positions.some((u) => u.id === bob.id)).toBe(false);
+    const staff = await (await apiGet(request, `/api/v1/users?centerId=${center.id}&roles=TEACHER`, hrCookies)).json();
+    expect(staff.map((u) => u.id)).toEqual([alice.id]);
+    const sheetList = await (await apiGet(request, `/api/v1/time-sheets/staff?centerId=${center.id}`, hrCookies)).json();
+    expect(sheetList.find((u) => u.id === bob.id).employmentStatus).toBe("QUIT");
   });
 
-  // ── Time Off ──────────────────────────────────────────────────
+  test("HR manages shifts; staff only read their own; other centers are closed", async ({ request }) => {
+    const hrCookies = await loginAsHrStaff(request);
+    const created = await apiPost(request, "/api/v1/shifts", { centerId: center.id, userId: alice.id, date: today, startTime: "07:00", endTime: "15:30", position: "Lead Teacher" }, hrCookies);
+    expect(created.status(), await created.text()).toBeLessThan(300);
+    const shifts = await (await apiGet(request, `/api/v1/shifts?centerId=${center.id}&from=${today}&to=${today}`, hrCookies)).json();
+    expect(shifts).toHaveLength(1);
 
-  test.describe("Time Off", () => {
-    test("GET /api/v1/time-off returns 401 without auth", async ({ request }) => {
-      const res = await apiGet(request, "/api/v1/time-off?centerId=fake");
-      expect(res.status()).toBe(401);
-    });
-
-    test("GET /api/v1/time-off returns requests for teacher", async ({ request }) => {
-      if (!centerId) test.skip();
-      const cookies = await loginAsTeacher(request);
-      const res = await apiGet(request, `/api/v1/time-off?centerId=${centerId}`, cookies);
-      expect(res.status()).toBe(200);
-      const data = await res.json();
-      expect(Array.isArray(data)).toBe(true);
-    });
-
-    test("POST /api/v1/time-off creates a request", async ({ request }) => {
-      if (!centerId) test.skip();
-      const cookies = await loginAsTeacher(request);
-      const startDate = "2026-03-15";
-      const endDate = "2026-03-16";
-      const res = await apiPost(
-        request,
-        "/api/v1/time-off",
-        {
-          centerId,
-          // This test covers request creation, not the balance guard. Without the
-          // override it starts returning 409 once earlier runs have consumed the
-          // demo teacher's PTO balance, since nothing deletes those rows.
-          overrideBalanceWarning: true,
-          type: "PTO",
-          startDate,
-          endDate,
-          reason: "E2E test time off",
-        },
-        cookies,
-      );
-      expect([200, 201]).toContain(res.status());
-    });
-
-    test("POST /api/v1/time-off rejects invalid dates", async ({ request }) => {
-      if (!centerId) test.skip();
-      const cookies = await loginAsTeacher(request);
-      const res = await apiPost(
-        request,
-        "/api/v1/time-off",
-        {
-          centerId,
-          type: "PTO",
-          startDate: "2026-03-16",
-          endDate: "2026-03-15", // end before start
-          reason: "Invalid dates test",
-        },
-        cookies,
-      );
-      expect(res.status()).toBe(400);
-    });
-
-    test("POST /api/v1/time-off warns when request exceeds available hours and allows override", async ({ request }) => {
-      if (!centerId) test.skip();
-      const cookies = await loginAsTeacher(request);
-
-      const warnRes = await apiPost(
-        request,
-        "/api/v1/time-off",
-        {
-          centerId,
-          type: "UNPAID",
-          startDate: "2026-03-20T08:00:00.000Z",
-          endDate: "2026-03-20T12:00:00.000Z",
-          reason: "Overage warning test",
-        },
-        cookies,
-      );
-      expect(warnRes.status()).toBe(409);
-      const warnBody = await warnRes.json();
-      expect(warnBody.code).toBe("TIME_OFF_BALANCE_WARNING");
-      expect(warnBody.canProceed).toBe(true);
-
-      const proceedRes = await apiPost(
-        request,
-        "/api/v1/time-off",
-        {
-          centerId,
-          type: "UNPAID",
-          startDate: "2026-03-20T08:00:00.000Z",
-          endDate: "2026-03-20T12:00:00.000Z",
-          reason: "Overage warning override test",
-          overrideBalanceWarning: true,
-        },
-        cookies,
-      );
-      expect([200, 201]).toContain(proceedRes.status());
-    });
-
-    test("GET /api/v1/time-off/calendar returns calendar data", async ({ request }) => {
-      if (!centerId) test.skip();
-      const cookies = await loginAsAdmin(request);
-      const res = await apiGet(
-        request,
-        `/api/v1/time-off/calendar?centerId=${centerId}&from=2026-02-01&to=2026-02-28`,
-        cookies,
-      );
-      expect(res.status()).toBe(200);
-      const data = await res.json();
-      expect(Array.isArray(data)).toBe(true);
-    });
-
-    test("admin can approve a time-off request", async ({ request }) => {
-      if (!centerId) test.skip();
-
-      // Create a request as teacher
-      const teacherCookies = await loginAsTeacher(request);
-      const createRes = await apiPost(
-        request,
-        "/api/v1/time-off",
-        {
-          centerId,
-          type: "PTO",
-          startDate: "2026-04-01",
-          endDate: "2026-04-02",
-          reason: "Approval test",
-        },
-        teacherCookies,
-      );
-      if (createRes.status() !== 200 && createRes.status() !== 201) {
-        test.skip();
-        return;
-      }
-      const created = await createRes.json();
-      const createdId = created.id || created.requests?.[0]?.id;
-
-      // Approve as admin
-      const adminCookies = await loginAsAdmin(request);
-      const approveRes = await apiPut(
-        request,
-        `/api/v1/time-off/${createdId}`,
-        {
-          status: "APPROVED",
-          coverageName: "QA Coverage Staff",
-          reviewNotes: "Approved during API coverage test",
-        },
-        adminCookies,
-      );
-      expect(approveRes.status()).toBe(200);
-      const approved = await approveRes.json();
-      expect(approved.status).toBe("APPROVED");
-      expect(approved.coverageName).toBe("QA Coverage Staff");
-    });
-
-    test("multi-day request splits into separate, individually approvable weekday rows", async ({ request }) => {
-      if (!centerId || !teacherUserId) test.skip();
-      const teacherCookies = await loginAsTeacher(request);
-
-      // 2026-05-04 (Mon) through 2026-05-09 (Sat): expect only the 5 weekdays.
-      const res = await apiPost(
-        request,
-        "/api/v1/time-off",
-        {
-          centerId,
-          type: "PTO",
-          startDate: "2026-05-04T08:00:00.000Z",
-          endDate: "2026-05-09T17:00:00.000Z",
-          reason: "Multi-day split test",
-          overrideBalanceWarning: true,
-        },
-        teacherCookies,
-      );
-      expect(res.status()).toBe(201);
-      const body = await res.json();
-      expect(Array.isArray(body.requests)).toBe(true);
-      expect(body.requests.length).toBe(5);
-      expect(body.requestGroupId).toBeTruthy();
-      for (const r of body.requests) {
-        expect(r.requestGroupId).toBe(body.requestGroupId);
-        expect(r.status).toBe("PENDING");
-      }
-
-      // Admin approves only the first day, leaving the rest pending.
-      const adminCookies = await loginAsAdmin(request);
-      const approveRes = await apiPut(
-        request,
-        `/api/v1/time-off/${body.requests[0].id}`,
-        { status: "APPROVED", reviewNotes: "Approve just this day" },
-        adminCookies,
-      );
-      expect(approveRes.status()).toBe(200);
-
-      const listRes = await apiGet(
-        request,
-        `/api/v1/time-off?centerId=${centerId}&userId=${teacherUserId}`,
-        adminCookies,
-      );
-      expect(listRes.status()).toBe(200);
-      const list = await listRes.json();
-      const groupRows = list.filter((r) => r.requestGroupId === body.requestGroupId);
-      expect(groupRows.length).toBe(5);
-      expect(groupRows.filter((r) => r.status === "APPROVED").length).toBe(1);
-      expect(groupRows.filter((r) => r.status === "PENDING").length).toBe(4);
-    });
-
-    test("approved paid requests reduce paid hours available", async ({ request }) => {
-      if (!centerId || !teacherUserId) test.skip();
-
-      const adminCookies = await loginAsAdmin(request);
-      const teacherCookies = await loginAsTeacher(request);
-
-      const earnedDate = "2026-04-01";
-      const addBalanceRes = await apiPost(
-        request,
-        "/api/v1/time-off/balances",
-        {
-          centerId,
-          userId: teacherUserId,
-          earnedDate,
-          paidHours: 12,
-          unpaidHours: 0,
-          note: "API balance test",
-        },
-        adminCookies,
-      );
-      expect(addBalanceRes.status()).toBe(201);
-
-      const beforeRes = await apiGet(
-        request,
-        `/api/v1/time-off/balances?centerId=${centerId}&userId=${teacherUserId}`,
-        adminCookies,
-      );
-      expect(beforeRes.status()).toBe(200);
-      const before = await beforeRes.json();
-
-      const createRes = await apiPost(
-        request,
-        "/api/v1/time-off",
-        {
-          centerId,
-          // The assertion below is relative (after === before - 4), so the balance
-          // guard is not what is under test. Each run approves another 4 hours that
-          // nothing cleans up, so without the override this 409s once the granted
-          // 12 hours have been used up by earlier runs.
-          overrideBalanceWarning: true,
-          type: "PAID",
-          startDate: "2026-04-10T08:00:00.000Z",
-          endDate: "2026-04-10T12:00:00.000Z",
-          reason: "Balance usage test",
-        },
-        teacherCookies,
-      );
-      expect([200, 201]).toContain(createRes.status());
-      const created = await createRes.json();
-
-      const approveRes = await apiPut(
-        request,
-        `/api/v1/time-off/${created.id}`,
-        {
-          status: "APPROVED",
-          reviewNotes: "Approved for balance usage test",
-        },
-        adminCookies,
-      );
-      expect(approveRes.status()).toBe(200);
-
-      const afterRes = await apiGet(
-        request,
-        `/api/v1/time-off/balances?centerId=${centerId}&userId=${teacherUserId}`,
-        adminCookies,
-      );
-      expect(afterRes.status()).toBe(200);
-      const after = await afterRes.json();
-
-      expect(after.summary.paidAvailable).toBeCloseTo(
-        before.summary.paidAvailable - 4,
-        5,
-      );
-    });
+    const aliceCookies = await getAuthCookie(request, alice.email, password);
+    expect((await apiGet(request, `/api/v1/shifts?centerId=${center.id}&from=${today}&to=${today}`, aliceCookies)).status()).toBe(200);
+    // teacher@demo.com is not at this center.
+    expect((await apiGet(request, `/api/v1/shifts?centerId=${center.id}`, await loginAsTeacher(request))).status()).toBe(403);
   });
 
-  // ── Training Logs ─────────────────────────────────────────────
+  test("Staff Attendance Overview: hours highest first, Move Today changes the classroom", async ({ request }) => {
+    const coachCookies = await loginAsCoach(request);
+    const range = `from=${today}&to=${today}&date=${today}`;
+    const res = await apiGet(request, `/api/v1/staff-attendance/overview?centerId=${center.id}&${range}`, coachCookies);
+    expect(res.status(), await res.text()).toBe(200);
+    const body = await res.json();
+    // Bob quit, so he is not listed; Alice (8h) comes before the 0h staff.
+    expect(body.staff.some((s) => s.id === bob.id)).toBe(false);
+    expect(body.staff[0].id).toBe(alice.id);
+    expect(body.staff[0]).toMatchObject({ totalHours: 8, classRoomName: "QA Room A", moved: false, position: "Lead Teacher", shift: { startTime: "07:00", endTime: "15:30" } });
 
-  test.describe("Training Logs", () => {
-    test("GET /api/v1/training-logs returns 401 without auth", async ({ request }) => {
-      const res = await apiGet(request, "/api/v1/training-logs?centerId=fake");
-      expect(res.status()).toBe(401);
-    });
+    const move = await apiPut(request, "/api/v1/staff-day-moves", { centerId: center.id, userId: alice.id, date: today, toClassRoomId: roomB.id }, coachCookies);
+    expect(move.status(), await move.text()).toBe(200);
+    const after = await (await apiGet(request, `/api/v1/staff-attendance/overview?centerId=${center.id}&${range}`, coachCookies)).json();
+    expect(after.staff.find((x) => x.id === alice.id)).toMatchObject({ classRoomName: "QA Room B", moved: true, homeClassRoomId: roomA.id });
 
-    test("GET /api/v1/training-logs returns logs for admin", async ({ request }) => {
-      if (!centerId) test.skip();
-      const cookies = await loginAsAdmin(request);
-      const res = await apiGet(request, `/api/v1/training-logs?centerId=${centerId}`, cookies);
-      expect(res.status()).toBe(200);
-      const data = await res.json();
-      expect(Array.isArray(data)).toBe(true);
-    });
+    // Alice's classroom checklist for today follows the move.
+    const admin = await loginAsAdmin(request);
+    for (const [title, room] of [["Room A list", roomA], ["Room B list", roomB]]) {
+      await apiPost(request, "/api/v1/daily-checklists", { centerId: center.id, title, classRoomIds: [room.id], items: [{ title: "Task" }] }, admin);
+    }
+    const aliceCookies = await getAuthCookie(request, alice.email, password);
+    const lists = await (await apiGet(request, `/api/v1/daily-checklists?centerId=${center.id}&date=${today}`, aliceCookies)).json();
+    expect(lists.map((l) => l.title)).toEqual(["Room B list"]);
 
-    test("POST /api/v1/training-logs creates a training entry", async ({ request }) => {
-      if (!centerId) test.skip();
-      const cookies = await loginAsAdmin(request);
-      const today = new Date().toISOString().split("T")[0];
-      const res = await apiPost(
-        request,
-        "/api/v1/training-logs",
-        {
-          centerId,
-          userId: teacherUserId || undefined,
-          topic: "E2E Test Training",
-          hours: 2,
-          date: today,
-          category: "Safety",
-          description: "Created by E2E test",
-        },
-        cookies,
-      );
-      expect([200, 201]).toContain(res.status());
-    });
-
-    test("GET /api/v1/training-logs/summary returns summary", async ({ request }) => {
-      if (!centerId) test.skip();
-      const cookies = await loginAsAdmin(request);
-      const qs = teacherUserId
-        ? `centerId=${centerId}&userId=${teacherUserId}`
-        : `centerId=${centerId}`;
-      const res = await apiGet(request, `/api/v1/training-logs/summary?${qs}`, cookies);
-      expect(res.status()).toBe(200);
-      const data = await res.json();
-      expect(data).toHaveProperty("totalHours");
-    });
+    expect((await apiPut(request, "/api/v1/staff-day-moves", { centerId: center.id, userId: alice.id, date: today, toClassRoomId: roomB.id }, aliceCookies)).status()).toBe(403);
+    const undo = await request.delete("/api/v1/staff-day-moves", { headers: { cookie: coachCookies, "content-type": "application/json" }, data: { centerId: center.id, userId: alice.id, date: today } });
+    expect(undo.status()).toBe(200);
+    const restored = await (await apiGet(request, `/api/v1/daily-checklists?centerId=${center.id}&date=${today}`, aliceCookies)).json();
+    expect(restored.map((l) => l.title)).toEqual(["Room A list"]);
   });
 
-  test.describe("Teacher Training Pathways", () => {
-    test("GET /api/v1/teacher-training-pathways returns pathways for admin", async ({ request }) => {
-      if (!centerId) test.skip();
-      const cookies = await loginAsAdmin(request);
-      const res = await apiGet(
-        request,
-        `/api/v1/teacher-training-pathways?centerId=${centerId}&includeInactive=1`,
-        cookies,
-      );
-      expect(res.status()).toBe(200);
-      const data = await res.json();
-      expect(Array.isArray(data)).toBe(true);
-    });
-
-    test("POST /api/v1/teacher-training-pathways creates a pathway", async ({ request }) => {
-      if (!centerId) test.skip();
-      const cookies = await loginAsAdmin(request);
-      const res = await apiPost(
-        request,
-        "/api/v1/teacher-training-pathways",
-        {
-          centerId,
-          title: "API Test Teacher Pathway",
-          description: "Created by API coverage",
-          effectiveDate: "2026-05-01",
-          active: true,
-          topics: [
-            {
-              title: "Orientation basics",
-              description: "Review onboarding expectations",
-              durationHours: 1,
-              required: true,
-            },
-            {
-              title: "Safety walkthrough",
-              durationHours: 1.5,
-              required: false,
-            },
-          ],
-        },
-        cookies,
-      );
-      expect([200, 201]).toContain(res.status());
-      const data = await res.json();
-      expect(data.title).toBe("API Test Teacher Pathway");
-      expect(Array.isArray(data.topics)).toBe(true);
-      expect(data.topics.length).toBe(2);
-    });
+  test("time-off calendars show only the staff member's name", async ({ request }) => {
+    const aliceCookies = await getAuthCookie(request, alice.email, password);
+    const start = new Date(`${today}T09:00:00`);
+    const end = new Date(`${today}T12:00:00`);
+    const created = await apiPost(request, "/api/v1/time-off", { centerId: center.id, startDate: start.toISOString(), endDate: end.toISOString() }, aliceCookies);
+    expect(created.status(), await created.text()).toBeLessThan(300);
+    const rows = await (await apiGet(request, `/api/v1/time-off/calendar?centerId=${center.id}&from=${today}&to=${key(new Date(Date.now() + 2 * 86400000))}&includePending=1&includeEvents=1`, await loginAsCoach(request))).json();
+    const mine = rows.filter((r) => r._source === "timeoff");
+    expect(mine.length).toBeGreaterThan(0);
+    expect(mine.every((r) => r.label === "Alice QA")).toBe(true);
   });
 
-  // ── Evaluations ───────────────────────────────────────────────
+  test("an employee e-signs their own time sheet; managers can see it", async ({ request }) => {
+    const aliceCookies = await getAuthCookie(request, alice.email, password);
+    expect((await apiGet(request, `/api/v1/time-sheets/staff/${alice.id}?from=${today}&to=${today}`, aliceCookies)).status()).toBe(200);
+    expect((await apiGet(request, `/api/v1/time-sheets/staff/${bob.id}`, aliceCookies)).status()).toBe(403);
 
-  test.describe("Evaluations", () => {
-    test("GET /api/v1/evaluations returns 401 without auth", async ({ request }) => {
-      const res = await apiGet(request, "/api/v1/evaluations?centerId=fake");
-      expect(res.status()).toBe(401);
-    });
+    expect((await apiPost(request, "/api/v1/time-sheets/signatures", { from: today, to: today, signatureName: "Alice QA" }, aliceCookies)).status()).toBe(400);
+    const signed = await apiPost(request, "/api/v1/time-sheets/signatures", { from: today, to: today, signatureName: "Alice QA", certify: true }, aliceCookies);
+    expect(signed.status(), await signed.text()).toBe(201);
+    expect(await signed.json()).toMatchObject({ from: today, to: today, signatureName: "Alice QA", totalHours: 8 });
 
-    test("GET /api/v1/evaluations returns evaluations for admin", async ({ request }) => {
-      if (!centerId) test.skip();
-      const cookies = await loginAsAdmin(request);
-      const res = await apiGet(request, `/api/v1/evaluations?centerId=${centerId}`, cookies);
-      expect(res.status()).toBe(200);
-      const data = await res.json();
-      expect(Array.isArray(data)).toBe(true);
-    });
-
-    test("POST /api/v1/evaluations creates an evaluation", async ({ request }) => {
-      if (!centerId || !teacherUserId) test.skip();
-      const cookies = await loginAsAdmin(request);
-      const res = await apiPost(
-        request,
-        "/api/v1/evaluations",
-        {
-          centerId,
-          teacherId: teacherUserId,
-          periodStart: "2026-02-01",
-          periodEnd: "2026-02-14",
-          categories: {
-            "Classroom Management": 4,
-            "Communication": 3,
-            "Curriculum Delivery": 4,
-            "Child Engagement": 5,
-            "Professionalism": 4,
-          },
-          strengths: "E2E test strengths",
-          areasForImprovement: "E2E test areas",
-          goals: "E2E test goals",
-          notes: "Created by E2E test",
-        },
-        cookies,
-      );
-      expect([200, 201]).toContain(res.status());
-      const data = await res.json();
-      expect(data.periodStart).toBeTruthy();
-      expect(data.periodEnd).toBeTruthy();
-      expect(data.period).toContain("2026-02-01");
-      expect(data.period).toContain("2026-02-14");
-    });
-
-    test("POST /api/v1/evaluations rejects an invalid period range", async ({ request }) => {
-      if (!centerId || !teacherUserId) test.skip();
-      const cookies = await loginAsAdmin(request);
-      const res = await apiPost(
-        request,
-        "/api/v1/evaluations",
-        {
-          centerId,
-          teacherId: teacherUserId,
-          periodStart: "2026-02-14",
-          periodEnd: "2026-02-01",
-          categories: {},
-        },
-        cookies,
-      );
-      expect(res.status()).toBe(400);
-    });
-
-    test("GET /api/v1/evaluations filters by employee, status, and period date range", async ({ request }) => {
-      if (!centerId || !teacherUserId) test.skip();
-      const cookies = await loginAsAdmin(request);
-      const now = new Date();
-      const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      const currentMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-      const currentMonthEnd = `${lastDayOfMonth.getFullYear()}-${String(lastDayOfMonth.getMonth() + 1).padStart(2, "0")}-${String(lastDayOfMonth.getDate()).padStart(2, "0")}`;
-
-      const createRes = await apiPost(
-        request,
-        "/api/v1/evaluations",
-        {
-          centerId,
-          teacherId: teacherUserId,
-          periodStart: "2031-07-01",
-          periodEnd: "2031-07-14",
-          categories: {
-            "Classroom Management": 4,
-            "Communication": 4,
-            "Curriculum Delivery": 4,
-            "Child Engagement": 5,
-            "Professionalism": 4,
-          },
-          notes: "API filter coverage",
-        },
-        cookies,
-      );
-      expect([200, 201]).toContain(createRes.status());
-      const created = await createRes.json();
-
-      const submitRes = await apiPut(
-        request,
-        `/api/v1/evaluations/${created.id}`,
-        { status: "SUBMITTED" },
-        cookies,
-      );
-      expect(submitRes.status()).toBe(200);
-
-      const filteredRes = await apiGet(
-        request,
-        `/api/v1/evaluations?centerId=${centerId}&teacherId=${teacherUserId}&status=SUBMITTED&from=2031-07-01&to=2031-07-14`,
-        cookies,
-      );
-      expect(filteredRes.status()).toBe(200);
-      const filtered = await filteredRes.json();
-      expect(filtered.some((evaluation) => evaluation.id === created.id)).toBe(true);
-
-      const currentMonthRes = await apiGet(
-        request,
-        `/api/v1/evaluations?centerId=${centerId}&teacherId=${teacherUserId}&from=${currentMonthStart}&to=${currentMonthEnd}`,
-        cookies,
-      );
-      expect(currentMonthRes.status()).toBe(200);
-      const currentMonth = await currentMonthRes.json();
-      expect(currentMonth.some((evaluation) => evaluation.id === created.id)).toBe(false);
-    });
-
-    test("teacher cannot create evaluations", async ({ request }) => {
-      if (!centerId) test.skip();
-      const cookies = await loginAsTeacher(request);
-      const res = await apiPost(
-        request,
-        "/api/v1/evaluations",
-        {
-          centerId,
-          teacherId: "some-id",
-          period: "2026-02",
-          categories: {},
-        },
-        cookies,
-      );
-      expect(res.status()).toBe(403);
-    });
-
-    test("teacher can view own evaluations", async ({ request }) => {
-      if (!centerId) test.skip();
-      const cookies = await loginAsTeacher(request);
-      const res = await apiGet(request, `/api/v1/evaluations?centerId=${centerId}`, cookies);
-      expect(res.status()).toBe(200);
-    });
+    const seen = await (await apiGet(request, `/api/v1/time-sheets/signatures?userId=${alice.id}&from=${today}&to=${today}`, await loginAsHrStaff(request))).json();
+    expect(seen).toHaveLength(1);
+    expect((await apiGet(request, `/api/v1/time-sheets/signatures?userId=${alice.id}`, await getAuthCookie(request, bob.email, password))).status()).toBe(403);
   });
 });

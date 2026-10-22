@@ -27,26 +27,9 @@ import {
 } from "@/lib/lessonScheduling";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { STAFF_PORTAL_ROLES } from "@/lib/roles";
+import { isLogActivityLink } from "@/lib/checklistLinks";
 
-const CATEGORY_OPTIONS = [
-  { value: "OPENING", label: "Opening" },
-  { value: "CLOSING", label: "Closing" },
-  { value: "HEALTH_SAFETY", label: "Health & Safety" },
-  { value: "CLEANING", label: "Cleaning" },
-  { value: "MEALS", label: "Meals" },
-  { value: "CLASSROOM", label: "Classroom" },
-  { value: "OTHER", label: "Other" },
-];
-
-const CATEGORY_STYLES = {
-  OPENING: { border: "border-l-amber-400", bg: "bg-amber-50", text: "text-amber-700" },
-  CLOSING: { border: "border-l-indigo-400", bg: "bg-indigo-50", text: "text-indigo-700" },
-  HEALTH_SAFETY: { border: "border-l-rose-400", bg: "bg-rose-50", text: "text-rose-700" },
-  CLEANING: { border: "border-l-emerald-400", bg: "bg-emerald-50", text: "text-emerald-700" },
-  MEALS: { border: "border-l-orange-400", bg: "bg-orange-50", text: "text-orange-700" },
-  CLASSROOM: { border: "border-l-sky-400", bg: "bg-sky-50", text: "text-sky-700" },
-  OTHER: { border: "border-l-gray-400", bg: "bg-gray-50", text: "text-gray-700" },
-};
+const CARD_STYLE = { border: "border-l-sky-400", bg: "bg-sky-50", text: "text-sky-700" };
 
 const FREQUENCY_OPTIONS = CHECKLIST_FREQUENCY_OPTIONS;
 
@@ -151,7 +134,8 @@ function toggleClassroomSelection(ids, classRoomId) {
   return [...set];
 }
 
-function selectedClassroomSummary(classrooms, selectedIds) {
+function selectedClassroomSummary(classrooms, selectedIds, noClassroom) {
+  if (noClassroom) return { title: "No Classroom" };
   const selected = classrooms.filter((room) => selectedIds.includes(room.id));
   if (!selected.length) {
     return {
@@ -219,7 +203,6 @@ export default function AdminTaskChecklistManager({ centerId }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
-  const [filterCategory, setFilterCategory] = useState("");
   const [filterFrequency, setFilterFrequency] = useState("");
   const [expandedId, setExpandedId] = useState("");
 
@@ -227,11 +210,11 @@ export default function AdminTaskChecklistManager({ centerId }) {
   const [editingChecklistId, setEditingChecklistId] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
-  const [newCategory, setNewCategory] = useState("OTHER");
   const [newFrequency, setNewFrequency] = useState("DAILY");
   const [newRepeatDays, setNewRepeatDays] = useState([]);
   const [newMonthlyDay, setNewMonthlyDay] = useState("");
   const [newClassRoomIds, setNewClassRoomIds] = useState([]);
+  const [newNoClassroom, setNewNoClassroom] = useState(false);
   const [classroomAccordionOpen, setClassroomAccordionOpen] = useState(false);
   const [newAssignedUserIds, setNewAssignedUserIds] = useState([]);
   const [assigneeAccordionOpen, setAssigneeAccordionOpen] = useState(false);
@@ -281,7 +264,6 @@ export default function AdminTaskChecklistManager({ centerId }) {
     setExpandedId("");
     setSuccess("");
     setSearch("");
-    setFilterCategory("");
     setFilterFrequency("");
   }, [centerId, loadData]);
 
@@ -289,11 +271,11 @@ export default function AdminTaskChecklistManager({ centerId }) {
     setEditingChecklistId("");
     setNewTitle("");
     setNewDescription("");
-    setNewCategory("OTHER");
     setNewFrequency("DAILY");
     setNewRepeatDays([]);
     setNewMonthlyDay("");
     setNewClassRoomIds([]);
+    setNewNoClassroom(false);
     setClassroomAccordionOpen(false);
     setNewAssignedUserIds([]);
     setAssigneeAccordionOpen(false);
@@ -318,11 +300,11 @@ export default function AdminTaskChecklistManager({ centerId }) {
     setEditingChecklistId(checklist.id);
     setNewTitle(checklist.title || "");
     setNewDescription(checklist.description || "");
-    setNewCategory(checklist.category || "OTHER");
     setNewFrequency(checklist.frequency || "DAILY");
     setNewRepeatDays(normalizeRepeatDays(checklist.repeatDays));
     setNewMonthlyDay(checklist.monthlyDay ? String(checklist.monthlyDay) : "");
     setNewClassRoomIds(normalizeChecklistClassRoomIds(checklist.classRoomIds, checklist.classRoomId));
+    setNewNoClassroom(!!checklist.noClassroom);
     setNewAssignedUserIds(
       Array.isArray(checklist.assignedUserIds) && checklist.assignedUserIds.length
         ? checklist.assignedUserIds
@@ -434,18 +416,18 @@ export default function AdminTaskChecklistManager({ centerId }) {
     setError("");
     setSuccess("");
     try {
-      await apiJson("/api/v1/daily-checklists", {
+      const saved = await apiJson("/api/v1/daily-checklists", {
         method: editingChecklistId ? "PUT" : "POST",
         body: JSON.stringify({
           id: editingChecklistId || undefined,
           centerId,
           title: newTitle.trim(),
           description: newDescription.trim() || null,
-          category: newCategory,
           frequency: newFrequency,
           repeatDays: newFrequency === "WEEKLY" ? normalizeRepeatDays(newRepeatDays) : [],
           monthlyDay: newFrequency === "MONTHLY" ? normalizeMonthlyDay(newMonthlyDay) : null,
-          classRoomIds: normalizeChecklistClassRoomIds(newClassRoomIds),
+          noClassroom: newNoClassroom,
+          classRoomIds: newNoClassroom ? [] : normalizeChecklistClassRoomIds(newClassRoomIds),
           assignedUserIds: newAssignedUserIds,
           items: newItems
             .filter((item) => item.title.trim())
@@ -498,7 +480,12 @@ export default function AdminTaskChecklistManager({ centerId }) {
         }),
       });
       closeForm();
-      setSuccess(editingChecklistId ? "Checklist updated." : "Checklist created.");
+      const copies = Array.isArray(saved?.copyIds) ? saved.copyIds.length : 1;
+      setSuccess(
+        `${editingChecklistId ? "Checklist updated." : "Checklist created."}${
+          copies > 1 ? ` Each of the ${copies} people now has their own copy.` : ""
+        }`,
+      );
       await loadData();
     } catch (nextError) {
       setError(nextError.message || "Failed to save checklist");
@@ -610,7 +597,6 @@ export default function AdminTaskChecklistManager({ centerId }) {
   const filtered = useMemo(() => {
     const needle = String(search || "").trim().toLowerCase();
     return checklists.filter((checklist) => {
-      if (filterCategory && checklist.category !== filterCategory) return false;
       if (!checklistMatchesFrequency(checklist, filterFrequency)) return false;
       if (!needle) return true;
 
@@ -638,24 +624,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
 
       return haystack.includes(needle);
     });
-  }, [checklists, filterCategory, filterFrequency, search]);
-
-  const grouped = useMemo(() => {
-    const map = {};
-    for (const checklist of filtered) {
-      if (!map[checklist.category]) map[checklist.category] = [];
-      map[checklist.category].push(checklist);
-    }
-    return map;
-  }, [filtered]);
-
-  const countsByCategory = useMemo(() => {
-    const counts = {};
-    for (const checklist of checklists) {
-      counts[checklist.category] = (counts[checklist.category] || 0) + 1;
-    }
-    return counts;
-  }, [checklists]);
+  }, [checklists, filterFrequency, search]);
 
   const selectedRooms = useMemo(
     () => classrooms.filter((room) => newClassRoomIds.includes(room.id)),
@@ -663,8 +632,8 @@ export default function AdminTaskChecklistManager({ centerId }) {
   );
 
   const classroomScopeSummary = useMemo(
-    () => selectedClassroomSummary(classrooms, newClassRoomIds),
-    [classrooms, newClassRoomIds],
+    () => selectedClassroomSummary(classrooms, newClassRoomIds, newNoClassroom),
+    [classrooms, newClassRoomIds, newNoClassroom],
   );
 
   const selectedAssignees = useMemo(
@@ -763,19 +732,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
               ))}
             </select>
 
-            <select
-              value={filterCategory}
-              onChange={(event) => setFilterCategory(event.target.value)}
-              className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:border-sky-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-200"
-            >
-              <option value="">All categories</option>
-              {CATEGORY_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                  {countsByCategory[option.value] ? ` (${countsByCategory[option.value]})` : ""}
-                </option>
-              ))}
-            </select>
+
           </div>
         </div>
 
@@ -808,7 +765,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
               ))}
             </datalist>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
               <label className="block">
                 <div className="mb-1 text-xs font-semibold text-gray-500">Checklist Title *</div>
                 <input
@@ -818,20 +775,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
                   className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:border-sky-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-200"
                 />
               </label>
-              <label className="block">
-                <div className="mb-1 text-xs font-semibold text-gray-500">Category</div>
-                <select
-                  value={newCategory}
-                  onChange={(event) => setNewCategory(event.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:border-sky-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-200"
-                >
-                  {CATEGORY_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+
               <label className="block">
                 <div className="mb-1 text-xs font-semibold text-gray-500">Classrooms</div>
                 <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
@@ -861,11 +805,26 @@ export default function AdminTaskChecklistManager({ centerId }) {
                       <label className="flex cursor-pointer items-center gap-3 rounded-lg bg-white px-3 py-2 text-sm text-gray-700">
                         <input
                           type="checkbox"
-                          checked={newClassRoomIds.length === 0}
-                          onChange={() => setNewClassRoomIds([])}
+                          checked={!newNoClassroom && newClassRoomIds.length === 0}
+                          onChange={() => {
+                            setNewNoClassroom(false);
+                            setNewClassRoomIds([]);
+                          }}
                           className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
                         />
                         <span className="font-medium">All classrooms</span>
+                      </label>
+                      <label className="flex cursor-pointer items-center gap-3 rounded-lg bg-white px-3 py-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={newNoClassroom}
+                          onChange={() => {
+                            setNewNoClassroom(true);
+                            setNewClassRoomIds([]);
+                          }}
+                          className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+                        />
+                        <span className="font-medium">No Classroom</span>
                       </label>
 
                       <div className="space-y-2">
@@ -879,9 +838,10 @@ export default function AdminTaskChecklistManager({ centerId }) {
                               <input
                                 type="checkbox"
                                 checked={selected}
-                                onChange={() =>
-                                  setNewClassRoomIds((current) => toggleClassroomSelection(current, room.id))
-                                }
+                                onChange={() => {
+                                  setNewNoClassroom(false);
+                                  setNewClassRoomIds((current) => toggleClassroomSelection(current, room.id));
+                                }}
                                 className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
                               />
                               <span>{room.name}</span>
@@ -966,6 +926,11 @@ export default function AdminTaskChecklistManager({ centerId }) {
                     </div>
                   ) : null}
 
+                  {selectedAssignees.length > 1 ? (
+                    <p className="mt-2 text-[11px] text-gray-500">
+                      Each person gets their own copy, so one person&apos;s checks don&apos;t affect another&apos;s.
+                    </p>
+                  ) : null}
                   {selectedAssignees.length ? (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {selectedAssignees.map((user) => (
@@ -1178,6 +1143,11 @@ export default function AdminTaskChecklistManager({ centerId }) {
                           placeholder="e.g. /teacher/logs?centerId=..."
                           className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-200"
                         />
+                        {isLogActivityLink(item.directLink) ? (
+                          <div className="mt-1 text-[11px] font-semibold text-sky-700">
+                            Links to Log Activity: staff must open it from this item before they can check it off.
+                          </div>
+                        ) : null}
                       </label>
                       <label className="block xl:col-span-2">
                         <div className="mb-1 text-xs font-semibold text-gray-500">Reference URL</div>
@@ -1359,31 +1329,18 @@ export default function AdminTaskChecklistManager({ centerId }) {
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white py-14 text-center">
           <div className="text-sm font-bold text-gray-900">
-            {search || filterCategory || filterFrequency ? "No matching checklists" : "No checklists yet"}
+            {search || filterFrequency ? "No matching checklists" : "No checklists yet"}
           </div>
           <p className="mt-1 max-w-md text-xs text-gray-500">
-            {search || filterCategory || filterFrequency
+            {search || filterFrequency
               ? "Adjust the filters or search terms and try again."
               : "Create a checklist and set the schedule on each task so only the right items appear on the right day."}
           </p>
         </div>
       ) : (
-        Object.entries(grouped).map(([categoryKey, lists]) => {
-          const category = CATEGORY_OPTIONS.find((option) => option.value === categoryKey);
-          const styles = CATEGORY_STYLES[categoryKey] || CATEGORY_STYLES.OTHER;
-
-          return (
-            <div key={categoryKey} className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className={`h-3 w-3 rounded-sm border-l-4 ${styles.bg} ${styles.border}`} />
-                <h3 className="text-xs font-extrabold uppercase tracking-wide text-gray-500">
-                  {category?.label || categoryKey}
-                  <span className="ml-1.5 font-semibold text-gray-400">({lists.length})</span>
-                </h3>
-              </div>
-
-              {lists.map((checklist) => {
-                const stylesForCard = CATEGORY_STYLES[checklist.category] || CATEGORY_STYLES.OTHER;
+        <div className="space-y-2">
+              {filtered.map((checklist) => {
+                const stylesForCard = CARD_STYLE;
                 const items = sortByTaskTime(checklist.items);
                 const checklistRooms = getChecklistClassRooms(checklist);
                 const checklistAssignedUsers = getChecklistAssignedUsers(checklist);
@@ -1421,6 +1378,11 @@ export default function AdminTaskChecklistManager({ centerId }) {
                             <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600">
                               {items.length} {items.length === 1 ? "item" : "items"}
                             </span>
+                            {checklist.noClassroom ? (
+                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600">
+                                No Classroom
+                              </span>
+                            ) : null}
                             {checklistRooms.slice(0, 2).map((room) => (
                               <span
                                 key={room.id}
@@ -1550,9 +1512,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
                   </div>
                 );
               })}
-            </div>
-          );
-        })
+        </div>
       )}
     </div>
   );

@@ -1369,13 +1369,11 @@ function TeachersTab({ centerId }) {
           {/* HR Section */}
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
             <div className="text-sm font-extrabold text-gray-900">HR</div>
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
               {[
                 { label: "Hours Worked", value: report.hr?.hoursWorked ?? "—", color: "bg-sky-50 text-sky-800 border-sky-200" },
                 { label: "Lates", value: report.hr?.lates ?? "—", color: "bg-amber-50 text-amber-800 border-amber-200" },
                 { label: "Absences", value: report.hr?.absences ?? "—", color: "bg-red-50 text-red-800 border-red-200" },
-                { label: "PTO Available (hrs)", value: report.hr?.ptoAvailable ?? "—", color: "bg-emerald-50 text-emerald-800 border-emerald-200" },
-                { label: "UTO Available (hrs)", value: report.hr?.utoAvailable ?? "—", color: "bg-gray-50 text-gray-800 border-gray-200" },
               ].map((s) => (
                 <div key={s.label} className={`rounded-xl border p-4 ${s.color}`}>
                   <div className="text-2xl font-extrabold">{String(s.value)}</div>
@@ -2068,13 +2066,11 @@ function OtherStaffPerformanceTab({ centerId, dateFrom, dateTo }) {
           {/* HR */}
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
             <div className="text-sm font-extrabold text-gray-900">HR</div>
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
               {[
                 { label: "Hours Worked", value: report.hr?.hoursWorked ?? "—", color: "bg-sky-50 text-sky-800 border-sky-200" },
                 { label: "Lates", value: report.hr?.lates ?? "—", color: "bg-amber-50 text-amber-800 border-amber-200" },
                 { label: "Absences", value: report.hr?.absences ?? "—", color: "bg-red-50 text-red-800 border-red-200" },
-                { label: "PTO Available (hrs)", value: report.hr?.ptoAvailable ?? "—", color: "bg-emerald-50 text-emerald-800 border-emerald-200" },
-                { label: "UTO Available (hrs)", value: report.hr?.utoAvailable ?? "—", color: "bg-gray-50 text-gray-800 border-gray-200" },
               ].map((s) => (
                 <div key={s.label} className={`rounded-xl border p-4 ${s.color}`}>
                   <div className="text-2xl font-extrabold">{String(s.value)}</div>
@@ -2907,13 +2903,11 @@ function CoachPerformanceTab({ centerId, dateFrom, dateTo }) {
           {/* HR Section */}
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
             <div className="text-sm font-extrabold text-gray-900">HR</div>
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
               {[
                 { label: "Hours Worked", value: report.hr?.hoursWorked ?? "—", color: "bg-sky-50 text-sky-800 border-sky-200" },
                 { label: "Lates", value: report.hr?.lates ?? "—", color: "bg-amber-50 text-amber-800 border-amber-200" },
                 { label: "Absences", value: report.hr?.absences ?? "—", color: "bg-red-50 text-red-800 border-red-200" },
-                { label: "PTO Available (hrs)", value: report.hr?.ptoAvailable ?? "—", color: "bg-emerald-50 text-emerald-800 border-emerald-200" },
-                { label: "UTO Available (hrs)", value: report.hr?.utoAvailable ?? "—", color: "bg-gray-50 text-gray-800 border-gray-200" },
               ].map((s) => (
                 <div key={s.label} className={`rounded-xl border p-4 ${s.color}`}>
                   <div className="text-2xl font-extrabold">{String(s.value)}</div>

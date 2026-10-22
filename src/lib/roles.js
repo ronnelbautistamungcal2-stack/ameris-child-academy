@@ -87,6 +87,11 @@ export function isManagerRole(role) {
  * Employees who only ever see and edit their own staff records. Managers see
  * the whole center, so they are excluded here.
  */
+/** Who builds shift schedules: admins, coaches and HR (client request 2026-10-02). */
+export function canManageShifts(role) {
+  return ["ADMIN", "COACH", "HR_STAFF"].includes(String(role || "").toUpperCase());
+}
+
 export function isSelfServiceEmployeeRole(role) {
   const normalizedRole = String(role || "").toUpperCase();
   return isEmployeeRole(normalizedRole) && !isManagerRole(normalizedRole);

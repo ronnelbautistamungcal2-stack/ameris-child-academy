@@ -1,6 +1,7 @@
 import { accessibleCenterIds, getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { EMPLOYEE_ROLES, isManagerRole } from "@/lib/roles";
+import { EMPLOYED_WHERE } from "@/lib/employment";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -16,6 +17,8 @@ export default async function handler(req, res) {
     const staff = await prisma.user.findMany({
       where: {
         AND: [
+          // Staff Positions lists only people who are currently employed.
+          EMPLOYED_WHERE,
           {
             OR: [
               { role: { in: EMPLOYEE_ROLES } },

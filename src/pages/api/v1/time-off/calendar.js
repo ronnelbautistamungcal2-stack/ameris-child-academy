@@ -1,7 +1,7 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { isEmployeeRole } from "@/lib/roles";
-import { decorateTimeOffRequest, getTimeOffTypeLabel } from "@/lib/time-off";
+import { decorateTimeOffRequest } from "@/lib/time-off";
 
 export default async function handler(req, res) {
   try {
@@ -95,17 +95,12 @@ export default async function handler(req, res) {
       createdBy: event.createdBy,
     }));
 
-    const requestRows = decoratedRequests.map((request) => {
-      const baseLabel = `${request.user?.name || "Unknown"} (${request.typeLabel || getTimeOffTypeLabel(request.type)})`;
-      return {
-        ...request,
-        _source: "timeoff",
-        label:
-          request.isUnexcused && request.coverageName
-            ? `${baseLabel} · Cover: ${request.coverageName}`
-            : baseLabel,
-      };
-    });
+    // Calendars show only the staff member's name (client request 2026-10-02).
+    const requestRows = decoratedRequests.map((request) => ({
+      ...request,
+      _source: "timeoff",
+      label: request.user?.name || "Unknown",
+    }));
 
     return res.status(200).json(
       [...eventRows, ...requestRows].sort(

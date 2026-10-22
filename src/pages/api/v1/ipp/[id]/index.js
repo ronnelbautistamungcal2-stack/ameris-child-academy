@@ -120,7 +120,7 @@ export default async function handler(req, res) {
       const me = await prisma.user.findUnique({ where: { id: user.id }, select: { name: true, email: true } });
 
       await prisma.$transaction(async (tx) => {
-        await tx.behaviorPlan.update({ where: { id: plan.id }, data: { ...parsed.plan, updatedByName: displayName(me) } });
+        await tx.behaviorPlan.update({ where: { id: plan.id }, data: { ...parsed.plan, updatedByName: displayName(me), reviewedAt: new Date() } });
         // Goals left out of the form are removed; their log entries stay with no goal.
         await tx.behaviorPlanGoal.deleteMany({ where: { planId: plan.id, id: { notIn: keep } } });
         for (const { id, strategies, ...goal } of parsed.goals) {

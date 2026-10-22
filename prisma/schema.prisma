@@ -219,6 +219,12 @@ model User {
   staffDepartment                    String?
   middleInitial                      String?
   disabled                           Boolean                             @default(false)
+  // Latest Employment Status entry; staff who aren't CURRENTLY_EMPLOYED drop
+  // off Staff Positions, shift schedules and attendance lists.
+  employmentStatus                   String                              @default("CURRENTLY_EMPLOYED")
+  employmentStatusEntries            EmploymentStatusEntry[]
+  staffDayMoves                      StaffDayMove[]
+  timeSheetSignatures                TimeSheetSignature[]
   kioskCredential                    KioskCredential?
   directedCenters                    Center[]                            @relation("CenterDirector")
   pictureUrl                         String?
@@ -278,6 +284,8 @@ model User {
   assignedDailyChecklists            DailyChecklist[]                    @relation("DailyChecklistAssignedUser")
   dailyChecklistAssignments          DailyChecklistAssignee[]
   dailyChecklistNotes                DailyChecklistNote[]                @relation("DailyChecklistNotesCreatedBy")
+  dailyChecklistLinkVisits           DailyChecklistLinkVisit[]
+  dailyChecklistChoices              DailyChecklistChoice[]
   closedChildFlagReviews             ChildFlagReview[]                   @relation("ChildFlagReviewClosedBy")
   parentInvolvements                 ParentInvolvement[]
   teacherCommendations               TeacherCommendation[]               @relation("TeacherCommendations")
@@ -379,6 +387,7 @@ model Center {
   lessonPlanners              LessonPlanner[]
   lessonPlanCells             LessonPlanCell[]
   curriculumOptions           CurriculumOption[]
+  staffDayMoves               StaffDayMove[]
 }
 
 model CenterUser {
@@ -1248,6 +1257,9 @@ model BehaviorPlan {
   reviewSchedule      String?
   measurableOutcomes  String?
   updatedByName       String?
+  // Last time the plan was saved from New/Edit. A review date (start date plus
+  // whole review periods) after this marks the plan Needs Review.
+  reviewedAt          DateTime?
   documents           BehaviorPlanDocument[]
   logs                BehaviorPlanLog[]
   goals               BehaviorPlanGoal[]
@@ -1842,6 +1854,9 @@ model DailyChecklist {
   assignedUser   User?                     @relation("DailyChecklistAssignedUser", fields: [assignedUserId], references: [id], onDelete: SetNull)
   assignedUserId String?
   assignees      DailyChecklistAssignee[]
+  // "No Classroom": not a classroom checklist (custodial, kitchen, coach...).
+  noClassroom    Boolean                   @default(false)
+  choices        DailyChecklistChoice[]
   title          String
   description    String?
   category       ChecklistCategory         @default(OTHER)
@@ -1912,6 +1927,7 @@ model DailyChecklistItem {
   directLinkLabel  String?
   taskTime         String?
   completions      DailyChecklistCompletion[]
+  linkVisits       DailyChecklistLinkVisit[]
   createdAt        DateTime                   @default(now())
 
   @@index([checklistId, sortOrder])
@@ -1937,6 +1953,84 @@ model DailyChecklistCompletion {
   @@unique([itemId, completedById, date])
   @@index([itemId, date])
   @@index([completedById, date])
+}
+
+// An item linking to Log Activity can only be ticked after the staff member
+// opened Log Activity from that item on that day.
+model DailyChecklistLinkVisit {
+  id        String             @id @default(uuid())
+  item      DailyChecklistItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  date      DateTime           @db.Date
+  visitedAt DateTime           @default(now())
+
+  @@unique([itemId, userId, date])
+}
+
+// The checklist a teacher picked to fill out on a day; only that one counts
+// toward their grade when they are assigned more than one.
+model DailyChecklistChoice {
+  id          String         @id @default(uuid())
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  checklist   DailyChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  checklistId String
+  date        DateTime       @db.Date
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([userId, date])
+  @@index([checklistId])
+}
+
+// Employment Status history (Staff List pop-up, client mockup 2026-10-02).
+model EmploymentStatusEntry {
+  id             String   @id @default(uuid())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  date           DateTime @db.Date
+  status         String
+  notes          String?
+  recordedById   String?
+  recordedByName String?
+  createdAt      DateTime @default(now())
+
+  @@index([userId, date])
+}
+
+// "Move Staff for Today" on Staff Attendance: the classroom a staff member
+// works in for one day (null = Not Assigned / float).
+model StaffDayMove {
+  id              String   @id @default(uuid())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String
+  center          Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId        String
+  date            DateTime @db.Date
+  fromClassRoomId String?
+  toClassRoomId   String?
+  movedById       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([centerId, date])
+}
+
+// An employee's e-signed time sheet for a date range.
+model TimeSheetSignature {
+  id            String   @id @default(uuid())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  from          DateTime @db.Date
+  to            DateTime @db.Date
+  signatureName String
+  totalHours    Float
+  signedAt      DateTime @default(now())
+
+  @@unique([userId, from, to])
 }
 
 model DailyChecklistNote {

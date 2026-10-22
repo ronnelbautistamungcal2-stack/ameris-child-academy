@@ -1,10 +1,11 @@
 import CoachLayout from "@/components/coach/CoachLayout";
-import ComingSoon from "@/components/shell/ComingSoon";
+import StudentReportWorkspace from "@/components/reports/StudentReportWorkspace";
 
+// Coach - Student Performance Report: the same report teachers see.
 export default function StudentPerformancePage() {
   return (
     <CoachLayout title="Student Performance Report">
-      <ComingSoon title="Student Performance Report" />
+      <StudentReportWorkspace />
     </CoachLayout>
   );
 }

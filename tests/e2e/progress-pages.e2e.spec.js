@@ -127,28 +127,18 @@ test.describe("Progress page filter behavior", () => {
     await expect(childSelect).toHaveValue("");
   });
 
-  test("teacher shows center guidance before selection and also resets stale scope", async ({ page, request }) => {
+  test("teacher Progression Tracking lists the children in their classes and opens one", async ({ page, request }) => {
     await loginAsTeacher(page, request);
     await page.goto("/teacher/progress");
     await waitForLoadingDone(page);
     await expect(page.getByRole("heading", { name: "Progression Tracking" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Children" })).toBeVisible();
 
-    await expect(page.getByText("Select a center to get started")).toBeVisible();
-
-    const centerSelect = page.getByRole("combobox").nth(0);
-    const classSelect = page.getByRole("combobox").nth(1);
-    const childSelect = page.getByRole("combobox").nth(3);
-
-    await centerSelect.selectOption(fixture.centerA.id);
-    await classSelect.selectOption(fixture.classA.id);
-    await childSelect.selectOption(fixture.childA.id);
-
-    await expect(classSelect).toHaveValue(fixture.classA.id);
-    await expect(childSelect).toHaveValue(fixture.childA.id);
-
-    await centerSelect.selectOption(fixture.centerB.id);
-
-    await expect(classSelect).toHaveValue("");
-    await expect(childSelect).toHaveValue("");
+    const name = `${fixture.childA.firstName} ${fixture.childA.lastName}`;
+    await page.getByLabel("Search children").fill(fixture.childA.lastName);
+    await page.getByRole("button", { name }).click();
+    await expect(page.getByText(name, { exact: true }).last()).toBeVisible();
+    // A child with no assessment yet has no active goals to slide.
+    await expect(page.getByText(/No active goals yet/)).toBeVisible();
   });
 });

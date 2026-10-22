@@ -68,6 +68,7 @@ export default async function handler(req, res) {
     lessonImage,
     notes,
     theme,
+    type,
     link,
     supplies,
   } = req.body || {};
@@ -133,6 +134,9 @@ export default async function handler(req, res) {
     : normalizeResourceList(previousPc.lessonImage);
 
   const updated = await prisma.$transaction(async (tx) => {
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "type")) {
+      await tx.lesson.update({ where: { id: existing.lessonId }, data: { type: normalizeSpaces(type).slice(0, 80) || null } });
+    }
     if (Array.isArray(supplies)) {
       await tx.lessonSupply.deleteMany({ where: { lessonId: existing.lessonId } });
       const validSupplies = supplies.filter((s) => s && normalizeSpaces(s.name));

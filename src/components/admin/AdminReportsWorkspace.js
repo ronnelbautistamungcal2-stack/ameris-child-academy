@@ -995,8 +995,10 @@ function gradeLetter(g) {
 }
 
 function TeachersTab({ centerId }) {
+  const router = useRouter();
   const [teacherList, setTeacherList] = useState([]);
-  const [teacherId, setTeacherId] = useState("");
+  // ?teacherId= opens one teacher (the View button on Center Performance).
+  const [teacherId, setTeacherId] = useState(() => (typeof router.query.teacherId === "string" ? router.query.teacherId : ""));
   const [dateFrom, setDateFrom] = useState(defaultDateFrom());
   const [dateTo, setDateTo] = useState(defaultDateTo());
   const [report, setReport] = useState(null);

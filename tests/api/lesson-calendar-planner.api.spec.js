@@ -109,10 +109,11 @@ test.describe("Lesson Calendar and Lesson Planner @api", () => {
     expect(plan.dayCount).toBe(10);
     expect(plan.cells.map((c) => [c.day, c.rowIndex, c.title])).toEqual([[1, 1, "QA Leaf Collage"]]);
 
-    plan = await (await put({ action: "markUsed", lessonId, used: true })).json();
+    // The bank lesson is checked as used because it sits in the planner.
     expect(plan.usedLessonIds).toEqual([lessonId]);
-    plan = await (await put({ action: "markUsed", lessonId, used: false })).json();
+    plan = await (await put({ action: "setCell", day: 1, rowIndex: 1, title: "" })).json();
     expect(plan.usedLessonIds).toEqual([]);
+    plan = await (await put({ action: "setCell", day: 1, rowIndex: 1, lessonId })).json();
 
     expect((await put({ action: "setCell", day: 99, rowIndex: 0, title: "x" })).status()).toBe(400);
     const teacher = await loginAsTeacher(request);

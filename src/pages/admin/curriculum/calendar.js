@@ -215,7 +215,6 @@ export default function LessonCalendarPage() {
 function StartDayDialog({ centerId, classRoomId, classroomName, today, initialClosed, onClose, onSaved }) {
   const [startDate, setStartDate] = useState("");
   const [dayNumber, setDayNumber] = useState("1");
-  const [applyToAll, setApplyToAll] = useState(true);
   const [closed, setClosed] = useState(initialClosed);
   const [pick, setPick] = useState("");
   const [saving, setSaving] = useState(false);
@@ -236,11 +235,11 @@ function StartDayDialog({ centerId, classRoomId, classroomName, today, initialCl
     try {
       await apiJson("/api/v1/lesson-calendar", {
         method: "PUT",
-        body: JSON.stringify({ centerId, classRoomId, applyToAll, startDate: startDate || null, dayNumber: Number(dayNumber), closedDays: closed }),
+        body: JSON.stringify({ centerId, classRoomId, startDate: startDate || null, dayNumber: Number(dayNumber), closedDays: closed }),
       });
       onSaved(
         startDate
-          ? `${formatLong(startDate)} is now Day ${dayNumber} for ${applyToAll ? "every classroom" : classroomName}.`
+          ? `${formatLong(startDate)} is now Day ${dayNumber} for ${classroomName}.`
           : "Closed days saved for every classroom.",
         startDate,
       );
@@ -271,10 +270,7 @@ function StartDayDialog({ centerId, classRoomId, classroomName, today, initialCl
           </label>
         </div>
         <p className="mt-1 text-xs text-gray-500">Leave the start date empty to change only the closed days. Days before today never change.</p>
-        <label className="mt-2 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-          <input type="checkbox" checked={applyToAll} onChange={(e) => setApplyToAll(e.target.checked)} />
-          Use this start day for every classroom in the center
-        </label>
+        <p className="mt-1 text-xs text-gray-500">The start day applies to {classroomName} only.</p>
 
         <div className="mt-4">
           <div className={`text-sm font-bold ${NAVY}`}>Mark Closed Days (optional)</div>

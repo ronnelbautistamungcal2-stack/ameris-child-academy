@@ -412,7 +412,6 @@ model ClassRoom {
   lessonCalendarAnchors     LessonCalendarAnchor[]
   lessonPlanner             LessonPlanner?
   lessonPlanCells           LessonPlanCell[]
-  lessonUsedMarks           LessonUsedMark[]
 }
 
 model TeacherClass {
@@ -541,6 +540,8 @@ model Lesson {
   isStep                  Boolean                  @default(false)
   criteria                Json?
   notes                   String?
+  // Optional Type from Curriculum > Categories (e.g. Regular, DCCS), on lessons and steps.
+  type                    String?
   media                   String[]                 @default([])
   goals                   LessonGoal[]
   progress                Progress[]
@@ -552,7 +553,6 @@ model Lesson {
   dailyChecklistItems     DailyChecklistItem[]
   supplyRequests          SupplyRequest[]
   planCells               LessonPlanCell[]
-  usedMarks               LessonUsedMark[]
 
   @@index([policyDocumentId])
   @@index([linkedLessonId])
@@ -639,19 +639,6 @@ model LessonPlanCell {
   @@index([lessonId])
 }
 
-// Lessons ticked as used in a classroom's Lesson Bank.
-model LessonUsedMark {
-  id          String    @id @default(uuid())
-  classRoom   ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
-  classRoomId String
-  lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  lessonId    String
-  createdAt   DateTime  @default(now())
-
-  @@unique([classRoomId, lessonId])
-  @@index([lessonId])
-}
-
 // Curriculum > Categories tab (client mockup 2026-10-02): the lists the lesson
 // and step forms offer in their dropdowns. Removing an entry only removes it
 // from the dropdowns; lessons that already use it keep their value.
@@ -710,6 +697,13 @@ model Progress {
   lessonGoal     LessonGoal?     @relation(fields: [lessonGoalId], references: [id], onDelete: SetNull)
   lessonGoalId   String?
   achievedAt     DateTime?
+  // SOP Tracking (client request 2026-10-02): an active goal shows on the
+  // teacher's Progression Tracking and the Student Performance Report.
+  // Levels map onto status: NOT_STARTED, IN_PROGRESS = Exposure,
+  // COMPLETED = Competency, PASSED = Mastery (see src/lib/sop.js).
+  active         Boolean         @default(false)
+  notes          String?
+  assessedAt     DateTime?
   nextGoals      Progress[]      @relation("GoalProgression")
   previousGoal   Progress?       @relation("GoalProgression", fields: [previousGoalId], references: [id])
   previousGoalId String?
@@ -720,6 +714,7 @@ model Progress {
   @@unique([childId, lessonId, goalIndex])
   @@index([childId, status])
   @@index([lessonId, status])
+  @@index([childId, active])
 }
 
 model ProgressEntry {

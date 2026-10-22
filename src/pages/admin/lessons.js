@@ -846,6 +846,7 @@ export default function AdminLessons() {
   const [editResource, setEditResource] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editTheme, setEditTheme] = useState("");
+  const [editType, setEditType] = useState("");
   const [editLink, setEditLink] = useState("");
   const [editLessonDocument, setEditLessonDocument] = useState("");
   const [editSupplyRows, setEditSupplyRows] = useState([]);
@@ -865,6 +866,7 @@ export default function AdminLessons() {
   const [newResource, setNewResource] = useState("");
   const [newNotes, setNewNotes] = useState("");
   const [newTheme, setNewTheme] = useState("");
+  const [newType, setNewType] = useState("");
   // Curriculum > Categories lists that feed the form dropdowns.
   const [listOptions, setListOptions] = useState(null);
   const [sortBy, setSortBy] = useState({ key: "refId", dir: 1 });
@@ -994,6 +996,7 @@ export default function AdminLessons() {
           lessonDocument: String(pc.lessonDocument ?? ""),
           notes: String(pc.notes ?? ""),
           theme: String(pc.theme ?? ""),
+          type: String(lesson?.type ?? ""),
           sheet: String(pc.sheet ?? ""),
           link: String(pc.link ?? ""),
           supplies: Array.isArray(lesson?.supplies) ? lesson.supplies : [],
@@ -1257,6 +1260,7 @@ export default function AdminLessons() {
     setEditLessonDocument(String(rec?.lessonDocument || ""));
     setEditNotes(String(rec?.notes || ""));
     setEditTheme(String(rec?.theme || ""));
+    setEditType(String(rec?.type || ""));
     setEditLink(String(rec?.link || ""));
     setEditSupplyRows(supplyRowsFromLesson(rec));
     setEditOpen(true);
@@ -1306,6 +1310,7 @@ export default function AdminLessons() {
     setNewLessonDocument("");
     setNewNotes("");
     setNewTheme("");
+    setNewType("");
     setNewLink("");
     setNewSupplyRows([]);
     setCreateOpen(true);
@@ -1332,6 +1337,7 @@ export default function AdminLessons() {
     setNewLessonDocument(String(rec.lessonDocument || ""));
     setNewNotes(String(rec.notes || ""));
     setNewTheme(String(rec.theme || ""));
+    setNewType(String(rec.type || ""));
     setNewLink(String(rec.link || ""));
     setNewSupplyRows(supplyRowsFromLesson(rec));
     setCreateOpen(true);
@@ -1366,6 +1372,7 @@ export default function AdminLessons() {
             lessonDocument: String(newLessonDocument || ""),
             notes: String(newNotes || ""),
             theme: normalizeSpaces(newTheme),
+            type: normalizeSpaces(newType),
             link: normalizeSpaces(newLink),
             supplies: newSupplyRows.filter((s) => normalizeSpaces(s.name)),
           }),
@@ -1389,6 +1396,7 @@ export default function AdminLessons() {
       newLink,
       newNotes,
       newTheme,
+      newType,
       newReference,
       newResource,
       newSubject,
@@ -1428,6 +1436,7 @@ export default function AdminLessons() {
               lessonDocument: String(editLessonDocument || ""),
               notes: String(editNotes || ""),
               theme: normalizeSpaces(editTheme),
+              type: normalizeSpaces(editType),
               link: normalizeSpaces(editLink),
               supplies: editSupplyRows.filter((s) => normalizeSpaces(s.name)),
             }),
@@ -1452,6 +1461,7 @@ export default function AdminLessons() {
       editLink,
       editNotes,
       editTheme,
+      editType,
       editRecord?.id,
       editReference,
       editResource,
@@ -2296,7 +2306,7 @@ export default function AdminLessons() {
               </Field>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
               <Field label="Subject (optional)">
                 <input
                   list="edit-subject-options"
@@ -2321,6 +2331,19 @@ export default function AdminLessons() {
                   maxLength={120}
                   disabled={saving}
                 />
+              </Field>
+              <Field label="Type (optional)">
+                <select
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={editType}
+                  onChange={(e) => setEditType(e.target.value)}
+                  disabled={saving}
+                >
+                  <option value="">None</option>
+                  {mergeSelectOptions((listOptions?.TYPE || []).map((o) => o.name), editType ? [editType] : []).map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
               </Field>
               <Field label="Link (optional)">
                 <input
@@ -2551,7 +2574,7 @@ export default function AdminLessons() {
               </Field>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
               <Field label="Subject (optional)">
                 <input
                   list="new-subject-options"
@@ -2576,6 +2599,19 @@ export default function AdminLessons() {
                   maxLength={120}
                   disabled={saving}
                 />
+              </Field>
+              <Field label="Type (optional)">
+                <select
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={newType}
+                  onChange={(e) => setNewType(e.target.value)}
+                  disabled={saving}
+                >
+                  <option value="">None</option>
+                  {mergeSelectOptions((listOptions?.TYPE || []).map((o) => o.name), newType ? [newType] : []).map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
               </Field>
               <Field label="Link (optional)">
                 <input

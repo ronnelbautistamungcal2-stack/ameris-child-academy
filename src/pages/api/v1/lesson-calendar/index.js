@@ -17,9 +17,9 @@ const MAX_RANGE_DAYS = 400;
  *     The classroom's day numbers for each date in the range, plus its start
  *     days and the center's closed days.
  * PUT /api/v1/lesson-calendar
- *     { centerId, classRoomId, applyToAll?, startDate?, dayNumber?, closedDays: [] }
+ *     { centerId, classRoomId, startDate?, dayNumber?, closedDays: [] }
  *     Admin only ("Set Start Day & Closed Days"). The start day restarts the
- *     count for the classroom (or every classroom in the center) and replaces
+ *     count for that classroom only (client answer 2026-10-21) and replaces
  *     any later start days. closedDays replaces the center's closed days from
  *     today on. Nothing before today can change.
  */
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === "PUT") {
-      const { centerId, classRoomId, applyToAll, startDate, dayNumber, closedDays } = req.body || {};
+      const { centerId, classRoomId, startDate, dayNumber, closedDays } = req.body || {};
       const access = await classroomAccess(user, centerId, classRoomId, { admin: true });
       if (access.error) return res.status(access.status).json({ error: access.error });
       const today = toDateKey(new Date());
@@ -64,9 +64,7 @@ export default async function handler(req, res) {
       if (closed.some((d) => !isDateKey(d))) return res.status(400).json({ error: "Closed days must be dates" });
       if (closed.some((d) => d < today)) return res.status(400).json({ error: "Closed days cannot be in the past" });
 
-      const classRoomIds = applyToAll
-        ? (await prisma.classRoom.findMany({ where: { centerId: String(centerId) }, select: { id: true } })).map((c) => c.id)
-        : [String(classRoomId)];
+      const classRoomIds = [String(classRoomId)];
 
       const ops = [
         prisma.lessonClosedDay.deleteMany({ where: { centerId: String(centerId), date: { gte: dbDate(today) } } }),

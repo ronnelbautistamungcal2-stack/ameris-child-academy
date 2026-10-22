@@ -364,6 +364,7 @@ function emptyForm(step) {
     supplies: (step?.supplies || []).map((s) => ({ ...s, quantity: s.quantity ?? 1 })),
     media: step?.media || [],
     notes: step?.notes || "",
+    type: step?.type || "",
   };
 }
 
@@ -382,6 +383,7 @@ function StepDialog({ centerId, step, lessons, bankLessons, categories, options,
   const categoryNames = withCurrent(options.CATEGORY?.length ? options.CATEGORY : distinct(categories.map((c) => c.name)), form.category);
   const subjectNames = withCurrent(options.SUBJECT || [], form.subject);
   const termNames = withCurrent(TERMS, form.term);
+  const typeNames = withCurrent(options.TYPE || [], form.type);
   const others = lessons.filter((l) => l.id !== step?.id);
 
   // A step's category is a LessonCategory row; reuse the one with that name
@@ -445,6 +447,7 @@ function StepDialog({ centerId, step, lessons, bankLessons, categories, options,
         supplies: form.supplies.filter((s) => String(s.name || "").trim()),
         media: form.media,
         notes: form.notes,
+        type: form.type || null,
       };
       if (step) {
         await apiJson(`/api/v1/lessons/${encodeURIComponent(step.id)}`, { method: "PUT", body: JSON.stringify(payload) });
@@ -509,14 +512,21 @@ function StepDialog({ centerId, step, lessons, bankLessons, categories, options,
               {STEP_AGE_MONTH_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>
-          <label className={`${label} md:col-span-4`}>
+          <label className={`${label} md:col-span-3`}>
             Term{req}
             <select value={form.term} onChange={(e) => set({ term: e.target.value })} className={`${input} mt-1`}>
               <option value="">Choose...</option>
               {termNames.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>
-          <div className="md:col-span-8">
+          <label className={`${label} md:col-span-3`}>
+            Type (Optional)
+            <select value={form.type} onChange={(e) => set({ type: e.target.value })} className={`${input} mt-1`}>
+              <option value="">{"—"}</option>
+              {typeNames.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </label>
+          <div className="md:col-span-6">
             <StepPicker label="Related Lesson (Optional)" lessons={bankLessons} value={form.linkedLessonId} onChange={(id) => set({ linkedLessonId: id || "" })} excludeIds={[]} />
             <p className="mt-1 text-xs text-gray-500">Linking a lesson helps teachers see which lesson supports this step.</p>
           </div>
@@ -646,6 +656,8 @@ async function downloadStepTemplate() {
     mastery: "Rolls on their own every time",
     buildsOn: "",
     leadsTo: "SP-002",
+    relatedLesson: "",
+    type: "",
     notes: "",
   };
   const sheet = XLSX.utils.aoa_to_sheet([STEP_IMPORT_COLUMNS.map((c) => c.header), STEP_IMPORT_COLUMNS.map((c) => example[c.key])]);

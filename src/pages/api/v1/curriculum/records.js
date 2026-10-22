@@ -110,6 +110,7 @@ export default async function handler(req, res) {
     lessonImage,
     notes,
     theme,
+    type,
     link,
     supplies,
   } = req.body || {};
@@ -133,6 +134,9 @@ export default async function handler(req, res) {
     categoryId: categoryRecord?.id || null,
   });
   if (!lesson) return res.status(400).json({ error: "lessonTitle is required" });
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, "type")) {
+    await prisma.lesson.update({ where: { id: lesson.id }, data: { type: normalizeSpaces(type).slice(0, 80) || null } });
+  }
 
   const maxGoal = await prisma.lessonGoal.aggregate({
     where: { lessonId: lesson.id },

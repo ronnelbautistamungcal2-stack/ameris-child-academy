@@ -1,10 +1,11 @@
 import CoachLayout from "@/components/coach/CoachLayout";
-import ComingSoon from "@/components/shell/ComingSoon";
+import ClassReportWorkspace from "@/components/reports/ClassReportWorkspace";
 
+// Coach - Class Performance Report: click a class name to open its report.
 export default function ClassPerformancePage() {
   return (
-    <CoachLayout title="Classroom Performance Report">
-      <ComingSoon title="Classroom Performance Report" />
+    <CoachLayout title="Class Performance Report">
+      <ClassReportWorkspace />
     </CoachLayout>
   );
 }

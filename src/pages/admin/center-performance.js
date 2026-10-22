@@ -1,10 +1,10 @@
 import AdminLayout from "@/components/admin/AdminLayout";
-import ComingSoon from "@/components/shell/ComingSoon";
+import CenterPerformance from "@/components/reports/CenterPerformance";
 
 export default function CenterPerformancePage() {
   return (
     <AdminLayout title="Center Performance Overview">
-      <ComingSoon title="Center Performance Overview" />
+      <CenterPerformance />
     </AdminLayout>
   );
 }

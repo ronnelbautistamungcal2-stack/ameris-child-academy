@@ -101,6 +101,8 @@ export default async function handler(req, res) {
         linkedLessonId: linkedLessonId || null,
         ageYears: age.data.ageYears ?? null,
         ageMonths: age.data.ageMonths ?? null,
+        maxAgeYears: age.data.maxAgeYears ?? null,
+        maxAgeMonths: age.data.maxAgeMonths ?? null,
         priorStepId: priorStepId || null,
         nextStepId: nextStepId || null,
         ...parseStepDetails(req.body),

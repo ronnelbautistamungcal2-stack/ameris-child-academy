@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { hasAnyRole } from "@/lib/roles";
 import { childStatus, isLevel, statusDistribution } from "@/lib/sop";
 import { SOP_ROLES, canUseChild, loadChildSteps, saveLevels } from "@/lib/sopServer";
+import { isChildLinkedToParent } from "@/lib/child-parent-links";
 
 const CHILD_SELECT = {
   id: true,
@@ -13,6 +14,8 @@ const CHILD_SELECT = {
   centerId: true,
   classRoomId: true,
   classRoom: { select: { name: true } },
+  parentId: true,
+  guardians: { select: { guardianId: true } },
 };
 
 function summary(steps, birthDate) {
@@ -34,16 +37,19 @@ function summary(steps, birthDate) {
  *     and whether it is an active goal, plus status summaries.
  * PUT /api/v1/sop/:childId  { mode: "assessment" | "tracking", levels: [{ stepId, level, notes? }], generate? }
  *     Initial Developmental Assessment (Save / Generate Active Goals) or the
- *     Progression Tracking sliders.
+ *     Progression Tracking sliders. Parents may only save "tracking" levels
+ *     for their child's General-category goals (Student Performance Report).
  */
 export default async function handler(req, res) {
   try {
     const session = await getSession(req, res);
     if (!session) return res.status(401).json({ error: "Unauthorized" });
     const user = session.user;
-    if (!hasAnyRole(user, SOP_ROLES)) return res.status(403).json({ error: "Forbidden" });
-
     const child = await prisma.child.findUnique({ where: { id: String(req.query.childId) }, select: CHILD_SELECT });
+    if (!hasAnyRole(user, SOP_ROLES)) {
+      if (!hasAnyRole(user, ["PARENT"]) || !child || !isChildLinkedToParent(child, user.id)) return res.status(403).json({ error: "Forbidden" });
+      return parentSave(req, res, child, user);
+    }
     if (!child || !(await canUseChild(user, child))) return res.status(404).json({ error: "Child not found" });
 
     if (req.method === "PUT") {
@@ -77,4 +83,26 @@ export default async function handler(req, res) {
     console.error("sop child error:", e);
     return res.status(500).json({ error: "Internal server error" });
   }
+}
+
+// A parent marks off their child's General-category goals.
+async function parentSave(req, res, child, user) {
+  if (req.method !== "PUT") {
+    res.setHeader("Allow", ["PUT"]);
+    return res.status(405).end();
+  }
+  const levels = Array.isArray(req.body?.levels) ? req.body.levels : [];
+  if (!levels.length || levels.length > 200 || levels.some((l) => !l?.stepId || !isLevel(l.level))) {
+    return res.status(400).json({ error: "Each level needs a step and one of Not Started, Exposure, Competency or Mastery" });
+  }
+  const steps = await prisma.lesson.findMany({
+    where: { centerId: child.centerId, isStep: true, id: { in: levels.map((l) => String(l.stepId)) } },
+    select: { id: true, category: { select: { name: true } } },
+  });
+  const general = new Set(steps.filter((s) => (s.category?.name || "General") === "General").map((s) => s.id));
+  if (levels.some((l) => !general.has(String(l.stepId)))) {
+    return res.status(403).json({ error: "Parents can only mark off goals in the General category" });
+  }
+  await saveLevels(child, levels.map((l) => ({ stepId: String(l.stepId), level: l.level })), user, { mode: "tracking" });
+  return res.status(200).json({ saved: levels.length });
 }

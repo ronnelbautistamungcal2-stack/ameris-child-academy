@@ -3,7 +3,7 @@ import { EMPLOYED_WHERE } from "@/lib/employment";
 import { CURRENT_IPP_STATUSES, ippNeedsReview } from "@/lib/ipp";
 import prisma from "@/lib/prisma";
 import { EMPLOYEE_ROLES, hasAnyRole, roleLabel } from "@/lib/roles";
-import { childStatus, levelForStatus } from "@/lib/sop";
+import { averagePercent, childStatus, levelForStatus, sopPercent } from "@/lib/sop";
 import { teacherPerformance } from "@/lib/teacherPerformance";
 
 // Center Performance Overview (client mockups 2026-10-02) for one center and
@@ -101,8 +101,8 @@ export default async function handler(req, res) {
         priorGrade: prior?.overallGrade ?? null,
         evaluationPct: current?.evaluation?.normalized ?? null,
         checklistPct: current?.checklist?.pct ?? null,
-        // Average SOP %: the calculation is still to be confirmed by the client.
-        sopPct: current?.milestones?.avgPct ?? null,
+        sopPct: null, // set below from the students
+
         citizenshipPct: current?.citizenship?.normalized ?? null,
         commendations: current?.commendations?.length ?? 0,
         citations: current?.citations?.length ?? 0,
@@ -133,8 +133,8 @@ export default async function handler(req, res) {
     const since = new Date(Date.now() - LOG_DAYS * 86400000);
     const [progress, grades, plans, logs] = await Promise.all([
       prisma.progress.findMany({
-        where: { childId: { in: childIds }, lesson: { isStep: true }, OR: [{ active: true }, { assessedAt: { not: null } }] },
-        select: { childId: true, status: true, active: true, lesson: { select: { ageYears: true, ageMonths: true, category: { select: { name: true } } } } },
+        where: { childId: { in: childIds }, lesson: { isStep: true }, OR: [{ active: true }, { assessedAt: { not: null } }, { status: { not: "NOT_STARTED" } }] },
+        select: { childId: true, status: true, active: true, lesson: { select: { ageYears: true, ageMonths: true, maxAgeYears: true, maxAgeMonths: true, category: { select: { name: true } } } } },
       }),
       prisma.activityLog.findMany({
         where: { childId: { in: childIds }, createdAt: { gte: dateFrom, lte: endOfTo }, details: { path: ["kind"], equals: "DAILY_GRADE" } },
@@ -177,6 +177,24 @@ export default async function handler(req, res) {
         ipp: myPlans.length ? (myPlans.some((p) => ippNeedsReview(p)) ? "NEEDS_REVIEW" : "ON_TRACK") : null,
       };
     });
+
+    // Average SOP % (client 2026-10-23): each of the staff member's students'
+    // average goal %, General category left out, averaged over the students.
+    const sopByChild = Object.fromEntries(
+      children.map((c) => [
+        c.id,
+        sopPercent(
+          progress
+            .filter((p) => p.childId === c.id)
+            .map((p) => ({ step: p.lesson, level: levelForStatus(p.status), category: p.lesson.category?.name || "General" })),
+          c.birthDate,
+          { excludeGeneral: true },
+        ),
+      ]),
+    );
+    for (const member of staff) {
+      member.sopPct = averagePercent(students.filter((st) => st.teacherIds.includes(member.id)).map((st) => sopByChild[st.id]));
+    }
 
     return res.status(200).json({
       centers,

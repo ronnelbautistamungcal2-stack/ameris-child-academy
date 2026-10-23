@@ -537,8 +537,11 @@ model Lesson {
   linkedLesson            Lesson?                  @relation("LessonLinkedLesson", fields: [linkedLessonId], references: [id], onDelete: SetNull)
   linkedLessonId          String?
   linkedFrom              Lesson[]                 @relation("LessonLinkedLesson")
+  // Steps: ageYears/ageMonths are the minimum age; maxAge* the maximum.
   ageYears                Int?
   ageMonths               Int?
+  maxAgeYears             Int?
+  maxAgeMonths            Int?
   priorStep               Lesson?                  @relation("LessonPriorStep", fields: [priorStepId], references: [id], onDelete: SetNull)
   priorStepId             String?
   priorStepOf             Lesson[]                 @relation("LessonPriorStep")

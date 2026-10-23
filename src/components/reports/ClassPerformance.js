@@ -78,6 +78,8 @@ export default function ClassPerformance({ classRoomId, header = null }) {
   }, [classRoomId, logDate]);
 
   const points = useMemo(() => (data?.citizenship || []).filter((p) => citizenship.inRange(p.date)), [data, citizenship]);
+  // Average citizenship grade % for the chart's dates (grades are out of 10).
+  const citizenshipPct = points.length ? Math.round((points.reduce((sum, p) => sum + p.score, 0) / points.length) * 10) : null;
   const correctionBars = useMemo(() => (data ? counts(data.courseCorrections, data.courseCorrectionTypes, corrections.inRange) : []), [data, corrections]);
   const highlightBars = useMemo(() => (data ? counts(data.characterHighlights, data.characterHighlightTypes, highlights.inRange) : []), [data, highlights]);
   // Allergies always count; a level 3+ course correction counts inside the
@@ -99,12 +101,18 @@ export default function ClassPerformance({ classRoomId, header = null }) {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <section className={card}>
-          <Heading icon={"⭐"}>Citizenship Grade</Heading>
+          <div className="flex items-center gap-3">
+            <Heading icon={"⭐"}>Citizenship Grade</Heading>
+            {citizenshipPct != null ? <span className={`mb-3 text-2xl font-black ${NAVY}`}>{citizenshipPct}%</span> : null}
+          </div>
           <RangePicker {...citizenship} label="Citizenship Grade" />
           {points.length ? <CitizenshipChart points={points} /> : <p className="py-6 text-center text-sm text-gray-500">No citizenship grades in these dates.</p>}
         </section>
         <section className={card}>
-          <Heading icon={"\u{1F3C6}"}>Milestones Grade</Heading>
+          <div className="flex items-center gap-3">
+            <Heading icon={"\u{1F3C6}"}>Milestones Grade</Heading>
+            {data.milestonePct != null ? <span className={`mb-3 text-2xl font-black ${NAVY}`}>{data.milestonePct}%</span> : null}
+          </div>
           {!data.milestones.length && <p className="text-sm text-gray-500">No milestones assessed in this class yet.</p>}
           <div className="space-y-3">
             {data.milestones.map((m) => (

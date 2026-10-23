@@ -2,6 +2,9 @@
 const { test, expect } = require("@playwright/test");
 const { loginAsAdmin, loginAsParent, loginAsKitchenStaff } = require("../helpers/auth");
 const { apiGet, apiPost, apiPut, apiDelete } = require("../helpers/api");
+const { PrismaClient } = require("@prisma/client");
+
+const prisma = new PrismaClient();
 
 // Student Performance Report on a throwaway center: a child about 20 months
 // old with two assessed steps, Daily Log entries and an open IPP.
@@ -17,6 +20,8 @@ test.describe("Student Performance Report @api", () => {
   let centerId;
   let childId;
   let planId;
+  let walk;
+  let devStep;
 
   test.beforeAll(async ({ request }) => {
     const admin = await loginAsAdmin(request);
@@ -28,9 +33,16 @@ test.describe("Student Performance Report @api", () => {
     const cat = await (await apiPost(request, "/api/v1/lesson-categories", { centerId, name: "General" }, admin)).json();
     const step = async (title, ref, years, months) =>
       (await (await apiPost(request, "/api/v1/lessons", { centerId, isStep: true, title, reference: ref, categoryId: cat.id, subCategory: "Gross Motor", ageYears: years, ageMonths: months }, admin)).json()).id;
-    const walk = await step("Walks independently", "SP-1", 1, 3); // expected 15 months: behind
+    walk = await step("Walks independently", "SP-1", 1, 3); // expected 15 months: behind
     const climb = await step("Climbs on low furniture", "SP-2", 2, 0); // expected 24 months: on track
-    await apiPut(request, `/api/v1/sop/${childId}`, { mode: "assessment", levels: [{ stepId: walk, level: "EXPOSURE" }, { stepId: climb, level: "NOT_STARTED" }], generate: true }, admin);
+    const dev = await (await apiPost(request, "/api/v1/lesson-categories", { centerId, name: "Development" }, admin)).json();
+    devStep = (await (await apiPost(request, "/api/v1/lessons", { centerId, isStep: true, title: "Stacks blocks", reference: "SP-3", categoryId: dev.id, ageYears: 2, ageMonths: 6 }, admin)).json()).id;
+    await apiPut(
+      request,
+      `/api/v1/sop/${childId}`,
+      { mode: "assessment", levels: [{ stepId: walk, level: "EXPOSURE" }, { stepId: climb, level: "NOT_STARTED" }, { stepId: devStep, level: "NOT_STARTED" }], generate: true },
+      admin,
+    );
 
     const log = (type, details, days, notes) => apiPost(request, "/api/v1/activities", { childId, type, details, notes, createdAt: daysAgo(days) }, admin);
     await log("OTHER", { kind: "DAILY_GRADE", grade: 9 }, 10);
@@ -70,12 +82,16 @@ test.describe("Student Performance Report @api", () => {
 
     expect(r.child.name).toBe("Report Kid");
     expect(r.citizenship.map((p) => p.score)).toEqual([9, 6]);
-    expect(r.activeGoals.map((g) => g.title).sort()).toEqual(["Climbs on low furniture", "Walks independently"]);
+    expect(r.activeGoals.map((g) => g.title).sort()).toEqual(["Climbs on low furniture", "Stacks blocks", "Walks independently"]);
 
-    // Walking (15 mo) not reached at ~20 mo is Critical; climbing (24 mo) is On Track.
-    expect(r.milestones).toHaveLength(1);
+    // Walking (15 mo) not reached at ~20 mo is Critical; climbing (24 mo) and
+    // stacking (30 mo) are On Track.
+    expect(r.milestones.map((m) => m.name)).toEqual(["General", "Development"]);
     expect(r.milestones[0]).toMatchObject({ name: "General", distribution: { CRITICAL: 50, ON_TRACK: 50 } });
-    expect(r.milestones[0].subjects).toEqual([expect.objectContaining({ name: "Gross Motor" })]);
+    expect(r.milestones[0].goals.map((g) => g.title).sort()).toEqual(["Climbs on low furniture", "Walks independently"]);
+    // Milestones %: (40 + 100 + 100) / 3.
+    expect(r.milestonePct).toBe(80);
+    expect(r.canTrack).toBe("ALL");
 
     // Newest first.
     expect(r.characterHighlights.map((h) => h.label)).toEqual(["Champion of Honesty", "Brother's Keeper"]);
@@ -98,5 +114,24 @@ test.describe("Student Performance Report @api", () => {
     expect((await apiGet(request, `/api/v1/reports/student/${childId}`)).status()).toBe(401);
     expect((await apiGet(request, `/api/v1/reports/student/${childId}`, await loginAsParent(request))).status()).toBe(404);
     expect((await apiGet(request, `/api/v1/reports/student/${childId}`, await loginAsKitchenStaff(request))).status()).toBe(404);
+  });
+
+  test("a parent can mark off General goals only", async ({ request }) => {
+    const parentUser = await prisma.user.findUnique({ where: { email: "parent@demo.com" } });
+    await prisma.child.update({ where: { id: childId }, data: { parentId: parentUser.id } });
+    const parent = await loginAsParent(request);
+    const r = await (await apiGet(request, `/api/v1/reports/student/${childId}`, parent)).json();
+    expect(r.canTrack).toBe("GENERAL");
+
+    const blocked = await apiPut(request, `/api/v1/sop/${childId}`, { mode: "tracking", levels: [{ stepId: devStep, level: "EXPOSURE" }] }, parent);
+    expect(blocked.status()).toBe(403);
+    const ok = await apiPut(request, `/api/v1/sop/${childId}`, { mode: "tracking", levels: [{ stepId: walk, level: "COMPETENCY" }] }, parent);
+    expect(ok.status(), await ok.text()).toBe(200);
+    const after = await (await apiGet(request, `/api/v1/reports/student/${childId}`, parent)).json();
+    expect(after.milestones[0].goals.find((g) => g.title === "Walks independently").level).toBe("COMPETENCY");
+    // Parents can only save; reading the staff SOP data is refused.
+    expect((await apiGet(request, `/api/v1/sop/${childId}`, parent)).status()).toBe(405);
+    await prisma.child.update({ where: { id: childId }, data: { parentId: null } });
+    await prisma.$disconnect();
   });
 });

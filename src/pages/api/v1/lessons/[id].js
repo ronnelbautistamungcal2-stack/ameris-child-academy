@@ -62,9 +62,12 @@ export default async function handler(req, res) {
       supplies,
     } = req.body;
 
-    const current = await prisma.lesson.findUnique({ where: { id }, select: { centerId: true } });
+    const current = await prisma.lesson.findUnique({
+      where: { id },
+      select: { centerId: true, ageYears: true, ageMonths: true, maxAgeYears: true, maxAgeMonths: true },
+    });
     if (!current) return res.status(404).json({ error: "Lesson not found" });
-    const age = parseStepAge(req.body);
+    const age = parseStepAge(req.body, current);
     if (age.error) return res.status(400).json({ error: age.error });
     const linkError = await validateStepLinks(prisma, {
       lessonId: id,

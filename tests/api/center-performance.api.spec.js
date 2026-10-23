@@ -49,8 +49,8 @@ test.describe("Center Performance Overview @api", () => {
     expect(row).toMatchObject({ name: "Perf Teacher", role: "TEACHER", position: "Teacher", hoursScheduled: 0, commendations: 0, citations: 0 });
     expect(row).toHaveProperty("currentGrade");
     expect(row).toHaveProperty("priorGrade");
-    // No classroom, so no Milestone Status.
-    expect(row.milestoneStatus).toBeNull();
+    // Average SOP % (calculation still to be confirmed by the client).
+    expect(row).toHaveProperty("sopPct");
 
     expect(r.students).toEqual([
       expect.objectContaining({

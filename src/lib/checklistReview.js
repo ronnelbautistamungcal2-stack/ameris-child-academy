@@ -135,10 +135,6 @@ export async function checklistReview(prisma, { centerId, date, userId = "" }) {
     }),
   ]);
 
-  // Staff moved to another classroom for the day work from that classroom.
-  const moves = await prisma.staffDayMove.findMany({ where: { userId: { in: ids }, centerId, date: day } });
-  for (const move of moves) classMap.set(move.userId, move.toClassRoomId ? [move.toClassRoomId] : []);
-
   const rows = members.map((member) => {
     const mine = completions.filter((c) => c.completedById === member.id);
     const doneAt = new Map(mine.map((c) => [c.itemId, c.completedAt]));

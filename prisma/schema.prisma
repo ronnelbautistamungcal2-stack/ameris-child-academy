@@ -223,7 +223,6 @@ model User {
   // off Staff Positions, shift schedules and attendance lists.
   employmentStatus                   String                              @default("CURRENTLY_EMPLOYED")
   employmentStatusEntries            EmploymentStatusEntry[]
-  staffDayMoves                      StaffDayMove[]
   timeSheetSignatures                TimeSheetSignature[]
   kioskCredential                    KioskCredential?
   directedCenters                    Center[]                            @relation("CenterDirector")
@@ -331,6 +330,8 @@ model Center {
   ageRates                    Json? // [{ label, monthly, weekly, daily, hourly }]
   // Staff Overall Grade weights (src/lib/staffGrade.js); null = defaults.
   staffGradeWeights           Json?
+  // Pay schedule: { type: "BIWEEKLY", startDate } or { type: "SEMI_MONTHLY" } (src/lib/payPeriods.js).
+  payPeriodSettings           Json?
   enrollmentFee               Float?
   // Roles tab: saved for a future access structure; not enforced yet.
   roleAccess                  Role[]                       @default([])
@@ -389,7 +390,6 @@ model Center {
   lessonPlanners              LessonPlanner[]
   lessonPlanCells             LessonPlanCell[]
   curriculumOptions           CurriculumOption[]
-  staffDayMoves               StaffDayMove[]
 }
 
 model CenterUser {
@@ -2000,25 +2000,6 @@ model EmploymentStatusEntry {
   createdAt      DateTime @default(now())
 
   @@index([userId, date])
-}
-
-// "Move Staff for Today" on Staff Attendance: the classroom a staff member
-// works in for one day (null = Not Assigned / float).
-model StaffDayMove {
-  id              String   @id @default(uuid())
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId          String
-  center          Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
-  centerId        String
-  date            DateTime @db.Date
-  fromClassRoomId String?
-  toClassRoomId   String?
-  movedById       String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@unique([userId, date])
-  @@index([centerId, date])
 }
 
 // An employee's e-signed time sheet for a date range.

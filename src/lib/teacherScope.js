@@ -17,21 +17,6 @@ export async function getTeacherClassIds(teacherId, centerId) {
   return rows.map((row) => row.classId);
 }
 
-/**
- * A teacher's classrooms on one day ("YYYY-MM-DD"): moving them for the day
- * on Staff Attendance replaces their classrooms with the new one (none when
- * moved to Not Assigned).
- */
-export async function getTeacherClassIdsForDay(teacherId, centerId, dateKey) {
-  const base = await getTeacherClassIds(teacherId, centerId);
-  if (!teacherId || !/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ""))) return base;
-  const move = await prisma.staffDayMove.findUnique({
-    where: { userId_date: { userId: teacherId, date: new Date(`${dateKey}T00:00:00.000Z`) } },
-  });
-  if (!move || (centerId && move.centerId !== centerId)) return base;
-  return move.toClassRoomId ? [move.toClassRoomId] : [];
-}
-
 export async function teacherCanAccessClass(teacherId, classId) {
   if (!teacherId || !classId) return false;
   const count = await prisma.teacherClass.count({

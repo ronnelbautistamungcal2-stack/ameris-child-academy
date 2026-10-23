@@ -3,7 +3,7 @@ import TimeSheetReportBody, { localDay, longDate } from "@/components/timesheets
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { formatDayKey } from "@/lib/checklistTime";
-import { rangeContaining, stepRange } from "@/lib/payPeriods";
+import { payPeriodSettingsFor, rangeContaining, stepRange } from "@/lib/payPeriods";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -15,7 +15,8 @@ const control = "rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm da
 export default function MyTimeSheetPage({ Layout }) {
   const { data: session } = useSession();
   const userId = session?.user?.id || "";
-  const [range, setRange] = useState(() => rangeContaining("PAY_PERIOD"));
+  const [payPeriod, setPayPeriod] = useState(null);
+  const [range, setRange] = useState(null);
   const [data, setData] = useState(null);
   const [signatures, setSignatures] = useState([]);
   const [error, setError] = useState("");
@@ -24,8 +25,19 @@ export default function MyTimeSheetPage({ Layout }) {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
 
+  // Pay periods follow the employee's (first) center's pay schedule.
+  useEffect(() => {
+    apiJson("/api/v1/centers")
+      .catch(() => [])
+      .then((centers) => {
+        const settings = payPeriodSettingsFor(Array.isArray(centers) ? centers[0] : null);
+        setPayPeriod(settings);
+        setRange(rangeContaining("PAY_PERIOD", undefined, settings));
+      });
+  }, []);
+
   const load = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || !range) return;
     setError("");
     setData(null);
     try {
@@ -44,7 +56,7 @@ export default function MyTimeSheetPage({ Layout }) {
     load();
   }, [load]);
 
-  const signature = signatures.find((s) => s.from === range.from && s.to === range.to) || null;
+  const signature = range ? signatures.find((s) => s.from === range.from && s.to === range.to) || null : null;
 
   async function submit(event) {
     event.preventDefault();
@@ -67,6 +79,14 @@ export default function MyTimeSheetPage({ Layout }) {
     }
   }
 
+  if (!range) {
+    return (
+      <Layout title="My Time Sheet">
+        <Skeleton count={6} />
+      </Layout>
+    );
+  }
+
   return (
     <Layout title="My Time Sheet">
       <div className="space-y-4">
@@ -76,11 +96,11 @@ export default function MyTimeSheetPage({ Layout }) {
             <p className="text-sm text-gray-600 dark:text-gray-400">Review your hours for the pay period, then e-sign and submit.</p>
           </div>
           <div className="flex items-center rounded-lg border border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800">
-            <button type="button" onClick={() => setRange(stepRange("PAY_PERIOD", range, -1))} className="px-3 py-2 text-blue-700" aria-label="Previous pay period">‹</button>
+            <button type="button" onClick={() => setRange(stepRange("PAY_PERIOD", range, -1, payPeriod))} className="px-3 py-2 text-blue-700" aria-label="Previous pay period">‹</button>
             <span className={`min-w-[200px] text-center text-sm font-bold ${NAVY}`}>
               {formatDayKey(range.from, { month: "short", day: "numeric", year: "numeric" })} - {formatDayKey(range.to, { month: "short", day: "numeric", year: "numeric" })}
             </span>
-            <button type="button" onClick={() => setRange(stepRange("PAY_PERIOD", range, 1))} className="px-3 py-2 text-blue-700" aria-label="Next pay period">›</button>
+            <button type="button" onClick={() => setRange(stepRange("PAY_PERIOD", range, 1, payPeriod))} className="px-3 py-2 text-blue-700" aria-label="Next pay period">›</button>
           </div>
         </div>
 

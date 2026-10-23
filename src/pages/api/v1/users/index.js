@@ -84,7 +84,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "GET") {
-    const { centerId, role, roles, staffOnly } = req.query || {};
+    const { centerId, role, roles, staffOnly, employedOnly } = req.query || {};
     const parsedRoles = []
       .concat(roles || [])
       .flatMap((value) => String(value || "").split(","))
@@ -100,6 +100,8 @@ export default async function handler(req, res) {
           : [];
 
     const where = {};
+    // Checklists, staff management and reports list only current employees.
+    if (employedOnly === "true") Object.assign(where, EMPLOYED_WHERE);
     if (centerId) {
       where.centers = { some: { centerId: String(centerId) } };
     }

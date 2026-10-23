@@ -237,11 +237,11 @@ export default function StaffManagementWorkspace({ Layout = CoachLayout, tab: fi
       try {
         const [cls, staff, teachers] = await Promise.all([
           apiJson(`/api/v1/classes?centerId=${centerId}`).catch(() => []),
-          apiJson(`/api/v1/users?centerId=${centerId}&staffOnly=true`).catch(
+          apiJson(`/api/v1/users?employedOnly=true&centerId=${centerId}&staffOnly=true`).catch(
             () => [],
           ),
           apiJson(
-            `/api/v1/users?centerId=${centerId}&roles=${["TEACHER", ...STAFF_PORTAL_ROLES, "COACH"].join(",")}`,
+            `/api/v1/users?employedOnly=true&centerId=${centerId}&roles=${["TEACHER", ...STAFF_PORTAL_ROLES, "COACH"].join(",")}`,
           ).catch(
             () => [],
           ),

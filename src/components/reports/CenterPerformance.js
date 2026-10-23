@@ -62,13 +62,6 @@ function citizenshipTone(value) {
   return ["bg-red-100 text-red-800", "bg-orange-100 text-orange-800", "bg-yellow-100 text-yellow-800", "bg-green-100 text-green-800", "bg-emerald-200 text-emerald-900"][i] || "bg-gray-100 text-gray-500";
 }
 
-const statusLabel = (v) => SOP_STATUSES.find((x) => x.value === v)?.label || "";
-
-function StatusPill({ value }) {
-  const status = SOP_STATUSES.find((x) => x.value === value);
-  return status ? <span className={`inline-block whitespace-nowrap rounded px-3 py-0.5 text-xs font-bold ${status.pill}`}>{status.label}</span> : "—";
-}
-
 const pct = (v) => (v == null ? "—" : `${Math.round(v)}%`);
 const num = (v) => (v == null ? "—" : v);
 
@@ -93,10 +86,10 @@ function ageLabel(birthDate) {
 }
 
 function downloadCsv(rows) {
-  const header = ["Staff Name", "Position", "Overall Current Grade", "Overall Prior Grade", "Evaluation %", "Checklist %", "Milestone Status", "Class Citizenship %", "# Commendations", "# Citations", "Hours Worked", "Hours Scheduled", "# Hours Absence", "# Lates"];
+  const header = ["Staff Name", "Position", "Overall Current Grade", "Overall Prior Grade", "Evaluation %", "Checklist %", "Average SOP %", "Class Citizenship %", "# Commendations", "# Citations", "Hours Worked", "Hours Scheduled", "# Hours Absence", "# Lates"];
   const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const lines = [header.map(esc).join(",")].concat(
-    rows.map((r) => [r.name, r.position, r.currentGrade, r.priorGrade, r.evaluationPct, r.checklistPct, statusLabel(r.milestoneStatus), r.citizenshipPct, r.commendations, r.citations, r.hoursWorked, r.hoursScheduled, r.hoursAbsence, r.lates].map(esc).join(",")),
+    rows.map((r) => [r.name, r.position, r.currentGrade, r.priorGrade, r.evaluationPct, r.checklistPct, r.sopPct, r.citizenshipPct, r.commendations, r.citations, r.hoursWorked, r.hoursScheduled, r.hoursAbsence, r.lates].map(esc).join(",")),
   );
   const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
   const a = document.createElement("a");
@@ -332,7 +325,7 @@ export default function CenterPerformance() {
               <table className="w-full min-w-[1200px] text-center text-sm">
                 <thead>
                   <tr className={`bg-blue-50 text-xs font-bold dark:bg-gray-800 ${NAVY}`}>
-                    {["Staff Name", "Position", "Overall Current Grade", "Overall Prior Grade", "Evaluation %", "Checklist %", "Milestone Status", "Class Citizenship %", "# Commendations", "# Citations", "Hours Worked", "Hours Scheduled", "# Hours Absence", "# Lates", "Action"].map((h, i) => (
+                    {["Staff Name", "Position", "Overall Current Grade", "Overall Prior Grade", "Evaluation %", "Checklist %", "Average SOP %", "Class Citizenship %", "# Commendations", "# Citations", "Hours Worked", "Hours Scheduled", "# Hours Absence", "# Lates", "Action"].map((h, i) => (
                       <th key={h} className={`px-2 py-2 ${i < 2 ? "text-left" : ""}`}>{h}</th>
                     ))}
                   </tr>
@@ -346,7 +339,7 @@ export default function CenterPerformance() {
                       <td className="px-2 py-1.5"><span className={`inline-block min-w-[44px] rounded px-2 py-0.5 font-bold ${gradeTone(s.priorGrade)}`}>{num(s.priorGrade)}</span></td>
                       <td className="px-2 py-1.5">{pct(s.evaluationPct)}</td>
                       <td className="px-2 py-1.5">{pct(s.checklistPct)}</td>
-                      <td className="px-2 py-1.5"><StatusPill value={s.milestoneStatus} /></td>
+                      <td className="px-2 py-1.5">{pct(s.sopPct)}</td>
                       <td className="px-2 py-1.5">{pct(s.citizenshipPct)}</td>
                       <td className="px-2 py-1.5">{s.commendations}</td>
                       <td className="px-2 py-1.5">{s.citations}</td>

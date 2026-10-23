@@ -4,14 +4,13 @@ import Skeleton from "@/components/ui/Skeleton";
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
 import { formatDayKey, todayKey } from "@/lib/checklistTime";
-import { RANGE_OPTIONS, rangeContaining, stepRange } from "@/lib/payPeriods";
+import { payPeriodSettingsFor, RANGE_OPTIONS, rangeContaining, stepRange } from "@/lib/payPeriods";
 import { roleLabel } from "@/lib/roles";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 // Staff Attendance Overview (client mockups 25-Staff-Attendance), for coaches
 // and HR: hours worked per employee for the pay period (highest first), the
-// day's sign in/out with the clock icon opening Employee Time, and "Move
-// Today" to put a staff member in another classroom for the day.
+// day's sign in/out with the clock icon opening Employee Time.
 
 const AVATAR_TONES = ["bg-pink-100 text-pink-700", "bg-sky-100 text-sky-700", "bg-violet-100 text-violet-700", "bg-emerald-100 text-emerald-700", "bg-amber-100 text-amber-700", "bg-indigo-100 text-indigo-700"];
 const control = "rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800";
@@ -24,13 +23,6 @@ const ATTENDANCE_FILTERS = [
 ];
 
 const time = (v) => (v ? new Date(v).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "—");
-const hhmm = (v) => {
-  const [h, m] = String(v || "").split(":").map(Number);
-  const d = new Date();
-  d.setHours(h, m || 0, 0, 0);
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-};
-
 function Avatar({ person, size = "h-9 w-9 text-xs" }) {
   const tone = AVATAR_TONES[[...String(person.id)].reduce((s, c) => s + c.charCodeAt(0), 0) % AVATAR_TONES.length];
   const initials = String(person.name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join("");
@@ -65,9 +57,15 @@ export default function StaffAttendanceOverview({ Layout, layoutProps = {} }) {
   const [roomFilter, setRoomFilter] = useState("");
   const [stateFilter, setStateFilter] = useState("");
   const [timeSheetId, setTimeSheetId] = useState(null);
-  const [moveOpen, setMoveOpen] = useState(false);
 
   useSyncedCenterId(centerId, setCenterId, centers);
+
+  // The center's pay schedule (Center Management) decides the pay periods.
+  const payPeriod = useMemo(() => payPeriodSettingsFor(centers.find((c) => c.id === centerId)), [centers, centerId]);
+  useEffect(() => {
+    setRange(rangeContaining(rangeKind, todayKey(), payPeriod));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payPeriod]);
 
   useEffect(() => {
     apiJson("/api/v1/centers")
@@ -170,17 +168,17 @@ export default function StaffAttendanceOverview({ Layout, layoutProps = {} }) {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center rounded-lg border border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800">
-                <button type="button" onClick={() => setRange(stepRange(rangeKind, range, -1))} className="px-3 py-2 text-blue-700" aria-label="Previous period">‹</button>
+                <button type="button" onClick={() => setRange(stepRange(rangeKind, range, -1, payPeriod))} className="px-3 py-2 text-blue-700" aria-label="Previous period">‹</button>
                 <span className={`min-w-[190px] text-center text-sm font-bold ${NAVY}`}>
                   {formatDayKey(range.from, { month: "short", day: "numeric", year: "numeric" })} - {formatDayKey(range.to, { month: "short", day: "numeric", year: "numeric" })}
                 </span>
-                <button type="button" onClick={() => setRange(stepRange(rangeKind, range, 1))} className="px-3 py-2 text-blue-700" aria-label="Next period">›</button>
+                <button type="button" onClick={() => setRange(stepRange(rangeKind, range, 1, payPeriod))} className="px-3 py-2 text-blue-700" aria-label="Next period">›</button>
               </div>
               <select
                 value={rangeKind}
                 onChange={(e) => {
                   setRangeKind(e.target.value);
-                  setRange(rangeContaining(e.target.value));
+                  setRange(rangeContaining(e.target.value, todayKey(), payPeriod));
                 }}
                 className={`${control} text-blue-700`}
                 aria-label="Period"
@@ -236,9 +234,6 @@ export default function StaffAttendanceOverview({ Layout, layoutProps = {} }) {
                   <h2 className={`text-xl font-black ${NAVY}`}>Staff Attendance</h2>
                 </button>
                 <div className="flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={() => setMoveOpen(true)} className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-100">
-                    ⇄ Move Today
-                  </button>
                   <label className="flex items-center gap-2 text-sm font-semibold">
                     <span className="sr-only">Date</span>
                     <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} className={control} aria-label="Attendance date" />
@@ -288,8 +283,7 @@ export default function StaffAttendanceOverview({ Layout, layoutProps = {} }) {
                               </div>
                             </td>
                             <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
-                              {p.classRoomName || (p.moved ? "Not Assigned" : "—")}
-                              {p.moved ? <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">Moved today</span> : null}
+                              {p.classRoomName || "—"}
                             </td>
                             <td className="px-3 py-2 text-center">{p.status === "ABSENT" ? <span className="font-semibold text-red-600">Absent</span> : time(p.clockIn)}</td>
                             <td className="px-3 py-2 text-center">{time(p.clockOut)}</td>
@@ -331,156 +325,6 @@ export default function StaffAttendanceOverview({ Layout, layoutProps = {} }) {
           }}
         />
       ) : null}
-      {moveOpen && data ? (
-        <MoveStaffDialog
-          staff={staff}
-          classrooms={data.classrooms}
-          centerId={centerId}
-          date={date}
-          onClose={() => setMoveOpen(false)}
-          onSaved={() => {
-            setMoveOpen(false);
-            load();
-          }}
-        />
-      ) : null}
     </Layout>
-  );
-}
-
-const ROOM_DOTS = ["bg-pink-400", "bg-yellow-400", "bg-green-500", "bg-blue-500", "bg-violet-500", "bg-orange-500", "bg-teal-500"];
-
-function MoveStaffDialog({ staff, classrooms, centerId, date, onClose, onSaved }) {
-  const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState("");
-  const [toRoom, setToRoom] = useState("");
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-  const people = staff.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase())).sort((a, b) => a.name.localeCompare(b.name));
-  const selected = staff.find((p) => p.id === selectedId);
-  const homeName = selected?.homeClassRoomId ? classrooms.find((c) => c.id === selected.homeClassRoomId)?.name : "";
-
-  async function save() {
-    if (!selected || toRoom === "") return;
-    setSaving(true);
-    setError("");
-    try {
-      await apiJson("/api/v1/staff-day-moves", {
-        method: "PUT",
-        body: JSON.stringify({ centerId, userId: selected.id, date, toClassRoomId: toRoom === "FLOAT" ? null : toRoom }),
-      });
-      onSaved();
-    } catch (e) {
-      setError(e.message || "Failed to move the staff member");
-      setSaving(false);
-    }
-  }
-
-  async function undo() {
-    setSaving(true);
-    try {
-      await apiJson("/api/v1/staff-day-moves", { method: "DELETE", body: JSON.stringify({ centerId, userId: selected.id, date }) });
-      onSaved();
-    } catch (e) {
-      setError(e.message || "Failed to undo the move");
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/50 px-4 py-10" role="dialog" aria-modal="true" aria-label="Move Staff for Today">
-      <div className="w-full max-w-3xl rounded-2xl bg-white shadow-2xl dark:bg-gray-900">
-        <div className="flex items-start justify-between px-6 pt-5">
-          <div>
-            <h2 className={`text-2xl font-black ${NAVY}`}>⇄ Move Staff for Today</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Select a staff member to move to a different classroom for {date === todayKey() ? "today" : formatDayKey(date)}.
-            </p>
-          </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-2xl leading-none text-gray-500 hover:text-gray-800">×</button>
-        </div>
-        {error ? <div className="mx-6 mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
-        <div className="grid gap-4 px-6 py-4 md:grid-cols-2">
-          <div className="rounded-xl border border-gray-200 p-2 dark:border-gray-700">
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search staff..." className={`${control} w-full`} aria-label="Search staff to move" />
-            <ul className="mt-2 max-h-80 space-y-1 overflow-y-auto">
-              {people.map((p) => (
-                <li key={p.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedId(p.id);
-                      setToRoom("");
-                    }}
-                    className={`flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-left ${selectedId === p.id ? "border-blue-300 bg-blue-50 dark:bg-blue-950" : "border-transparent hover:bg-gray-50 dark:hover:bg-gray-800"}`}
-                  >
-                    <Avatar person={p} size="h-8 w-8 text-[10px]" />
-                    <span className="min-w-0 flex-1">
-                      <span className={`block truncate text-sm font-semibold ${NAVY}`}>{p.name}</span>
-                      <span className="block truncate text-xs text-gray-500">{p.position}</span>
-                    </span>
-                    <span className="text-xs text-gray-500">{p.classRoomName || "Not Assigned"}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
-            {!selected ? (
-              <p className="text-sm text-gray-500">Pick a staff member on the left.</p>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <Avatar person={selected} size="h-12 w-12 text-base" />
-                  <div>
-                    <div className={`text-lg font-black ${NAVY}`}>{selected.name}</div>
-                    <div className="text-sm text-gray-500">{selected.position}</div>
-                  </div>
-                </div>
-                <div>
-                  <div className={`text-sm font-bold ${NAVY}`}>Current Assignment for Today</div>
-                  <div className="mt-1 flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-800">
-                    <div>
-                      <div className="font-semibold">{selected.classRoomName || "Not Assigned"}</div>
-                      {selected.moved ? <div className="text-xs text-amber-700">Moved for the day (usually {homeName || "Not Assigned"})</div> : null}
-                    </div>
-                    <div className="text-sm text-gray-600">{selected.shift ? `${hhmm(selected.shift.startTime)} – ${hhmm(selected.shift.endTime)}` : "No shift"}</div>
-                  </div>
-                </div>
-                <div>
-                  <div className={`text-sm font-bold ${NAVY}`}>New Classroom for Today</div>
-                  <div className="mt-1 max-h-56 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-1 dark:border-gray-700" role="listbox" aria-label="New classroom">
-                    {[...classrooms.map((c, i) => ({ id: c.id, name: c.name, dot: ROOM_DOTS[i % ROOM_DOTS.length] })), { id: "FLOAT", name: "Not Assigned (Float)", dot: "bg-gray-400" }].map((room) => (
-                      <button
-                        key={room.id}
-                        type="button"
-                        role="option"
-                        aria-selected={toRoom === room.id}
-                        onClick={() => setToRoom(room.id)}
-                        className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm ${toRoom === room.id ? "bg-blue-50 font-semibold dark:bg-blue-950" : "hover:bg-gray-50 dark:hover:bg-gray-800"}`}
-                      >
-                        <span className={`h-3 w-3 rounded-full ${room.dot}`} />
-                        {room.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {selected.moved ? (
-                  <button type="button" onClick={undo} disabled={saving} className="text-sm font-semibold text-red-600 hover:underline">
-                    Undo today&apos;s move
-                  </button>
-                ) : null}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 border-t border-gray-200 px-6 py-4 dark:border-gray-700">
-          <button type="button" onClick={onClose} className="rounded-lg border border-blue-300 px-5 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50">Cancel</button>
-          <button type="button" onClick={save} disabled={!selected || toRoom === "" || saving} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">
-            ⇄ Save for Today
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }

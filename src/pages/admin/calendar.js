@@ -160,7 +160,7 @@ export default function CalendarPage() {
     }
     (async () => {
       try {
-        const users = await apiJson(`/api/v1/users?centerId=${centerId}&staffOnly=true`);
+        const users = await apiJson(`/api/v1/users?employedOnly=true&centerId=${centerId}&staffOnly=true`);
         setStaffUsers(Array.isArray(users) ? users : []);
       } catch {
         setStaffUsers([]);

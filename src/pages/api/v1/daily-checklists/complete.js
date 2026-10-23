@@ -5,7 +5,7 @@ import {
 } from "@/lib/dailyChecklistClassrooms";
 import { canUserBeAssignedChecklist } from "@/lib/dailyChecklistAssignees";
 import prisma from "@/lib/prisma";
-import { getTeacherClassIdsForDay } from "@/lib/teacherScope";
+import { getTeacherClassIds } from "@/lib/teacherScope";
 import { isStaffPortalRole, STAFF_PORTAL_ROLES } from "@/lib/roles";
 import { isLogActivityLink } from "@/lib/checklistLinks";
 
@@ -194,7 +194,7 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "This checklist is assigned to another staff member" });
     }
     if (role === "TEACHER") {
-      const teacherClassIds = await getTeacherClassIdsForDay(session.user.id, item.checklist.centerId, normalizeDateInput(date));
+      const teacherClassIds = await getTeacherClassIds(session.user.id, item.checklist.centerId);
       if (!canTeacherAccessChecklist(item.checklist, teacherClassIds)) {
         return res.status(403).json({ error: "You do not have access to this classroom checklist" });
       }

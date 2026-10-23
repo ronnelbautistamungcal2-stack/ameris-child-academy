@@ -216,7 +216,7 @@ export default async function handler(req, res) {
     ]);
     const cfg = staffGradeWeightsFor(center);
     const hoursScheduled = Math.round(shifts.reduce((sum, shift) => sum + shiftHours(shift), 0) * 10) / 10;
-    const { parts: gradeParts, grade: overallGrade } = staffOverallGrade(
+    const { parts: gradeParts, adjustments: gradeAdjustments, grade: overallGrade } = staffOverallGrade(
       {
         evaluationScore: mostRecentEvalScore,
         checklistPct,
@@ -247,6 +247,7 @@ export default async function handler(req, res) {
       citations: { teamTotal: teamCitations, own: ownCitations },
       hr: { hoursWorked, hoursScheduled, hrPct: gradeParts.hr, lates, absences, ptoAvailable: ptoHours, utoAvailable: utoHours },
       gradeParts,
+      gradeAdjustments,
       training: { totalHours: totalTrainingHours, logs: trainingLogs },
       trainingPathways,
     });

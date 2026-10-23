@@ -233,7 +233,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
         apiJson(`/api/v1/lesson-categories?centerId=${encodeURIComponent(centerId)}`).catch(() => []),
         apiJson(`/api/v1/lesson-term-calendars?centerId=${encodeURIComponent(centerId)}`).catch(() => []),
         apiJson(`/api/v1/policies?centerId=${encodeURIComponent(centerId)}`).catch(() => []),
-        apiJson(`/api/v1/users?centerId=${encodeURIComponent(centerId)}&roles=${["TEACHER", ...STAFF_PORTAL_ROLES, "COACH"].join(",")}`),
+        apiJson(`/api/v1/users?employedOnly=true&centerId=${encodeURIComponent(centerId)}&roles=${["TEACHER", ...STAFF_PORTAL_ROLES, "COACH"].join(",")}`),
       ]);
       setChecklists(Array.isArray(lists) ? lists : []);
       setClassrooms(Array.isArray(rooms) ? rooms : []);

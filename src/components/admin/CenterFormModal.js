@@ -11,7 +11,8 @@ import {
   MEALS,
 } from "@/lib/centerSettings";
 import { roleLabel } from "@/lib/roles";
-import { DEFAULT_STAFF_GRADE_WEIGHTS, STAFF_GRADE_PARTS } from "@/lib/staffGrade";
+import { DEFAULT_STAFF_GRADE_WEIGHTS, STAFF_GRADE_PARTS, staffGradeWeightsFor } from "@/lib/staffGrade";
+import { DEFAULT_PAY_PERIOD, PAY_SCHEDULES, payPeriodSettingsFor } from "@/lib/payPeriods";
 import { useEffect, useMemo, useState } from "react";
 
 // Add Center / Edit Center (client mockups 2026-10-02): Basic Information,
@@ -23,7 +24,7 @@ const TABS = [
   { key: "care", label: "Care & Schedule", icon: "\u{1F4C5}" },
   { key: "rates", label: "Ages & Rates", icon: "\u{1F465}" },
   { key: "roles", label: "Roles", icon: "\u{1F464}" },
-  { key: "grade", label: "Staff Grade", icon: "\u{1F4CA}" },
+  { key: "grade", label: "Staff Grade & Pay", icon: "\u{1F4CA}" },
 ];
 
 const STATES = "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY".split(" ");
@@ -84,7 +85,8 @@ function formFromCenter(center) {
     })),
     enrollmentFee: center?.enrollmentFee ?? "",
     roleAccess: center?.roleAccess || [],
-    staffGradeWeights: { ...DEFAULT_STAFF_GRADE_WEIGHTS, ...(center?.staffGradeWeights || {}) },
+    staffGradeWeights: { ...(center ? staffGradeWeightsFor(center) : DEFAULT_STAFF_GRADE_WEIGHTS) },
+    payPeriodSettings: center ? payPeriodSettingsFor(center) : DEFAULT_PAY_PERIOD,
   };
 }
 
@@ -137,47 +139,62 @@ function Section({ icon, title, description, action, children }) {
   );
 }
 
-// Staff Overall Grade weights (client request 2026-10-22): how much each part
-// counts toward every staff member's overall grade at this center.
-function StaffGradeSection({ weights, onChange }) {
+// Staff Overall Grade weights and the pay schedule (client requests
+// 2026-10-22/23), on one tab.
+function StaffGradeSection({ weights, onChange, payPeriod, onPayPeriodChange }) {
   const total = STAFF_GRADE_PARTS.reduce((sum, { key }) => sum + (Number(weights[key]) || 0), 0);
   const ok = Math.abs(total - 100) < 0.01;
+  const num = (value) => (value === "" ? "" : Number(value));
   return (
-    <Section icon={"\u{1F4CA}"} title="Staff Overall Grade" description="Set how much each part counts toward a staff member's overall grade. The percentages must add up to 100.">
-      <div className="grid gap-3 sm:grid-cols-5">
-        {STAFF_GRADE_PARTS.map(({ key, label }) => (
-          <Field key={key} label={`% ${label}`}>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              step="1"
-              className={input}
-              value={weights[key]}
-              onChange={(e) => onChange({ [key]: e.target.value === "" ? "" : Number(e.target.value) })}
-              aria-label={`${label} percent`}
-            />
+    <div className="space-y-4">
+      <Section icon={"\u{1F4CA}"} title="Staff Overall Grade" description="Set how much each part counts toward a staff member's overall grade. Evaluations, Checklist and HR must add up to 100%.">
+        <div className="grid gap-3 sm:grid-cols-3">
+          {STAFF_GRADE_PARTS.map(({ key, label }) => (
+            <Field key={key} label={`% ${label}`}>
+              <input type="number" min="0" max="100" step="1" className={input} value={weights[key]} onChange={(e) => onChange({ [key]: num(e.target.value) })} aria-label={`${label} percent`} />
+            </Field>
+          ))}
+        </div>
+        <p className={`mt-2 text-sm font-semibold ${ok ? "text-green-700" : "text-red-600"}`}>Total: {total}%{ok ? "" : " (must be 100%)"}</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <Field label="% taken off per citation">
+            <input type="number" min="0" max="100" step="0.5" className={input} value={weights.citationPct} onChange={(e) => onChange({ citationPct: num(e.target.value) })} />
           </Field>
-        ))}
-      </div>
-      <p className={`mt-2 text-sm font-semibold ${ok ? "text-green-700" : "text-red-600"}`}>Total: {total}%{ok ? "" : " (must be 100%)"}</p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <Field label="Points taken off per citation">
-          <input type="number" min="0" max="100" className={input} value={weights.citationPoints} onChange={(e) => onChange({ citationPoints: e.target.value === "" ? "" : Number(e.target.value) })} />
-        </Field>
-        <Field label="Points per commendation">
-          <input type="number" min="0" max="100" className={input} value={weights.commendationPoints} onChange={(e) => onChange({ commendationPoints: e.target.value === "" ? "" : Number(e.target.value) })} />
-        </Field>
-      </div>
-      <ul className="mt-4 list-disc space-y-1 pl-5 text-xs text-gray-600 dark:text-gray-400">
-        <li><strong>Evaluations:</strong> the latest evaluation score out of 10.</li>
-        <li><strong>Checklist:</strong> the share of due checklist items ticked on the days worked.</li>
-        <li><strong>Citations:</strong> starts at 100% and loses the points above for each citation in the period.</li>
-        <li><strong>Commendations:</strong> the points above for each commendation in the period, up to 100%.</li>
-        <li><strong>HR:</strong> hours worked out of scheduled shift hours.</li>
-        <li>A part with no data yet (for example no evaluation) is left out and the others are scaled up.</li>
-      </ul>
-    </Section>
+          <Field label="% added per commendation">
+            <input type="number" min="0" max="100" step="0.5" className={input} value={weights.commendationPct} onChange={(e) => onChange({ commendationPct: num(e.target.value) })} />
+          </Field>
+        </div>
+        <ul className="mt-4 list-disc space-y-1 pl-5 text-xs text-gray-600 dark:text-gray-400">
+          <li><strong>Evaluations:</strong> the latest evaluation score out of 10.</li>
+          <li><strong>Checklist:</strong> the share of due checklist items ticked on the days worked.</li>
+          <li><strong>HR:</strong> hours worked out of scheduled shift hours.</li>
+          <li>A part with no data yet (for example no evaluation) is left out and the others are scaled up.</li>
+          <li>Each citation in the period takes the % above off the grade and each commendation adds it (e.g. 3 commendations at 5% add 15%). The grade stays between 0% and 100%.</li>
+        </ul>
+      </Section>
+      <Section icon={"\u{1F4B5}"} title="Pay Schedule" description="Staff Attendance and My Time Sheet use these pay periods.">
+        <div className="grid gap-3 sm:grid-cols-2">
+          {PAY_SCHEDULES.map((option) => (
+            <label key={option.value} className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 ${payPeriod.type === option.value ? "border-blue-400 bg-blue-50 dark:bg-gray-800" : "border-gray-200 dark:border-gray-700"}`}>
+              <input
+                type="radio"
+                name="pay-schedule"
+                checked={payPeriod.type === option.value}
+                onChange={() => onPayPeriodChange(option.value === "BIWEEKLY" ? { type: "BIWEEKLY", startDate: payPeriod.startDate || DEFAULT_PAY_PERIOD.startDate } : { type: "SEMI_MONTHLY" })}
+              />
+              <span className="text-sm font-semibold text-blue-950 dark:text-gray-200">{option.label}</span>
+            </label>
+          ))}
+        </div>
+        {payPeriod.type === "BIWEEKLY" ? (
+          <Field label="First day of a pay period" className="mt-3 max-w-xs">
+            <input type="date" className={input} value={payPeriod.startDate || ""} onChange={(e) => onPayPeriodChange({ type: "BIWEEKLY", startDate: e.target.value })} />
+          </Field>
+        ) : (
+          <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">Pay periods run from the 1st to the 15th and from the 16th to the end of each month.</p>
+        )}
+      </Section>
+    </div>
   );
 }
 
@@ -544,7 +561,12 @@ export default function CenterFormModal({ center, onClose, onSaved }) {
           ) : null}
 
           {tab === "grade" ? (
-            <StaffGradeSection weights={form.staffGradeWeights} onChange={(patch) => set({ staffGradeWeights: { ...form.staffGradeWeights, ...patch } })} />
+            <StaffGradeSection
+              weights={form.staffGradeWeights}
+              onChange={(patch) => set({ staffGradeWeights: { ...form.staffGradeWeights, ...patch } })}
+              payPeriod={form.payPeriodSettings}
+              onPayPeriodChange={(value) => set({ payPeriodSettings: value })}
+            />
           ) : null}
 
           {tab === "roles" ? (

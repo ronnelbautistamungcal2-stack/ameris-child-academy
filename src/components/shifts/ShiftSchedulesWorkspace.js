@@ -73,7 +73,7 @@ export default function ShiftSchedulesWorkspace({ Layout, layoutProps = {} }) {
 
   useEffect(() => {
     if (!centerId) return;
-    apiJson(`/api/v1/users?centerId=${encodeURIComponent(centerId)}&roles=TEACHER,OTHER_STAFF,KITCHEN_STAFF,HR_STAFF,STUDENT_SUPPORT,COACH`)
+    apiJson(`/api/v1/users?employedOnly=true&centerId=${encodeURIComponent(centerId)}&roles=TEACHER,OTHER_STAFF,KITCHEN_STAFF,HR_STAFF,STUDENT_SUPPORT,COACH`)
       .then((rows) => setStaff(Array.isArray(rows) ? rows : []))
       .catch((e) => setError(e.message || "Failed to load staff"));
   }, [centerId]);

@@ -14,7 +14,7 @@ const dbDay = (key) => new Date(`${key}T00:00:00.000Z`);
  * GET /api/v1/staff-attendance/overview?centerId=&from=&to=&date=
  * Staff Attendance Overview (coaches, HR, admins): each currently employed
  * staff member's hours worked from..to, and on `date` their sign in/out, shift
- * and classroom (after any "Move Staff for Today").
+ * and classroom.
  */
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -57,7 +57,7 @@ export default async function handler(req, res) {
   const dayEnd = new Date(dayStart);
   dayEnd.setDate(dayEnd.getDate() + 1);
 
-  const [worked, today, shifts, moves, classrooms] = await Promise.all([
+  const [worked, today, shifts, classrooms] = await Promise.all([
     prisma.staffAttendance.findMany({
       where: { userId: { in: ids }, date: { gte: localDay(from), lt: rangeEnd }, clockIn: { not: null }, clockOut: { not: null } },
       select: { userId: true, clockIn: true, clockOut: true },
@@ -71,7 +71,6 @@ export default async function handler(req, res) {
       select: { userId: true, startTime: true, endTime: true, position: true },
       orderBy: { startTime: "asc" },
     }),
-    prisma.staffDayMove.findMany({ where: { userId: { in: ids }, centerId: String(centerId), date: dbDay(date) } }),
     prisma.classRoom.findMany({ where: { centerId: String(centerId) }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
   const roomName = new Map(classrooms.map((c) => [c.id, c.name]));
@@ -82,9 +81,7 @@ export default async function handler(req, res) {
       .reduce((sum, w) => sum + Math.max(0, (new Date(w.clockOut) - new Date(w.clockIn)) / 3600000), 0);
     const att = today.find((t) => t.userId === m.id);
     const shift = shifts.find((s) => s.userId === m.id);
-    const move = moves.find((mv) => mv.userId === m.id);
-    const homeId = m.teacherClasses[0]?.classId || null;
-    const classRoomId = move ? move.toClassRoomId : homeId;
+    const classRoomId = m.teacherClasses[0]?.classId || null;
     const role = userRoles(m).find((r) => STAFF_ROLES.includes(r)) || m.role;
     return {
       id: m.id,
@@ -98,10 +95,8 @@ export default async function handler(req, res) {
       clockOut: att?.clockOut || null,
       status: att?.status || null,
       shift: shift ? { startTime: shift.startTime, endTime: shift.endTime } : null,
-      homeClassRoomId: homeId,
       classRoomId,
       classRoomName: classRoomId ? roomName.get(classRoomId) || "" : "",
-      moved: !!move,
     };
   });
 

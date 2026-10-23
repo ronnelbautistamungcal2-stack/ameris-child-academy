@@ -975,7 +975,7 @@ function BehaviorTab({ centerId, classId, children, dateFrom, dateTo }) {
 // ─── Teachers Tab ─────────────────────────────────────────────
 
 // The Staff Overall Grade weights now live on the center (Center Management →
-// Edit Center → Staff Grade), shared by teachers, other staff and coaches.
+// Edit Center → Staff Grade & Pay), shared by teachers, other staff and coaches.
 function StaffGradeFormulaNote({ centerId }) {
   const [weights, setWeights] = useState(null);
   useEffect(() => {
@@ -991,7 +991,7 @@ function StaffGradeFormulaNote({ centerId }) {
       <p className="mt-1 text-xs text-gray-500">
         Change these on{" "}
         <Link href="/admin/centers" className="font-semibold text-sky-700 hover:underline">Center Management</Link>
-        {" "}(Edit Center → Staff Grade).
+        {" "}(Edit Center → Staff Grade & Pay).
       </p>
     </div>
   );
@@ -1039,7 +1039,7 @@ function TeachersTab({ centerId }) {
   useEffect(() => {
     if (!centerId) return;
     setLoadingTeachers(true);
-    apiJson(`/api/v1/users?centerId=${encodeURIComponent(centerId)}&roles=TEACHER`)
+    apiJson(`/api/v1/users?employedOnly=true&centerId=${encodeURIComponent(centerId)}&roles=TEACHER`)
       .then((r) => {
         const arr = Array.isArray(r) ? r : [];
         setTeacherList(arr);
@@ -1726,7 +1726,7 @@ function OtherStaffPerformanceTab({ centerId, dateFrom, dateTo }) {
   useEffect(() => {
     if (!centerId) return;
     setLoadingStaff(true);
-    apiJson(`/api/v1/users?centerId=${encodeURIComponent(centerId)}&roles=${STAFF_PORTAL_ROLES.join(",")}`)
+    apiJson(`/api/v1/users?employedOnly=true&centerId=${encodeURIComponent(centerId)}&roles=${STAFF_PORTAL_ROLES.join(",")}`)
       .then((r) => {
         const arr = Array.isArray(r) ? r : [];
         setStaffList(arr);
@@ -2543,7 +2543,7 @@ function CoachPerformanceTab({ centerId, dateFrom, dateTo }) {
   useEffect(() => {
     if (!centerId) return;
     setLoadingCoaches(true);
-    apiJson(`/api/v1/users?centerId=${encodeURIComponent(centerId)}&roles=COACH`)
+    apiJson(`/api/v1/users?employedOnly=true&centerId=${encodeURIComponent(centerId)}&roles=COACH`)
       .then((r) => {
         const arr = Array.isArray(r) ? r : [];
         setCoaches(arr);

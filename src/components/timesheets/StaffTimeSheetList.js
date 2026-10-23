@@ -49,9 +49,9 @@ export default function StaffTimeSheetList() {
           aria-label="Employment status"
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
         >
-          <option value="ACTIVE">Active Staff</option>
-          <option value="INACTIVE">Inactive Staff</option>
-          <option value="ALL">All Staff</option>
+          <option value="ACTIVE">Currently Employed</option>
+          <option value="ALL">View All</option>
+          <option value="INACTIVE">Not Currently Employed</option>
         </select>
         <input
           value={query}

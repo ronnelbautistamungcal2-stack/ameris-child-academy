@@ -1,8 +1,9 @@
 import { getSession } from "@/lib/auth";
+import { EMPLOYED_WHERE } from "@/lib/employment";
 import { CURRENT_IPP_STATUSES, ippNeedsReview } from "@/lib/ipp";
 import prisma from "@/lib/prisma";
 import { EMPLOYEE_ROLES, hasAnyRole, roleLabel } from "@/lib/roles";
-import { childStatus, goalOffsetDays, levelForStatus, statusForOffset } from "@/lib/sop";
+import { childStatus, levelForStatus } from "@/lib/sop";
 import { teacherPerformance } from "@/lib/teacherPerformance";
 
 // Center Performance Overview (client mockups 2026-10-02) for one center and
@@ -62,6 +63,7 @@ export default async function handler(req, res) {
     const members = await prisma.user.findMany({
       where: {
         centers: { some: { centerId: center.id } },
+        ...EMPLOYED_WHERE,
         OR: [{ role: { in: STAFF_ROLES } }, { roles: { hasSome: STAFF_ROLES } }],
       },
       select: { id: true, name: true, email: true, role: true, roles: true },
@@ -99,7 +101,8 @@ export default async function handler(req, res) {
         priorGrade: prior?.overallGrade ?? null,
         evaluationPct: current?.evaluation?.normalized ?? null,
         checklistPct: current?.checklist?.pct ?? null,
-        milestoneStatus: null,
+        // Average SOP %: the calculation is still to be confirmed by the client.
+        sopPct: current?.milestones?.avgPct ?? null,
         citizenshipPct: current?.citizenship?.normalized ?? null,
         commendations: current?.commendations?.length ?? 0,
         citations: current?.citations?.length ?? 0,
@@ -174,28 +177,6 @@ export default async function handler(req, res) {
         ipp: myPlans.length ? (myPlans.some((p) => ippNeedsReview(p)) ? "NEEDS_REVIEW" : "ON_TRACK") : null,
       };
     });
-
-    // Milestone Status (client answer 2026-10-22): for each staff member's
-    // classes, average the goals' offsets within each category (the Class
-    // report's Milestones Grade), then average the categories.
-    const birthById = Object.fromEntries(children.map((c) => [c.id, c.birthDate]));
-    const goals = progress.map((p) => ({
-      childId: p.childId,
-      category: p.lesson.category?.name || "General",
-      offset: goalOffsetDays(p.lesson, levelForStatus(p.status), birthById[p.childId]),
-    }));
-    for (const member of staff) {
-      const mine = new Set(students.filter((st) => st.teacherIds.includes(member.id)).map((st) => st.id));
-      const byCategory = new Map();
-      for (const g of goals) {
-        if (!mine.has(g.childId)) continue;
-        const list = byCategory.get(g.category) || [];
-        list.push(g.offset ?? 0);
-        byCategory.set(g.category, list);
-      }
-      const averages = [...byCategory.values()].map((list) => list.reduce((a, b) => a + b, 0) / list.length);
-      member.milestoneStatus = averages.length ? statusForOffset(averages.reduce((a, b) => a + b, 0) / averages.length) : null;
-    }
 
     return res.status(200).json({
       centers,

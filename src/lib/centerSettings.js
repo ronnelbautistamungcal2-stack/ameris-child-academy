@@ -4,6 +4,7 @@
 
 import { hasEmployeeRole, ROLE_OPTIONS } from "@/lib/roles";
 import { parseStaffGradeWeights } from "@/lib/staffGrade";
+import { parsePayPeriodSettings } from "@/lib/payPeriods";
 
 export const CENTER_STATUSES = [
   { value: "ACTIVE", label: "Active" },
@@ -191,6 +192,7 @@ export function parseCenterInput(body = {}, { partial = false } = {}) {
     ["meals", parseMeals],
     ["ageRates", parseAgeRates],
     ["staffGradeWeights", parseStaffGradeWeights],
+    ["payPeriodSettings", parsePayPeriodSettings],
   ];
   for (const [key, parse] of jsonFields) {
     if (!has(key)) continue;

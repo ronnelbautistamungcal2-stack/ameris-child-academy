@@ -11,7 +11,7 @@ function key(d) {
 }
 
 // Phase 6b on a throwaway center: employment status, shift schedules for HR,
-// Staff Attendance Overview with Move Today, time-off calendar labels and the
+// Staff Attendance Overview, time-off calendar labels and the
 // employee time sheet e-signature.
 test.describe("Staff management (Phase 6b) @api", () => {
   test.describe.configure({ mode: "serial" });
@@ -19,7 +19,6 @@ test.describe("Staff management (Phase 6b) @api", () => {
   const password = "Password123!";
   let center;
   let roomA;
-  let roomB;
   let alice; // teacher, stays employed
   let bob; // teacher, quits
   let hr;
@@ -46,7 +45,6 @@ test.describe("Staff management (Phase 6b) @api", () => {
     alice = await make("Alice");
     bob = await make("Bob");
     roomA = await (await apiPost(request, "/api/v1/classes", { centerId: center.id, name: "QA Room A" }, admin)).json();
-    roomB = await (await apiPost(request, "/api/v1/classes", { centerId: center.id, name: "QA Room B" }, admin)).json();
     await prisma.teacherClass.create({ data: { teacherId: alice.id, classId: roomA.id } });
 
     // Alice worked 8h and 7.5h, Bob 4h in the current fortnight.
@@ -110,7 +108,7 @@ test.describe("Staff management (Phase 6b) @api", () => {
     expect((await apiGet(request, `/api/v1/shifts?centerId=${center.id}`, await loginAsTeacher(request))).status()).toBe(403);
   });
 
-  test("Staff Attendance Overview: hours highest first, Move Today changes the classroom", async ({ request }) => {
+  test("Staff Attendance Overview: hours highest first; former staff only on the admin list", async ({ request }) => {
     const coachCookies = await loginAsCoach(request);
     const range = `from=${today}&to=${today}&date=${today}`;
     const res = await apiGet(request, `/api/v1/staff-attendance/overview?centerId=${center.id}&${range}`, coachCookies);
@@ -119,27 +117,16 @@ test.describe("Staff management (Phase 6b) @api", () => {
     // Bob quit, so he is not listed; Alice (8h) comes before the 0h staff.
     expect(body.staff.some((s) => s.id === bob.id)).toBe(false);
     expect(body.staff[0].id).toBe(alice.id);
-    expect(body.staff[0]).toMatchObject({ totalHours: 8, classRoomName: "QA Room A", moved: false, position: "Lead Teacher", shift: { startTime: "07:00", endTime: "15:30" } });
+    expect(body.staff[0]).toMatchObject({ totalHours: 8, classRoomName: "QA Room A", position: "Lead Teacher", shift: { startTime: "07:00", endTime: "15:30" } });
 
-    const move = await apiPut(request, "/api/v1/staff-day-moves", { centerId: center.id, userId: alice.id, date: today, toClassRoomId: roomB.id }, coachCookies);
-    expect(move.status(), await move.text()).toBe(200);
-    const after = await (await apiGet(request, `/api/v1/staff-attendance/overview?centerId=${center.id}&${range}`, coachCookies)).json();
-    expect(after.staff.find((x) => x.id === alice.id)).toMatchObject({ classRoomName: "QA Room B", moved: true, homeClassRoomId: roomA.id });
-
-    // Alice's classroom checklist for today follows the move.
+    // Admin pickers ask for current employees only; the full list still has Bob,
+    // and his time sheet can still be opened.
     const admin = await loginAsAdmin(request);
-    for (const [title, room] of [["Room A list", roomA], ["Room B list", roomB]]) {
-      await apiPost(request, "/api/v1/daily-checklists", { centerId: center.id, title, classRoomIds: [room.id], items: [{ title: "Task" }] }, admin);
-    }
-    const aliceCookies = await getAuthCookie(request, alice.email, password);
-    const lists = await (await apiGet(request, `/api/v1/daily-checklists?centerId=${center.id}&date=${today}`, aliceCookies)).json();
-    expect(lists.map((l) => l.title)).toEqual(["Room B list"]);
-
-    expect((await apiPut(request, "/api/v1/staff-day-moves", { centerId: center.id, userId: alice.id, date: today, toClassRoomId: roomB.id }, aliceCookies)).status()).toBe(403);
-    const undo = await request.delete("/api/v1/staff-day-moves", { headers: { cookie: coachCookies, "content-type": "application/json" }, data: { centerId: center.id, userId: alice.id, date: today } });
-    expect(undo.status()).toBe(200);
-    const restored = await (await apiGet(request, `/api/v1/daily-checklists?centerId=${center.id}&date=${today}`, aliceCookies)).json();
-    expect(restored.map((l) => l.title)).toEqual(["Room A list"]);
+    const employed = await (await apiGet(request, `/api/v1/users?employedOnly=true&centerId=${center.id}&roles=TEACHER`, admin)).json();
+    expect(employed.map((u) => u.id)).toEqual([alice.id]);
+    const all = await (await apiGet(request, `/api/v1/users?centerId=${center.id}&roles=TEACHER`, admin)).json();
+    expect(all.map((u) => u.id).sort()).toEqual([alice.id, bob.id].sort());
+    expect((await apiGet(request, `/api/v1/time-sheets/staff/${bob.id}`, admin)).status()).toBe(200);
   });
 
   test("time-off calendars show only the staff member's name", async ({ request }) => {

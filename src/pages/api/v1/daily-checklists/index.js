@@ -8,7 +8,7 @@ import {
   resolveTermCalendarEntry,
 } from "@/lib/lessonScheduling";
 import prisma from "@/lib/prisma";
-import { getTeacherClassIdsForDay } from "@/lib/teacherScope";
+import { getTeacherClassIds } from "@/lib/teacherScope";
 import { STAFF_PORTAL_ROLES } from "@/lib/roles";
 import {
   itemMatchesDate,
@@ -507,7 +507,7 @@ export default async function handler(req, res) {
       staffScope = {
         userId: staffUser.id,
         roles: asRole && staffRoles.includes(asRole) ? [asRole] : staffRoles,
-        teacherClassIds: await getTeacherClassIdsForDay(staffUser.id, centerId, date),
+        teacherClassIds: await getTeacherClassIds(staffUser.id, centerId),
       };
     }
 
@@ -535,7 +535,7 @@ export default async function handler(req, res) {
     }
 
     const teacherClassIds =
-      role === "TEACHER" ? await getTeacherClassIdsForDay(session.user.id, centerId, date) : [];
+      role === "TEACHER" ? await getTeacherClassIds(session.user.id, centerId) : [];
     const include = buildDailyChecklistInclude(date, staffScope?.userId || session.user.id);
 
     const lists = await prisma.dailyChecklist.findMany({

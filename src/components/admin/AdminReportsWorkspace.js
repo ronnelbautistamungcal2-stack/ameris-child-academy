@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import { AGE_GROUPS } from "@/lib/ageUtils";
 import { STAFF_PORTAL_ROLES } from "@/lib/roles";
+import { formatStaffGradeFormula, staffGradeWeightsFor } from "@/lib/staffGrade";
 
 // Lazy-load chart components (no SSR for recharts)
 const ProgressPieChart = dynamic(() => import("@/components/analytics/charts/ProgressPieChart"), { ssr: false });
@@ -973,6 +974,29 @@ function BehaviorTab({ centerId, classId, children, dateFrom, dateTo }) {
 
 // ─── Teachers Tab ─────────────────────────────────────────────
 
+// The Staff Overall Grade weights now live on the center (Center Management →
+// Edit Center → Staff Grade), shared by teachers, other staff and coaches.
+function StaffGradeFormulaNote({ centerId }) {
+  const [weights, setWeights] = useState(null);
+  useEffect(() => {
+    if (!centerId) return;
+    apiJson(`/api/v1/centers/${encodeURIComponent(centerId)}`)
+      .then((center) => setWeights(staffGradeWeightsFor(center)))
+      .catch(() => setWeights(null));
+  }, [centerId]);
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+      <div className="text-sm font-extrabold text-gray-900">Overall Grade Formula</div>
+      <p className="mt-0.5 text-xs text-gray-600">{weights ? formatStaffGradeFormula(weights) : "Loading…"}</p>
+      <p className="mt-1 text-xs text-gray-500">
+        Change these on{" "}
+        <Link href="/admin/centers" className="font-semibold text-sky-700 hover:underline">Center Management</Link>
+        {" "}(Edit Center → Staff Grade).
+      </p>
+    </div>
+  );
+}
+
 function gradeColor(g) {
   if (g == null) return "text-gray-400";
   if (g >= 80) return "text-emerald-700";
@@ -1005,11 +1029,6 @@ function TeachersTab({ centerId }) {
   const [loading, setLoading] = useState(false);
   const [loadingTeachers, setLoadingTeachers] = useState(true);
 
-  // Grade config editor
-  const [gradeConfig, setGradeConfig] = useState(null);
-  const [editingConfig, setEditingConfig] = useState(false);
-  const [savingConfig, setSavingConfig] = useState(false);
-  const [configDraft, setConfigDraft] = useState({});
 
   // Commendation / Citation forms
   const [newCommendation, setNewCommendation] = useState("");
@@ -1030,13 +1049,6 @@ function TeachersTab({ centerId }) {
       .finally(() => setLoadingTeachers(false));
   }, [centerId]);
 
-  useEffect(() => {
-    if (!centerId) return;
-    apiJson(`/api/v1/performance-grade-config?centerId=${encodeURIComponent(centerId)}`)
-      .then((r) => { setGradeConfig(r); setConfigDraft(r); })
-      .catch(() => {});
-  }, [centerId]);
-
   const loadReport = useCallback(async () => {
     if (!centerId || !teacherId) return;
     setLoading(true);
@@ -1049,20 +1061,6 @@ function TeachersTab({ centerId }) {
   }, [centerId, teacherId, dateFrom, dateTo]);
 
   useEffect(() => { loadReport(); }, [loadReport]);
-
-  async function saveConfig() {
-    setSavingConfig(true);
-    try {
-      const r = await apiJson(`/api/v1/performance-grade-config?centerId=${encodeURIComponent(centerId)}`, {
-        method: "PUT",
-        body: JSON.stringify(configDraft),
-      });
-      setGradeConfig(r);
-      setEditingConfig(false);
-      await loadReport();
-    } catch {}
-    setSavingConfig(false);
-  }
 
   async function addCommendation() {
     if (!newCommendation.trim() || !teacherId) return;
@@ -1132,58 +1130,7 @@ function TeachersTab({ centerId }) {
         </div>
       </div>
 
-      {/* Grade Formula Config */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-extrabold text-gray-900">Overall Grade Formula</div>
-            <p className="mt-0.5 text-xs text-gray-600">
-              {gradeConfig
-                ? `${gradeConfig.citizenshipWeight}% citizenship · ${gradeConfig.evaluationWeight}% evaluation · ${gradeConfig.checklistWeight}% checklist · −${gradeConfig.lateDeductionPct}pt/late · −${gradeConfig.absenceDeductionPct}pt/absence`
-                : "Loading…"}
-            </p>
-          </div>
-          <button
-            onClick={() => { setEditingConfig(!editingConfig); setConfigDraft(gradeConfig || {}); }}
-            className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-          >
-            {editingConfig ? "Cancel" : "Edit Formula"}
-          </button>
-        </div>
-        {editingConfig && (
-          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5 border-t border-gray-100 pt-4">
-            {[
-              { key: "citizenshipWeight", label: "Citizenship %" },
-              { key: "evaluationWeight", label: "Evaluation %" },
-              { key: "checklistWeight", label: "Checklist %" },
-              { key: "lateDeductionPct", label: "Late deduction (pts)" },
-              { key: "absenceDeductionPct", label: "Absence deduction (pts)" },
-            ].map(({ key, label }) => (
-              <label key={key} className="block">
-                <div className="mb-1 text-xs font-semibold text-gray-500">{label}</div>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.5"
-                  value={configDraft[key] ?? ""}
-                  onChange={(e) => setConfigDraft((d) => ({ ...d, [key]: Number(e.target.value) }))}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                />
-              </label>
-            ))}
-            <div className="flex items-end col-span-2 md:col-span-5">
-              <button
-                onClick={saveConfig}
-                disabled={savingConfig}
-                className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
-              >
-                {savingConfig ? "Saving…" : "Save Formula"}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      <StaffGradeFormulaNote centerId={centerId} />
 
       {!teacherId && <Empty msg="Select a teacher to view their performance report." />}
       {teacherId && loading && <Loading />}
@@ -1767,10 +1714,6 @@ function OtherStaffPerformanceTab({ centerId, dateFrom, dateTo }) {
   const [loading, setLoading] = useState(false);
   const [loadingStaff, setLoadingStaff] = useState(true);
 
-  const [gradeConfig, setGradeConfig] = useState(null);
-  const [editingConfig, setEditingConfig] = useState(false);
-  const [savingConfig, setSavingConfig] = useState(false);
-  const [configDraft, setConfigDraft] = useState({});
 
   const [newCommendation, setNewCommendation] = useState("");
   const [newCitation, setNewCitation] = useState("");
@@ -1793,13 +1736,6 @@ function OtherStaffPerformanceTab({ centerId, dateFrom, dateTo }) {
       .finally(() => setLoadingStaff(false));
   }, [centerId]);
 
-  useEffect(() => {
-    if (!centerId) return;
-    apiJson(`/api/v1/other-staff-grade-config?centerId=${encodeURIComponent(centerId)}`)
-      .then((r) => { setGradeConfig(r); setConfigDraft(r); })
-      .catch(() => {});
-  }, [centerId]);
-
   const loadReport = useCallback(async () => {
     if (!centerId || !staffId) return;
     setLoading(true);
@@ -1812,20 +1748,6 @@ function OtherStaffPerformanceTab({ centerId, dateFrom, dateTo }) {
   }, [centerId, staffId, reportFrom, reportTo]);
 
   useEffect(() => { loadReport(); }, [loadReport]);
-
-  async function saveConfig() {
-    setSavingConfig(true);
-    try {
-      const r = await apiJson(`/api/v1/other-staff-grade-config?centerId=${encodeURIComponent(centerId)}`, {
-        method: "PUT",
-        body: JSON.stringify(configDraft),
-      });
-      setGradeConfig(r);
-      setEditingConfig(false);
-      await loadReport();
-    } catch {}
-    setSavingConfig(false);
-  }
 
   async function addCommendation() {
     if (!newCommendation.trim() || !staffId) return;
@@ -1884,50 +1806,7 @@ function OtherStaffPerformanceTab({ centerId, dateFrom, dateTo }) {
         </div>
       </div>
 
-      {/* Grade Formula Config */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-extrabold text-gray-900">Overall Grade Formula</div>
-            <p className="mt-0.5 text-xs text-gray-600">
-              {gradeConfig
-                ? `${gradeConfig.evaluationWeight}% evaluation · ${gradeConfig.checklistWeight}% checklist · −${gradeConfig.lateDeductionPct}pt/late · −${gradeConfig.absenceDeductionPct}pt/absence`
-                : "Loading…"}
-            </p>
-          </div>
-          <button
-            onClick={() => { setEditingConfig(!editingConfig); setConfigDraft(gradeConfig || {}); }}
-            className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-          >
-            {editingConfig ? "Cancel" : "Edit Formula"}
-          </button>
-        </div>
-        {editingConfig && (
-          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4 border-t border-gray-100 pt-4">
-            {[
-              { key: "evaluationWeight", label: "Evaluation %" },
-              { key: "checklistWeight", label: "Checklist %" },
-              { key: "lateDeductionPct", label: "Late deduction (pts)" },
-              { key: "absenceDeductionPct", label: "Absence deduction (pts)" },
-            ].map(({ key, label }) => (
-              <label key={key} className="block">
-                <div className="mb-1 text-xs font-semibold text-gray-500">{label}</div>
-                <input
-                  type="number" min="0" max="100" step="0.5"
-                  value={configDraft[key] ?? ""}
-                  onChange={(e) => setConfigDraft((d) => ({ ...d, [key]: Number(e.target.value) }))}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                />
-              </label>
-            ))}
-            <div className="flex items-end col-span-2 md:col-span-4">
-              <button onClick={saveConfig} disabled={savingConfig} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60">
-                {savingConfig ? "Saving…" : "Save Formula"}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      <StaffGradeFormulaNote centerId={centerId} />
 
       {!staffId && <Empty msg="Select a staff member to view their performance report." />}
       {staffId && loading && <Loading />}
@@ -1950,7 +1829,7 @@ function OtherStaffPerformanceTab({ centerId, dateFrom, dateTo }) {
                   Period: {new Date(report.dateRange.from).toLocaleDateString()} – {new Date(report.dateRange.to).toLocaleDateString()}
                 </div>
                 <div className="mt-1 text-xs text-gray-500">
-                  Formula: {report.gradeConfig.evaluationWeight}% evaluation · {report.gradeConfig.checklistWeight}% checklist
+                  Formula: {formatStaffGradeFormula(report.gradeConfig)}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 text-center text-xs">
@@ -2657,11 +2536,6 @@ function CoachPerformanceTab({ centerId, dateFrom, dateTo }) {
   const [loading, setLoading] = useState(false);
   const [loadingCoaches, setLoadingCoaches] = useState(true);
 
-  // Grade config editor
-  const [gradeConfig, setGradeConfig] = useState(null);
-  const [editingConfig, setEditingConfig] = useState(false);
-  const [savingConfig, setSavingConfig] = useState(false);
-  const [configDraft, setConfigDraft] = useState({});
 
   useEffect(() => { setReportFrom(dateFrom); }, [dateFrom]);
   useEffect(() => { setReportTo(dateTo); }, [dateTo]);
@@ -2679,13 +2553,6 @@ function CoachPerformanceTab({ centerId, dateFrom, dateTo }) {
       .finally(() => setLoadingCoaches(false));
   }, [centerId]);
 
-  useEffect(() => {
-    if (!centerId) return;
-    apiJson(`/api/v1/coach-performance-grade-config?centerId=${encodeURIComponent(centerId)}`)
-      .then((r) => { setGradeConfig(r); setConfigDraft(r); })
-      .catch(() => {});
-  }, [centerId]);
-
   const loadReport = useCallback(async () => {
     if (!centerId || !coachId) return;
     setLoading(true);
@@ -2698,20 +2565,6 @@ function CoachPerformanceTab({ centerId, dateFrom, dateTo }) {
   }, [centerId, coachId, reportFrom, reportTo]);
 
   useEffect(() => { loadReport(); }, [loadReport]);
-
-  async function saveConfig() {
-    setSavingConfig(true);
-    try {
-      const r = await apiJson(`/api/v1/coach-performance-grade-config?centerId=${encodeURIComponent(centerId)}`, {
-        method: "PUT",
-        body: JSON.stringify(configDraft),
-      });
-      setGradeConfig(r);
-      setEditingConfig(false);
-      await loadReport();
-    } catch {}
-    setSavingConfig(false);
-  }
 
   return (
     <div className="space-y-4">
@@ -2734,53 +2587,7 @@ function CoachPerformanceTab({ centerId, dateFrom, dateTo }) {
         </div>
       </div>
 
-      {/* Grade Formula Config */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-extrabold text-gray-900">Overall Grade Formula</div>
-            <p className="mt-0.5 text-xs text-gray-600">
-              {gradeConfig
-                ? `${gradeConfig.teamPerformanceWeight}% team performance · ${gradeConfig.evaluationWeight}% evaluation · −${gradeConfig.lateDeductionPct}pt/late · −${gradeConfig.absenceDeductionPct}pt/absence`
-                : "Loading…"}
-            </p>
-          </div>
-          <button
-            onClick={() => { setEditingConfig(!editingConfig); setConfigDraft(gradeConfig || {}); }}
-            className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-          >
-            {editingConfig ? "Cancel" : "Edit Formula"}
-          </button>
-        </div>
-        {editingConfig && (
-          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4 border-t border-gray-100 pt-4">
-            {[
-              { key: "teamPerformanceWeight", label: "Team Performance %" },
-              { key: "evaluationWeight", label: "Evaluation %" },
-              { key: "lateDeductionPct", label: "Late deduction (pts)" },
-              { key: "absenceDeductionPct", label: "Absence deduction (pts)" },
-            ].map(({ key, label }) => (
-              <label key={key} className="block">
-                <div className="mb-1 text-xs font-semibold text-gray-500">{label}</div>
-                <input
-                  type="number" min="0" max="100" step="0.5"
-                  value={configDraft[key] ?? ""}
-                  onChange={(e) => setConfigDraft((d) => ({ ...d, [key]: Number(e.target.value) }))}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                />
-              </label>
-            ))}
-            <div className="flex items-end col-span-2 md:col-span-4">
-              <button
-                onClick={saveConfig} disabled={savingConfig}
-                className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
-              >
-                {savingConfig ? "Saving…" : "Save Formula"}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      <StaffGradeFormulaNote centerId={centerId} />
 
       {!coachId && <Empty msg="Select a coach to view their performance report." />}
       {coachId && loading && <Loading />}

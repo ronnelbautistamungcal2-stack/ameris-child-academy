@@ -1,5 +1,7 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { checklistCompletionForRange } from "@/lib/checklistReview";
+import { shiftHours, staffGradeWeightsFor, staffOverallGrade } from "@/lib/staffGrade";
 import { getTimeOffBalanceSummary } from "@/lib/time-off";
 import { isStaffPortalRole, STAFF_PORTAL_ROLES } from "@/lib/roles";
 
@@ -46,31 +48,11 @@ export default async function handler(req, res) {
     }));
     const mostRecentEvalScore = evaluations.length > 0 ? evaluations[evaluations.length - 1].overallScore : null;
 
-    // ── Checklist Grade ──
-    const totalChecklistCompletions = await prisma.dailyChecklistCompletion.count({
-      where: {
-        completedById: resolvedStaffId,
-        date: { gte: dateFrom, lte: dateTo },
-        item: { checklist: { centerId } },
-      },
-    });
-    const assignedChecklistItems = await prisma.dailyChecklistItem.count({
-      where: {
-        checklist: {
-          centerId,
-          active: true,
-          OR: [
-            { assignedUserId: resolvedStaffId },
-            { assignees: { some: { userId: resolvedStaffId } } },
-          ],
-        },
-      },
-    });
-    const dayRange = Math.max(1, Math.round((dateTo - dateFrom) / (1000 * 60 * 60 * 24)));
-    const expectedItems = assignedChecklistItems * dayRange;
-    const checklistPct = expectedItems > 0
-      ? Math.min(100, Math.round((totalChecklistCompletions / expectedItems) * 100))
-      : null;
+    // ── Checklist Grade: share of due items ticked on the days worked ──
+    const checklistStats = await checklistCompletionForRange(prisma, { userId: resolvedStaffId, centerId, dateFrom, dateTo });
+    const totalChecklistCompletions = checklistStats.completedCount;
+    const assignedChecklistItems = checklistStats.assignedCount;
+    const checklistPct = checklistStats.pct;
 
     // ── Commendations & Citations ──
     const [commendations, citations] = await Promise.all([
@@ -126,25 +108,28 @@ export default async function handler(req, res) {
       take: 10,
     });
 
-    // ── Grade Config + Overall Grade ──
-    const gradeConfig = await prisma.otherStaffGradeConfig.findUnique({ where: { centerId } });
-    const cfg = gradeConfig || { evaluationWeight: 50, checklistWeight: 50, lateDeductionPct: 1, absenceDeductionPct: 2 };
-
-    const evalNorm = mostRecentEvalScore != null ? Math.min(100, Math.round((mostRecentEvalScore / 10) * 100)) : null;
-    const checklistNorm = checklistPct;
-
-    let overallGrade = null;
-    if (evalNorm != null || checklistNorm != null) {
-      const totalW = (evalNorm != null ? cfg.evaluationWeight : 0) + (checklistNorm != null ? cfg.checklistWeight : 0);
-      if (totalW > 0) {
-        let raw = 0;
-        if (evalNorm != null) raw += (evalNorm * cfg.evaluationWeight) / totalW;
-        if (checklistNorm != null) raw += (checklistNorm * cfg.checklistWeight) / totalW;
-        raw -= lates * cfg.lateDeductionPct;
-        raw -= absences * cfg.absenceDeductionPct;
-        overallGrade = Math.max(0, Math.min(100, Math.round(raw * 10) / 10));
-      }
-    }
+    // ── Overall grade: the center's Staff Overall Grade weights ──
+    const [center, shifts] = await Promise.all([
+      prisma.center.findUnique({ where: { id: centerId }, select: { staffGradeWeights: true } }),
+      prisma.shiftSchedule.findMany({
+        where: { userId: resolvedStaffId, centerId, date: { gte: dateFrom, lte: dateTo } },
+        select: { startTime: true, endTime: true },
+      }),
+    ]);
+    const cfg = staffGradeWeightsFor(center);
+    const hoursScheduled = Math.round(shifts.reduce((sum, shift) => sum + shiftHours(shift), 0) * 10) / 10;
+    const { parts: gradeParts, grade: overallGrade } = staffOverallGrade(
+      {
+        evaluationScore: mostRecentEvalScore,
+        checklistPct,
+        citations: citations.length,
+        commendations: commendations.length,
+        hoursWorked,
+        hoursScheduled,
+      },
+      cfg,
+    );
+    const evalNorm = gradeParts.evaluations;
 
     return res.status(200).json({
       staff: { id: staff.id, name: staff.name, email: staff.email, hireDate: staff.hireDate },
@@ -155,7 +140,8 @@ export default async function handler(req, res) {
       checklist: { completedCount: totalChecklistCompletions, assignedCount: assignedChecklistItems, pct: checklistPct },
       commendations,
       citations,
-      hr: { hoursWorked, lates, absences, ptoAvailable: ptoHours, utoAvailable: utoHours },
+      hr: { hoursWorked, hoursScheduled, hrPct: gradeParts.hr, lates, absences, ptoAvailable: ptoHours, utoAvailable: utoHours },
+      gradeParts,
       training: { totalHours: totalTrainingHours, logs: trainingLogs },
       trainingPathways,
     });

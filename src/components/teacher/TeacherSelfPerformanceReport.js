@@ -1,4 +1,5 @@
 import { SkeletonTable } from "@/components/ui/Skeleton";
+import { formatStaffGradeFormula } from "@/lib/staffGrade";
 import { apiJson } from "@/lib/api";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
@@ -115,7 +116,7 @@ export default function TeacherSelfPerformanceReport({ centerId, centers, loadin
                   Period: {new Date(report.dateRange.from).toLocaleDateString()} – {new Date(report.dateRange.to).toLocaleDateString()}
                 </div>
                 <div className="mt-2 text-xs text-gray-500">
-                  Formula: {report.gradeConfig.citizenshipWeight}% citizenship · {report.gradeConfig.evaluationWeight}% evaluation · {report.gradeConfig.checklistWeight}% checklist
+                  Formula: {formatStaffGradeFormula(report.gradeConfig)}
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3 text-center text-xs">

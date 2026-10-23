@@ -1,4 +1,5 @@
 import ProfessionalDevelopment from "@/components/training/ProfessionalDevelopment";
+import { formatStaffGradeFormula } from "@/lib/staffGrade";
 import Skeleton, { SkeletonCard } from "@/components/ui/Skeleton";
 import {
   WorkspaceHero,
@@ -865,7 +866,7 @@ function StaffPerformanceReport({ centerId }) {
                   {new Date(report.dateRange.from).toLocaleDateString()} – {new Date(report.dateRange.to).toLocaleDateString()}
                 </div>
                 <div className="mt-1 text-xs text-gray-400">
-                  Formula: {report.gradeConfig?.evaluationWeight}% evaluation · {report.gradeConfig?.checklistWeight}% checklist
+                  Formula: {formatStaffGradeFormula(report.gradeConfig)}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 text-center text-xs">

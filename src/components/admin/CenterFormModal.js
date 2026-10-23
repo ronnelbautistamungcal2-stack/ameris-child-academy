@@ -11,6 +11,7 @@ import {
   MEALS,
 } from "@/lib/centerSettings";
 import { roleLabel } from "@/lib/roles";
+import { DEFAULT_STAFF_GRADE_WEIGHTS, STAFF_GRADE_PARTS } from "@/lib/staffGrade";
 import { useEffect, useMemo, useState } from "react";
 
 // Add Center / Edit Center (client mockups 2026-10-02): Basic Information,
@@ -22,6 +23,7 @@ const TABS = [
   { key: "care", label: "Care & Schedule", icon: "\u{1F4C5}" },
   { key: "rates", label: "Ages & Rates", icon: "\u{1F465}" },
   { key: "roles", label: "Roles", icon: "\u{1F464}" },
+  { key: "grade", label: "Staff Grade", icon: "\u{1F4CA}" },
 ];
 
 const STATES = "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY".split(" ");
@@ -82,6 +84,7 @@ function formFromCenter(center) {
     })),
     enrollmentFee: center?.enrollmentFee ?? "",
     roleAccess: center?.roleAccess || [],
+    staffGradeWeights: { ...DEFAULT_STAFF_GRADE_WEIGHTS, ...(center?.staffGradeWeights || {}) },
   };
 }
 
@@ -131,6 +134,50 @@ function Section({ icon, title, description, action, children }) {
       </div>
       <div className="p-4">{children}</div>
     </section>
+  );
+}
+
+// Staff Overall Grade weights (client request 2026-10-22): how much each part
+// counts toward every staff member's overall grade at this center.
+function StaffGradeSection({ weights, onChange }) {
+  const total = STAFF_GRADE_PARTS.reduce((sum, { key }) => sum + (Number(weights[key]) || 0), 0);
+  const ok = Math.abs(total - 100) < 0.01;
+  return (
+    <Section icon={"\u{1F4CA}"} title="Staff Overall Grade" description="Set how much each part counts toward a staff member's overall grade. The percentages must add up to 100.">
+      <div className="grid gap-3 sm:grid-cols-5">
+        {STAFF_GRADE_PARTS.map(({ key, label }) => (
+          <Field key={key} label={`% ${label}`}>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              className={input}
+              value={weights[key]}
+              onChange={(e) => onChange({ [key]: e.target.value === "" ? "" : Number(e.target.value) })}
+              aria-label={`${label} percent`}
+            />
+          </Field>
+        ))}
+      </div>
+      <p className={`mt-2 text-sm font-semibold ${ok ? "text-green-700" : "text-red-600"}`}>Total: {total}%{ok ? "" : " (must be 100%)"}</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <Field label="Points taken off per citation">
+          <input type="number" min="0" max="100" className={input} value={weights.citationPoints} onChange={(e) => onChange({ citationPoints: e.target.value === "" ? "" : Number(e.target.value) })} />
+        </Field>
+        <Field label="Points per commendation">
+          <input type="number" min="0" max="100" className={input} value={weights.commendationPoints} onChange={(e) => onChange({ commendationPoints: e.target.value === "" ? "" : Number(e.target.value) })} />
+        </Field>
+      </div>
+      <ul className="mt-4 list-disc space-y-1 pl-5 text-xs text-gray-600 dark:text-gray-400">
+        <li><strong>Evaluations:</strong> the latest evaluation score out of 10.</li>
+        <li><strong>Checklist:</strong> the share of due checklist items ticked on the days worked.</li>
+        <li><strong>Citations:</strong> starts at 100% and loses the points above for each citation in the period.</li>
+        <li><strong>Commendations:</strong> the points above for each commendation in the period, up to 100%.</li>
+        <li><strong>HR:</strong> hours worked out of scheduled shift hours.</li>
+        <li>A part with no data yet (for example no evaluation) is left out and the others are scaled up.</li>
+      </ul>
+    </Section>
   );
 }
 
@@ -231,7 +278,7 @@ export default function CenterFormModal({ center, onClose, onSaved }) {
             &#10005;
           </button>
         </div>
-        <div className="mx-6 mt-4 grid shrink-0 grid-cols-2 overflow-hidden rounded-xl border border-blue-100 sm:grid-cols-4 dark:border-gray-700" role="tablist">
+        <div className="mx-6 mt-4 grid shrink-0 grid-cols-2 overflow-hidden rounded-xl border border-blue-100 sm:grid-cols-5 dark:border-gray-700" role="tablist">
           {TABS.map((t) => (
             <button
               key={t.key}
@@ -494,6 +541,10 @@ export default function CenterFormModal({ center, onClose, onSaved }) {
                 <input aria-label="Initial enrollment fee" inputMode="decimal" className={`${input} max-w-xs`} value={form.enrollmentFee} onChange={(e) => set({ enrollmentFee: e.target.value })} placeholder="$0.00" />
               </div>
             </>
+          ) : null}
+
+          {tab === "grade" ? (
+            <StaffGradeSection weights={form.staffGradeWeights} onChange={(patch) => set({ staffGradeWeights: { ...form.staffGradeWeights, ...patch } })} />
           ) : null}
 
           {tab === "roles" ? (

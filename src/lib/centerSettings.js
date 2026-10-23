@@ -3,6 +3,7 @@
 // sends, so the API and the form agree on the shape of the JSON settings.
 
 import { hasEmployeeRole, ROLE_OPTIONS } from "@/lib/roles";
+import { parseStaffGradeWeights } from "@/lib/staffGrade";
 
 export const CENTER_STATUSES = [
   { value: "ACTIVE", label: "Active" },
@@ -189,6 +190,7 @@ export function parseCenterInput(body = {}, { partial = false } = {}) {
     ["mealAgeGroups", parseMealAgeGroups],
     ["meals", parseMeals],
     ["ageRates", parseAgeRates],
+    ["staffGradeWeights", parseStaffGradeWeights],
   ];
   for (const [key, parse] of jsonFields) {
     if (!has(key)) continue;

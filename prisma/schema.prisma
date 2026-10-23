@@ -329,6 +329,8 @@ model Center {
   mealAgeGroups               Json? // [{ fromMonths, toMonths }] served the same foods
   meals                       Json? // { breakfast: { provided, catered }, ... }
   ageRates                    Json? // [{ label, monthly, weekly, daily, hourly }]
+  // Staff Overall Grade weights (src/lib/staffGrade.js); null = defaults.
+  staffGradeWeights           Json?
   enrollmentFee               Float?
   // Roles tab: saved for a future access structure; not enforced yet.
   roleAccess                  Role[]                       @default([])

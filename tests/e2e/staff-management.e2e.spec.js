@@ -299,9 +299,8 @@ test.describe("Staff management browser QA", () => {
     if (await centerSelect.isVisible().catch(() => false)) {
       await centerSelect.selectOption({ label: demo.center.name });
     }
-    await page.getByRole("button", { name: "Evaluations" }).click();
+    await page.getByRole("tab", { name: "Evaluations" }).click();
 
-    await expect(page.getByText("Submitted Evaluations", { exact: true })).toBeVisible();
     await expect(metricCard(page, "Visible Evaluations")).toContainText("1");
     await expect(metricCard(page, "Awaiting Acknowledgement")).toContainText("1");
     await expect(metricCard(page, "Acknowledged")).toContainText("0");

@@ -37,9 +37,11 @@ function gradeLetter(g) {
   return "F";
 }
 
-export default function TeacherSelfPerformanceReport({ centerId, centers, loading: centersLoading, setCenterId }) {
-  const [dateFrom, setDateFrom] = useState(defaultDateFrom());
-  const [dateTo, setDateTo] = useState(defaultDateTo());
+// userId: whose report to show (another staff member's from Staff Performance);
+// left out, the signed-in user's own.
+export default function TeacherSelfPerformanceReport({ centerId, centers, loading: centersLoading, setCenterId, userId = "me", initialFrom, initialTo }) {
+  const [dateFrom, setDateFrom] = useState(initialFrom || defaultDateFrom());
+  const [dateTo, setDateTo] = useState(initialTo || defaultDateTo());
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -47,12 +49,12 @@ export default function TeacherSelfPerformanceReport({ centerId, centers, loadin
     if (!centerId) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams({ centerId, teacherId: "me", from: dateFrom, to: dateTo });
+      const params = new URLSearchParams({ centerId, teacherId: userId, from: dateFrom, to: dateTo });
       const r = await apiJson(`/api/v1/analytics/teacher-perf-report?${params}`);
       setReport(r);
     } catch {}
     setLoading(false);
-  }, [centerId, dateFrom, dateTo]);
+  }, [centerId, dateFrom, dateTo, userId]);
 
   useEffect(() => { loadReport(); }, [loadReport]);
 
@@ -165,7 +167,7 @@ export default function TeacherSelfPerformanceReport({ centerId, centers, loadin
             <div className="rounded-2xl border border-gray-200 bg-white p-5">
               <div className="text-sm font-extrabold text-gray-900">Evaluation Grade</div>
               <p className="mt-0.5 text-xs text-gray-500">Evaluation scores from admin — score over time.</p>
-              <div className="mt-1 text-xs text-gray-600">Most recent: <span className="font-bold text-gray-900">{report.evaluation?.mostRecentScore != null ? `${report.evaluation.mostRecentScore}/10` : "—"}</span></div>
+              <div className="mt-1 text-xs text-gray-600">Most recent: <span className="font-bold text-gray-900">{report.evaluation?.mostRecentScore != null ? `${report.evaluation.mostRecentScore}%` : "—"}</span></div>
               <div className="mt-3">
                 <TrendLineChart
                   data={report.evaluation?.trend || []}

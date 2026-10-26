@@ -67,6 +67,36 @@ export const ADMIN_REPORTS = [
       "Every infant's feeding plan on one printable sheet, straight from their profiles.",
   },
   {
+    key: "milestone-progress",
+    label: "Milestone Progress Report",
+    icon: "📈",
+    description: "Center average age at each step vs. the world standard age.",
+  },
+  {
+    key: "child-steps",
+    label: "Child Steps of Progression",
+    icon: "🧒",
+    description: "One child's age at each step vs. the world standard age.",
+  },
+  {
+    key: "infant-feeding",
+    label: "Infant Feeding Report",
+    icon: "🍼",
+    description: "One child's bottles, meals and kitchen portions for a date range.",
+  },
+  {
+    key: "meal-production",
+    label: "Meal Production Record",
+    icon: "🍽️",
+    description: "Served components with planned and actual numbers served per meal.",
+  },
+  {
+    key: "meal-claim",
+    label: "Meal Claim",
+    icon: "🧾",
+    description: "Meals logged per child and day, with totals and a summary.",
+  },
+  {
     key: "query",
     label: "Custom Query",
     icon: "🔎",

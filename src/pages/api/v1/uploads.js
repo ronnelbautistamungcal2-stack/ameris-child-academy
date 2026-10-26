@@ -27,8 +27,9 @@ export default async function handler(req, res) {
 
   // Parents upload the documents their required forms ask for (immunization
   // records, signed handbooks), so they belong here too. Student Support
-  // uploads documents for Individual Progress Plans.
-  if (!hasAnyRole(session.user, ["ADMIN", "COACH", "TEACHER", "PARENT", "STUDENT_SUPPORT"])) {
+  // uploads documents for Individual Progress Plans; every staff member can
+  // attach a certificate when recording a training.
+  if (!hasAnyRole(session.user, ["ADMIN", "COACH", "TEACHER", "PARENT", "STUDENT_SUPPORT", "OTHER_STAFF", "KITCHEN_STAFF", "HR_STAFF"])) {
     return res.status(403).json({ error: "Forbidden" });
   }
 

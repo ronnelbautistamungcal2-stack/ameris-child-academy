@@ -89,6 +89,14 @@ const ROLE_SECTIONS = {
         { href: "/staff/student-support/student-performance", label: "Student Performance Report" },
       ],
     },
+    {
+      label: "Reports",
+      icon: IconStudents,
+      children: [
+        { href: "/staff/student-support/reports/milestone-progress", label: "Milestone Progress Report" },
+        { href: "/staff/student-support/reports/child-steps", label: "Child Steps of Progression" },
+      ],
+    },
   ],
 };
 

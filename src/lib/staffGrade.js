@@ -2,7 +2,7 @@
 // the Add/Edit Center form, how much evaluations, checklist and HR count
 // (adding up to 100), then a % taken off per citation and added per
 // commendation. Each weighted part is a 0–100 %:
-//   Evaluations – latest evaluation score out of 10
+//   Evaluations – the latest evaluation's overall score (already a %)
 //   Checklist   – share of due checklist items ticked
 //   HR          – hours worked / scheduled shift hours (max 100)
 // A part with no data (e.g. no evaluation yet) is left out and the others are
@@ -60,12 +60,12 @@ const round1 = (n) => Math.round(n * 10) / 10;
 /**
  * The parts as 0–100 % (null = no data), the citation/commendation
  * adjustments in points, and the overall grade (null when no part has data).
- * Inputs: evaluationScore (0–10) | null, checklistPct | null, citations,
+ * Inputs: evaluationPct (0–100) | null, checklistPct | null, citations,
  * commendations (counts), hoursWorked, hoursScheduled.
  */
 export function staffOverallGrade(inputs, weights = DEFAULT_STAFF_GRADE_WEIGHTS) {
   const parts = {
-    evaluations: inputs.evaluationScore == null ? null : round1(clamp((inputs.evaluationScore / 10) * 100)),
+    evaluations: inputs.evaluationPct == null ? null : round1(clamp(inputs.evaluationPct)),
     checklist: inputs.checklistPct == null ? null : round1(clamp(inputs.checklistPct)),
     hr: inputs.hoursScheduled > 0 ? round1(clamp(((inputs.hoursWorked || 0) / inputs.hoursScheduled) * 100)) : null,
   };

@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
 import { badRequest } from "@/lib/api-error";
 import prisma from "@/lib/prisma";
 import { STAFF_PORTAL_ROLES } from "@/lib/roles";
@@ -39,6 +39,7 @@ export default async function handler(req, res) {
     res.setHeader("Allow", ["GET", "PUT"]);
     return res.status(405).end();
   } catch (e) {
+    if (e?.status && e.status < 500) return res.status(e.status).json({ error: e.message });
     console.error("evaluations/[id] error:", e);
     return res.status(500).json({ error: "Internal server error" });
   }
@@ -59,7 +60,8 @@ async function handleGet(req, res, session) {
 
   if (!evaluation) return res.status(404).json({ error: "Evaluation not found" });
 
-  if (session.user.role !== "ADMIN" && evaluation.teacherId !== session.user.id) {
+  const coachHere = session.user.role === "COACH" && (await hasAccessToCenter(session.user.id, evaluation.centerId));
+  if (session.user.role !== "ADMIN" && !coachHere && evaluation.teacherId !== session.user.id) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -67,13 +69,16 @@ async function handleGet(req, res, session) {
 }
 
 async function handlePut(req, res, session) {
-  if (session.user.role !== "ADMIN") {
-    return res.status(403).json({ error: "Only admins can update evaluations" });
+  if (!["ADMIN", "COACH"].includes(session.user.role)) {
+    return res.status(403).json({ error: "Only admins and coaches can update evaluations" });
   }
 
   const { id } = req.query;
   const evaluation = await prisma.teacherEvaluation.findUnique({ where: { id } });
   if (!evaluation) return res.status(404).json({ error: "Evaluation not found" });
+  if (session.user.role === "COACH" && !(await hasAccessToCenter(session.user.id, evaluation.centerId))) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
 
   const body = ensureObject(req.body || {});
   const status = optionalEnum(body, "status", EVALUATION_STATUSES);
@@ -91,18 +96,21 @@ async function handlePut(req, res, session) {
   });
   const goals = optionalString(body, "goals", { nullable: true });
   const notes = optionalString(body, "notes", { nullable: true });
+  const evaluationType = optionalString(body, "evaluationType", { nullable: true });
   const periodStart = optionalDate(body, "periodStart", { nullable: true });
   const periodEnd = optionalDate(body, "periodEnd", { nullable: true });
   const period = optionalString(body, "period");
 
   const data = {};
   if (status !== undefined) data.status = status;
-  if (overallScore !== undefined) data.overallScore = overallScore;
+  // optionalNumber gives null for a missing field; only change the score when sent.
+  if (Object.prototype.hasOwnProperty.call(body, "overallScore")) data.overallScore = overallScore;
   if (categories !== undefined) data.categories = categories;
   if (strengths !== undefined) data.strengths = strengths;
   if (areasForImprovement !== undefined) data.areasForImprovement = areasForImprovement;
   if (goals !== undefined) data.goals = goals;
   if (notes !== undefined) data.notes = notes;
+  if (evaluationType !== undefined) data.evaluationType = evaluationType;
 
   const hasPeriodStartChange = Object.prototype.hasOwnProperty.call(body, "periodStart");
   const hasPeriodEndChange = Object.prototype.hasOwnProperty.call(body, "periodEnd");

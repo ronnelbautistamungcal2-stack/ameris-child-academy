@@ -107,7 +107,7 @@ export const ADMIN_NAV_ITEMS = [
       { href: "/admin/checklists", label: "Checklist Manager" },
       { href: "/admin/checklist-review", label: "Checklist Review" },
       {
-        href: "/admin/teacher-training-pathways",
+        href: "/admin/training-pathways",
         label: "Staff Professional Development",
       },
       { href: "/admin/character-guide", label: "Character Guide" },

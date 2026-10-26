@@ -36,7 +36,7 @@ export default async function handler(req, res) {
 
     // ── Evaluation Grade ──
     const evaluations = await prisma.teacherEvaluation.findMany({
-      where: { teacherId: resolvedStaffId, centerId, NOT: { overallScore: null } },
+      where: { teacherId: resolvedStaffId, centerId, NOT: { overallScore: null }, status: { not: "DRAFT" } },
       select: { id: true, period: true, periodStart: true, overallScore: true, status: true, createdAt: true },
       orderBy: { createdAt: "asc" },
     });
@@ -120,7 +120,7 @@ export default async function handler(req, res) {
     const hoursScheduled = Math.round(shifts.reduce((sum, shift) => sum + shiftHours(shift), 0) * 10) / 10;
     const { parts: gradeParts, adjustments: gradeAdjustments, grade: overallGrade } = staffOverallGrade(
       {
-        evaluationScore: mostRecentEvalScore,
+        evaluationPct: mostRecentEvalScore,
         checklistPct,
         citations: citations.length,
         commendations: commendations.length,

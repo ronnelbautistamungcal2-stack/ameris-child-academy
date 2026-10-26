@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { accessibleCenterIds, getSession } from "@/lib/auth";
 import { EMPLOYED_WHERE } from "@/lib/employment";
 import { CURRENT_IPP_STATUSES, ippNeedsReview } from "@/lib/ipp";
 import prisma from "@/lib/prisma";
@@ -43,11 +43,21 @@ export default async function handler(req, res) {
       res.setHeader("Allow", ["GET"]);
       return res.status(405).end();
     }
-    if (!hasAnyRole(session.user, ["ADMIN"])) return res.status(403).json({ error: "Forbidden" });
+    // Admins see every center; coaches and HR see the Staff Performance
+    // Overview (staffOnly) for their own centers.
+    const isAdmin = hasAnyRole(session.user, ["ADMIN"]);
+    if (!isAdmin && !hasAnyRole(session.user, ["COACH", "HR_STAFF"])) return res.status(403).json({ error: "Forbidden" });
+    const staffOnly = !isAdmin || req.query.staffOnly === "1";
+    const scope = isAdmin ? null : (await accessibleCenterIds(session.user.id)) || [];
 
-    const centers = await prisma.center.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
+    const centers = await prisma.center.findMany({
+      where: scope ? { id: { in: scope } } : {},
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
     const requested = req.query.centerId ? String(req.query.centerId) : "";
     const center = requested ? centers.find((c) => c.id === requested) : centers.find((c) => c.name === "Demo Center") || centers[0];
+    if (!center && requested && !isAdmin) return res.status(403).json({ error: "Forbidden" });
     if (!center) return res.status(requested ? 404 : 200).json(requested ? { error: "Center not found" } : { centers: [], staff: [], students: [] });
 
     const today = new Date();
@@ -196,6 +206,9 @@ export default async function handler(req, res) {
       member.sopPct = averagePercent(students.filter((st) => st.teacherIds.includes(member.id)).map((st) => sopByChild[st.id]));
     }
 
+    if (staffOnly) {
+      return res.status(200).json({ centers, center, range: { from: dayKey(dateFrom), to: dayKey(dateTo) }, staff });
+    }
     return res.status(200).json({
       centers,
       center,

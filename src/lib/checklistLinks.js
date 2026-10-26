@@ -26,3 +26,5 @@ export function checklistItemHref(item) {
   if (!url || !item?.id || !isLogActivityLink(url)) return url;
   return `${url}${url.includes("?") ? "&" : "?"}checklistItem=${encodeURIComponent(item.id)}`;
 }
+
+export const LOG_FIRST_MESSAGE = "You must log this activity before checking off";

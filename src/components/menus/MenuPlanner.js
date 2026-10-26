@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
+import InfantPortionsPanel from "@/components/menus/InfantPortionsPanel";
 import {
   AGE_GROUPS,
   COMPONENTS,
@@ -120,6 +121,23 @@ export default function MenuPlanner({ editable = false, mode: modeProp, title = 
   useEffect(() => {
     loadWeek(weekStart, centerId);
   }, [loadWeek, weekStart, centerId]);
+
+  // Kitchen only: how many infants have portions recorded per day and row.
+  const [portionSummary, setPortionSummary] = useState({});
+  const [portionPanel, setPortionPanel] = useState(null); // { date, ageGroup }
+  const loadPortions = useCallback(async () => {
+    if (mode !== "kitchen" || !centerId) return;
+    try {
+      const query = new URLSearchParams({ centerId, start: toDateKey(weekStart), days: "5", meal: mealKey });
+      const res = await fetch(`/api/v1/menus/infant-portions?${query}`);
+      if (res.ok) setPortionSummary((await res.json()).summary || {});
+    } catch {
+      // the badges just stay empty
+    }
+  }, [mode, centerId, weekStart, mealKey]);
+  useEffect(() => {
+    loadPortions();
+  }, [loadPortions]);
 
   // Stay on a meal the center provides.
   useEffect(() => {
@@ -518,6 +536,13 @@ export default function MenuPlanner({ editable = false, mode: modeProp, title = 
                             </div>
                           </div>
                         ))}
+                        {mode === "kitchen" && (group.key === "youngerInfants" || group.key === "olderInfants") && (
+                          <InfantPortionsButton
+                            summary={portionSummary[`${date}|${group.key}`]}
+                            tone={tone}
+                            onClick={() => setPortionPanel({ date, ageGroup: group.key })}
+                          />
+                        )}
                       </div>
                     </td>
                   ))}
@@ -527,6 +552,20 @@ export default function MenuPlanner({ editable = false, mode: modeProp, title = 
           </tbody>
         </table>
       </div>
+
+      {portionPanel && (
+        <InfantPortionsPanel
+          centerId={centerId}
+          date={portionPanel.date}
+          meal={mealKey}
+          ageGroup={portionPanel.ageGroup}
+          onClose={() => setPortionPanel(null)}
+          onSaved={async () => {
+            setPortionPanel(null);
+            await loadPortions();
+          }}
+        />
+      )}
 
       {/* Quick reference */}
       {meal && meals.length > 0 && (
@@ -548,6 +587,26 @@ export default function MenuPlanner({ editable = false, mode: modeProp, title = 
       </div>
       )}
     </div>
+  );
+}
+
+function InfantPortionsButton({ summary, tone, onClick }) {
+  const done = summary && summary.total > 0 && summary.recorded >= summary.total;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`menu-no-print flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-left ${tone.card}`}
+    >
+      <span aria-hidden className={done ? "text-emerald-600" : tone.label}>{done ? "✔" : "🍼"}</span>
+      <span className="min-w-0 flex-1">
+        <span className={`block text-[11px] font-black ${tone.label}`}>Infant Portions</span>
+        <span className="block text-[10px] text-gray-600 dark:text-gray-400">
+          {summary ? `${summary.recorded} of ${summary.total} recorded` : "Enter portions"}
+        </span>
+      </span>
+      <span aria-hidden className={tone.label}>›</span>
+    </button>
   );
 }
 

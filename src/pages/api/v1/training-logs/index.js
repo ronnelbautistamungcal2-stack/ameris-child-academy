@@ -88,6 +88,10 @@ export default createApiHandler(async function handler(req, res) {
   const category = optionalString(body, "category", { nullable: true });
   const certificateUrl = optionalString(body, "certificateUrl", { nullable: true });
   const certificateFileName = optionalString(body, "certificateFileName", { nullable: true });
+  // Record Training: non-interactive / interactive hours and the source.
+  const nonInteractiveHours = optionalNumber(body, "nonInteractiveHours", { min: 0, nullable: true });
+  const interactiveHours = optionalNumber(body, "interactiveHours", { min: 0, nullable: true });
+  const source = optionalString(body, "source", { nullable: true });
   const rawUserIds = Array.isArray(body.userIds) ? body.userIds : [];
   const normalizedUserIds = rawUserIds
     .map((value) => (typeof value === "string" ? value.trim() : ""))
@@ -114,6 +118,9 @@ export default createApiHandler(async function handler(req, res) {
           category: category || "Other",
           certificateUrl,
           certificateFileName,
+          nonInteractiveHours,
+          interactiveHours,
+          source,
           recordedById: session.user.id,
         },
         include: {

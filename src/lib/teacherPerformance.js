@@ -118,6 +118,7 @@ export async function teacherPerformance(prisma, { teacherId, centerId, dateFrom
       teacherId: teacherId,
       centerId,
       NOT: { overallScore: null },
+      status: { not: "DRAFT" },
       OR: [
         { periodStart: { gte: dateFrom, lte: dateTo } },
         { periodEnd: { gte: dateFrom, lte: dateTo } },
@@ -219,7 +220,7 @@ export async function teacherPerformance(prisma, { teacherId, centerId, dateFrom
   const hoursScheduled = Math.round(shifts.reduce((sum, shift) => sum + shiftHours(shift), 0) * 10) / 10;
   const { parts: gradeParts, adjustments: gradeAdjustments, grade: overallGrade } = staffOverallGrade(
     {
-      evaluationScore: mostRecentEvalScore,
+      evaluationPct: mostRecentEvalScore,
       checklistPct,
       citations: citations.length,
       commendations: commendations.length,

@@ -29,6 +29,7 @@ export const PARENT_NAV_ITEMS = [
       { href: "/parent/forms", label: "Forms & Renewals" },
       { href: "/parent/billing", label: "Billing" },
       { href: "/parent/involvement", label: "Parent Involvement" },
+      { href: "/parent/steps-report", label: "Steps of Progression Report" },
     ],
   },
   {

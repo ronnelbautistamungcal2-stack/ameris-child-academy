@@ -7,7 +7,7 @@ import { canUserBeAssignedChecklist } from "@/lib/dailyChecklistAssignees";
 import prisma from "@/lib/prisma";
 import { getTeacherClassIds } from "@/lib/teacherScope";
 import { isStaffPortalRole, STAFF_PORTAL_ROLES } from "@/lib/roles";
-import { isLogActivityLink } from "@/lib/checklistLinks";
+import { LOG_FIRST_MESSAGE, isLogActivityLink } from "@/lib/checklistLinks";
 
 function todayDateString() {
   const value = new Date();
@@ -228,7 +228,7 @@ export default async function handler(req, res) {
         where: { itemId_userId_date: { itemId, userId: completedById, date: completionDate } },
       });
       if (!visit) {
-        return res.status(409).json({ error: "Open Log Activity from this item before marking it done." });
+        return res.status(409).json({ error: LOG_FIRST_MESSAGE });
       }
     }
 

@@ -165,7 +165,7 @@ function StaffGradeSection({ weights, onChange, payPeriod, onPayPeriodChange }) 
           </Field>
         </div>
         <ul className="mt-4 list-disc space-y-1 pl-5 text-xs text-gray-600 dark:text-gray-400">
-          <li><strong>Evaluations:</strong> the latest evaluation score out of 10.</li>
+          <li><strong>Evaluations:</strong> the latest evaluation&apos;s overall score.</li>
           <li><strong>Checklist:</strong> the share of due checklist items ticked on the days worked.</li>
           <li><strong>HR:</strong> hours worked out of scheduled shift hours.</li>
           <li>A part with no data yet (for example no evaluation) is left out and the others are scaled up.</li>

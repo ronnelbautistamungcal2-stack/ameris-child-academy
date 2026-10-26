@@ -8,7 +8,7 @@ import { NAVY } from "@/components/reports/reportUi";
 import Skeleton from "@/components/ui/Skeleton";
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
-import { checklistItemHref } from "@/lib/checklistLinks";
+import { LOG_FIRST_MESSAGE, checklistItemHref } from "@/lib/checklistLinks";
 import { collectChecklistLessonAttachments } from "@/lib/checklistLessonResources";
 import { formatDayKey, formatTaskTime, shiftDayKey, sortByTaskTime, todayKey } from "@/lib/checklistTime";
 import { getChecklistClassRooms } from "@/lib/dailyChecklistClassrooms";
@@ -365,6 +365,7 @@ export default function DailyChecklistWorkspace({ Layout, mode = "staff", title 
 }
 
 function ChecklistItems({ checklist, isDone, canComplete, busyItem, onToggle, onDetails }) {
+  const [blockedId, setBlockedId] = useState("");
   const items = sortByTaskTime(checklist.items);
   if (!items.length) return <p className="text-sm text-gray-500">Nothing is due on this checklist today.</p>;
   return (
@@ -378,10 +379,14 @@ function ChecklistItems({ checklist, isDone, canComplete, busyItem, onToggle, on
             <input
               type="checkbox"
               checked={done}
-              disabled={!canComplete || busyItem === item.id || needsVisit}
-              onChange={() => onToggle(item)}
+              disabled={!canComplete || busyItem === item.id}
+              onChange={() => {
+                // Log Activity items can't be ticked until the link was opened (client 2026-10-23).
+                if (needsVisit) return setBlockedId(item.id);
+                setBlockedId("");
+                onToggle(item);
+              }}
               aria-label={item.title}
-              title={needsVisit ? "Open Log Activity from this item first" : undefined}
               className="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 disabled:cursor-not-allowed"
             />
             <div className="min-w-0 flex-1">
@@ -402,7 +407,11 @@ function ChecklistItems({ checklist, isDone, canComplete, busyItem, onToggle, on
                   ) : null}
                 </div>
               ) : null}
-              {needsVisit ? <div className="mt-1 text-[11px] font-semibold text-amber-700">Open Log Activity from this item before checking it off.</div> : null}
+              {needsVisit && blockedId === item.id ? (
+                <div role="alert" className="mt-1 rounded border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700">{LOG_FIRST_MESSAGE}</div>
+              ) : needsVisit ? (
+                <div className="mt-1 text-[11px] font-semibold text-amber-700">Click the Log Activity link to log this activity before checking it off.</div>
+              ) : null}
             </div>
           </li>
         );

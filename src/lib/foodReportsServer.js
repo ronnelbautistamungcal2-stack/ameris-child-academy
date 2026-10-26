@@ -81,7 +81,8 @@ export async function infantFeedingReport({ centerId, childId, from, to }) {
         time: time.label,
         minutes: time.minutes,
         activity: "Bottle",
-        milk: details.formula || formula || "Bottle",
+        // The client's sheet says "Formula" here; the brand is in the header.
+        milk: "Formula",
         offered: details.amount || "",
         consumed: details.consumed || "",
         components: [],
@@ -96,6 +97,8 @@ export async function infantFeedingReport({ centerId, childId, from, to }) {
   // Kitchen portions fill in each meal's components (a meal the teacher didn't log still shows).
   const mealOrder = MEALS.map((m) => m.key);
   for (const p of portions) {
+    // Formula shows on the bottle rows only, as on the client's sheet.
+    if (p.component === "breastMilkOrFormula") continue;
     const date = p.date.toISOString().slice(0, 10);
     const day = dayOf(date);
     let row = day.rows.find((r) => r.meal === p.meal);

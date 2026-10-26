@@ -101,8 +101,8 @@ test.describe("Food and milestone reports @api", () => {
     expect(report.child).toMatchObject({ name: "Mia Turner", formula: "Similac" });
     expect(report.days).toHaveLength(1);
     expect(report.days[0].rows).toEqual([
-      expect.objectContaining({ time: "8:15 AM", activity: "Bottle", milk: "Similac", offered: "4", consumed: "4" }),
-      expect.objectContaining({ time: "8:38 AM", activity: "Breakfast", components: ["Breast Milk or Formula — 4 oz", "Oatmeal — 0.5 tbsp"] }),
+      expect.objectContaining({ time: "8:15 AM", activity: "Bottle", milk: "Formula", offered: "4", consumed: "4" }),
+      expect.objectContaining({ time: "8:38 AM", activity: "Breakfast", components: ["Oatmeal — 0.5 tbsp"] }),
     ]);
     expect((await apiGet(request, `/api/v1/reports/infant-feeding?centerId=${center.id}`, await loginAsKitchenStaff(request))).status()).toBe(403);
   });

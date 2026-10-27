@@ -1,4 +1,5 @@
 import { CenterSelect, NAVY, ReportControls, ReportMessage, ReportSheet, input, longDate, monthRange, shortDate, useReportCenters } from "@/components/reports/ReportSheet";
+import { isCurrentlyEnrolled, useReportFilters } from "@/components/reports/ReportFilters";
 import { apiJson } from "@/lib/api";
 import { MEALS } from "@/lib/menuPlan";
 import { Fragment, useCallback, useEffect, useState } from "react";
@@ -28,6 +29,7 @@ function DateRange({ range, setRange }) {
 const dayHeading = (key) => new Date(`${key}T00:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "2-digit", year: "numeric" });
 
 export function InfantFeedingReport() {
+  const filters = useReportFilters();
   const { centers, centerId, setCenterId } = useReportCenters();
   const [children, setChildren] = useState([]);
   const [childId, setChildId] = useState("");
@@ -60,7 +62,9 @@ export function InfantFeedingReport() {
           Child
           <select value={childId} onChange={(e) => setChildId(e.target.value)} className={input}>
             <option value="">Select a child...</option>
-            {children.map((c) => <option key={c.id} value={c.id}>{c.name}{c.enrolled ? "" : " (not enrolled)"}</option>)}
+            {children
+              .filter((c) => filters.children === "ALL" || isCurrentlyEnrolled(c) || c.id === childId)
+              .map((c) => <option key={c.id} value={c.id}>{c.name}{c.enrolled ? "" : " (not enrolled)"}</option>)}
           </select>
         </label>
         <DateRange range={range} setRange={setRange} />
@@ -222,6 +226,8 @@ export function MealProductionReport() {
 }
 
 export function MealClaimReport() {
+  const filters = useReportFilters();
+  const enrolledOnly = filters.children !== "ALL";
   const { centers, centerId, setCenterId } = useReportCenters();
   const [range, setRange] = useState(() => monthRange());
   const [view, setView] = useState("claim");
@@ -232,11 +238,11 @@ export function MealClaimReport() {
     if (!centerId) return;
     setData(null);
     setError("");
-    const qs = new URLSearchParams({ centerId, ...range });
+    const qs = new URLSearchParams({ centerId, ...range, ...(enrolledOnly ? { enrolledOnly: "1" } : {}) });
     apiJson(`/api/v1/reports/meal-claim?${qs}`)
       .then(setData)
       .catch((e) => setError(e.message || "Failed to load the report"));
-  }, [centerId, range]);
+  }, [centerId, range, enrolledOnly]);
 
   const toggle = (
     <div className="flex overflow-hidden rounded-lg border border-blue-300">

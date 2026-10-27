@@ -7,6 +7,23 @@ import Skeleton from "@/components/ui/Skeleton";
 import { useToast } from "@/contexts/ToastContext";
 import { useNewMessages, useUserSocket } from "@/hooks/useSocket";
 import { apiJson } from "@/lib/api";
+import {
+  MESSAGE_PRIORITY_LEVELS,
+  canCompleteWorkflow,
+  canMarkReadyForReview,
+  canReopenWorkflow,
+  getAvailableThreadTypesForRole,
+  isWorkflowThread,
+  supportsDueDate,
+  supportsPriority,
+  threadTypeLabel,
+  workflowStatusLabel,
+} from "@/lib/messageWorkflows";
+
+// Messages for every role (client requests 2026-09-28 and 2026-10-02). Parents
+// and staff get the inbox layout (Inbox / Sent / Archived); coaches and admins
+// get the workflow layout (Messages / Open Points / Requests, Current / Past)
+// with Ready for Review and Mark as Completed. Everyone can archive or delete.
 
 const NAVY = "text-[#12386a] dark:text-slate-100";
 const PRIMARY_BUTTON =
@@ -22,6 +39,24 @@ const TABS = [
   { id: "archived", label: "Archived" },
 ];
 
+const WORKFLOW_TABS = [
+  { id: "current", label: "Current" },
+  { id: "past", label: "Past" },
+  { id: "archived", label: "Archived" },
+];
+
+const TYPE_PILL = {
+  MESSAGE: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200",
+  OPEN_POINT: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
+  REQUEST: "bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200",
+  ACCOMMODATION: "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-200",
+};
+const STATUS_PILL = {
+  OPEN: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200",
+  READY_FOR_REVIEW: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200",
+  COMPLETED: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200",
+};
+
 const READ_FILTERS = [
   { id: "all", label: "All Messages" },
   { id: "unread", label: "Unread" },
@@ -32,6 +67,7 @@ const READ_FILTERS = [
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 // Parents write to the center, never to other families.
 const FAMILY_ROLES = new Set(["PARENT", "SUBSCRIBER"]);
+const WORKFLOW_ROLES = new Set(["ADMIN", "COACH"]);
 
 function queryValue(value) {
   return typeof value === "string" ? value : "";
@@ -117,18 +153,54 @@ function threadFolders(thread) {
   return folders;
 }
 
-export default function ParentMessages() {
+/** Coach/admin tabs: Current (not completed), Past (completed), Archived. */
+function workflowFolder(thread) {
+  if (thread.archivedAt) return "archived";
+  return thread.status === "COMPLETED" ? "past" : "current";
+}
+
+function relativeDays(value) {
+  if (!value) return "";
+  const days = Math.floor((Date.now() - new Date(value).getTime()) / 86400000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "1d ago";
+  return `${days}d ago`;
+}
+
+export function TypePill({ type }) {
+  return (
+    <span className={`inline-block whitespace-nowrap rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${TYPE_PILL[type] || TYPE_PILL.MESSAGE}`}>
+      {threadTypeLabel(type)}
+    </span>
+  );
+}
+
+export function StatusPill({ status }) {
+  return (
+    <span className={`inline-block whitespace-nowrap rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${STATUS_PILL[status] || STATUS_PILL.OPEN}`}>
+      {workflowStatusLabel(status)}
+    </span>
+  );
+}
+
+export default function MessagesWorkspace({ variant: variantProp } = {}) {
   const { data: session } = useSession();
   const router = useRouter();
   const toast = useToast();
   const userId = session?.user?.id;
+  const role = String(session?.user?.role || "").toUpperCase();
+  const isAdmin = role === "ADMIN";
+  const variant = variantProp || (WORKFLOW_ROLES.has(role) ? "workflow" : "inbox");
+  const workflowView = variant === "workflow";
   const socket = useUserSocket(userId);
   const queryThreadId = queryValue(router.query.threadId);
 
   const [threads, setThreads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState("inbox");
+  const [tab, setTab] = useState(workflowView ? "current" : "inbox");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
   const [readFilter, setReadFilter] = useState("all");
   const [activeId, setActiveId] = useState(queryThreadId);
@@ -139,6 +211,13 @@ export default function ParentMessages() {
   const [filing, setFiling] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeSeed, setComposeSeed] = useState(null);
+
+  useEffect(() => {
+    setTab((current) => {
+      const ids = (workflowView ? WORKFLOW_TABS : TABS).map((t) => t.id);
+      return ids.includes(current) ? current : ids[0];
+    });
+  }, [workflowView]);
 
   const activeIdRef = useRef(activeId);
   useEffect(() => {
@@ -256,10 +335,16 @@ export default function ParentMessages() {
           date: last?.createdAt || thread.updatedAt,
           unread: (thread.unreadCount || 0) > 0,
           hasAttachment: Boolean(last?.attachmentUrl),
-          folders: threadFolders(thread),
+          folders: workflowView ? new Set([workflowFolder(thread)]) : threadFolders(thread),
+          type: thread.type || "MESSAGE",
+          status: thread.status || "OPEN",
+          priority: thread.priority || "",
+          dueDate: thread.dueDate || null,
+          updatedAt: thread.updatedAt,
+          workflow: isWorkflowThread(thread.type),
         };
       }),
-    [threads, userId],
+    [threads, userId, workflowView],
   );
 
   const inboxUnread = useMemo(
@@ -274,10 +359,22 @@ export default function ParentMessages() {
       if (readFilter === "unread" && !row.unread) return false;
       if (readFilter === "read" && row.unread) return false;
       if (readFilter === "attachments" && !row.hasAttachment) return false;
+      if (typeFilter && (typeFilter === "REQUEST" ? !["REQUEST", "ACCOMMODATION"].includes(row.type) : row.type !== typeFilter)) return false;
+      if (statusFilter && row.status !== statusFilter) return false;
       if (!q) return true;
       return `${row.name} ${row.subject} ${row.preview}`.toLowerCase().includes(q);
     });
-  }, [rows, tab, search, readFilter]);
+  }, [rows, tab, search, readFilter, typeFilter, statusFilter]);
+
+  // Coach/admin summary tiles: what is still current, by kind.
+  const tiles = useMemo(() => {
+    const current = rows.filter((row) => row.folders.has("current"));
+    return [
+      { type: "MESSAGE", label: "Messages", hint: "General messages and announcements", count: current.filter((r) => r.type === "MESSAGE").length, tone: "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-200" },
+      { type: "OPEN_POINT", label: "Open Points", hint: "Items to review and complete", count: current.filter((r) => r.type === "OPEN_POINT").length, tone: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-200" },
+      { type: "REQUEST", label: "Requests", hint: "Action or response needed", count: current.filter((r) => r.type === "REQUEST" || r.type === "ACCOMMODATION").length, tone: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-200" },
+    ];
+  }, [rows]);
 
   // Keep a conversation open: when the list changes and nothing (or something
   // no longer listed) is selected, fall back to the first visible one on wide
@@ -357,7 +454,7 @@ export default function ParentMessages() {
     setComposeSeed(null);
     await refreshThreads();
     if (thread?.id) {
-      setTab("sent");
+      setTab(workflowView ? "current" : "sent");
       setActiveId(thread.id);
       setMobilePanel("thread");
       replaceQuery(thread.id);
@@ -375,24 +472,53 @@ export default function ParentMessages() {
     const byId = new Map();
     threads.forEach((thread) =>
       otherParticipants(thread, userId).forEach((p) => {
-        if (p.user && !FAMILY_ROLES.has(p.user.role) && !byId.has(p.user.id)) {
+        if (p.user && (!FAMILY_ROLES.has(role) || !FAMILY_ROLES.has(p.user.role)) && !byId.has(p.user.id)) {
           byId.set(p.user.id, p.user);
         }
       }),
     );
     return [...byId.values()].slice(0, 6);
-  }, [threads, userId]);
+  }, [threads, userId, role]);
 
   const activeRow = rows.find((row) => row.id === activeId);
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className={`text-3xl font-black tracking-tight sm:text-4xl ${NAVY}`}>Messages</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className={`text-3xl font-black tracking-tight sm:text-4xl ${NAVY}`}>Messages</h1>
+          {workflowView ? (
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">View and respond to messages, open points, and requests.</p>
+          ) : null}
+        </div>
         <button type="button" className={PRIMARY_BUTTON} onClick={() => setComposeOpen(true)}>
-          New Message
+          + New Message
         </button>
       </div>
+
+      {workflowView ? (
+        <div className="grid gap-3 sm:grid-cols-3">
+          {tiles.map((tile) => (
+            <button
+              key={tile.type}
+              type="button"
+              onClick={() => {
+                setTypeFilter(typeFilter === tile.type ? "" : tile.type);
+                if (tab !== "current") changeTab("current");
+              }}
+              aria-pressed={typeFilter === tile.type}
+              className={`flex items-center justify-between gap-3 rounded-xl p-4 text-left shadow-sm ring-1 ring-black/5 transition hover:brightness-95 ${tile.tone} ${typeFilter === tile.type ? "ring-2 ring-blue-500" : ""}`}
+            >
+              <span>
+                <span className={`block text-lg font-black ${NAVY}`}>{tile.label}</span>
+                <span className={`block text-3xl font-black ${NAVY}`}>{tile.count}</span>
+                <span className="block text-xs text-gray-600 dark:text-gray-300">{tile.hint}</span>
+              </span>
+              <span aria-hidden="true" className="text-2xl">›</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-500/30 dark:bg-red-950/25 dark:text-red-200">
@@ -400,7 +526,7 @@ export default function ParentMessages() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
+      <div className={`grid gap-4 ${workflowView ? "lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]" : "lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]"}`}>
         {/* Conversation list */}
         <section
           aria-label="Conversations"
@@ -410,10 +536,12 @@ export default function ParentMessages() {
         >
           <div className="space-y-3 border-b border-gray-100 px-3 pt-2 pb-3 dark:border-gray-700">
             <div role="tablist" aria-label="Message folders" className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
-              {TABS.map((item) => {
+              {(workflowView ? WORKFLOW_TABS : TABS).map((item) => {
                 const selected = tab === item.id;
-                const label =
-                  item.id === "inbox" && inboxUnread > 0 ? `${item.label} (${inboxUnread})` : item.label;
+                const count = workflowView ? rows.filter((row) => row.folders.has(item.id)).length : 0;
+                const label = workflowView
+                  ? item.id === "archived" ? item.label : `${item.label} (${count})`
+                  : item.id === "inbox" && inboxUnread > 0 ? `${item.label} (${inboxUnread})` : item.label;
                 return (
                   <button
                     key={item.id}
@@ -443,20 +571,47 @@ export default function ParentMessages() {
                 className={`${FIELD} pl-9`}
               />
             </div>
-            <select
-              value={readFilter}
-              onChange={(e) => setReadFilter(e.target.value)}
-              aria-label="Filter messages"
-              className={FIELD}
-            >
-              {READ_FILTERS.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
+            {workflowView ? (
+              <div className="grid grid-cols-2 gap-2">
+                <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Type" className={FIELD}>
+                  <option value="">All types</option>
+                  <option value="MESSAGE">Messages</option>
+                  <option value="OPEN_POINT">Open Points</option>
+                  <option value="REQUEST">Requests</option>
+                </select>
+                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status" className={FIELD}>
+                  <option value="">All statuses</option>
+                  <option value="OPEN">Open</option>
+                  <option value="READY_FOR_REVIEW">Ready For Review</option>
+                  <option value="COMPLETED">Completed</option>
+                </select>
+              </div>
+            ) : (
+              <select
+                value={readFilter}
+                onChange={(e) => setReadFilter(e.target.value)}
+                aria-label="Filter messages"
+                className={FIELD}
+              >
+                {READ_FILTERS.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
+          {workflowView && visibleRows.length ? (
+            <div className="grid grid-cols-[6.5rem_minmax(0,1fr)_7.5rem_2rem_3.5rem_4rem] gap-2 border-b border-gray-100 py-2 pl-6 pr-3 text-[11px] font-bold uppercase text-gray-500 dark:border-gray-700">
+              <span>Type</span>
+              <span>Title</span>
+              <span>Status</span>
+              <span className="text-center">Pri.</span>
+              <span>Due</span>
+              <span className="text-right">Updated</span>
+            </div>
+          ) : null}
           <ul className="flex-1 divide-y divide-gray-100 overflow-y-auto dark:divide-gray-700 lg:max-h-[calc(100vh-22rem)]">
             {loading ? (
               [0, 1, 2, 3].map((key) => (
@@ -470,16 +625,44 @@ export default function ParentMessages() {
               ))
             ) : visibleRows.length === 0 ? (
               <li className="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-                {search || readFilter !== "all"
+                {search || readFilter !== "all" || typeFilter || statusFilter
                   ? "No messages match your search."
                   : tab === "archived"
                     ? "Archived conversations will appear here."
                     : tab === "sent"
                       ? "Messages you send will appear here."
-                      : "Your inbox is empty."}
+                      : tab === "past"
+                        ? "Completed items will appear here."
+                        : tab === "current"
+                          ? "Nothing open right now."
+                          : "Your inbox is empty."}
               </li>
             ) : (
-              visibleRows.map((row) => (
+              visibleRows.map((row) => workflowView ? (
+                <li key={row.id}>
+                  <button
+                    type="button"
+                    onClick={() => selectThread(row.id)}
+                    aria-current={row.id === activeId ? "true" : undefined}
+                    className={`relative grid w-full grid-cols-[6.5rem_minmax(0,1fr)_7.5rem_2rem_3.5rem_4rem] items-center gap-2 py-2.5 pl-6 pr-3 text-left text-sm transition ${
+                      row.id === activeId ? "bg-sky-50 dark:bg-sky-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    }`}
+                  >
+                    {row.unread ? (
+                      <span className="absolute left-2 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-[#1a73e8]" aria-label="Unread" />
+                    ) : null}
+                    <span><TypePill type={row.type} /></span>
+                    <span className="min-w-0">
+                      <span className={`block truncate ${row.unread ? "font-bold" : "font-semibold"} ${NAVY}`}>{row.subject}</span>
+                      <span className="block truncate text-xs text-gray-500 dark:text-gray-400">{row.name}</span>
+                    </span>
+                    <span><StatusPill status={row.status} /></span>
+                    <span className="text-center text-xs font-semibold text-gray-600 dark:text-gray-300">{row.priority || "—"}</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-300">{row.dueDate ? new Date(row.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "—"}</span>
+                    <span className="text-right text-xs text-gray-500 dark:text-gray-400">{relativeDays(row.updatedAt)}</span>
+                  </button>
+                </li>
+              ) : (
                 <li key={row.id}>
                   <button
                     type="button"
@@ -515,6 +698,12 @@ export default function ParentMessages() {
                       <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
                         {row.preview}
                       </span>
+                      {row.workflow ? (
+                        <span className="mt-1 flex gap-1">
+                          <TypePill type={row.type} />
+                          <StatusPill status={row.status} />
+                        </span>
+                      ) : null}
                     </span>
                   </button>
                 </li>
@@ -534,6 +723,11 @@ export default function ParentMessages() {
             <ThreadView
               thread={activeThread}
               userId={userId}
+              isAdmin={isAdmin}
+              onWorkflowChanged={(updated) => {
+                setActiveThread(updated);
+                refreshThreads();
+              }}
               archived={Boolean(activeRow?.thread.archivedAt)}
               filing={filing}
               onBack={() => setMobilePanel("list")}
@@ -576,6 +770,8 @@ export default function ParentMessages() {
         <ComposeDialog
           seed={composeSeed}
           userId={userId}
+          role={role}
+          workflowView={workflowView}
           suggestedContacts={suggestedContacts}
           onClose={closeCompose}
           onCreated={handleCreated}
@@ -585,9 +781,37 @@ export default function ParentMessages() {
   );
 }
 
-function ThreadView({ thread, userId, archived, filing, onBack, onArchive, onDelete, onReplied }) {
+function ThreadView({ thread, userId, isAdmin, archived, filing, onBack, onArchive, onDelete, onReplied, onWorkflowChanged }) {
   const toast = useToast();
   const [reply, setReply] = useState("");
+  const [workflowBusy, setWorkflowBusy] = useState(false);
+  const workflow = isWorkflowThread(thread.type);
+  const canReview = workflow && canMarkReadyForReview(thread, userId, isAdmin);
+  const canComplete = workflow && canCompleteWorkflow(thread, userId, isAdmin);
+  const canReopen = workflow && canReopenWorkflow(thread, userId, isAdmin);
+
+  // Ready for Review / Mark as Completed / Send Back (the reply box is the note).
+  async function runWorkflow(action) {
+    const note = reply.trim();
+    if (action === "REOPEN" && !note) {
+      toast.error("Type a note in the reply box to say what still needs doing.");
+      return;
+    }
+    setWorkflowBusy(true);
+    try {
+      const updated = await apiJson(`/api/v1/messages/threads/${thread.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ action, note: note || undefined }),
+      });
+      setReply("");
+      onWorkflowChanged(updated);
+      toast.success(action === "COMPLETE" ? "Marked as completed." : action === "READY_FOR_REVIEW" ? "Marked ready for review." : "Sent back.");
+    } catch (e) {
+      toast.error(e.message || "Could not update this item");
+    } finally {
+      setWorkflowBusy(false);
+    }
+  }
   const [attachment, setAttachment] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -672,6 +896,25 @@ function ThreadView({ thread, userId, archived, filing, onBack, onArchive, onDel
         </div>
       </div>
 
+      {workflow ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs dark:bg-gray-900/40">
+          <TypePill type={thread.type} />
+          <StatusPill status={thread.status} />
+          {thread.priority ? <span className="font-semibold text-gray-700 dark:text-gray-300">Priority {thread.priority}</span> : null}
+          {thread.dueDate ? (
+            <span className="font-semibold text-gray-700 dark:text-gray-300">
+              Due {new Date(thread.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}
+            </span>
+          ) : null}
+          {thread.status === "READY_FOR_REVIEW" && thread.reviewRequestedBy ? (
+            <span className="text-gray-600 dark:text-gray-400">Ready for review by {personName(thread.reviewRequestedBy)}</span>
+          ) : null}
+          {thread.status === "COMPLETED" && thread.completedBy ? (
+            <span className="text-gray-600 dark:text-gray-400">Completed by {personName(thread.completedBy)}</span>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="flex-1 space-y-6">
         {messages.length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-gray-400">No messages in this conversation yet.</p>
@@ -729,7 +972,7 @@ function ThreadView({ thread, userId, archived, filing, onBack, onArchive, onDel
         {attachment ? (
           <PendingAttachment attachment={attachment} onRemove={() => setAttachment(null)} />
         ) : null}
-        <div className="mt-3 flex items-center justify-between gap-3">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <input ref={fileInputRef} type="file" className="hidden" onChange={pickFile} />
           <button
             type="button"
@@ -740,22 +983,50 @@ function ThreadView({ thread, userId, archived, filing, onBack, onArchive, onDel
             <PaperclipIcon className="h-4 w-4" />
             {uploading ? "Uploading..." : "Attach File"}
           </button>
-          <button
-            type="submit"
-            className={`${PRIMARY_BUTTON} min-w-[5.5rem]`}
-            disabled={sending || uploading || (!reply.trim() && !attachment)}
-          >
-            {sending ? "Sending..." : "Send"}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {canReview ? (
+              <button type="button" className={OUTLINE_BUTTON} onClick={() => runWorkflow("READY_FOR_REVIEW")} disabled={workflowBusy}>
+                Ready for Review
+              </button>
+            ) : null}
+            {canReopen ? (
+              <button type="button" className={OUTLINE_BUTTON} onClick={() => runWorkflow("REOPEN")} disabled={workflowBusy} title="Type a note in the reply box first">
+                Send Back
+              </button>
+            ) : null}
+            {canComplete ? (
+              <button type="button" className={OUTLINE_BUTTON} onClick={() => runWorkflow("COMPLETE")} disabled={workflowBusy}>
+                ✓ Mark as Completed
+              </button>
+            ) : null}
+            <button
+              type="submit"
+              className={`${PRIMARY_BUTTON} min-w-[5.5rem]`}
+              disabled={sending || uploading || (!reply.trim() && !attachment)}
+            >
+              {sending ? "Sending..." : "Send"}
+            </button>
+          </div>
         </div>
       </form>
     </div>
   );
 }
 
-function ComposeDialog({ seed, userId, suggestedContacts, onClose, onCreated }) {
+function ComposeDialog({ seed, userId, role, workflowView, suggestedContacts, onClose, onCreated }) {
   const toast = useToast();
-  const [recipient, setRecipient] = useState(seed?.recipient || null);
+  const family = FAMILY_ROLES.has(role);
+  const threadTypes = getAvailableThreadTypesForRole(role);
+  const [recipients, setRecipients] = useState(seed?.recipient ? [seed.recipient] : []);
+  const recipient = recipients[0] || null;
+  const setRecipient = (person) => setRecipients(person ? (family ? [person] : [...recipients.filter((r) => r.id !== person.id), person]) : []);
+  const [threadType, setThreadType] = useState("MESSAGE");
+  const [priority, setPriority] = useState("B");
+  const [dueDate, setDueDate] = useState("");
+  const [centers, setCenters] = useState([]);
+  const [centerId, setCenterId] = useState("");
+  const [audiences, setAudiences] = useState([]);
+  const [audienceKeys, setAudienceKeys] = useState([]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -778,7 +1049,7 @@ function ComposeDialog({ seed, userId, suggestedContacts, onClose, onCreated }) 
         const data = await apiJson(`/api/v1/users/search?q=${encodeURIComponent(q)}&limit=10`);
         setResults(
           (Array.isArray(data) ? data : []).filter(
-            (u) => u.id !== userId && !FAMILY_ROLES.has(u.role),
+            (u) => u.id !== userId && (!family || !FAMILY_ROLES.has(u.role)),
           ),
         );
       } catch {
@@ -788,7 +1059,30 @@ function ComposeDialog({ seed, userId, suggestedContacts, onClose, onCreated }) 
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [query, userId]);
+  }, [query, userId, family]);
+
+  // Coaches and admins can also send to a whole group at a center.
+  useEffect(() => {
+    if (!workflowView) return;
+    apiJson("/api/v1/centers")
+      .then((rows) => {
+        const list = Array.isArray(rows) ? rows : [];
+        setCenters(list);
+        if (list.length === 1) setCenterId(list[0].id);
+      })
+      .catch(() => setCenters([]));
+  }, [workflowView]);
+
+  useEffect(() => {
+    if (!workflowView || !centerId) {
+      setAudiences([]);
+      return;
+    }
+    const qs = new URLSearchParams({ centerId, threadType });
+    apiJson(`/api/v1/messages/audiences?${qs}`)
+      .then((rows) => setAudiences(Array.isArray(rows) ? rows.filter((a) => a.count > 0) : []))
+      .catch(() => setAudiences([]));
+  }, [workflowView, centerId, threadType]);
 
   useEffect(() => {
     function onKey(event) {
@@ -814,7 +1108,7 @@ function ComposeDialog({ seed, userId, suggestedContacts, onClose, onCreated }) 
 
   async function submit(event) {
     event.preventDefault();
-    if (!recipient) {
+    if (!recipients.length && !audienceKeys.length) {
       toast.error("Choose who to send this message to.");
       return;
     }
@@ -824,7 +1118,11 @@ function ComposeDialog({ seed, userId, suggestedContacts, onClose, onCreated }) 
       const response = await apiJson("/api/v1/messages/threads", {
         method: "POST",
         body: JSON.stringify({
-          participants: [{ id: recipient.id, role: recipient.role || undefined }],
+          participants: recipients.map((r) => ({ id: r.id, role: r.role || undefined })),
+          ...(audienceKeys.length ? { audienceKeys, centerId } : centerId ? { centerId } : {}),
+          threadType,
+          ...(supportsPriority(threadType) ? { priority } : {}),
+          ...(supportsDueDate(threadType) && dueDate ? { dueDate } : {}),
           title: subject.trim() || undefined,
           firstMessage: body.trim(),
           attachment: attachment || undefined,
@@ -868,28 +1166,32 @@ function ComposeDialog({ seed, userId, suggestedContacts, onClose, onCreated }) 
           <label htmlFor="compose-to" className={`mb-1 block text-sm font-semibold ${NAVY}`}>
             To
           </label>
-          {recipient ? (
-            <div className="flex items-center justify-between rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 dark:border-sky-800 dark:bg-sky-900/30">
-              <span className="flex items-center gap-2 text-sm">
-                <Avatar label={personName(recipient)} small />
-                <span className={`font-semibold ${NAVY}`}>{personName(recipient)}</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => setRecipient(null)}
-                className="text-xs font-semibold text-[#1a73e8] hover:underline"
-              >
-                Change
-              </button>
+          {recipients.length ? (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {recipients.map((person) => (
+                <span key={person.id} className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 py-1 pl-1 pr-2 text-sm dark:border-sky-800 dark:bg-sky-900/30">
+                  <Avatar label={personName(person)} small />
+                  <span className={`font-semibold ${NAVY}`}>{personName(person)}</span>
+                  <button
+                    type="button"
+                    onClick={() => setRecipients(recipients.filter((r) => r.id !== person.id))}
+                    aria-label={`Remove ${personName(person)}`}
+                    className="text-xs font-bold text-[#1a73e8]"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
             </div>
-          ) : (
+          ) : null}
+          {family && recipient ? null : (
             <>
               <input
                 id="compose-to"
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search teachers and staff by name..."
+                placeholder={family ? "Search teachers and staff by name..." : "Search people by name..."}
                 autoComplete="off"
                 className={FIELD}
               />
@@ -920,11 +1222,62 @@ function ComposeDialog({ seed, userId, suggestedContacts, onClose, onCreated }) 
                   )}
                 </div>
               ) : query.trim().length >= 2 ? (
-                <p className="mt-2 text-xs text-gray-500">No staff members match that name.</p>
+                <p className="mt-2 text-xs text-gray-500">No one matches that name.</p>
               ) : null}
             </>
           )}
         </div>
+
+        {workflowView ? (
+          <div className="space-y-2 rounded-lg bg-gray-50 p-3 dark:bg-gray-900/40">
+            <label className={`block text-sm font-semibold ${NAVY}`}>
+              Or send to a group at
+              <select value={centerId} onChange={(e) => { setCenterId(e.target.value); setAudienceKeys([]); }} className={`${FIELD} mt-1`}>
+                <option value="">Select a center...</option>
+                {centers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </label>
+            {audiences.length ? (
+              <div className="grid gap-1 sm:grid-cols-2">
+                {audiences.map((a) => (
+                  <label key={a.key} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={audienceKeys.includes(a.key)}
+                      onChange={(e) => setAudienceKeys(e.target.checked ? [...audienceKeys, a.key] : audienceKeys.filter((k) => k !== a.key))}
+                    />
+                    {a.label} <span className="text-xs text-gray-500">({a.count})</span>
+                  </label>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {threadTypes.length > 1 ? (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className={`block text-sm font-semibold ${NAVY}`}>
+              Type
+              <select value={threadType} onChange={(e) => setThreadType(e.target.value)} className={`${FIELD} mt-1`}>
+                {threadTypes.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </label>
+            {supportsPriority(threadType) ? (
+              <label className={`block text-sm font-semibold ${NAVY}`}>
+                Priority
+                <select value={priority} onChange={(e) => setPriority(e.target.value)} className={`${FIELD} mt-1`}>
+                  {MESSAGE_PRIORITY_LEVELS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              </label>
+            ) : null}
+            {supportsDueDate(threadType) ? (
+              <label className={`block text-sm font-semibold ${NAVY}`}>
+                Due Date
+                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={`${FIELD} mt-1`} />
+              </label>
+            ) : null}
+          </div>
+        ) : null}
 
         <div>
           <label htmlFor="compose-subject" className={`mb-1 block text-sm font-semibold ${NAVY}`}>
@@ -978,7 +1331,7 @@ function ComposeDialog({ seed, userId, suggestedContacts, onClose, onCreated }) 
             <button
               type="submit"
               className={PRIMARY_BUTTON}
-              disabled={sending || uploading || !recipient || (!body.trim() && !attachment)}
+              disabled={sending || uploading || (!recipients.length && !audienceKeys.length) || (!body.trim() && !attachment)}
             >
               {sending ? "Sending..." : "Send"}
             </button>

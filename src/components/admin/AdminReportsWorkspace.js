@@ -1,5 +1,6 @@
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
+import { isCurrentlyEnrolled, useReportFilters } from "@/components/reports/ReportFilters";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -160,6 +161,7 @@ function currentPeriod() {
 export default function AdminReportsWorkspace({ reportKey }) {
   const router = useRouter();
   const report = findAdminReport(reportKey);
+  const { children: childrenFilter } = useReportFilters();
 
   // Shared filters
   const [centers, setCenters] = useState([]);
@@ -209,10 +211,10 @@ export default function AdminReportsWorkspace({ reportKey }) {
         const sorted = (Array.isArray(kids) ? kids : []).sort((a, b) =>
           (a.firstName || "").localeCompare(b.firstName || "")
         );
-        setChildren(sorted);
+        setChildren(childrenFilter === "ALL" ? sorted : sorted.filter((child) => isCurrentlyEnrolled(child)));
       } catch {}
     })();
-  }, [centerId]);
+  }, [centerId, childrenFilter]);
 
   function printActiveReport() {
     window.print();
@@ -1049,6 +1051,7 @@ function gradeLetter(g) {
 }
 
 function TeachersTab({ centerId }) {
+  const { staff: staffFilter } = useReportFilters();
   const router = useRouter();
   const [teacherList, setTeacherList] = useState([]);
   // ?teacherId= opens one teacher (the View button on Center Performance).
@@ -1069,7 +1072,7 @@ function TeachersTab({ centerId }) {
   useEffect(() => {
     if (!centerId) return;
     setLoadingTeachers(true);
-    apiJson(`/api/v1/users?employedOnly=true&centerId=${encodeURIComponent(centerId)}&roles=TEACHER`)
+    apiJson(`/api/v1/users?employedOnly=${staffFilter !== "ALL"}&centerId=${encodeURIComponent(centerId)}&roles=TEACHER`)
       .then((r) => {
         const arr = Array.isArray(r) ? r : [];
         setTeacherList(arr);
@@ -1077,7 +1080,7 @@ function TeachersTab({ centerId }) {
       })
       .catch(() => {})
       .finally(() => setLoadingTeachers(false));
-  }, [centerId]);
+  }, [centerId, staffFilter]);
 
   const loadReport = useCallback(async () => {
     if (!centerId || !teacherId) return;
@@ -1736,6 +1739,7 @@ function staffGradeLetter(g) {
 }
 
 function OtherStaffPerformanceTab({ centerId, dateFrom, dateTo }) {
+  const { staff: staffFilter } = useReportFilters();
   const [staffList, setStaffList] = useState([]);
   const [staffId, setStaffId] = useState("");
   const [reportFrom, setReportFrom] = useState(dateFrom);
@@ -1756,7 +1760,7 @@ function OtherStaffPerformanceTab({ centerId, dateFrom, dateTo }) {
   useEffect(() => {
     if (!centerId) return;
     setLoadingStaff(true);
-    apiJson(`/api/v1/users?employedOnly=true&centerId=${encodeURIComponent(centerId)}&roles=${STAFF_PORTAL_ROLES.join(",")}`)
+    apiJson(`/api/v1/users?employedOnly=${staffFilter !== "ALL"}&centerId=${encodeURIComponent(centerId)}&roles=${STAFF_PORTAL_ROLES.join(",")}`)
       .then((r) => {
         const arr = Array.isArray(r) ? r : [];
         setStaffList(arr);
@@ -1764,7 +1768,7 @@ function OtherStaffPerformanceTab({ centerId, dateFrom, dateTo }) {
       })
       .catch(() => {})
       .finally(() => setLoadingStaff(false));
-  }, [centerId]);
+  }, [centerId, staffFilter]);
 
   const loadReport = useCallback(async () => {
     if (!centerId || !staffId) return;
@@ -2558,6 +2562,7 @@ function coachGradeLetter(g) {
 }
 
 function CoachPerformanceTab({ centerId, dateFrom, dateTo }) {
+  const { staff: staffFilter } = useReportFilters();
   const [coaches, setCoaches] = useState([]);
   const [coachId, setCoachId] = useState("");
   const [reportFrom, setReportFrom] = useState(dateFrom);
@@ -2573,7 +2578,7 @@ function CoachPerformanceTab({ centerId, dateFrom, dateTo }) {
   useEffect(() => {
     if (!centerId) return;
     setLoadingCoaches(true);
-    apiJson(`/api/v1/users?employedOnly=true&centerId=${encodeURIComponent(centerId)}&roles=COACH`)
+    apiJson(`/api/v1/users?employedOnly=${staffFilter !== "ALL"}&centerId=${encodeURIComponent(centerId)}&roles=COACH`)
       .then((r) => {
         const arr = Array.isArray(r) ? r : [];
         setCoaches(arr);
@@ -2581,7 +2586,7 @@ function CoachPerformanceTab({ centerId, dateFrom, dateTo }) {
       })
       .catch(() => {})
       .finally(() => setLoadingCoaches(false));
-  }, [centerId]);
+  }, [centerId, staffFilter]);
 
   const loadReport = useCallback(async () => {
     if (!centerId || !coachId) return;

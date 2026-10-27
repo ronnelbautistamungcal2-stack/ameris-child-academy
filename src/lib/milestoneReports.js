@@ -5,6 +5,7 @@
 
 import { isDateKey, localDateKey } from "@/lib/foodReports";
 import prisma from "@/lib/prisma";
+import { enrolledWhere } from "@/lib/reportAccess";
 
 const MONTH_DAYS = 30.44;
 const YEAR_DAYS = 365.25;
@@ -117,9 +118,9 @@ function endOfDay(dateKey) {
 }
 
 /** Milestone Progress Report: center average age at completion vs. the world standard. */
-export async function milestoneProgressReport({ centerId, date, categoryId, subCategory, minMonths, maxMonths }) {
+export async function milestoneProgressReport({ centerId, date, categoryId, subCategory, minMonths, maxMonths, enrolledOnly = false }) {
   const [steps, filters] = await Promise.all([loadSteps(centerId, { categoryId, subCategory, minMonths, maxMonths }), stepFilters(centerId)]);
-  const done = await completions(steps.map((s) => s.id), { centerId }, endOfDay(date));
+  const done = await completions(steps.map((s) => s.id), { centerId, ...(enrolledOnly ? enrolledWhere() : {}) }, endOfDay(date));
   const rows = steps.map((s) => {
     const ages = done.filter((d) => d.stepId === s.id).map((d) => d.age);
     const center = ages.length ? ages.reduce((a, b) => a + b, 0) / ages.length : null;

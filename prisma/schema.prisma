@@ -1081,6 +1081,16 @@ model PolicyDocument {
   url                     String
   roles                   Role[]
   category                String                   @default("POLICY")
+  // Additional Resources (client mockup 38-03): a resource can be a website
+  // (url then holds the website) with contact details and a logo, shown on
+  // the public Resources page when showOnHomePage is set.
+  version                 String?
+  websiteUrl              String?
+  contactEmail            String?
+  contactPhone            String?
+  logoUrl                 String?
+  showOnHomePage          Boolean                  @default(false)
+  active                  Boolean                  @default(true)
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @default(now()) @updatedAt
   milestoneChecklistItems MilestoneChecklistItem[]
@@ -1623,15 +1633,22 @@ model ClassroomBudget {
   classRoomId     String
   center          Center          @relation(fields: [centerId], references: [id], onDelete: Cascade)
   centerId        String
-  month           String
+  // Budget period (client 2026-10-02): WEEK, MONTH, QUARTER or YEAR from
+  // startDate to endDate. With autoRenew the next period is created with
+  // the same amount once this one ends (src/lib/classroomBudgets.js).
+  month           String?
+  period          String          @default("MONTH")
+  startDate       DateTime        @db.Date
+  endDate         DateTime        @db.Date
+  autoRenew       Boolean         @default(false)
   allocatedAmount Float           @default(0)
   notes           String?
   expenses        BudgetExpense[]
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
-  @@unique([classRoomId, month])
-  @@index([centerId, month])
+  @@index([classRoomId, startDate])
+  @@index([centerId, startDate])
 }
 
 model BudgetExpense {
@@ -1748,6 +1765,10 @@ model SupplyRequest {
   quantity      Int                 @default(1)
   purpose       String?
   notes         String?
+  // Note from the coach/admin reviewing it; the requester is notified of it.
+  reviewNote    String?
+  reviewedById  String?
+  reviewedAt    DateTime?
   status        SupplyRequestStatus @default(PENDING)
   requestedBy   User                @relation("SupplyRequestsRequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
   requestedById String

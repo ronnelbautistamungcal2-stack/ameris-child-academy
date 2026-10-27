@@ -4,22 +4,21 @@ import { mealProductionReport } from "@/lib/foodReportsServer";
 import { dbDate } from "@/lib/menuAccess";
 import { getMeal } from "@/lib/menuPlan";
 import prisma from "@/lib/prisma";
+import { reportCenter } from "@/lib/reportAccess";
 
 /**
  * GET /api/v1/reports/meal-production?centerId=&meal=&from=&to=
- *     Meal Production Record for one meal (admins).
+ *     Meal Production Record for one meal (admins, and coaches at their centers).
  * PUT /api/v1/reports/meal-production { centerId, meal, date, ageGroup, planned }
  *     The planned number served, typed in on the report (blank clears it).
  */
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
-  if (session.user.role !== "ADMIN") return res.status(403).json({ error: "Forbidden" });
-  const centerId = String(req.query.centerId || req.body?.centerId || "");
+  const access = await reportCenter(session.user, req.query.centerId || req.body?.centerId, ["ADMIN", "COACH"]);
+  if (access.error) return res.status(access.status).json({ error: access.error });
+  const centerId = access.center.id;
   const meal = String(req.query.meal || req.body?.meal || "");
-  if (!centerId || !(await prisma.center.findUnique({ where: { id: centerId }, select: { id: true } }))) {
-    return res.status(400).json({ error: "centerId is required" });
-  }
   if (!getMeal(meal)) return res.status(400).json({ error: "Unknown meal" });
 
   if (req.method === "GET") {

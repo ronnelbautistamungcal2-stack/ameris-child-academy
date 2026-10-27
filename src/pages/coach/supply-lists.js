@@ -1,941 +1,376 @@
-import CoachLayout from "@/components/coach/CoachLayout";
-import { SkeletonTable } from "@/components/ui/Skeleton";
+import CoachLayout, { SUPPLY_REQUESTS_CHANGED_EVENT } from "@/components/coach/CoachLayout";
+import { Modal } from "@/components/training/trainingUi";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import Skeleton from "@/components/ui/Skeleton";
+import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-const SUPPLY_CATEGORIES = ["General", "Art", "Science", "Craft", "Outdoor", "Music", "Math", "Other"];
+// Coach - Supply Lists (client request 2026-10-02): supply requests from
+// teachers (pending ones by default; fulfilled ones drop off), a note the
+// teacher is told about, and the supplies the center's lessons need.
 
-const CATEGORY_META = {
-  General:  { icon: "📦", color: "#64748b" },
-  Art:      { icon: "🎨", color: "#ec4899" },
-  Science:  { icon: "🔬", color: "#6366f1" },
-  Craft:    { icon: "✂️", color: "#f59e0b" },
-  Outdoor:  { icon: "🌳", color: "#10b981" },
-  Music:    { icon: "🎵", color: "#8b5cf6" },
-  Math:     { icon: "🔢", color: "#0ea5e9" },
-  Other:    { icon: "📝", color: "#94a3b8" },
-};
+const NAVY = "text-[#0b2a5b] dark:text-blue-100";
+const control = "mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800";
+const card = "rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900";
+const thead = "bg-blue-50 text-left text-[#0b2a5b] dark:bg-gray-800 dark:text-blue-100";
+const STATUSES = [
+  { value: "PENDING", label: "Pending", pill: "bg-amber-100 text-amber-800" },
+  { value: "APPROVED", label: "Approved", pill: "bg-blue-100 text-blue-800" },
+  { value: "DENIED", label: "Denied", pill: "bg-red-100 text-red-700" },
+  { value: "FULFILLED", label: "Fulfilled", pill: "bg-emerald-100 text-emerald-800" },
+];
+const EMPTY_FORM = { item: "", quantity: 1, classRoomId: "", purpose: "", notes: "" };
 
-const REQUEST_STATUSES = ["PENDING", "APPROVED", "FULFILLED", "DENIED"];
+function csvEscape(value) {
+  const s = String(value ?? "");
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
 
-const STATUS_META = {
-  PENDING:   { label: "Pending",   color: "#f59e0b" },
-  APPROVED:  { label: "Approved",  color: "#0ea5e9" },
-  FULFILLED: { label: "Fulfilled", color: "#10b981" },
-  DENIED:    { label: "Denied",    color: "#ef4444" },
-};
+const announce = () => window.dispatchEvent(new Event(SUPPLY_REQUESTS_CHANGED_EVENT));
 
-const EMPTY_REQUEST_FORM = { item: "", quantity: 1, classRoomId: "", purpose: "", notes: "", status: "PENDING" };
-
-export default function AdminSupplyLists() {
+export default function CoachSupplyLists() {
   const [centers, setCenters] = useState([]);
-  const [classrooms, setClassrooms] = useState([]);
-  const [lessons, setLessons] = useState([]);
-  const [supplyList, setSupplyList] = useState([]);
-  const [requests, setRequests] = useState([]);
   const [centerId, setCenterId] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [supplyLoading, setSupplyLoading] = useState(false);
-  const [requestsLoading, setRequestsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [classrooms, setClassrooms] = useState([]);
+  const [requests, setRequests] = useState(null);
+  const [supplies, setSupplies] = useState([]);
+  const [status, setStatus] = useState("PENDING");
   const [search, setSearch] = useState("");
-  const [filterCategory, setFilterCategory] = useState("");
-  const [requestStatusFilter, setRequestStatusFilter] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [dialog, setDialog] = useState(null); // {} new, or a request to edit
+  const [deleting, setDeleting] = useState(null);
 
-  // Manual supply request entry / edit modal
-  const [requestModalOpen, setRequestModalOpen] = useState(false);
-  const [editingRequestId, setEditingRequestId] = useState("");
-  const [requestForm, setRequestForm] = useState(EMPTY_REQUEST_FORM);
-  const [savingRequest, setSavingRequest] = useState(false);
+  useSyncedCenterId(centerId, setCenterId, centers);
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const c = await apiJson("/api/v1/centers");
-        setCenters(Array.isArray(c) ? c : []);
-        if (c.length) setCenterId(c[0].id);
-      } catch (e) {
-        setError(e.message || "Failed to load centers");
-      } finally {
-        setLoading(false);
-      }
-    })();
+    apiJson("/api/v1/centers")
+      .then((rows) => {
+        const list = Array.isArray(rows) ? rows : [];
+        setCenters(list);
+        if (list.length === 1) setCenterId(list[0].id);
+      })
+      .catch((e) => setError(e.message || "Failed to load centers"));
   }, []);
 
-  const loadClassrooms = useCallback(async (cId) => {
-    if (!cId) return;
+  const load = useCallback(async () => {
+    if (!centerId) return;
+    setError("");
+    const qs = `centerId=${encodeURIComponent(centerId)}`;
     try {
-      const data = await apiJson(`/api/v1/classes?centerId=${encodeURIComponent(cId)}`);
-      setClassrooms(Array.isArray(data) ? data : []);
-    } catch {
-      setClassrooms([]);
-    }
-  }, []);
-
-  const loadLessons = useCallback(async (cId) => {
-    if (!cId) return;
-    try {
-      const data = await apiJson(`/api/v1/lessons?centerId=${encodeURIComponent(cId)}`);
-      setLessons(Array.isArray(data) ? data : []);
-    } catch {
-      setLessons([]);
-    }
-  }, []);
-
-  const loadSupplyList = useCallback(async (cId) => {
-    if (!cId) return;
-    setSupplyLoading(true);
-    try {
-      const data = await apiJson(`/api/v1/lessons/supply-list?centerId=${encodeURIComponent(cId)}`);
-      setSupplyList(Array.isArray(data) ? data : []);
+      const [rooms, reqs, list] = await Promise.all([
+        apiJson(`/api/v1/classes?${qs}`),
+        apiJson(`/api/v1/supply-requests?${qs}`),
+        apiJson(`/api/v1/lessons/supply-list?${qs}`),
+      ]);
+      setClassrooms(Array.isArray(rooms) ? rooms : []);
+      setRequests(Array.isArray(reqs) ? reqs : []);
+      setSupplies(Array.isArray(list) ? list : []);
     } catch (e) {
-      setError(e.message || "Failed to load supply list");
-    } finally {
-      setSupplyLoading(false);
+      setError(e.message || "Failed to load supplies");
     }
-  }, []);
-
-  const loadRequests = useCallback(async (cId) => {
-    if (!cId) return;
-    setRequestsLoading(true);
-    try {
-      const data = await apiJson(`/api/v1/supply-requests?centerId=${encodeURIComponent(cId)}`);
-      setRequests(Array.isArray(data) ? data : []);
-    } catch (e) {
-      setError(e.message || "Failed to load supply requests");
-    } finally {
-      setRequestsLoading(false);
-    }
-  }, []);
+  }, [centerId]);
 
   useEffect(() => {
-    if (centerId) {
-      loadClassrooms(centerId);
-      loadLessons(centerId);
-      loadSupplyList(centerId);
-      loadRequests(centerId);
-    }
-  }, [centerId, loadClassrooms, loadLessons, loadSupplyList, loadRequests]);
+    setRequests(null);
+    load();
+  }, [load]);
 
-  const totalCost = useMemo(() => supplyList.reduce((sum, s) => sum + (s.estimatedCost || 0), 0), [supplyList]);
-  const totalQty = useMemo(() => supplyList.reduce((s, i) => s + i.totalQuantity, 0), [supplyList]);
-  const lessonsWithSupplies = useMemo(() => lessons.filter((l) => l.supplies && l.supplies.length > 0), [lessons]);
+  const shown = useMemo(() => (requests || []).filter((r) => !status || r.status === status), [requests, status]);
+  const pending = (requests || []).filter((r) => r.status === "PENDING").length;
+  const filteredSupplies = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return supplies;
+    return supplies.filter((s) => s.name.toLowerCase().includes(q) || (s.lessons || []).some((l) => l.title.toLowerCase().includes(q)));
+  }, [supplies, search]);
 
-  const filteredSupplyList = useMemo(() => {
-    let list = supplyList;
-    if (filterCategory) list = list.filter((s) => s.category === filterCategory);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((s) =>
-        s.name.toLowerCase().includes(q) ||
-        (s.unit || "").toLowerCase().includes(q) ||
-        (s.lessons || []).some((l) => l.title.toLowerCase().includes(q))
-      );
-    }
-    return list;
-  }, [supplyList, filterCategory, search]);
-
-  const filteredRequests = useMemo(() => {
-    if (!requestStatusFilter) return requests;
-    return requests.filter((r) => r.status === requestStatusFilter);
-  }, [requests, requestStatusFilter]);
-
-  const pendingRequestCount = useMemo(() => requests.filter((r) => r.status === "PENDING").length, [requests]);
-
-  const categoryBreakdown = useMemo(() => {
-    const counts = {};
-    for (const s of supplyList) {
-      const cat = s.category || "General";
-      counts[cat] = (counts[cat] || 0) + 1;
-    }
-    return counts;
-  }, [supplyList]);
-
-  function openAddRequest() {
-    setEditingRequestId("");
-    setRequestForm(EMPTY_REQUEST_FORM);
-    setRequestModalOpen(true);
-  }
-
-  function openEditRequest(r) {
-    setEditingRequestId(r.id);
-    setRequestForm({
-      item: r.item || "",
-      quantity: r.quantity || 1,
-      classRoomId: r.classRoomId || "",
-      purpose: r.purpose || "",
-      notes: r.notes || "",
-      status: r.status || "PENDING",
-    });
-    setRequestModalOpen(true);
-  }
-
-  function closeRequestModal() {
-    setRequestModalOpen(false);
-    setEditingRequestId("");
-    setRequestForm(EMPTY_REQUEST_FORM);
-  }
-
-  async function saveRequest(e) {
-    e.preventDefault();
-    if (!requestForm.item.trim() || !centerId) return;
-    setSavingRequest(true);
+  async function update(id, body, message) {
     setError("");
-    setSuccess("");
+    setNotice("");
     try {
-      const payload = {
-        centerId,
-        item: requestForm.item.trim(),
-        quantity: Number(requestForm.quantity) || 1,
-        classRoomId: requestForm.classRoomId || null,
-        purpose: requestForm.purpose || null,
-        notes: requestForm.notes || null,
-        status: requestForm.status,
-      };
-      if (editingRequestId) {
-        await apiJson(`/api/v1/supply-requests/${editingRequestId}`, {
-          method: "PUT",
-          body: JSON.stringify(payload),
-        });
-      } else {
-        await apiJson("/api/v1/supply-requests", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
-      }
-      setSuccess(editingRequestId ? "Supply request updated." : "Supply request added.");
-      closeRequestModal();
-      await loadRequests(centerId);
-      setTimeout(() => setSuccess(""), 4000);
-    } catch (e2) {
-      setError(e2.message || "Failed to save supply request");
-    } finally {
-      setSavingRequest(false);
-    }
-  }
-
-  async function changeRequestStatus(id, status) {
-    setError("");
-    try {
-      await apiJson(`/api/v1/supply-requests/${id}`, {
-        method: "PUT",
-        body: JSON.stringify({ status }),
-      });
-      setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
+      const updated = await apiJson(`/api/v1/supply-requests/${id}`, { method: "PUT", body: JSON.stringify(body) });
+      setRequests((rows) => rows.map((r) => (r.id === id ? updated : r)));
+      if (message) setNotice(message);
+      announce();
     } catch (e) {
-      setError(e.message || "Failed to update status");
+      setError(e.message || "Failed to update the request");
     }
   }
 
-  async function deleteRequest(id) {
-    if (!confirm("Delete this supply request?")) return;
-    setError("");
+  async function confirmDelete() {
+    const r = deleting;
+    setDeleting(null);
     try {
-      await apiJson(`/api/v1/supply-requests/${id}`, { method: "DELETE" });
-      setRequests((prev) => prev.filter((r) => r.id !== id));
+      await apiJson(`/api/v1/supply-requests/${r.id}`, { method: "DELETE" });
+      setRequests((rows) => rows.filter((x) => x.id !== r.id));
+      announce();
     } catch (e) {
-      setError(e.message || "Failed to delete request");
+      setError(e.message || "Failed to delete the request");
     }
   }
 
   function exportCsv() {
-    if (!supplyList.length) return;
     const lines = ["Name,Quantity,Type,Unit,Estimated Cost,Category,Lessons"];
-    for (const s of supplyList) {
-      const lessonNames = (s.lessons || []).map((l) => l.title).join("; ");
+    for (const s of supplies) {
       lines.push(
         [
           csvEscape(s.name),
           s.totalQuantity,
-          csvEscape(s.quantityType === "per_student" ? "Per Student" : "Total"),
+          s.quantityType === "per_student" ? "Per Student" : "Total",
           csvEscape(s.unit || ""),
           (s.estimatedCost || 0).toFixed(2),
           csvEscape(s.category || ""),
-          csvEscape(lessonNames),
+          csvEscape((s.lessons || []).map((l) => l.title).join("; ")),
         ].join(","),
       );
     }
-    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
     const a = document.createElement("a");
     a.href = url;
     a.download = "supply-list.csv";
-    document.body.appendChild(a);
     a.click();
-    a.remove();
+    URL.revokeObjectURL(url);
   }
-
-  const dismissError = useCallback(() => setError(""), []);
-  const dismissSuccess = useCallback(() => setSuccess(""), []);
 
   return (
     <CoachLayout title="Supply Lists">
-      {/* Page Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{
-            width: 42, height: 42, borderRadius: 10,
-            background: "linear-gradient(135deg, #10b981, #0ea5e9)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 20, flexShrink: 0,
-          }}>
-            📦
-          </div>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Supply Lists</h2>
-            <p style={{ margin: 0, fontSize: 13, color: "var(--admin-text-muted)" }}>
-              Consolidated supply lists auto-generated from lesson requirements, plus supply requests from staff.
-            </p>
-          </div>
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h1 className={`text-3xl font-black ${NAVY}`}>Supply Lists</h1>
+          <label className="block text-sm font-bold">
+            Center
+            <select value={centerId} onChange={(e) => setCenterId(e.target.value)} className={`${control} w-60`}>
+              <option value="">Select a center...</option>
+              {centers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <select value={centerId} onChange={(e) => setCenterId(e.target.value)} style={selectStyle}>
-            <option value="">Select center</option>
-            {centers.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          <button type="button" onClick={exportCsv} disabled={!supplyList.length} style={outlineButton}>
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M4 12v1.5a1 1 0 001 1h6a1 1 0 001-1V12M8 2v8M5 7l3 3 3-3" />
-            </svg>
-            Export CSV
-          </button>
-        </div>
-      </div>
+        {error ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+        {notice ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{notice}</div> : null}
 
-      {/* Alerts */}
-      {error && <AlertBanner kind="error" message={error} onDismiss={dismissError} />}
-      {success && <AlertBanner kind="success" message={success} onDismiss={dismissSuccess} />}
-
-      {loading || supplyLoading ? (
-        <Panel><SkeletonTable rows={5} cols={4} /></Panel>
-      ) : supplyList.length === 0 ? (
-        <EmptyState
-          icon="📋"
-          title="No supplies found"
-          description="Supplies are added when a lesson is created in Curriculum & Progress and will auto-populate here."
-        />
-      ) : (
-        <>
-          {/* Stats Cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 16 }}>
-            <StatCard icon="📋" label="Unique Items" value={supplyList.length} color="#6366f1" />
-            <StatCard icon="📊" label="Total Quantity" value={totalQty} color="#0ea5e9" />
-            <StatCard icon="💰" label="Estimated Cost" value={`$${totalCost.toFixed(2)}`} color="#10b981" />
-            <StatCard icon="📖" label="Lessons w/ Supplies" value={lessonsWithSupplies.length} color="#f59e0b" />
-          </div>
-
-          {/* Category Breakdown */}
-          {Object.keys(categoryBreakdown).length > 1 && (
-            <Panel style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>By Category</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {Object.entries(categoryBreakdown).sort((a, b) => b[1] - a[1]).map(([cat, count]) => {
-                  const meta = CATEGORY_META[cat] || CATEGORY_META.Other;
-                  const isActive = filterCategory === cat;
-                  return (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setFilterCategory(isActive ? "" : cat)}
-                      style={{
-                        display: "inline-flex", alignItems: "center", gap: 6,
-                        padding: "5px 12px", borderRadius: 999,
-                        border: isActive ? `2px solid ${meta.color}` : "1px solid var(--admin-border)",
-                        background: isActive ? meta.color + "14" : "var(--admin-bg)",
-                        cursor: "pointer", fontSize: 13, fontWeight: 600,
-                        color: isActive ? meta.color : "var(--admin-text)",
-                        transition: "all 0.15s",
-                      }}
-                    >
-                      <span>{meta.icon}</span>
-                      {cat}
-                      <span style={{
-                        fontSize: 11, fontWeight: 700,
-                        background: isActive ? meta.color + "22" : "var(--admin-bg-tertiary)",
-                        padding: "1px 6px", borderRadius: 999,
-                        color: isActive ? meta.color : "var(--admin-text-muted)",
-                      }}>{count}</span>
-                    </button>
-                  );
-                })}
-                {filterCategory && (
-                  <button
-                    type="button"
-                    onClick={() => setFilterCategory("")}
-                    style={{ ...linkButton, fontSize: 12 }}
-                  >
-                    Clear filter
-                  </button>
-                )}
+        {!centerId ? (
+          <p className={`${card} text-sm text-gray-600`}>Choose a center to see its supply requests.</p>
+        ) : !requests ? (
+          <Skeleton count={5} />
+        ) : (
+          <>
+            <div className={card}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className={`text-xl font-black ${NAVY}`}>
+                  Supply Requests
+                  {pending ? <span className="ml-2 rounded-full bg-red-600 px-2 py-0.5 align-middle text-xs font-bold text-white">{pending} pending</span> : null}
+                </h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status" className={`${control} mt-0 w-40`}>
+                    {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    <option value="">All statuses</option>
+                  </select>
+                  <button type="button" onClick={() => setDialog({})} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700">+ Add Supply Request</button>
+                </div>
               </div>
-            </Panel>
-          )}
-
-          {/* Supply List Table */}
-          <Panel style={{ marginBottom: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 15, fontWeight: 600 }}>All Supplies</span>
-                <CountBadge count={filteredSupplyList.length} total={supplyList.length} />
-              </div>
-              <div style={{ position: "relative" }}>
-                <SearchIcon />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search supplies…"
-                  style={{ ...inputStyle, padding: "7px 12px 7px 32px", fontSize: 13, width: 200 }}
-                />
-              </div>
-            </div>
-
-            {filteredSupplyList.length === 0 ? (
-              <EmptyState icon="🔍" title="No matching supplies" description="Try adjusting your search or filter." />
-            ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table style={tableStyle}>
-                  <thead>
+              <div className="mt-3 overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className={thead}>
                     <tr>
-                      <th style={thStyle}>Supply Name</th>
-                      <th style={{ ...thStyle, width: 70 }}>Qty</th>
-                      <th style={{ ...thStyle, width: 90 }}>Type</th>
-                      <th style={{ ...thStyle, width: 80 }}>Unit</th>
-                      <th style={{ ...thStyle, width: 100 }}>Est. Cost</th>
-                      <th style={{ ...thStyle, width: 120 }}>Category</th>
-                      <th style={thStyle}>Used In Lessons</th>
+                      {["Date", "Item", "Qty", "Classroom", "Requested By", "Purpose / Notes", "Status", "Note to Teacher", ""].map((h) => (
+                        <th key={h} className="px-3 py-2 font-bold">{h}</th>
+                      ))}
                     </tr>
                   </thead>
-                  <tbody>
-                    {filteredSupplyList.map((s, idx) => {
-                      const meta = CATEGORY_META[s.category] || CATEGORY_META.Other;
-                      return (
-                        <tr key={idx}
-                          style={{ transition: "background 0.15s" }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = "var(--admin-bg-secondary)"}
-                          onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
-                          <td style={{ ...tdStyle, fontWeight: 600 }}>{s.name}</td>
-                          <td style={tdStyle}>
-                            <span style={{
-                              display: "inline-block", minWidth: 28, textAlign: "center",
-                              padding: "2px 8px", borderRadius: 6,
-                              background: "var(--admin-bg-tertiary)", fontWeight: 700, fontSize: 13,
-                            }}>
-                              {s.totalQuantity}
-                            </span>
-                          </td>
-                          <td style={tdStyle}>
-                            <span style={{
-                              display: "inline-block", padding: "2px 8px", borderRadius: 999,
-                              background: s.quantityType === "per_student" ? "#f59e0b14" : "var(--admin-bg-tertiary)",
-                              color: s.quantityType === "per_student" ? "#f59e0b" : "var(--admin-text-muted)",
-                              fontWeight: 600, fontSize: 11,
-                            }}>
-                              {s.quantityType === "per_student" ? "Per Student" : "Total"}
-                            </span>
-                          </td>
-                          <td style={{ ...tdStyle, color: s.unit ? "var(--admin-text)" : "var(--admin-text-muted)" }}>
-                            {s.unit || "—"}
-                          </td>
-                          <td style={tdStyle}>
-                            {s.estimatedCost ? (
-                              <span style={{ fontWeight: 600, color: "#10b981" }}>${(s.estimatedCost).toFixed(2)}</span>
-                            ) : (
-                              <span style={{ color: "var(--admin-text-muted)" }}>—</span>
-                            )}
-                          </td>
-                          <td style={tdStyle}>
-                            <span style={{
-                              display: "inline-flex", alignItems: "center", gap: 4,
-                              padding: "3px 10px 3px 6px", borderRadius: 999,
-                              background: meta.color + "14", color: meta.color,
-                              fontSize: 12, fontWeight: 600,
-                            }}>
-                              <span style={{ fontSize: 13 }}>{meta.icon}</span>
-                              {s.category || "General"}
-                            </span>
-                          </td>
-                          <td style={{ ...tdStyle, fontSize: 12, color: "var(--admin-text-muted)" }}>
-                            {(s.lessons || []).length > 0 ? (
-                              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                                {(s.lessons || []).map((l, li) => (
-                                  <span key={li} style={{
-                                    padding: "2px 8px", borderRadius: 6,
-                                    background: "var(--admin-bg-tertiary)", fontSize: 11, fontWeight: 500,
-                                    color: "var(--admin-text)", whiteSpace: "nowrap",
-                                  }}>
-                                    {l.title}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : "—"}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                    {shown.map((r) => (
+                      <RequestRow
+                        key={r.id}
+                        request={r}
+                        onStatus={(value) => update(r.id, { status: value }, value === "FULFILLED" ? `${r.item} marked fulfilled.` : "")}
+                        onNote={(note) => update(r.id, { reviewNote: note }, `Note saved. ${r.requestedBy?.name || "The teacher"} was notified.`)}
+                        onEdit={() => setDialog(r)}
+                        onDelete={() => setDeleting(r)}
+                      />
+                    ))}
+                    {!shown.length ? (
+                      <tr>
+                        <td colSpan={9} className="px-3 py-6 text-center text-gray-500">
+                          {status === "PENDING" ? "No pending supply requests." : "No supply requests."}
+                        </td>
+                      </tr>
+                    ) : null}
                   </tbody>
                 </table>
               </div>
-            )}
-          </Panel>
-        </>
-      )}
-
-      {/* Supply Request List */}
-      <Panel style={{ marginTop: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 600 }}>Supply Requests</div>
-              <div style={{ fontSize: 13, color: "var(--admin-text-muted)", marginTop: 2 }}>
-                Requests submitted by teachers, plus supplies logged manually.
-              </div>
             </div>
-            {pendingRequestCount > 0 && (
-              <span style={{
-                fontSize: 11, fontWeight: 700, background: "#f59e0b14", color: "#f59e0b",
-                padding: "2px 8px", borderRadius: 999,
-              }}>
-                {pendingRequestCount} pending
-              </span>
-            )}
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <select value={requestStatusFilter} onChange={(e) => setRequestStatusFilter(e.target.value)} style={selectStyle}>
-              <option value="">All statuses</option>
-              {REQUEST_STATUSES.map((s) => (
-                <option key={s} value={s}>{STATUS_META[s].label}</option>
-              ))}
-            </select>
-            <button type="button" onClick={openAddRequest} style={primaryButton} disabled={!centerId}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <line x1="8" y1="3" x2="8" y2="13" /><line x1="3" y1="8" x2="13" y2="8" />
-                </svg>
-                Add Supply Request
-              </span>
-            </button>
-          </div>
-        </div>
 
-        {requestsLoading ? (
-          <SkeletonTable rows={4} cols={8} />
-        ) : filteredRequests.length === 0 ? (
-          <EmptyState
-            icon="🧾"
-            title="No supply requests"
-            description="Requests teachers submit from their checklist, or that you log manually, will appear here."
-          />
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={tableStyle}>
-              <thead>
-                <tr>
-                  <th style={{ ...thStyle, width: 110 }}>Date Requested</th>
-                  <th style={thStyle}>Item</th>
-                  <th style={{ ...thStyle, width: 60 }}>Qty</th>
-                  <th style={{ ...thStyle, width: 120 }}>Classroom</th>
-                  <th style={{ ...thStyle, width: 140 }}>Requested By</th>
-                  <th style={thStyle}>Purpose</th>
-                  <th style={{ ...thStyle, width: 140 }}>Status</th>
-                  <th style={thStyle}>Notes</th>
-                  <th style={{ ...thStyle, width: 80 }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRequests.map((r) => {
-                  const meta = STATUS_META[r.status] || STATUS_META.PENDING;
-                  return (
-                    <tr key={r.id}
-                      style={{ transition: "background 0.15s" }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = "var(--admin-bg-secondary)"}
-                      onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
-                      <td style={{ ...tdStyle, whiteSpace: "nowrap", color: "var(--admin-text-muted)", fontSize: 12 }}>
-                        {r.createdAt ? new Date(r.createdAt).toLocaleDateString() : "—"}
-                      </td>
-                      <td style={{ ...tdStyle, fontWeight: 600 }}>{r.item}</td>
-                      <td style={tdStyle}>{r.quantity}</td>
-                      <td style={tdStyle}>{r.classRoom?.name || "—"}</td>
-                      <td style={tdStyle}>{r.requestedBy?.name || r.requestedBy?.email || "—"}</td>
-                      <td style={{ ...tdStyle, color: r.purpose ? "var(--admin-text)" : "var(--admin-text-muted)", fontSize: 12 }}>
-                        {r.purpose || "—"}
-                      </td>
-                      <td style={tdStyle}>
-                        <select
-                          value={r.status}
-                          onChange={(e) => changeRequestStatus(r.id, e.target.value)}
-                          style={{
-                            ...selectStyle, padding: "4px 8px", fontSize: 12, fontWeight: 700,
-                            color: meta.color, background: meta.color + "14", border: `1px solid ${meta.color}40`,
-                          }}
-                        >
-                          {REQUEST_STATUSES.map((s) => (
-                            <option key={s} value={s}>{STATUS_META[s].label}</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td style={{ ...tdStyle, color: r.notes ? "var(--admin-text)" : "var(--admin-text-muted)", fontSize: 12 }}>
-                        {r.notes || "—"}
-                      </td>
-                      <td style={tdStyle}>
-                        <div style={{ display: "flex", gap: 4 }}>
-                          <button type="button" onClick={() => openEditRequest(r)} title="Edit" style={deleteIconBtn}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--admin-bg-tertiary)"; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M11 2l3 3-8 8-3.5 1L3 11l8-9z" />
-                            </svg>
-                          </button>
-                          <button type="button" onClick={() => deleteRequest(r.id)} title="Delete" style={deleteIconBtn}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.color = "#dc2626"; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--admin-text-muted)"; }}>
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                              <path d="M3 4.5h10M6.5 4.5V3a1 1 0 011-1h1a1 1 0 011 1v1.5M5 4.5l.5 8.5h5l.5-8.5M7 7v3.5M9 7v3.5" />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+            {supplies.length ? (
+              <div className={card}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className={`text-xl font-black ${NAVY}`}>Lesson Supplies</h2>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search supplies..." aria-label="Search supplies" className={`${control} mt-0 w-56`} />
+                    <button type="button" onClick={exportCsv} className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50">Export CSV</button>
+                  </div>
+                </div>
+                <div className="mt-3 overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className={thead}>
+                      <tr>{["Supply", "Qty", "Type", "Unit", "Est. Cost", "Category", "Used In Lessons"].map((h) => <th key={h} className="px-3 py-2 font-bold">{h}</th>)}</tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                      {filteredSupplies.map((s, i) => (
+                        <tr key={`${s.name}-${i}`}>
+                          <td className="px-3 py-2 font-semibold">{s.name}</td>
+                          <td className="px-3 py-2">{s.totalQuantity}</td>
+                          <td className="px-3 py-2">{s.quantityType === "per_student" ? "Per Student" : "Total"}</td>
+                          <td className="px-3 py-2">{s.unit || "—"}</td>
+                          <td className="px-3 py-2">{s.estimatedCost ? `$${s.estimatedCost.toFixed(2)}` : "—"}</td>
+                          <td className="px-3 py-2">{s.category || "General"}</td>
+                          <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{(s.lessons || []).map((l) => l.title).join(", ") || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
+          </>
         )}
-      </Panel>
+      </div>
 
-      {/* Add / Edit Supply Request Modal */}
-      {requestModalOpen && (
-        <div style={modalOverlay} onClick={closeRequestModal}>
-          <div style={modalPanel} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>
-                {editingRequestId ? "Edit Supply Request" : "Add Supply Request"}
-              </div>
-              <button type="button" onClick={closeRequestModal} style={linkButton}>Cancel</button>
-            </div>
-            <form onSubmit={saveRequest}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: 10, marginBottom: 10 }}>
-                <FormField label="Item">
-                  <input
-                    autoFocus
-                    placeholder="e.g. Construction paper"
-                    value={requestForm.item}
-                    onChange={(e) => setRequestForm((p) => ({ ...p, item: e.target.value }))}
-                    style={inputStyle}
-                    required
-                  />
-                </FormField>
-                <FormField label="Qty">
-                  <input
-                    type="number"
-                    min="1"
-                    value={requestForm.quantity}
-                    onChange={(e) => setRequestForm((p) => ({ ...p, quantity: parseInt(e.target.value) || 1 }))}
-                    style={inputStyle}
-                  />
-                </FormField>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                <FormField label="Classroom">
-                  <select
-                    value={requestForm.classRoomId}
-                    onChange={(e) => setRequestForm((p) => ({ ...p, classRoomId: e.target.value }))}
-                    style={inputStyle}
-                  >
-                    <option value="">None / Center-wide</option>
-                    {classrooms.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </FormField>
-                <FormField label="Status">
-                  <select
-                    value={requestForm.status}
-                    onChange={(e) => setRequestForm((p) => ({ ...p, status: e.target.value }))}
-                    style={inputStyle}
-                  >
-                    {REQUEST_STATUSES.map((s) => (
-                      <option key={s} value={s}>{STATUS_META[s].label}</option>
-                    ))}
-                  </select>
-                </FormField>
-              </div>
-              <div style={{ marginBottom: 10 }}>
-                <FormField label="Purpose">
-                  <input
-                    placeholder="What is this supply for?"
-                    value={requestForm.purpose}
-                    onChange={(e) => setRequestForm((p) => ({ ...p, purpose: e.target.value }))}
-                    style={inputStyle}
-                  />
-                </FormField>
-              </div>
-              <div style={{ marginBottom: 16 }}>
-                <FormField label="Notes">
-                  <textarea
-                    rows={2}
-                    placeholder="Optional notes"
-                    value={requestForm.notes}
-                    onChange={(e) => setRequestForm((p) => ({ ...p, notes: e.target.value }))}
-                    style={{ ...inputStyle, resize: "vertical" }}
-                  />
-                </FormField>
-              </div>
-              <div style={{ display: "flex", gap: 10 }}>
-                <button type="submit" disabled={savingRequest || !requestForm.item.trim()} style={primaryButton}>
-                  {savingRequest ? (
-                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <Spinner /> Saving…
-                    </span>
-                  ) : editingRequestId ? "Save Changes" : "Add Request"}
-                </button>
-                <button type="button" onClick={closeRequestModal} style={outlineButton}>Cancel</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {dialog ? (
+        <RequestDialog
+          centerId={centerId}
+          classrooms={classrooms}
+          request={dialog.id ? dialog : null}
+          onClose={() => setDialog(null)}
+          onSaved={async () => {
+            setDialog(null);
+            await load();
+            announce();
+          }}
+        />
+      ) : null}
+      <ConfirmDialog
+        open={Boolean(deleting)}
+        title="Delete supply request?"
+        message={`"${deleting?.item}" will be removed.`}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleting(null)}
+      />
     </CoachLayout>
   );
 }
 
-/* ── Sub-components ─────────────────────────────────────────── */
-
-function FormField({ label, children }) {
+function RequestRow({ request: r, onStatus, onNote, onEdit, onDelete }) {
+  const [note, setNote] = useState(r.reviewNote || "");
+  const meta = STATUSES.find((s) => s.value === r.status) || STATUSES[0];
+  const dirty = note.trim() !== (r.reviewNote || "");
   return (
-    <label style={{ display: "block" }}>
-      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--admin-text-muted)", marginBottom: 4 }}>
-        {label}
-      </div>
-      {children}
-    </label>
+    <tr className="align-top">
+      <td className="whitespace-nowrap px-3 py-2 text-gray-600">{new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</td>
+      <td className="px-3 py-2 font-semibold">{r.item}</td>
+      <td className="px-3 py-2">{r.quantity}</td>
+      <td className="px-3 py-2">{r.classRoom?.name || "—"}</td>
+      <td className="px-3 py-2">{r.requestedBy?.name || r.requestedBy?.email || "—"}</td>
+      <td className="max-w-xs px-3 py-2 text-gray-600 dark:text-gray-400">
+        {r.purpose || "—"}
+        {r.notes ? <div className="text-xs italic">{r.notes}</div> : null}
+      </td>
+      <td className="px-3 py-2">
+        <select value={r.status} onChange={(e) => onStatus(e.target.value)} aria-label={`Status of ${r.item}`} className={`rounded-md border-0 px-2 py-1 text-xs font-bold ${meta.pill}`}>
+          {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+      </td>
+      <td className="min-w-[14rem] px-3 py-2">
+        <div className="flex items-start gap-1">
+          <textarea
+            rows={1}
+            value={note}
+            onChange={(e) => setNote(e.target.value.slice(0, 1000))}
+            placeholder="Add a note for the teacher..."
+            aria-label={`Note to teacher about ${r.item}`}
+            className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800"
+          />
+          {dirty ? (
+            <button type="button" onClick={() => onNote(note)} className="rounded-md bg-blue-600 px-2 py-1 text-xs font-bold text-white hover:bg-blue-700">Save</button>
+          ) : null}
+        </div>
+      </td>
+      <td className="whitespace-nowrap px-3 py-2 text-right">
+        <button type="button" onClick={onEdit} className="mr-2 text-xs font-semibold text-blue-700 hover:underline">Edit</button>
+        <button type="button" onClick={onDelete} className="text-xs font-semibold text-red-600 hover:underline">Delete</button>
+      </td>
+    </tr>
   );
 }
 
-function Panel({ children, style }) {
-  return (
-    <div style={{
-      background: "var(--admin-bg)",
-      border: "1px solid var(--admin-border)",
-      borderRadius: 12, padding: 20,
-      ...style,
-    }}>
-      {children}
-    </div>
+function RequestDialog({ centerId, classrooms, request, onClose, onSaved }) {
+  const [form, setForm] = useState(() =>
+    request
+      ? { item: request.item, quantity: request.quantity, classRoomId: request.classRoomId || "", purpose: request.purpose || "", notes: request.notes || "" }
+      : EMPTY_FORM,
   );
-}
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const set = (patch) => setForm((f) => ({ ...f, ...patch }));
 
-function StatCard({ icon, label, value, color }) {
-  return (
-    <div style={{
-      background: "var(--admin-bg)",
-      border: "1px solid var(--admin-border)",
-      borderRadius: 12, padding: "16px 18px",
-      position: "relative", overflow: "hidden",
-    }}>
-      <div style={{
-        position: "absolute", top: -8, right: -8,
-        width: 48, height: 48, borderRadius: "50%",
-        background: color + "10",
-      }} />
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        <span style={{ fontSize: 16 }}>{icon}</span>
-        <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--admin-text-muted)" }}>{label}</span>
-      </div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: color }}>{value}</div>
-    </div>
-  );
-}
-
-function CountBadge({ count, total }) {
-  return (
-    <span style={{
-      fontSize: 11, fontWeight: 700, background: "var(--admin-bg-tertiary)",
-      color: "var(--admin-text-muted)", padding: "2px 8px", borderRadius: 999,
-    }}>
-      {count}{count !== total ? ` / ${total}` : ""}
-    </span>
-  );
-}
-
-function AlertBanner({ message, kind, onDismiss }) {
-  const isSuccess = kind === "success";
-  const bg = isSuccess ? "var(--admin-success-bg)" : "var(--admin-error-bg)";
-  const color = isSuccess ? "var(--admin-success-text)" : "var(--admin-error-text)";
-  const border = isSuccess ? "var(--admin-success-border)" : "var(--admin-error-border)";
-  const icon = isSuccess ? "✓" : "!";
-
-  return (
-    <div style={{
-      padding: "10px 14px", borderRadius: 10, marginBottom: 14,
-      background: bg, color, border: `1px solid ${border}`,
-      display: "flex", alignItems: "center", gap: 10, fontSize: 14,
-    }}>
-      <span style={{
-        width: 22, height: 22, borderRadius: 999,
-        background: color, color: bg,
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        fontSize: 12, fontWeight: 800, flexShrink: 0,
-      }}>{icon}</span>
-      <span style={{ flex: 1 }}>{message}</span>
-      {onDismiss && (
-        <button onClick={onDismiss} style={{
-          background: "none", border: "none", cursor: "pointer", color, fontSize: 18,
-          lineHeight: 1, padding: 0, opacity: 0.6,
-        }}>×</button>
-      )}
-    </div>
-  );
-}
-
-function EmptyState({ icon, title, description }) {
-  return (
-    <div style={{
-      textAlign: "center", padding: "40px 20px",
-      color: "var(--admin-text-muted)",
-    }}>
-      <div style={{ fontSize: 36, marginBottom: 8 }}>{icon}</div>
-      <div style={{ fontSize: 15, fontWeight: 600, color: "var(--admin-text)", marginBottom: 4 }}>{title}</div>
-      <div style={{ fontSize: 13 }}>{description}</div>
-    </div>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--admin-text-muted)" strokeWidth="1.5" strokeLinecap="round"
-      style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
-      <circle cx="7" cy="7" r="4.5" /><line x1="10.5" y1="10.5" x2="14" y2="14" />
-    </svg>
-  );
-}
-
-function Spinner() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" style={{ animation: "spin 1s linear infinite" }}>
-      <circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="20 12" strokeLinecap="round" />
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </svg>
-  );
-}
-
-function csvEscape(val) {
-  const str = String(val ?? "");
-  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
-    return `"${str.replace(/"/g, '""')}"`;
+  async function save() {
+    if (!form.item.trim()) return setError("Enter the item");
+    setSaving(true);
+    setError("");
+    const body = { centerId, item: form.item.trim(), quantity: Number(form.quantity) || 1, classRoomId: form.classRoomId || null, purpose: form.purpose || null, notes: form.notes || null };
+    try {
+      if (request) await apiJson(`/api/v1/supply-requests/${request.id}`, { method: "PUT", body: JSON.stringify(body) });
+      else await apiJson("/api/v1/supply-requests", { method: "POST", body: JSON.stringify(body) });
+      await onSaved();
+    } catch (e) {
+      setError(e.message || "Failed to save the request");
+      setSaving(false);
+    }
   }
-  return str;
+
+  return (
+    <Modal
+      title={request ? "Edit Supply Request" : "Add Supply Request"}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="rounded-lg border border-gray-300 px-5 py-2 text-sm font-bold">Cancel</button>
+          <button type="button" onClick={save} disabled={saving} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60">
+            {saving ? "Saving..." : "Save"}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        {error ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+        <div className="grid gap-3 sm:grid-cols-[1fr_6rem]">
+          <label className="block text-sm font-bold">
+            Item
+            <input value={form.item} onChange={(e) => set({ item: e.target.value })} className={control} />
+          </label>
+          <label className="block text-sm font-bold">
+            Quantity
+            <input type="number" min="1" value={form.quantity} onChange={(e) => set({ quantity: e.target.value })} className={control} />
+          </label>
+        </div>
+        <label className="block text-sm font-bold">
+          Classroom
+          <select value={form.classRoomId} onChange={(e) => set({ classRoomId: e.target.value })} className={control}>
+            <option value="">No classroom</option>
+            {classrooms.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+        <label className="block text-sm font-bold">
+          Purpose
+          <input value={form.purpose} onChange={(e) => set({ purpose: e.target.value })} className={control} />
+        </label>
+        <label className="block text-sm font-bold">
+          Notes
+          <input value={form.notes} onChange={(e) => set({ notes: e.target.value })} className={control} />
+        </label>
+      </div>
+    </Modal>
+  );
 }
-
-/* ── Styles ──────────────────────────────────────────────────── */
-
-const inputStyle = {
-  width: "100%",
-  padding: "8px 10px",
-  border: "1px solid var(--admin-border)",
-  borderRadius: 8,
-  boxSizing: "border-box",
-  fontSize: 13,
-  background: "var(--admin-bg)",
-  color: "var(--admin-text)",
-  outline: "none",
-};
-
-const selectStyle = {
-  padding: "8px 12px",
-  border: "1px solid var(--admin-border)",
-  borderRadius: 8,
-  fontSize: 13,
-  background: "var(--admin-bg)",
-  color: "var(--admin-text)",
-  cursor: "pointer",
-};
-
-const tableStyle = {
-  width: "100%",
-  borderCollapse: "collapse",
-};
-
-const thStyle = {
-  textAlign: "left",
-  fontSize: 11,
-  fontWeight: 700,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  color: "var(--admin-text-muted)",
-  padding: "10px 14px",
-  borderBottom: "2px solid var(--admin-border)",
-};
-
-const tdStyle = {
-  padding: "12px 14px",
-  borderBottom: "1px solid var(--admin-border-light, var(--admin-border))",
-  verticalAlign: "middle",
-  fontSize: 13,
-};
-
-const primaryButton = {
-  padding: "8px 18px",
-  background: "#6366f1",
-  color: "white",
-  border: "none",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontWeight: 700,
-  fontSize: 13,
-  transition: "background 0.15s",
-};
-
-const outlineButton = {
-  padding: "8px 14px",
-  background: "var(--admin-bg)",
-  color: "var(--admin-text)",
-  border: "1px solid var(--admin-border)",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontWeight: 600,
-  fontSize: 13,
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  transition: "all 0.15s",
-};
-
-const linkButton = {
-  background: "none",
-  border: "none",
-  color: "var(--admin-text-muted)",
-  fontSize: 13,
-  cursor: "pointer",
-  textDecoration: "underline",
-  textUnderlineOffset: 3,
-  padding: 0,
-};
-
-const deleteIconBtn = {
-  width: 28, height: 28, borderRadius: 8,
-  display: "inline-flex", alignItems: "center", justifyContent: "center",
-  background: "transparent", border: "none",
-  color: "var(--admin-text-muted)", cursor: "pointer",
-  transition: "all 0.15s", flexShrink: 0,
-};
-
-const modalOverlay = {
-  position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.5)",
-  display: "flex", alignItems: "center", justifyContent: "center",
-  padding: 20, zIndex: 1000,
-};
-
-const modalPanel = {
-  background: "var(--admin-bg)",
-  borderRadius: 14,
-  padding: 22,
-  width: "100%",
-  maxWidth: 440,
-  boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
-  border: "1px solid var(--admin-border)",
-};

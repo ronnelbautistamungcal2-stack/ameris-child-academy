@@ -1,4 +1,5 @@
 import { NAVY } from "@/components/reports/reportUi";
+import { useReportFilters } from "@/components/reports/ReportFilters";
 import StaffPerformanceTable from "@/components/reports/StaffPerformanceTable";
 import Skeleton from "@/components/ui/Skeleton";
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
@@ -16,6 +17,7 @@ function dayKey(d) {
 }
 
 export default function StaffPerformanceOverview({ Layout, layoutProps = {}, basePath }) {
+  const { staff: staffFilter } = useReportFilters();
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
   const [range, setRange] = useState(() => {
@@ -43,10 +45,11 @@ export default function StaffPerformanceOverview({ Layout, layoutProps = {}, bas
     if (!centerId || range.from > range.to) return;
     setData(null);
     setError("");
-    apiJson(`/api/v1/reports/center-performance?${new URLSearchParams({ centerId, from: range.from, to: range.to, staffOnly: "1" })}`)
+    const params = { centerId, from: range.from, to: range.to, staffOnly: "1", ...(staffFilter === "ALL" ? { allStaff: "1" } : {}) };
+    apiJson(`/api/v1/reports/center-performance?${new URLSearchParams(params)}`)
       .then(setData)
       .catch((e) => setError(e.message || "Failed to load staff performance"));
-  }, [centerId, range]);
+  }, [centerId, range, staffFilter]);
 
   return (
     <Layout title="Staff Performance" {...layoutProps}>

@@ -73,7 +73,8 @@ export default async function handler(req, res) {
     const members = await prisma.user.findMany({
       where: {
         centers: { some: { centerId: center.id } },
-        ...EMPLOYED_WHERE,
+        // Reports filter "All staff" (allStaff=1) keeps people no longer employed.
+        ...(req.query.allStaff === "1" ? {} : EMPLOYED_WHERE),
         OR: [{ role: { in: STAFF_ROLES } }, { roles: { hasSome: STAFF_ROLES } }],
       },
       select: { id: true, name: true, email: true, role: true, roles: true },

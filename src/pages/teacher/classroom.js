@@ -1044,6 +1044,8 @@ export default function TeacherClassroom() {
                   detailChildId={detailChildId}
                   onOpenDetail={setDetailChildId}
                   onCloseDetail={() => setDetailChildId("")}
+                  onActivityChanged={(updated) => setActivities((rows) => rows.map((a) => (a.id === updated.id ? { ...a, ...updated } : a)))}
+                  onActivityDeleted={(id) => setActivities((rows) => rows.filter((a) => a.id !== id))}
                 />
               </div>
 
@@ -1399,7 +1401,12 @@ function AttendanceSummaryPanel({ history, loading, children, attendanceByChildI
   );
 }
 
-function ActivityLogSummaryPanel({ activities, loading, children, classNameById, detailChildId, onOpenDetail, onCloseDetail }) {
+function ActivityLogSummaryPanel({ activities, loading, children, classNameById, detailChildId, onOpenDetail, onCloseDetail, onActivityChanged, onActivityDeleted }) {
+  // A drop-down section (client request 2026-10-02): closed until opened.
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [deleting, setDeleting] = useState(null);
+  const [actionError, setActionError] = useState("");
   const childSummaries = useMemo(() => {
     const byId = new Map();
     for (const ch of children || []) {
@@ -1443,19 +1450,25 @@ function ActivityLogSummaryPanel({ activities, loading, children, classNameById,
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-600">
-              <IconClipboard className="h-4 w-4" />
-            </span>
-            <h3 className="text-sm font-extrabold text-gray-900">Activity Log Summary</h3>
-          </div>
-          <p className="mt-0.5 text-xs text-gray-500">Today's logs per child, by activity type. Click a child to view past logs.</p>
-        </div>
-      </div>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className={`flex w-full flex-wrap items-center justify-between gap-3 text-left ${open ? "border-b border-gray-100 pb-3" : ""}`}
+      >
+        <span className="flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-blue-700">
+            <IconClipboard className="h-4 w-4" />
+          </span>
+          <span className="text-base font-extrabold text-[#0b2a5b]">Activity Logs – Today</span>
+        </span>
+        <span className="flex items-center gap-2 text-xs font-semibold text-gray-500">
+          {childSummaries.filter((s) => s.todayTotal > 0).length} children with logs
+          <span aria-hidden="true" className={`text-base text-blue-700 transition ${open ? "rotate-180" : ""}`}>▾</span>
+        </span>
+      </button>
 
-      {loading ? (
+      {!open ? null : loading ? (
         <div className="mt-3 text-sm text-gray-600">Loading activity logs...</div>
       ) : childSummaries.length === 0 ? (
         <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
@@ -1541,6 +1554,7 @@ function ActivityLogSummaryPanel({ activities, loading, children, classNameById,
               </button>
             </div>
 
+            {actionError ? <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{actionError}</div> : null}
             <div className="mt-3 flex flex-wrap gap-1.5">
               {ACTIVITY_TYPES.filter((type) => detailSummary.allCounts[type]).map((type) => {
                 const meta = ACTIVITY_TYPE_META[type];
@@ -1566,7 +1580,8 @@ function ActivityLogSummaryPanel({ activities, loading, children, classNameById,
                         const meta = ACTIVITY_TYPE_META[activity.type] || ACTIVITY_TYPE_META.OTHER;
                         const detail = describeActivity(activity);
                         return (
-                          <div key={activity.id} className="flex gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+                          <div key={activity.id}>
+                          <div className="flex gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
                             <div className="flex-shrink-0">
                               <span className={["flex h-7 w-7 items-center justify-center rounded-full border text-xs", meta.tint].join(" ")}>
                                 <span aria-hidden="true">{meta.icon}</span>
@@ -1584,6 +1599,57 @@ function ActivityLogSummaryPanel({ activities, loading, children, classNameById,
                                 </div>
                               ) : null}
                             </div>
+                            <div className="flex shrink-0 items-start gap-1">
+                              <button
+                                type="button"
+                                onClick={() => { setActionError(""); setEditing(activity); }}
+                                className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setActionError(""); setDeleting(activity); }}
+                                className="rounded-md border border-red-200 bg-white px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                            {deleting?.id === activity.id ? (
+                              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                                <span>Delete this {(ACTIVITY_TYPE_META[deleting.type] || ACTIVITY_TYPE_META.OTHER).label.toLowerCase()} log from {formatDateTime(deleting.createdAt)}?</span>
+                                <span className="flex gap-2">
+                                  <button type="button" onClick={() => setDeleting(null)} className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-700">Cancel</button>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      try {
+                                        await apiJson(`/api/v1/activities/${deleting.id}`, { method: "DELETE" });
+                                        onActivityDeleted(deleting.id);
+                                        setDeleting(null);
+                                      } catch (e) {
+                                        setActionError(e.message || "Failed to delete the log");
+                                      }
+                                    }}
+                                    className="rounded-md bg-red-600 px-3 py-1 text-xs font-bold text-white"
+                                  >
+                                    Delete
+                                  </button>
+                                </span>
+                              </div>
+                            ) : null}
+                            {editing?.id === activity.id ? (
+                              <EditLogForm
+                                activity={editing}
+                                onCancel={() => setEditing(null)}
+                                onSaved={(updated) => {
+                                  onActivityChanged(updated);
+                                  setEditing(null);
+                                }}
+                                onError={setActionError}
+                              />
+                            ) : null}
                           </div>
                         );
                       })}
@@ -1595,6 +1661,114 @@ function ActivityLogSummaryPanel({ activities, loading, children, classNameById,
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+// Edit a log from My Classroom: its time, the main details for its type, and notes.
+function EditLogForm({ activity, onCancel, onSaved, onError }) {
+  const details = activity.details && typeof activity.details === "object" ? activity.details : {};
+  const [form, setForm] = useState(() => ({
+    time: details.time || details.startTime || "",
+    notes: activity.notes || "",
+    amount: details.amount || "",
+    consumed: details.consumed || "",
+    quantity: details.quantity || "ALL",
+    diaperType: details.diaperType || "W",
+    toiletingType: details.toiletingType || "SUCCESS",
+    startTime: details.startTime || "",
+    endTime: details.endTime || "",
+  }));
+  const [saving, setSaving] = useState(false);
+  const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+  const type = activity.type;
+  const input = "mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm";
+
+  async function save() {
+    const next = { ...details };
+    if (type === "NAP") {
+      next.startTime = form.startTime;
+      next.endTime = form.endTime;
+      next.time = form.startTime || form.endTime || next.time;
+    } else {
+      if (form.time) next.time = form.time;
+      if (type === "BOTTLE") {
+        next.amount = form.amount;
+        next.consumed = form.consumed;
+      } else if (type === "MEAL" || type === "SNACK") {
+        next.quantity = form.quantity;
+      } else if (type === "DIAPER_CHANGE") {
+        next.diaperType = form.diaperType;
+      } else if (type === "TOILETING") {
+        next.toiletingType = form.toiletingType;
+      }
+    }
+    setSaving(true);
+    onError("");
+    try {
+      const updated = await apiJson(`/api/v1/activities/${activity.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ details: next, notes: form.notes || null }),
+      });
+      onSaved(updated);
+    } catch (e) {
+      onError(e.message || "Failed to save the log");
+      setSaving(false);
+    }
+  }
+
+  const meta = ACTIVITY_TYPE_META[type] || ACTIVITY_TYPE_META.OTHER;
+  return (
+    <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50/60 p-3">
+      <div className="text-sm font-extrabold text-[#0b2a5b]">Edit {meta.label} — {formatDateTime(activity.createdAt)}</div>
+      <div className="mt-2 grid gap-2 sm:grid-cols-3">
+        {type === "NAP" ? (
+          <>
+            <label className="text-xs font-semibold text-gray-700">Start<input type="time" value={form.startTime} onChange={(e) => set({ startTime: e.target.value })} className={input} /></label>
+            <label className="text-xs font-semibold text-gray-700">End<input type="time" value={form.endTime} onChange={(e) => set({ endTime: e.target.value })} className={input} /></label>
+          </>
+        ) : (
+          <label className="text-xs font-semibold text-gray-700">Time<input type="time" value={form.time} onChange={(e) => set({ time: e.target.value })} className={input} /></label>
+        )}
+        {type === "BOTTLE" ? (
+          <>
+            <label className="text-xs font-semibold text-gray-700">Offered (oz)<input value={form.amount} onChange={(e) => set({ amount: e.target.value })} className={input} /></label>
+            <label className="text-xs font-semibold text-gray-700">Consumed (oz)<input value={form.consumed} onChange={(e) => set({ consumed: e.target.value })} className={input} /></label>
+          </>
+        ) : null}
+        {type === "MEAL" || type === "SNACK" ? (
+          <label className="text-xs font-semibold text-gray-700">
+            Amount eaten
+            <select value={form.quantity} onChange={(e) => set({ quantity: e.target.value })} className={input}>
+              {Object.entries(QUANTITY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </label>
+        ) : null}
+        {type === "DIAPER_CHANGE" ? (
+          <label className="text-xs font-semibold text-gray-700">
+            Diaper
+            <select value={form.diaperType} onChange={(e) => set({ diaperType: e.target.value })} className={input}>
+              {Object.entries(DIAPER_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </label>
+        ) : null}
+        {type === "TOILETING" ? (
+          <label className="text-xs font-semibold text-gray-700">
+            Result
+            <select value={form.toiletingType} onChange={(e) => set({ toiletingType: e.target.value })} className={input}>
+              {Object.entries(TOILETING_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </label>
+        ) : null}
+      </div>
+      <label className="mt-2 block text-xs font-semibold text-gray-700">
+        Notes
+        <textarea rows={2} value={form.notes} onChange={(e) => set({ notes: e.target.value })} className={input} />
+      </label>
+      <div className="mt-2 flex justify-end gap-2">
+        <button type="button" onClick={onCancel} className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">Cancel</button>
+        <button type="button" onClick={save} disabled={saving} className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-60">{saving ? "Saving..." : "Save"}</button>
+      </div>
     </div>
   );
 }
@@ -1696,7 +1870,7 @@ function RosterRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <Link
-            href={`/teacher/children/${encodeURIComponent(child.id)}`}
+            href={`/teacher/student-performance-report?childId=${encodeURIComponent(child.id)}`}
             className="truncate text-sm font-extrabold text-gray-900 hover:text-blue-700 hover:underline"
           >
             {fullName(child)}

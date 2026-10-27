@@ -1,10 +1,10 @@
 import ParentLayout from "@/components/parent/ParentLayout";
-import ParentMessages from "@/components/parent/ParentMessages";
+import MessagesWorkspace from "@/components/messages/MessagesWorkspace";
 
 export default function ParentMessagesPage() {
   return (
     <ParentLayout title="Messages">
-      <ParentMessages />
+      <MessagesWorkspace variant="inbox" />
     </ParentLayout>
   );
 }

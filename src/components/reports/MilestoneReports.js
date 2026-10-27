@@ -1,4 +1,5 @@
 import { CenterSelect, NAVY, ReportControls, ReportMessage, ReportSheet, input, longDate, useReportCenters } from "@/components/reports/ReportSheet";
+import { isCurrentlyEnrolled, useReportFilters } from "@/components/reports/ReportFilters";
 import { apiJson } from "@/lib/api";
 import { localDateKey } from "@/lib/foodReports";
 import { useEffect, useMemo, useState } from "react";
@@ -142,6 +143,8 @@ function statusCell(status) {
 }
 
 export function MilestoneProgressReport() {
+  const reportFilters = useReportFilters();
+  const enrolledOnly = reportFilters.children !== "ALL";
   const { centers, centerId, setCenterId } = useReportCenters();
   const [filters, setFilters] = useFilters();
   const [data, setData] = useState(null);
@@ -150,10 +153,10 @@ export function MilestoneProgressReport() {
   useEffect(() => {
     if (!centerId) return;
     setError("");
-    apiJson(`/api/v1/reports/milestone-progress?${query(filters, { centerId })}`)
+    apiJson(`/api/v1/reports/milestone-progress?${query(filters, { centerId, ...(enrolledOnly ? { enrolledOnly: "1" } : {}) })}`)
       .then(setData)
       .catch((e) => setError(e.message || "Failed to load the report"));
-  }, [centerId, filters]);
+  }, [centerId, filters, enrolledOnly]);
 
   return (
     <div className="space-y-4">
@@ -194,6 +197,7 @@ export function MilestoneProgressReport() {
 }
 
 export function ChildStepsReport({ parent = false }) {
+  const reportFilters = useReportFilters();
   const { centers, centerId, setCenterId } = useReportCenters();
   const [children, setChildren] = useState([]);
   const [childId, setChildId] = useState("");
@@ -229,7 +233,9 @@ export function ChildStepsReport({ parent = false }) {
           Child
           <select value={childId} onChange={(e) => setChildId(e.target.value)} className={input}>
             <option value="">Select a child...</option>
-            {children.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {children
+              .filter((c) => parent || reportFilters.children === "ALL" || isCurrentlyEnrolled(c) || c.id === childId)
+              .map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </label>
         <FilterFields filters={filters} setFilters={setFilters} options={data?.filters || []} showAchieved />

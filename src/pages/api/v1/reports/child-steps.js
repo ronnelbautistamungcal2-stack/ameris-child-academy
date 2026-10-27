@@ -4,23 +4,23 @@ import { childStepsReport, milestoneParams } from "@/lib/milestoneReports";
 import prisma from "@/lib/prisma";
 import { hasAnyRole } from "@/lib/roles";
 
-const CHILD_SELECT = { id: true, firstName: true, lastName: true, birthDate: true, centerId: true, center: { select: { name: true } } };
+const CHILD_SELECT = { id: true, firstName: true, lastName: true, birthDate: true, centerId: true, enrollmentEndDate: true, center: { select: { name: true } } };
 
 /**
  * GET /api/v1/reports/child-steps[?centerId=]   the children the user can pick
  * GET /api/v1/reports/child-steps?childId=&date=&minMonths=&maxMonths=&categoryId=&subCategory=&achieved=yes|no
- * Child Steps of Progression Report: admins and Student Support (children at
+ * Child Steps of Progression Report: admins, coaches and Student Support (children at
  * their centers) and parents (their own children).
  */
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
-  if (!hasAnyRole(session.user, ["ADMIN", "STUDENT_SUPPORT", "PARENT"])) return res.status(403).json({ error: "Forbidden" });
+  if (!hasAnyRole(session.user, ["ADMIN", "COACH", "STUDENT_SUPPORT", "PARENT"])) return res.status(403).json({ error: "Forbidden" });
   if (req.method !== "GET") {
     res.setHeader("Allow", ["GET"]);
     return res.status(405).end();
   }
-  const isStaff = hasAnyRole(session.user, ["ADMIN", "STUDENT_SUPPORT"]);
+  const isStaff = hasAnyRole(session.user, ["ADMIN", "COACH", "STUDENT_SUPPORT"]);
 
   async function canSee(child) {
     if (session.user.role === "ADMIN") return true;
@@ -41,7 +41,12 @@ export default async function handler(req, res) {
     }
     const children = await prisma.child.findMany({ where, select: CHILD_SELECT, orderBy: [{ firstName: "asc" }, { lastName: "asc" }] });
     return res.status(200).json({
-      children: children.map((c) => ({ id: c.id, name: `${c.firstName || ""} ${c.lastName || ""}`.trim(), centerName: c.center?.name || "" })),
+      children: children.map((c) => ({
+        id: c.id,
+        name: `${c.firstName || ""} ${c.lastName || ""}`.trim(),
+        centerName: c.center?.name || "",
+        enrolled: !c.enrollmentEndDate || c.enrollmentEndDate >= new Date(new Date().setHours(0, 0, 0, 0)),
+      })),
     });
   }
 

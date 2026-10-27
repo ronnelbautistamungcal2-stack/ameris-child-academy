@@ -1,7 +1,15 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { normalizePolicyCategory } from "@/lib/policy-categories";
+import { parseDocument } from "@/lib/policyDocuments";
+import { userRoles } from "@/lib/roles";
 
+/**
+ * GET  /api/v1/policies?category=POLICY|RESOURCE[&centerId=]
+ *      Admins see every document; everyone else the active ones for any of
+ *      their roles.
+ * POST /api/v1/policies { category, title, url?, websiteUrl?, roles[], ... }  (admins)
+ */
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
@@ -10,7 +18,7 @@ export default async function handler(req, res) {
   const { centerId, category } = req.query;
 
   if (req.method === "GET") {
-    let where = user.role === "ADMIN" ? {} : { roles: { has: user.role } };
+    let where = user.role === "ADMIN" ? {} : { roles: { hasSome: userRoles(user) }, active: true };
     if (centerId) {
       if (user.role !== "ADMIN") {
         const ok = await hasAccessToCenter(user.id, centerId);
@@ -37,20 +45,9 @@ export default async function handler(req, res) {
     if (user.role !== "ADMIN") {
       return res.status(403).json({ error: "Only admins can manage policies" });
     }
-    const { title, description, url, roles, category: cat, centerId: cId } = req.body || {};
-    if (!title || !url || !Array.isArray(roles) || roles.length === 0) {
-      return res.status(400).json({ error: "title, url, and roles[] are required" });
-    }
-    const created = await prisma.policyDocument.create({
-      data: {
-        title,
-        description: description || null,
-        url,
-        roles,
-        category: normalizePolicyCategory(cat),
-        centerId: cId || null,
-      },
-    });
+    const parsed = parseDocument(req.body || {}, normalizePolicyCategory(req.body?.category));
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const created = await prisma.policyDocument.create({ data: parsed.data });
     return res.status(201).json(created);
   }
 

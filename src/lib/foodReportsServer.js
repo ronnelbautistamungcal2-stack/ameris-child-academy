@@ -15,6 +15,7 @@ import {
 import { dbDate } from "@/lib/menuAccess";
 import { COMPONENTS, MEALS, ageGroupsFor, componentsFor } from "@/lib/menuPlan";
 import prisma from "@/lib/prisma";
+import { enrolledWhere } from "@/lib/reportAccess";
 
 const childName = (c) => `${c.firstName || ""} ${c.lastName || ""}`.trim();
 
@@ -200,13 +201,15 @@ export async function mealProductionReport({ centerId, meal, from, to }) {
  * Meal Claim: a 1 for every child, day and meal a teacher logged, with totals,
  * and the monthly summary.
  */
-export async function mealClaimReport({ centerId, from, to }) {
+export async function mealClaimReport({ centerId, from, to, enrolledOnly = false }) {
   const dates = dateKeysBetween(from, to);
   const served = await mealLogsByDay(centerId, from, to);
   const loggedIds = new Set(Object.values(served).flatMap((byMeal) => Object.values(byMeal).flatMap((set) => [...set])));
   const children = await prisma.child.findMany({
     where: {
       centerId,
+      // "Currently enrolled" leaves out children whose enrollment has ended.
+      ...(enrolledOnly ? { AND: [enrolledWhere()] } : {}),
       OR: [
         { id: { in: [...loggedIds] } },
         {
@@ -220,6 +223,13 @@ export async function mealClaimReport({ centerId, from, to }) {
     select: { id: true, firstName: true, lastName: true, birthDate: true, classRoom: { select: { name: true } } },
     orderBy: [{ birthDate: "desc" }, { firstName: "asc" }],
   });
+  // Totals count only the children on the sheet.
+  if (enrolledOnly) {
+    const listed = new Set(children.map((c) => c.id));
+    for (const byMeal of Object.values(served)) {
+      for (const [meal, ids] of Object.entries(byMeal)) byMeal[meal] = new Set([...ids].filter((id) => listed.has(id)));
+    }
+  }
   const meals = MEALS.map((m) => m.key);
   const rows = children.map((c) => {
     const cells = {};

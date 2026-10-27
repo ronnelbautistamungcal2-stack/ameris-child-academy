@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { useEffect, useState } from "react";
 import PublicLayout from "@/components/public/PublicLayout";
 import { NAVBAR_OFFSET } from "@/components/public/PublicNavbar";
 
@@ -113,13 +114,29 @@ function HeroText({ className = "" }) {
   );
 }
 
+// Resources an admin added with "Add to Home Page" (client mockup 38-03) come
+// first, then the standing list.
 function ResourceList() {
+  const [added, setAdded] = useState([]);
+  useEffect(() => {
+    fetch("/api/v1/public/resources")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rows) => setAdded(Array.isArray(rows) ? rows : []))
+      .catch(() => {});
+  }, []);
+  const known = new Set(RESOURCES.map((r) => r.href));
+  const resources = [...added.filter((r) => !known.has(r.href)), ...RESOURCES];
+
   return (
     <section className="pb-16 sm:pb-20">
       <ul className="mx-auto w-full max-w-[1200px] divide-y divide-[#c9dcf3] px-6 lg:px-10">
-        {RESOURCES.map((resource) => (
-          <li key={resource.title} className="py-4">
-            <h2 className="text-[clamp(1.35rem,2.2vw,1.75rem)] font-bold leading-tight text-[#1b3f8f]">
+        {resources.map((resource) => (
+          <li key={resource.id || resource.title} className="py-4">
+            <h2 className="flex items-center gap-3 text-[clamp(1.35rem,2.2vw,1.75rem)] font-bold leading-tight text-[#1b3f8f]">
+              {resource.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={resource.logoUrl} alt="" className="h-8 w-8 rounded object-contain" />
+              ) : null}
               {resource.title}
             </h2>
             <p className="mt-1 text-[14px] leading-6 text-slate-800 sm:text-[15px]">

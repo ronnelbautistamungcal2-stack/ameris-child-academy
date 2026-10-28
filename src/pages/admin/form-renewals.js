@@ -1,1255 +1,407 @@
 import AdminLayout from "@/components/admin/AdminLayout";
-import FormLibraryPanel from "@/components/admin/FormLibraryPanel";
+import { Modal } from "@/components/training/trainingUi";
+import Skeleton from "@/components/ui/Skeleton";
+import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-/* ── tiny helpers ─────────────────────────────────────────── */
+// Admin Form Renewals (client mockups 36-02/03): each child's renewing forms
+// with expiration, days until due, status and a note; Add Form puts a new
+// form on the parents' Forms & Renewals page; a sent form opens with its
+// e-signature.
 
-function fmt(d) {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function daysUntil(dateStr) {
-  if (!dateStr) return null;
-  const ms = new Date(dateStr).getTime() - Date.now();
-  return Math.ceil(ms / 86_400_000);
-}
-
-function statusOf(s) {
-  if (!s.expiresAt) return "none";
-  const days = daysUntil(s.expiresAt);
-  if (days < 0) return "expired";
-  if (days <= 30) return "expiring";
-  return "active";
-}
-
-/* ── icons ────────────────────────────────────────────────── */
-
-function SvgIcon({ children, size = 20, ...rest }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      width={size}
-      height={size}
-      aria-hidden="true"
-      {...rest}
-    >
-      {children}
-    </svg>
-  );
-}
-
-function IconFileText(p) {
-  return (
-    <SvgIcon {...p}>
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-      <polyline points="10 9 9 9 8 9" />
-    </SvgIcon>
-  );
-}
-
-function IconRefresh(p) {
-  return (
-    <SvgIcon {...p}>
-      <polyline points="23 4 23 10 17 10" />
-      <polyline points="1 20 1 14 7 14" />
-      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-    </SvgIcon>
-  );
-}
-
-function IconAlertTriangle(p) {
-  return (
-    <SvgIcon {...p}>
-      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-      <line x1="12" y1="9" x2="12" y2="13" />
-      <line x1="12" y1="17" x2="12.01" y2="17" />
-    </SvgIcon>
-  );
-}
-
-function IconClock(p) {
-  return (
-    <SvgIcon {...p}>
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </SvgIcon>
-  );
-}
-
-function IconCheckCircle(p) {
-  return (
-    <SvgIcon {...p}>
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-      <polyline points="22 4 12 14.01 9 11.01" />
-    </SvgIcon>
-  );
-}
-
-function IconXCircle(p) {
-  return (
-    <SvgIcon {...p}>
-      <circle cx="12" cy="12" r="10" />
-      <line x1="15" y1="9" x2="9" y2="15" />
-      <line x1="9" y1="9" x2="15" y2="15" />
-    </SvgIcon>
-  );
-}
-
-function IconSearch(p) {
-  return (
-    <SvgIcon {...p}>
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </SvgIcon>
-  );
-}
-
-function IconX(p) {
-  return (
-    <SvgIcon {...p}>
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </SvgIcon>
-  );
-}
-
-function IconChevronLeft(p) {
-  return (
-    <SvgIcon {...p}>
-      <polyline points="15 18 9 12 15 6" />
-    </SvgIcon>
-  );
-}
-
-function IconChevronRight(p) {
-  return (
-    <SvgIcon {...p}>
-      <polyline points="9 18 15 12 9 6" />
-    </SvgIcon>
-  );
-}
-
-function IconUser(p) {
-  return (
-    <SvgIcon {...p}>
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </SvgIcon>
-  );
-}
-
-function IconCalendar(p) {
-  return (
-    <SvgIcon {...p}>
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
-    </SvgIcon>
-  );
-}
-
-function IconEye(p) {
-  return (
-    <SvgIcon {...p}>
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" />
-      <circle cx="12" cy="12" r="3" />
-    </SvgIcon>
-  );
-}
-
-function IconBell(p) {
-  return (
-    <SvgIcon {...p}>
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-    </SvgIcon>
-  );
-}
-
-/* ── sub-components ───────────────────────────────────────── */
-
-function StatCard({ label, value, sublabel, icon: Icon, iconBg, iconColor }) {
-  return (
-    <div
-      style={{
-        padding: 20,
-        borderRadius: 14,
-        background: "var(--admin-bg)",
-        border: "1px solid var(--admin-border)",
-        display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "space-between",
-        gap: 12,
-        transition: "box-shadow 0.15s, border-color 0.15s",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.06)";
-        e.currentTarget.style.borderColor = "var(--admin-text-faint)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = "none";
-        e.currentTarget.style.borderColor = "var(--admin-border)";
-      }}
-    >
-      <div>
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: "var(--admin-text-muted)" }}>
-          {label}
-        </div>
-        <div style={{ fontSize: 28, fontWeight: 800, marginTop: 6, color: "var(--admin-text)", lineHeight: 1 }}>
-          {value}
-        </div>
-        {sublabel ? (
-          <div style={{ fontSize: 11, color: "var(--admin-text-muted)", marginTop: 4 }}>{sublabel}</div>
-        ) : null}
-      </div>
-      {Icon ? (
-        <div
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 10,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: iconBg || "var(--admin-bg-tertiary)",
-            color: iconColor || "var(--admin-text-muted)",
-            flexShrink: 0,
-          }}
-        >
-          <Icon size={20} />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function Badge({ status }) {
-  const config = {
-    expired: {
-      bg: "var(--admin-error-bg)",
-      color: "var(--admin-error-text)",
-      border: "var(--admin-error-border)",
-      label: "Expired",
-      Icon: IconXCircle,
-    },
-    expiring: {
-      bg: "var(--admin-warning-bg)",
-      color: "var(--admin-warning-text)",
-      border: "var(--admin-warning-bg)",
-      label: "Expiring Soon",
-      Icon: IconAlertTriangle,
-    },
-    active: {
-      bg: "var(--admin-success-bg)",
-      color: "var(--admin-success-text)",
-      border: "var(--admin-success-border)",
-      label: "Active",
-      Icon: IconCheckCircle,
-    },
-    none: {
-      bg: "var(--admin-bg-tertiary)",
-      color: "var(--admin-text-muted)",
-      border: "var(--admin-border)",
-      label: "No Expiry",
-      Icon: null,
-    },
-  };
-  const c = config[status] || config.active;
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
-        fontSize: 11,
-        fontWeight: 700,
-        padding: "3px 10px",
-        borderRadius: 999,
-        background: c.bg,
-        color: c.color,
-        border: `1px solid ${c.border}`,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {c.Icon ? <c.Icon size={12} /> : null}
-      {c.label}
-    </span>
-  );
-}
-
-function Panel({ children, style }) {
-  return (
-    <div
-      style={{
-        background: "var(--admin-bg)",
-        border: "1px solid var(--admin-border)",
-        borderRadius: 14,
-        padding: 0,
-        overflow: "hidden",
-        ...style,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-function Banner({ message, kind, onDismiss }) {
-  const isSuccess = kind === "success";
-  const Icon = isSuccess ? IconCheckCircle : IconXCircle;
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 12,
-        padding: 14,
-        borderRadius: 12,
-        marginTop: 12,
-        background: isSuccess ? "var(--admin-success-bg)" : "var(--admin-error-bg)",
-        color: isSuccess ? "var(--admin-success-text)" : "var(--admin-error-text)",
-        border: `1px solid ${isSuccess ? "var(--admin-success-border)" : "var(--admin-error-border)"}`,
-        fontSize: 13,
-      }}
-    >
-      <Icon size={18} style={{ flexShrink: 0, marginTop: 1 }} />
-      <div style={{ flex: 1 }}>
-        <div style={{ fontWeight: 700 }}>{isSuccess ? "Success" : "Error"}</div>
-        <div style={{ marginTop: 2 }}>{message}</div>
-      </div>
-      {onDismiss ? (
-        <button
-          type="button"
-          onClick={onDismiss}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            color: "inherit",
-            opacity: 0.5,
-            padding: 2,
-            flexShrink: 0,
-          }}
-        >
-          <IconX size={16} />
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function DetailsModal({ record, onClose }) {
-  useEffect(() => {
-    const h = (e) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, [onClose]);
-
-  if (!record) return null;
-
-  const status = statusOf(record);
-  const days = daysUntil(record.expiresAt);
-  const childName = record.child
-    ? `${record.child.firstName} ${record.child.lastName || ""}`.trim()
-    : "—";
-
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 90,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "var(--admin-modal-overlay, rgba(0,0,0,0.5))",
-        padding: 16,
-        backdropFilter: "blur(4px)",
-      }}
-      onMouseDown={onClose}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 560,
-          background: "var(--admin-bg)",
-          border: "1px solid var(--admin-border)",
-          borderRadius: 16,
-          boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
-          overflow: "hidden",
-        }}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        {/* Modal header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "16px 20px",
-            borderBottom: "1px solid var(--admin-border-light)",
-          }}
-        >
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--admin-text)" }}>
-            Form Submission Details
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: "var(--admin-text-muted)",
-              padding: 4,
-              borderRadius: 6,
-              display: "flex",
-            }}
-          >
-            <IconX size={18} />
-          </button>
-        </div>
-
-        {/* Modal body */}
-        <div style={{ padding: 20 }}>
-          {/* Title + Badge */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 18, fontWeight: 800, color: "var(--admin-text)" }}>
-              {record.template?.title || "Unknown Form"}
-            </span>
-            <Badge status={status} />
-          </div>
-
-          {/* Days indicator */}
-          {record.expiresAt && days !== null ? (
-            <div
-              style={{
-                marginTop: 12,
-                padding: "10px 14px",
-                borderRadius: 10,
-                background: status === "expired"
-                  ? "var(--admin-error-bg)"
-                  : status === "expiring"
-                    ? "var(--admin-warning-bg)"
-                    : "var(--admin-success-bg)",
-                color: status === "expired"
-                  ? "var(--admin-error-text)"
-                  : status === "expiring"
-                    ? "var(--admin-warning-text)"
-                    : "var(--admin-success-text)",
-                fontSize: 13,
-                fontWeight: 600,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <IconClock size={16} />
-              {status === "expired"
-                ? `Expired ${Math.abs(days)} day${Math.abs(days) !== 1 ? "s" : ""} ago`
-                : `Expires in ${days} day${days !== 1 ? "s" : ""}`}
-            </div>
-          ) : null}
-
-          {/* Info grid */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 16,
-              marginTop: 16,
-            }}
-          >
-            {[
-              { icon: IconUser, label: "Child", value: childName },
-              { icon: IconUser, label: "Submitted By", value: record.submittedBy?.name || record.submittedBy?.email || "—" },
-              { icon: IconCalendar, label: "Submitted", value: fmt(record.createdAt) },
-              { icon: IconCalendar, label: "Expires", value: fmt(record.expiresAt) },
-            ].map(({ icon: IC, label, value }) => (
-              <div key={label} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 8,
-                    background: "var(--admin-bg-tertiary)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                    color: "var(--admin-text-muted)",
-                  }}
-                >
-                  <IC size={15} />
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.3, color: "var(--admin-text-muted)" }}>
-                    {label}
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "var(--admin-text)", marginTop: 2 }}>
-                    {value}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Renewal period info */}
-          {record.template?.renewalPeriodDays ? (
-            <div
-              style={{
-                marginTop: 16,
-                padding: "10px 14px",
-                borderRadius: 10,
-                background: "var(--admin-bg-secondary)",
-                border: "1px solid var(--admin-border-light)",
-                fontSize: 13,
-                color: "var(--admin-text-secondary)",
-              }}
-            >
-              Renewal period: <strong>{record.template.renewalPeriodDays} days</strong>
-            </div>
-          ) : null}
-        </div>
-
-        {/* Modal footer */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            padding: "12px 20px",
-            borderTop: "1px solid var(--admin-border-light)",
-            background: "var(--admin-bg-secondary)",
-          }}
-        >
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              padding: "8px 16px",
-              borderRadius: 8,
-              border: "1px solid var(--admin-border)",
-              background: "var(--admin-bg)",
-              color: "var(--admin-text-secondary)",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SkeletonRows({ count = 5 }) {
-  return Array.from({ length: count }, (_, i) => (
-    <tr key={i}>
-      {[180, 120, 130, 90, 90, 80, 40].map((w, ci) => (
-        <td key={ci} style={tdBase}>
-          <div
-            style={{
-              height: 14,
-              width: w,
-              maxWidth: "100%",
-              borderRadius: 6,
-              background: "var(--admin-bg-tertiary)",
-              animation: "pulse 1.5s ease-in-out infinite",
-              animationDelay: `${i * 0.05}s`,
-            }}
-          />
-        </td>
-      ))}
-    </tr>
-  ));
-}
-
-/* ── main component ───────────────────────────────────────── */
+const NAVY = "text-[#0b2a5b] dark:text-blue-100";
+const control = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800";
+const PAGE = 15;
+const STATUS = {
+  OVERDUE: ["Overdue", "bg-red-500", "text-red-600"],
+  DUE_SOON: ["Due Soon", "bg-amber-400", "text-amber-700"],
+  CURRENT: ["Current", "bg-blue-500", "text-blue-700"],
+};
+const FORM_TYPES = [
+  "Immunization Record",
+  "Physical Exam",
+  "Emergency Contact Form",
+  "Medication Authorization",
+  "Allergy Action Plan",
+  "Enrollment Agreement",
+  "Health Assessment",
+];
+const FREQUENCIES = [
+  { days: 30, label: "Every month" },
+  { days: 91, label: "Every 3 months" },
+  { days: 182, label: "Every 6 months" },
+  { days: 365, label: "Every year" },
+  { days: 730, label: "Every 2 years" },
+];
+const RANGES = [
+  { value: "", label: "All Dates" },
+  { value: "PAST", label: "Past due" },
+  { value: "30", label: "Next 30 days" },
+  { value: "90", label: "Next 90 days" },
+];
+const fmt = (v) => (v ? new Date(v).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Not sent");
 
 export default function FormRenewals() {
-  const [submissions, setSubmissions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [filter, setFilter] = useState("all");
-  const [checking, setChecking] = useState(false);
-  const [search, setSearch] = useState("");
+  const [centers, setCenters] = useState([]);
+  const [centerId, setCenterId] = useState("");
+  const [data, setData] = useState(null);
+  const [formType, setFormType] = useState("");
+  const [status, setStatus] = useState("");
+  const [range, setRange] = useState("");
   const [page, setPage] = useState(1);
-  const [detailRecord, setDetailRecord] = useState(null);
-  const [view, setView] = useState("renewals");
-  const pageSize = 10;
+  const [error, setError] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [viewing, setViewing] = useState("");
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError("");
+  useSyncedCenterId(centerId, setCenterId, centers);
+
+  useEffect(() => {
+    apiJson("/api/v1/centers")
+      .then((rows) => {
+        const list = Array.isArray(rows) ? rows : [];
+        setCenters(list);
+        if (list.length === 1) setCenterId(list[0].id);
+      })
+      .catch(() => {});
+  }, []);
+
+  const load = useCallback(async () => {
     try {
-      const data = await apiJson(`/api/v1/forms/renewals?status=${filter}`);
-      setSubmissions(Array.isArray(data) ? data : []);
+      setData(await apiJson(`/api/v1/forms/renewals/tracker${centerId ? `?centerId=${encodeURIComponent(centerId)}` : ""}`));
+      setError("");
     } catch (e) {
-      setError(e.message || "Failed to load renewals");
-    } finally {
-      setLoading(false);
+      setError(e.message || "Failed to load form renewals");
     }
-  }, [filter]);
+  }, [centerId]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    load();
+  }, [load]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [filter, search]);
+  useEffect(() => setPage(1), [formType, status, range, centerId]);
 
-  async function runCheck() {
-    setChecking(true);
-    setError("");
-    setSuccess("");
+  const rows = useMemo(
+    () =>
+      (data?.rows || []).filter((r) => {
+        if (formType && r.templateId !== formType) return false;
+        if (status && r.status !== status) return false;
+        if (range === "PAST" && !(r.daysUntilDue < 0)) return false;
+        if (range && range !== "PAST" && !(r.daysUntilDue !== null && r.daysUntilDue >= 0 && r.daysUntilDue <= Number(range))) return false;
+        return true;
+      }),
+    [data, formType, status, range],
+  );
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE));
+  const shown = rows.slice((page - 1) * PAGE, page * PAGE);
+
+  async function saveNote(row, note) {
     try {
-      const result = await apiJson("/api/v1/forms/renewals/check", { method: "POST" });
-      const parts = [];
-      if (result.summary?.expiringSoon) parts.push(`${result.summary.expiringSoon} expiring soon`);
-      if (result.summary?.expired) parts.push(`${result.summary.expired} expired`);
-      setSuccess(
-        `Renewal check complete. ${result.created || 0} notification${result.created !== 1 ? "s" : ""} sent.` +
-        (parts.length ? ` Found: ${parts.join(", ")}.` : ""),
-      );
-      await refresh();
+      await apiJson("/api/v1/forms/renewals/tracker", { method: "PUT", body: JSON.stringify({ templateId: row.templateId, childId: row.childId, note }) });
+      setData((d) => ({ ...d, rows: d.rows.map((r) => (r.key === row.key ? { ...r, note } : r)) }));
     } catch (e) {
-      setError(e.message || "Failed to run renewal check");
-    } finally {
-      setChecking(false);
+      setError(e.message || "Failed to save the note");
     }
   }
 
-  const counts = useMemo(() => {
-    let expiring = 0, expired = 0, active = 0;
-    for (const s of submissions) {
-      const st = statusOf(s);
-      if (st === "expired") expired++;
-      else if (st === "expiring") expiring++;
-      else if (st === "active") active++;
-    }
-    return { expiring, expired, active, total: submissions.length };
-  }, [submissions]);
-
-  const filtered = useMemo(() => {
-    if (!search.trim()) return submissions;
-    const q = search.toLowerCase().trim();
-    return submissions.filter((s) => {
-      const hay = [
-        s.template?.title,
-        s.child?.firstName,
-        s.child?.lastName,
-        s.submittedBy?.name,
-        s.submittedBy?.email,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return hay.includes(q);
-    });
-  }, [submissions, search]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const paged = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, page]);
-
-  const filterTabs = [
-    { key: "all", label: "All", count: counts.total },
-    { key: "expiring", label: "Expiring Soon", count: counts.expiring },
-    { key: "expired", label: "Expired", count: counts.expired },
-  ];
-
+  const tiles = data?.tiles || {};
   return (
     <AdminLayout title="Form Renewals">
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {/* ── Header ─────────────────────────────────── */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div
-              style={{
-                width: 42,
-                height: 42,
-                borderRadius: 12,
-                background: "#2563eb",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "white",
-                flexShrink: 0,
-              }}
-            >
-              <IconFileText size={22} />
-            </div>
-            <div>
-              <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "var(--admin-text)" }}>
-                Form Renewals
-              </h1>
-              <p style={{ margin: 0, fontSize: 13, color: "var(--admin-text-muted)" }}>
-                Track form expirations and send renewal reminders
-              </p>
-            </div>
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h1 className={`text-3xl font-black ${NAVY}`} style={{ fontFamily: "Georgia, serif" }}>Form Renewals</h1>
+          <div className="flex flex-wrap items-end gap-3">
+            <select value={centerId} onChange={(e) => setCenterId(e.target.value)} aria-label="Center" className={`${control} w-56`}>
+              <option value="">All Centers</option>
+              {centers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <button type="button" onClick={() => setAdding(true)} className="rounded-lg bg-[#0b2a5b] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#123a7a]">+ Add Form</button>
           </div>
-          {view === "renewals" ? (
-          <button
-            type="button"
-            onClick={runCheck}
-            disabled={checking}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "10px 16px",
-              background: "#2563eb",
-              color: "white",
-              border: "none",
-              borderRadius: 10,
-              cursor: checking ? "wait" : "pointer",
-              fontWeight: 700,
-              fontSize: 13,
-              opacity: checking ? 0.7 : 1,
-              transition: "opacity 0.15s, background 0.15s",
-              boxShadow: "0 1px 3px rgba(37,99,235,0.3)",
-            }}
-            onMouseEnter={(e) => { if (!checking) e.currentTarget.style.background = "#1d4ed8"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "#2563eb"; }}
-          >
-            <IconBell size={16} style={checking ? { animation: "spin 1s linear infinite" } : {}} />
-            {checking ? "Checking..." : "Run Renewal Check"}
-          </button>
-          ) : null}
         </div>
+        {error ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
 
-        {/* ── View switcher ──────────────────────────── */}
-        <div style={{ display: "flex", gap: 4, borderBottom: "1px solid var(--admin-border)" }}>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            { key: "renewals", label: "Renewals" },
-            { key: "library", label: "Form Library" },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => {
-                setView(tab.key);
-                setError("");
-                setSuccess("");
-              }}
-              style={{
-                padding: "10px 16px",
-                fontSize: 13,
-                fontWeight: 700,
-                border: "none",
-                background: "none",
-                cursor: "pointer",
-                color: view === tab.key ? "#2563eb" : "var(--admin-text-muted)",
-                borderBottom: `2px solid ${view === tab.key ? "#2563eb" : "transparent"}`,
-                marginBottom: -1,
-              }}
-            >
-              {tab.label}
+            ["!", tiles.overdue, "Overdue", "bg-red-50", "OVERDUE"],
+            ["🕒", tiles.dueSoon, "Due Soon (within 30 days)", "bg-amber-50", "DUE_SOON"],
+            ["📄", tiles.current, "Current", "bg-blue-50", "CURRENT"],
+            ["👥", tiles.total, "Total Forms Tracked", "bg-violet-50", ""],
+          ].map(([icon, value, label, tone, key]) => (
+            <button key={label} type="button" onClick={() => setStatus(key)} className={`flex items-center gap-3 rounded-xl p-4 text-left ${tone} dark:bg-gray-800`}>
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-xl font-black text-[#0b2a5b] shadow-sm" aria-hidden="true">{icon}</span>
+              <span>
+                <span className={`block text-2xl font-black ${NAVY}`}>{value ?? "—"}</span>
+                <span className="text-sm text-[#0b2a5b] dark:text-blue-100">{label}</span>
+              </span>
             </button>
           ))}
         </div>
 
-        {/* ── Banners ────────────────────────────────── */}
-        {error ? <Banner kind="error" message={error} onDismiss={() => setError("")} /> : null}
-        {success ? <Banner kind="success" message={success} onDismiss={() => setSuccess("")} /> : null}
-
-        {view === "library" ? (
-          <FormLibraryPanel onError={setError} onSuccess={setSuccess} />
-        ) : (
-        <>
-        {/* ── Stat cards ─────────────────────────────── */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-          <StatCard
-            label="Expiring Soon"
-            value={counts.expiring}
-            sublabel="Within 30 days"
-            icon={IconAlertTriangle}
-            iconBg="var(--admin-warning-bg)"
-            iconColor="var(--admin-warning-text)"
-          />
-          <StatCard
-            label="Expired"
-            value={counts.expired}
-            sublabel="Needs renewal"
-            icon={IconXCircle}
-            iconBg="var(--admin-error-bg)"
-            iconColor="var(--admin-error-text)"
-          />
-          <StatCard
-            label="Active"
-            value={counts.active}
-            sublabel="Up to date"
-            icon={IconCheckCircle}
-            iconBg="var(--admin-success-bg)"
-            iconColor="var(--admin-success-text)"
-          />
-          <StatCard
-            label="Total Forms"
-            value={counts.total}
-            sublabel="With renewal tracking"
-            icon={IconFileText}
-            iconBg="var(--admin-info-bg)"
-            iconColor="var(--admin-info-text)"
-          />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
+          <label className="text-sm font-bold">
+            Form Type
+            <select value={formType} onChange={(e) => setFormType(e.target.value)} className={`${control} mt-1`}>
+              <option value="">All Form Types</option>
+              {(data?.formTypes || []).map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+            </select>
+          </label>
+          <label className="text-sm font-bold">
+            Status
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className={`${control} mt-1`}>
+              <option value="">All Statuses</option>
+              {Object.entries(STATUS).map(([value, [label]]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </label>
+          <label className="text-sm font-bold">
+            Due Date Range
+            <select value={range} onChange={(e) => setRange(e.target.value)} className={`${control} mt-1`}>
+              {RANGES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
+          </label>
+          <button type="button" onClick={() => { setFormType(""); setStatus(""); setRange(""); }} className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-bold text-blue-700">Clear Filters</button>
         </div>
 
-        {/* ── Filter + Search bar ────────────────────── */}
-        <Panel>
-          <div style={{ padding: "14px 16px", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            {/* Filter tabs */}
-            <div style={{ display: "flex", gap: 4, background: "var(--admin-bg-secondary)", borderRadius: 8, padding: 3 }}>
-              {filterTabs.map((t) => (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => setFilter(t.key)}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "6px 12px",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    border: "none",
-                    borderRadius: 6,
-                    cursor: "pointer",
-                    transition: "all 0.15s",
-                    background: filter === t.key ? "var(--admin-bg)" : "transparent",
-                    color: filter === t.key ? "var(--admin-text)" : "var(--admin-text-muted)",
-                    boxShadow: filter === t.key ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-                  }}
-                >
-                  {t.label}
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      minWidth: 20,
-                      height: 20,
-                      padding: "0 6px",
-                      borderRadius: 999,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      background: filter === t.key ? "#2563eb" : "var(--admin-bg-tertiary)",
-                      color: filter === t.key ? "white" : "var(--admin-text-muted)",
-                    }}
-                  >
-                    {t.count}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            {/* Search */}
-            <div style={{ position: "relative", minWidth: 220 }}>
-              <IconSearch
-                size={16}
-                style={{
-                  position: "absolute",
-                  left: 10,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "var(--admin-text-faint)",
-                  pointerEvents: "none",
-                }}
-              />
-              <input
-                type="text"
-                placeholder="Search forms, children, users..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "8px 32px 8px 32px",
-                  fontSize: 13,
-                  borderRadius: 8,
-                  border: "1px solid var(--admin-border)",
-                  background: "var(--admin-bg)",
-                  color: "var(--admin-text)",
-                  outline: "none",
-                }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = "#2563eb"; e.currentTarget.style.boxShadow = "0 0 0 2px rgba(37,99,235,0.15)"; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = "var(--admin-border)"; e.currentTarget.style.boxShadow = "none"; }}
-              />
-              {search ? (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  style={{
-                    position: "absolute",
-                    right: 8,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    color: "var(--admin-text-faint)",
-                    padding: 2,
-                    display: "flex",
-                  }}
-                >
-                  <IconX size={14} />
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          {/* Results count bar */}
-          <div
-            style={{
-              padding: "8px 16px",
-              borderTop: "1px solid var(--admin-border-light)",
-              borderBottom: "1px solid var(--admin-border-light)",
-              background: "var(--admin-bg-secondary)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              fontSize: 12,
-              color: "var(--admin-text-muted)",
-            }}
-          >
-            <span>
-              Showing <strong style={{ color: "var(--admin-text)" }}>{filtered.length ? (page - 1) * pageSize + 1 : 0}</strong>
-              {" – "}
-              <strong style={{ color: "var(--admin-text)" }}>{Math.min(page * pageSize, filtered.length)}</strong>
-              {" of "}
-              <strong style={{ color: "var(--admin-text)" }}>{filtered.length}</strong>
-              {" results"}
-            </span>
-          </div>
-
-          {/* ── Table ──────────────────────────────── */}
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr>
-                  {["Form", "Child", "Submitted By", "Submitted", "Expires", "Status", ""].map((h) => (
-                    <th key={h} style={thBase}>{h}</th>
-                  ))}
-                </tr>
+        <h2 className={`text-2xl font-black ${NAVY}`} style={{ fontFamily: "Georgia, serif" }}>Form Renewals</h2>
+        {!data ? (
+          <Skeleton count={8} />
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
+            <table className="min-w-full text-sm">
+              <thead className="bg-blue-50 text-left text-[#0b2a5b] dark:bg-gray-800 dark:text-blue-100">
+                <tr>{["Parent", "Child", "Form Type", "Current Expiration Date", "Days Until Due", "Status", "Notes", ""].map((h) => <th key={h} className="px-3 py-2.5 font-bold">{h}</th>)}</tr>
               </thead>
-              <tbody>
-                {loading ? (
-                  <SkeletonRows count={5} />
-                ) : paged.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} style={{ padding: "48px 16px", textAlign: "center" }}>
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-                        <div
-                          style={{
-                            width: 56,
-                            height: 56,
-                            borderRadius: "50%",
-                            background: "var(--admin-bg-tertiary)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: "var(--admin-text-faint)",
-                          }}
-                        >
-                          <IconFileText size={28} />
-                        </div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--admin-text-secondary)" }}>
-                          No forms found
-                        </div>
-                        <div style={{ fontSize: 12, color: "var(--admin-text-muted)", maxWidth: 300 }}>
-                          {search
-                            ? "Try adjusting your search terms."
-                            : filter !== "all"
-                              ? "No forms match this filter. Try selecting \"All\"."
-                              : "No forms with renewal tracking have been submitted yet."}
-                        </div>
-                        {(search || filter !== "all") ? (
-                          <button
-                            type="button"
-                            onClick={() => { setSearch(""); setFilter("all"); }}
-                            style={{
-                              marginTop: 4,
-                              padding: "6px 14px",
-                              borderRadius: 6,
-                              border: "1px solid var(--admin-border)",
-                              background: "var(--admin-bg)",
-                              color: "var(--admin-text-secondary)",
-                              fontSize: 12,
-                              fontWeight: 600,
-                              cursor: "pointer",
-                            }}
-                          >
-                            Clear filters
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  paged.map((s) => {
-                    const status = statusOf(s);
-                    const days = daysUntil(s.expiresAt);
-                    return (
-                      <tr
-                        key={s.id}
-                        style={{ cursor: "pointer", transition: "background 0.1s" }}
-                        onClick={() => setDetailRecord(s)}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--admin-accent-bg)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                      >
-                        <td style={tdBase}>
-                          <div style={{ fontWeight: 700, color: "var(--admin-text)" }}>
-                            {s.template?.title || "—"}
-                          </div>
-                          {s.template?.renewalPeriodDays ? (
-                            <div style={{ fontSize: 11, color: "var(--admin-text-faint)", marginTop: 2 }}>
-                              {s.template.renewalPeriodDays}-day renewal
-                            </div>
-                          ) : null}
-                        </td>
-                        <td style={tdBase}>
-                          {s.child ? (
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <div
-                                style={{
-                                  width: 28,
-                                  height: 28,
-                                  borderRadius: "50%",
-                                  background: "var(--admin-bg-tertiary)",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  color: "var(--admin-text-faint)",
-                                  fontSize: 11,
-                                  fontWeight: 700,
-                                  flexShrink: 0,
-                                }}
-                              >
-                                {(s.child.firstName?.[0] || "").toUpperCase()}
-                              </div>
-                              <span style={{ color: "var(--admin-text-secondary)" }}>
-                                {s.child.firstName} {s.child.lastName || ""}
-                              </span>
-                            </div>
-                          ) : (
-                            <span style={{ color: "var(--admin-text-muted)" }}>—</span>
-                          )}
-                        </td>
-                        <td style={{ ...tdBase, color: "var(--admin-text-secondary)" }}>
-                          {s.submittedBy?.name || s.submittedBy?.email || "—"}
-                        </td>
-                        <td style={{ ...tdBase, color: "var(--admin-text-muted)", whiteSpace: "nowrap" }}>
-                          {fmt(s.createdAt)}
-                        </td>
-                        <td style={tdBase}>
-                          <div style={{ whiteSpace: "nowrap", color: "var(--admin-text-secondary)" }}>
-                            {fmt(s.expiresAt)}
-                          </div>
-                          {days !== null && s.expiresAt ? (
-                            <div
-                              style={{
-                                fontSize: 11,
-                                marginTop: 2,
-                                color: status === "expired"
-                                  ? "var(--admin-error-text)"
-                                  : status === "expiring"
-                                    ? "var(--admin-warning-text)"
-                                    : "var(--admin-text-faint)",
-                                fontWeight: 600,
-                              }}
-                            >
-                              {status === "expired"
-                                ? `${Math.abs(days)}d overdue`
-                                : `${days}d remaining`}
-                            </div>
-                          ) : null}
-                        </td>
-                        <td style={tdBase}>
-                          <Badge status={status} />
-                        </td>
-                        <td style={{ ...tdBase, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                          <button
-                            type="button"
-                            title="View details"
-                            onClick={() => setDetailRecord(s)}
-                            style={{
-                              background: "none",
-                              border: "1px solid var(--admin-border)",
-                              borderRadius: 6,
-                              cursor: "pointer",
-                              padding: "4px 6px",
-                              display: "inline-flex",
-                              color: "var(--admin-text-muted)",
-                              transition: "all 0.15s",
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = "#2563eb";
-                              e.currentTarget.style.color = "#2563eb";
-                              e.currentTarget.style.background = "var(--admin-accent-bg)";
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = "var(--admin-border)";
-                              e.currentTarget.style.color = "var(--admin-text-muted)";
-                              e.currentTarget.style.background = "none";
-                            }}
-                          >
-                            <IconEye size={15} />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* ── Pagination ─────────────────────────── */}
-          {totalPages > 1 ? (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "10px 16px",
-                borderTop: "1px solid var(--admin-border-light)",
-                fontSize: 12,
-                color: "var(--admin-text-muted)",
-              }}
-            >
-              <span>
-                Page <strong style={{ color: "var(--admin-text)" }}>{page}</strong> of{" "}
-                <strong style={{ color: "var(--admin-text)" }}>{totalPages}</strong>
-              </span>
-              <div style={{ display: "flex", gap: 4 }}>
-                <button
-                  type="button"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  style={paginationBtn(page <= 1)}
-                >
-                  <IconChevronLeft size={14} /> Prev
-                </button>
-                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                  let n;
-                  if (totalPages <= 5) {
-                    n = i + 1;
-                  } else if (page <= 3) {
-                    n = i + 1;
-                  } else if (page >= totalPages - 2) {
-                    n = totalPages - 4 + i;
-                  } else {
-                    n = page - 2 + i;
-                  }
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                {shown.map((r) => {
+                  const [label, dot, text] = STATUS[r.status];
                   return (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setPage(n)}
-                      style={{
-                        padding: "4px 10px",
-                        borderRadius: 6,
-                        border: n === page ? "1px solid #2563eb" : "1px solid transparent",
-                        background: n === page ? "#2563eb" : "transparent",
-                        color: n === page ? "white" : "var(--admin-text-secondary)",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        transition: "all 0.15s",
-                      }}
-                    >
-                      {n}
-                    </button>
+                    <tr key={r.key}>
+                      <td className="px-3 py-2 text-[#0b2a5b] dark:text-blue-100">{r.parent || "—"}</td>
+                      <td className="px-3 py-2 text-[#0b2a5b] dark:text-blue-100">{r.child}</td>
+                      <td className="px-3 py-2 text-[#0b2a5b] dark:text-blue-100">{r.formType}</td>
+                      <td className="px-3 py-2">{fmt(r.expiration)}</td>
+                      <td className="px-3 py-2">{r.daysUntilDue === null ? "—" : `${r.daysUntilDue} days`}</td>
+                      <td className="px-3 py-2">
+                        <span className={`inline-flex items-center gap-1.5 font-semibold ${text}`}>
+                          <span className={`h-2.5 w-2.5 rounded-full ${dot}`} aria-hidden="true" />
+                          {label}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          defaultValue={r.note}
+                          key={`${r.key}-${r.note}`}
+                          onBlur={(e) => e.target.value !== r.note && saveNote(r, e.target.value)}
+                          aria-label={`Note for ${r.child} ${r.formType}`}
+                          className="w-48 rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800"
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        {r.submissionId ? (
+                          <button type="button" onClick={() => setViewing(r.submissionId)} className="text-xs font-semibold text-blue-700 underline">View</button>
+                        ) : null}
+                      </td>
+                    </tr>
                   );
                 })}
-                <button
-                  type="button"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  style={paginationBtn(page >= totalPages)}
-                >
-                  Next <IconChevronRight size={14} />
-                </button>
-              </div>
+                {!rows.length ? (
+                  <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-500">{data.rows.length ? "No forms match these filters." : "No renewing forms yet. Use Add Form to add one."}</td></tr>
+                ) : null}
+              </tbody>
+            </table>
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm text-gray-600">
+              <span>Showing {rows.length ? (page - 1) * PAGE + 1 : 0}–{Math.min(rows.length, page * PAGE)} of {rows.length} items</span>
+              <span className="flex gap-1">
+                <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded border border-gray-300 px-2 disabled:opacity-40" aria-label="Previous page">‹</button>
+                <span className="rounded bg-blue-600 px-2 font-bold text-white">{page}</span>
+                <button type="button" disabled={page >= pages} onClick={() => setPage(page + 1)} className="rounded border border-gray-300 px-2 disabled:opacity-40" aria-label="Next page">›</button>
+              </span>
             </div>
-          ) : null}
-        </Panel>
-        </>
+          </div>
         )}
       </div>
 
-      {/* ── Details Modal ──────────────────────────── */}
-      {detailRecord ? (
-        <DetailsModal record={detailRecord} onClose={() => setDetailRecord(null)} />
+      {adding ? (
+        <AddFormDialog
+          centerId={centerId}
+          onClose={() => setAdding(false)}
+          onSaved={async () => {
+            setAdding(false);
+            await load();
+          }}
+        />
       ) : null}
-
-      {/* pulse animation for skeleton */}
-      <style jsx global>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+      {viewing ? <SignedFormDialog submissionId={viewing} onClose={() => setViewing("")} /> : null}
     </AdminLayout>
   );
 }
 
-/* ── shared inline styles ─────────────────────────────────── */
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
-const thBase = {
-  padding: "10px 14px",
-  background: "var(--admin-bg-secondary)",
-  borderBottom: "2px solid var(--admin-border)",
-  textAlign: "left",
-  fontWeight: 700,
-  fontSize: 11,
-  textTransform: "uppercase",
-  letterSpacing: 0.3,
-  color: "var(--admin-text-muted)",
-  whiteSpace: "nowrap",
-};
+function AddFormDialog({ centerId, onClose, onSaved }) {
+  const [form, setForm] = useState({ type: "", otherType: "", days: "", attachment: null });
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-const tdBase = {
-  padding: "12px 14px",
-  borderBottom: "1px solid var(--admin-border-light)",
-  verticalAlign: "top",
-};
+  async function upload(file) {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) return setError("Files must be 10 MB or smaller.");
+    if (!/\.(pdf|docx?|jpe?g|png)$/i.test(file.name)) return setError("Accepted formats: PDF, DOC, DOCX, JPG, PNG.");
+    setUploading(true);
+    setError("");
+    try {
+      const saved = await apiJson("/api/v1/uploads", { method: "POST", body: JSON.stringify({ filename: file.name, mimeType: file.type, dataBase64: await fileToBase64(file) }) });
+      setForm((f) => ({ ...f, attachment: { url: saved.url, name: file.name, size: file.size } }));
+    } catch (e) {
+      setError(e.message || "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
 
-function paginationBtn(disabled) {
-  return {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    padding: "4px 10px",
-    borderRadius: 6,
-    border: "1px solid var(--admin-border)",
-    background: "var(--admin-bg)",
-    color: disabled ? "var(--admin-text-faint)" : "var(--admin-text-secondary)",
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: disabled ? "default" : "pointer",
-    opacity: disabled ? 0.5 : 1,
-  };
+  async function save() {
+    const title = form.type === "OTHER" ? form.otherType.trim() : form.type;
+    if (!title) return setError("Select a form type.");
+    if (!form.days) return setError("Select how often it expires.");
+    if (!form.attachment) return setError("Upload the form.");
+    setSaving(true);
+    setError("");
+    try {
+      await apiJson("/api/v1/forms/templates", {
+        method: "POST",
+        body: JSON.stringify({
+          title,
+          targetRole: "PARENT",
+          assignmentType: "CHILD",
+          active: true,
+          requiresRenewal: true,
+          renewalPeriodDays: Number(form.days),
+          centerId: centerId || null,
+          attachmentUrl: form.attachment.url,
+          attachmentName: form.attachment.name,
+          attachmentSize: form.attachment.size,
+        }),
+      });
+      await onSaved();
+    } catch (e) {
+      setError(e.message || "Failed to save the form");
+      setSaving(false);
+    }
+  }
+
+  const label = "block text-sm font-bold text-[#0b2a5b] dark:text-blue-100";
+  return (
+    <Modal
+      title="📄 Add Form"
+      label="Add Form"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="rounded-lg border border-blue-300 px-6 py-2 text-sm font-bold text-[#0b2a5b]">Cancel</button>
+          <button type="button" onClick={save} disabled={saving || uploading} className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-bold text-white disabled:opacity-60">{saving ? "Saving..." : "Save Form"}</button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        {error ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+        <label className={label}>
+          Form Type <span className="text-red-500">*</span>
+          <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className={`${control} mt-1`}>
+            <option value="">Select a form type</option>
+            {FORM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            <option value="OTHER">Other…</option>
+          </select>
+        </label>
+        {form.type === "OTHER" ? (
+          <label className={label}>Form name<input value={form.otherType} onChange={(e) => setForm({ ...form, otherType: e.target.value })} className={`${control} mt-1`} /></label>
+        ) : null}
+        <label className={label}>
+          How often it expires? <span className="text-red-500">*</span>
+          <select value={form.days} onChange={(e) => setForm({ ...form, days: e.target.value })} className={`${control} mt-1`}>
+            <option value="">Select frequency</option>
+            {FREQUENCIES.map((f) => <option key={f.days} value={f.days}>{f.label}</option>)}
+          </select>
+        </label>
+        <div>
+          <div className={label}>Upload Attachment <span className="text-red-500">*</span></div>
+          <label
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              upload(e.dataTransfer.files?.[0]);
+            }}
+            className="mt-1 flex cursor-pointer flex-col items-center rounded-xl border-2 border-dashed border-blue-200 px-4 py-6 text-center text-sm"
+          >
+            <span className="text-2xl text-blue-600" aria-hidden="true">☁</span>
+            <span className="font-bold text-blue-800">{uploading ? "Uploading..." : form.attachment ? form.attachment.name : "Drag and drop a file here"}</span>
+            <span className="text-gray-600">or click to upload</span>
+            <span className="text-xs text-gray-500">Accepted formats: PDF, DOC, DOCX, JPG, PNG (Max 10 MB)</span>
+            <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="hidden" onChange={(e) => upload(e.target.files?.[0])} />
+          </label>
+        </div>
+        <p className="text-xs text-gray-500">The form appears on every family&apos;s Forms &amp; Renewals page{centerId ? " at this center" : ""}.</p>
+      </div>
+    </Modal>
+  );
+}
+
+function SignedFormDialog({ submissionId, onClose }) {
+  const [sub, setSub] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    apiJson(`/api/v1/forms/submissions/${submissionId}`)
+      .then(setSub)
+      .catch((e) => setError(e.message || "Failed to load the form"));
+  }, [submissionId]);
+  const data = sub?.data && typeof sub.data === "object" ? sub.data : {};
+  const answers = Object.entries(data).filter(([key]) => !["certification", "document", "notes"].includes(key));
+  return (
+    <Modal
+      title={sub?.template?.title || "Form"}
+      label="Submitted form"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" onClick={() => window.print()} className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-bold text-blue-700">🖨 Print</button>
+          <button type="button" onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-bold">Close</button>
+        </>
+      }
+    >
+      {error ? <p className="text-sm text-red-600">{error}</p> : !sub ? <p className="text-sm text-gray-500">Loading…</p> : (
+        <div className="space-y-3 text-sm">
+          <p>
+            <b>Child:</b> {[sub.child?.firstName, sub.child?.lastName].filter(Boolean).join(" ") || "—"} &nbsp;·&nbsp; <b>Sent by:</b> {sub.submittedBy?.name || sub.submittedBy?.email} on {new Date(sub.createdAt).toLocaleString()}
+          </p>
+          {answers.length ? (
+            <dl className="grid gap-2 sm:grid-cols-2">
+              {answers.map(([key, value]) => (
+                <div key={key} className="rounded border border-gray-200 px-3 py-2">
+                  <dt className="text-xs font-bold text-gray-500">{key}</dt>
+                  <dd>{typeof value === "object" ? JSON.stringify(value) : String(value)}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+          {data.notes ? <p><b>Notes:</b> {data.notes}</p> : null}
+          {data.document?.url ? <a href={data.document.url} target="_blank" rel="noreferrer" className="font-semibold text-blue-700 underline">View the attached document</a> : null}
+          {data.certification ? (
+            <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
+              <p className="italic">{data.certification.statement}</p>
+              <p className="mt-2"><b>E-signature:</b> <span className="font-serif text-lg italic">{data.certification.signedName}</span></p>
+              <p><b>Date signed:</b> {new Date(data.certification.signedAt).toLocaleString()}</p>
+            </div>
+          ) : (
+            <p className="text-gray-500">This form was sent before e-signatures were required.</p>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
 }

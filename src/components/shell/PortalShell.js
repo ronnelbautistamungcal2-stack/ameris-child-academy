@@ -8,7 +8,7 @@ import {
 } from "react";
 import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
-import AppShell, { HEADER_BANNER_SRC } from "@/components/shell/AppShell";
+import AppShell from "@/components/shell/AppShell";
 import Skeleton from "@/components/ui/Skeleton";
 import { ADMIN_NAV_ITEMS } from "@/components/admin/adminNav";
 import { buildStaffNavItems } from "@/components/staff/staffNav";
@@ -68,8 +68,8 @@ export function useShellTitle(title) {
 
 /**
  * The one shell for every signed-in portal page. It is mounted by _app.js and
- * stays mounted while pages swap underneath it, so the sidebar, the banner
- * header, and the unread badge never blink or reset on navigation.
+ * stays mounted while pages swap underneath it, so the sidebar, the header
+ * and the unread badge never blink or reset on navigation.
  */
 export default function PortalShell({ children }) {
   const { data: session, status } = useSession();
@@ -162,8 +162,6 @@ export default function PortalShell({ children }) {
         shellMaxWidthClassName="max-w-[1760px]"
         contentMaxWidthClassName="max-w-[1400px]"
         showBack={false}
-        bannerSrc={isParent ? HEADER_BANNER_SRC : ""}
-        bannerTagline={isParent ? "From Blessings to Pillars" : ""}
       >
         {status === "authenticated" ? children : <Skeleton count={6} />}
       </AppShell>

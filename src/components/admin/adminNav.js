@@ -118,7 +118,7 @@ export const ADMIN_NAV_ITEMS = [
     label: "Policies & Compliance",
     icon: icons.compliance,
     children: [
-      { href: "/admin/teacher-logging-alerts", label: "Compliance Alerts" },
+      { href: "/admin/compliance-alerts", label: "Compliance Alerts" },
       { href: "/admin/form-renewals", label: "Form Renewals" },
       { href: "/admin/policies", label: "Policies & Procedures" },
       { href: "/admin/resources", label: "Resources" },

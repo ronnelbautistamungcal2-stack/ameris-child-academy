@@ -4,6 +4,7 @@ import ParentLayout from "@/components/parent/ParentLayout";
 import { ParentEmpty } from "@/components/parent/ParentUI";
 import ResponsiveTable from "@/components/ui/ResponsiveTable";
 import Skeleton from "@/components/ui/Skeleton";
+import InvoiceView from "@/components/billing/InvoiceView";
 import { apiJson } from "@/lib/api";
 import { formatAge } from "@/lib/ageUtils";
 import { buildParentMessageComposeHref } from "@/lib/parentSupport";
@@ -12,7 +13,6 @@ import {
   PAYMENT_METHODS,
   STATEMENT_STATUS,
   billingPeriodOptions,
-  buildTuitionLedger,
   formatLedgerDate,
   formatLongDate,
   formatMoney,
@@ -27,6 +27,8 @@ const TABS = [
   { key: "scheduled", label: "Scheduled Payments" },
 ];
 
+const EMPTY_LEDGER = { statements: [], payments: [], scheduledPayments: [] };
+
 export default function ParentBilling() {
   const [centers, setCenters] = useState([]);
   const [children, setChildren] = useState([]);
@@ -35,10 +37,8 @@ export default function ParentBilling() {
   const [tab, setTab] = useState("statements");
   const [openStatement, setOpenStatement] = useState(null);
 
-  // The ledger is generated from today, so build it once per mount rather than
-  // on every render — otherwise each Date would differ and the memos below
-  // would recompute forever.
-  const ledger = useMemo(() => buildTuitionLedger(), []);
+  // The family's invoices, charges and payments (client mockups 09-01/02).
+  const [ledger, setLedger] = useState(EMPTY_LEDGER);
   const periodOptions = useMemo(
     () => billingPeriodOptions(ledger.statements),
     [ledger.statements],
@@ -52,11 +52,17 @@ export default function ParentBilling() {
       setLoading(true);
       setError("");
       try {
-        const [billingRes, childrenRes] = await Promise.all([
+        const [billingRes, childrenRes, ledgerRes] = await Promise.all([
           apiJson("/api/v1/billing/summary").catch(() => ({ centers: [] })),
           apiJson("/api/v1/children"),
+          apiJson("/api/v1/billing/ledger"),
         ]);
         if (cancelled) return;
+        setLedger({
+          statements: ledgerRes?.statements || [],
+          payments: ledgerRes?.payments || [],
+          scheduledPayments: ledgerRes?.scheduledPayments || [],
+        });
         setCenters(
           Array.isArray(billingRes?.centers) ? billingRes.centers : [],
         );
@@ -241,7 +247,9 @@ export default function ParentBilling() {
         </div>
       </div>
 
-      {openStatement ? (
+      {openStatement?.invoiceId ? (
+        <InvoiceView invoiceId={openStatement.invoiceId} onClose={() => setOpenStatement(null)} />
+      ) : openStatement ? (
         <StatementDialog
           row={openStatement}
           roster={children}
@@ -536,11 +544,11 @@ function LedgerCard({ tab, onTab, rows, roster, onView }) {
   );
 }
 
-/** "All Children", or the names behind the roster positions a row carries. */
+/** "All Children", or the children a row is for (names, or roster positions). */
 function describeAppliesTo(appliesTo, roster) {
   if (!Array.isArray(appliesTo)) return "All Children";
   const names = appliesTo
-    .map((position) => roster[position]?.firstName)
+    .map((item) => (typeof item === "string" ? item.split(" ")[0] : roster[item]?.firstName))
     .filter(Boolean);
   return names.length ? names.join(", ") : "All Children";
 }

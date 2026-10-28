@@ -1,4 +1,5 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { profileTabData } from "@/lib/childProfile";
 import prisma from "@/lib/prisma";
 import {
   attendanceByChildId,
@@ -316,6 +317,8 @@ export default async function handler(req, res) {
           enrollmentEndDate: enrollmentEndDate
             ? new Date(enrollmentEndDate)
             : null,
+          // Edit Child tabs (schedule, health & safety, care plan, ...).
+          ...profileTabData(req.body),
         },
       });
 

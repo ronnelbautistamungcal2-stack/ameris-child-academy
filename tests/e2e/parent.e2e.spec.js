@@ -95,7 +95,13 @@ test.describe("Parent Workflows", () => {
     await expect(page.getByRole("button", { name: "Permissions", exact: true })).toHaveCount(0);
   });
 
-  test("a required form can be filled in and sent from the table", async ({ page }) => {
+  test("a required form can be filled in and sent from the table", async ({ page, request }) => {
+    // A fresh family form, so there is always one to start (earlier runs send the demo ones).
+    const { loginAsAdmin: adminCookie } = require("../helpers/auth");
+    const { apiDelete, apiPost } = require("../helpers/api");
+    const admin = await adminCookie(request);
+    const template = await (await apiPost(request, "/api/v1/forms/templates", { title: `QA Family Form ${Date.now()}`, targetRole: "PARENT", assignmentType: "FAMILY", active: true }, admin)).json();
+    test.info().annotations.push({ type: "template", description: template.id });
     await page.goto("/parent/forms");
     await waitForLoadingDone(page);
 
@@ -106,8 +112,13 @@ test.describe("Parent Workflows", () => {
       await expect(page.getByRole("dialog")).toBeVisible({ timeout: 5000 });
     }).toPass({ timeout: 45000 });
 
-    await page.getByRole("dialog").getByRole("button", { name: "Submit form" }).click();
+    // Parents certify and e-sign every form (client request 36-01).
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("checkbox", { name: /I certify/ }).check();
+    await dialog.getByLabel(/E-Signature/).fill("Parent User");
+    await dialog.getByRole("button", { name: "Submit form" }).click();
     await expect(page.getByText("sent to the center.")).toBeVisible();
+    await apiDelete(request, `/api/v1/forms/templates/${template.id}`, admin);
   });
 
   test("forms & renewals keeps the submission history reachable", async ({ page }) => {

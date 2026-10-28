@@ -1,6 +1,7 @@
 import ParentLayout from "@/components/parent/ParentLayout";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
+import { CERTIFICATION_STATEMENT, prefillFromProfile } from "@/lib/formCertification";
 import {
   ageInMonths,
   childMatchesAgeGroup,
@@ -689,6 +690,29 @@ function FormModal({ row, scope, mode, onClose, onSubmitted }) {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  // The child's profile fills the form; the parent certifies and signs it
+  // (client request 36-01, C3/D4).
+  const [profile, setProfile] = useState(null);
+  const [agreed, setAgreed] = useState(false);
+  const [signedName, setSignedName] = useState("");
+  const childId = scope?.child?.id || null;
+
+  useEffect(() => {
+    if (!childId) return;
+    apiJson(`/api/v1/children/${childId}/profile`)
+      .then((data) => {
+        setProfile(data);
+        if (!row.submission) {
+          const filled = prefillFromProfile(fields, template.autoFillMapping, data);
+          setValues((current) => {
+            const next = { ...current };
+            for (const [name, value] of Object.entries(filled)) if (!next[name]) next[name] = value;
+            return next;
+          });
+        }
+      })
+      .catch(() => setProfile(null));
+  }, [childId, fields, template.autoFillMapping, row.submission]);
 
   const draft = useMemo(() => buildDraftState({ fields, values }), [fields, values]);
 
@@ -727,6 +751,10 @@ function FormModal({ row, scope, mode, onClose, onSubmitted }) {
       setFormError("Attach the completed document before you send it.");
       return;
     }
+    if (!agreed || !signedName.trim()) {
+      setFormError("Check the certification and type your full name to sign the form.");
+      return;
+    }
 
     const data = { ...draft.data };
     if (notes.trim()) data.notes = notes.trim();
@@ -741,6 +769,7 @@ function FormModal({ row, scope, mode, onClose, onSubmitted }) {
           templateId: template.id,
           childId: scope?.child?.id || null,
           data: Object.keys(data).length ? data : null,
+          certification: { agreed, signedName: signedName.trim() },
         }),
       });
       await onSubmitted(`${template.title} sent to the center.`);
@@ -819,6 +848,11 @@ function FormModal({ row, scope, mode, onClose, onSubmitted }) {
             <>
               <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-300">
                 Sent {formatDateTime(row.submission?.createdAt)}
+                {row.submission?.data?.certification ? (
+                  <div className="mt-1 font-semibold">
+                    E-signed by {row.submission.data.certification.signedName} on {formatDateTime(row.submission.data.certification.signedAt)}
+                  </div>
+                ) : null}
               </div>
               {answers.length ? (
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -852,6 +886,7 @@ function FormModal({ row, scope, mode, onClose, onSubmitted }) {
             </>
           ) : (
             <form id="parent-form-modal" onSubmit={submit} className="space-y-4">
+              {profile ? <ChildOnFile profile={profile} /> : null}
               {fields.length ? (
                 <GuidedFormFields
                   fields={fields}
@@ -906,6 +941,29 @@ function FormModal({ row, scope, mode, onClose, onSubmitted }) {
                 />
                 {uploading ? <p className="mt-2 text-xs font-bold text-gray-500">Uploading…</p> : null}
               </div>
+
+              <div className="space-y-3 rounded-xl border border-sky-200 bg-sky-50 p-4 dark:border-sky-800 dark:bg-sky-900/20">
+                <label className="flex items-start gap-2 text-sm text-gray-800 dark:text-gray-200">
+                  <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-1 h-4 w-4" />
+                  {CERTIFICATION_STATEMENT}
+                </label>
+                <div className="grid gap-3 sm:grid-cols-[1fr_10rem]">
+                  <label className="block text-xs font-extrabold uppercase tracking-[0.16em] text-gray-500">
+                    E-Signature (type your full name)
+                    <input
+                      value={signedName}
+                      onChange={(e) => setSignedName(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 font-serif text-base italic normal-case tracking-normal text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
+                    />
+                  </label>
+                  <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-gray-500">
+                    Date
+                    <div className="mt-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm normal-case tracking-normal text-gray-800 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200">
+                      {formatDate(new Date())}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </form>
           )}
         </div>
@@ -938,6 +996,37 @@ function FormModal({ row, scope, mode, onClose, onSubmitted }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** The child's information on file; Edit goes to their profile (client 36-01, C3). */
+function ChildOnFile({ profile }) {
+  const { child, classroom, family, emergency, about } = profile;
+  const items = [
+    ["Child", [child.firstName, child.lastName].filter(Boolean).join(" ")],
+    ["Date of Birth", child.birthDate ? formatDate(child.birthDate) : ""],
+    ["Classroom", classroom?.name],
+    ["Parent/Guardian", (family?.parents || []).map((p) => [p.name, p.phone].filter(Boolean).join(" · ")).join("; ")],
+    ["Emergency Contact", (emergency?.contacts || []).slice(0, 2).map((c) => [c.name, c.phone].filter(Boolean).join(" · ")).join("; ")],
+    ["Allergies", about?.allergies],
+  ];
+  return (
+    <div className="rounded-xl border border-gray-200 p-4 dark:border-gray-600">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-gray-500">Information on file</div>
+        <a href={`/parent/children/${encodeURIComponent(child.id)}`} className="text-xs font-extrabold text-[#1c5fa8] hover:underline dark:text-sky-400">
+          Edit
+        </a>
+      </div>
+      <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
+        {items.map(([label, value]) => (
+          <div key={label}>
+            <dt className="text-[11px] font-bold text-gray-500">{label}</dt>
+            <dd className="text-gray-800 dark:text-gray-200">{value || "—"}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }

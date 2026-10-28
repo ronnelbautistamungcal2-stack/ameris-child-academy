@@ -11,6 +11,7 @@ export const CHILD_SNAPSHOT_TEXT_FIELDS = [
   "areasOfFocus",
   "allergies",
   "snapshotNotes",
+  "languages",
 ];
 
 export const CHILD_SNAPSHOT_FIELDS = ["photoUrl", ...CHILD_SNAPSHOT_TEXT_FIELDS];
@@ -25,6 +26,7 @@ export const childSnapshotSelect = {
   areasOfFocus: true,
   allergies: true,
   snapshotNotes: true,
+  languages: true,
 };
 
 export function pickChildSnapshot(child) {

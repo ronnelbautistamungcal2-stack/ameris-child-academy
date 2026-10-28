@@ -264,6 +264,7 @@ model User {
   trainingLogsRecorded               TrainingLog[]                       @relation("TrainingLogsRecorded")
   createdTeacherTrainingPathways     TeacherTrainingPathway[]            @relation("TeacherTrainingPathwaysCreated")
   trainingProgress                   TrainingProgress[]
+  billingInvoices                    BillingInvoice[]                    @relation("BillingInvoices")
   evaluationsReceived                TeacherEvaluation[]                 @relation("EvaluationsReceived")
   evaluationsGiven                   TeacherEvaluation[]                 @relation("EvaluationsGiven")
   budgetExpensesRecorded             BudgetExpense[]                     @relation("BudgetExpensesRecorded")
@@ -387,6 +388,9 @@ model Center {
   createdAt                   DateTime                     @default(now())
   menuItems                   MenuItem[]
   infantPortions              InfantPortion[]
+  billingInvoices             BillingInvoice[]
+  billingCharges              BillingCharge[]
+  complianceRequirements      ComplianceRequirement[]
   mealProductionCounts        MealProductionCount[]
   lessonCalendarAnchors       LessonCalendarAnchor[]
   lessonClosedDays            LessonClosedDay[]
@@ -460,6 +464,15 @@ model Child {
   infantDocuments               Json?
   otherDocuments                Json?
   feedingPlan                   Json?
+  // Edit Child tabs (client mockups 07-04..11): weekly schedule
+  // { MONDAY: { attends, dropOff, pickUp }, ... }, Health & Safety
+  // { allergies[], conditions[], notes, pediatrician }, the Care Plan
+  // answers, the out-of-area emergency contact and spoken languages.
+  schedule                      Json?
+  healthInfo                    Json?
+  carePlan                      Json?
+  outOfAreaContact              Json?
+  languages                     String?
   center                        Center                             @relation(fields: [centerId], references: [id])
   centerId                      String
   classRoom                     ClassRoom?                         @relation(fields: [classRoomId], references: [id])
@@ -484,6 +497,7 @@ model Child {
   parentInvolvements            ParentInvolvement[]
   taggedInvolvements            ParentInvolvement[]                @relation("ParentInvolvementChildren")
   infantPortions                InfantPortion[]
+  billingCharges                BillingCharge[]
 }
 
 model ChildGuardian {
@@ -1072,6 +1086,19 @@ model FormSubmission {
   childPermissions ChildPermission[]
 }
 
+// Form Renewals notes (client mockup 36-02): the admin's note on one child's
+// renewing form, kept even before the form is first sent.
+model FormRenewalNote {
+  id          String   @id @default(uuid())
+  templateId  String
+  childId     String
+  note        String
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+
+  @@unique([templateId, childId])
+}
+
 model PolicyDocument {
   id                      String                   @id @default(uuid())
   center                  Center?                  @relation(fields: [centerId], references: [id])
@@ -1174,6 +1201,100 @@ model MealProductionCount {
   updatedAt   DateTime @updatedAt
 
   @@unique([centerId, date, meal, ageGroup])
+}
+
+// Billing (client mockups 09-01..09): one invoice per parent account, center
+// and month; charges (tuition, parent fees) are its lines and payments settle
+// it. Amounts are in cents.
+model BillingInvoice {
+  id           String           @id @default(uuid())
+  number       Int              @unique @default(autoincrement())
+  center       Center           @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId     String
+  parent       User             @relation("BillingInvoices", fields: [parentId], references: [id], onDelete: Cascade)
+  parentId     String
+  period       String
+  invoiceDate  DateTime         @db.Date
+  dueDate      DateTime         @db.Date
+  verified     Boolean          @default(false)
+  verifiedById String?
+  notes        String?
+  charges      BillingCharge[]
+  payments     BillingPayment[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([parentId, centerId, period])
+  @@index([centerId, period])
+}
+
+model BillingCharge {
+  id          String         @id @default(uuid())
+  invoice     BillingInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId   String
+  center      Center         @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId    String
+  child       Child?         @relation(fields: [childId], references: [id], onDelete: SetNull)
+  childId     String?
+  date        DateTime       @db.Date
+  description String
+  amountCents Int
+  createdById String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([centerId, date])
+  @@index([invoiceId])
+}
+
+model BillingPayment {
+  id           String         @id @default(uuid())
+  invoice      BillingInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId    String
+  amountCents  Int
+  paidAt       DateTime
+  method       String?
+  note         String?
+  recordedById String?
+  createdAt    DateTime       @default(now())
+
+  @@index([invoiceId])
+}
+
+// Compliance Alerts (client mockups 37-01/02): a center requirement that
+// repeats (weekly, monthly, quarterly, annually) or happens once. Marking it
+// complete logs a completion and moves nextDue to the next repeat.
+model ComplianceRequirement {
+  id              String                 @id @default(uuid())
+  center          Center?                @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId        String?
+  name            String
+  description     String?
+  category        String
+  frequency       String
+  repeatOn        Int?
+  appliesToRoles  String[]               @default([])
+  ageGroups       String[]               @default([])
+  notes           String?
+  nextDue         DateTime               @db.Date
+  lastCompletedAt DateTime?
+  createdById     String?
+  completions     ComplianceCompletion[]
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@index([centerId, nextDue])
+}
+
+model ComplianceCompletion {
+  id            String                @id @default(uuid())
+  requirement   ComplianceRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  requirementId String
+  dueDate       DateTime              @db.Date
+  completedAt   DateTime              @default(now())
+  completedById String?
+
+  @@index([requirementId, completedAt])
 }
 
 model AuditLog {

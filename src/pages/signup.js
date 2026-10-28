@@ -153,6 +153,7 @@ export default function Signup() {
             aria-label="Ameris Academy home"
           >
             <AmerisLogo
+              legacy
               size="xl"
               showTagline
               className="drop-shadow-[0_2px_12px_rgba(255,255,255,0.85)]"

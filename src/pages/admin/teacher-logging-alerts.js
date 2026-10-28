@@ -3,6 +3,7 @@ import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
+import Link from "next/link";
 
 const TABS = [
   { key: "logging", label: "Missed Logging", icon: IconLogging, color: "amber" },
@@ -104,7 +105,7 @@ export default function ComplianceAlerts() {
   };
 
   return (
-    <AdminLayout title="Compliance Alerts">
+    <AdminLayout title="Teacher Logging Alerts">
       <div className="space-y-5">
         {/* Page Header */}
         <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br from-amber-50 via-white to-red-50 p-6">
@@ -119,7 +120,8 @@ export default function ComplianceAlerts() {
                   </svg>
                 </div>
                 <div>
-                  <h2 className="text-xl font-extrabold text-gray-900">Compliance Alerts</h2>
+                  <Link href="/admin/compliance-alerts" className="text-xs font-semibold text-blue-700 hover:underline">← Compliance Alerts</Link>
+                  <h2 className="text-xl font-extrabold text-gray-900">Teacher Logging Alerts</h2>
                   <p className="text-sm text-gray-500">
                     Monitor missed logging, attendance gaps, and overdue progress updates
                   </p>

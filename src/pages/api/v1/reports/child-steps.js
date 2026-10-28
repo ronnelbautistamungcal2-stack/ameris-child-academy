@@ -8,7 +8,7 @@ const CHILD_SELECT = { id: true, firstName: true, lastName: true, birthDate: tru
 
 /**
  * GET /api/v1/reports/child-steps[?centerId=]   the children the user can pick
- * GET /api/v1/reports/child-steps?childId=&date=&minMonths=&maxMonths=&categoryId=&subCategory=&achieved=yes|no
+ * GET /api/v1/reports/child-steps?childId=&date=&minMonths=&maxMonths=&categoryId=&subCategory=&competency=yes|no&mastery=yes|no
  * Child Steps of Progression Report: admins, coaches and Student Support (children at
  * their centers) and parents (their own children).
  */

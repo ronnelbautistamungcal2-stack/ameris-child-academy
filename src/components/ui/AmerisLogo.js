@@ -1,5 +1,9 @@
 import Image from "next/image";
 
+// The Ameris Solutions logo (client 2026-10-28) is used across the portals
+// and the login page; the public home pages keep the Ameris Academy logo
+// (`legacy`).
+const SOLUTIONS_ASPECT_RATIO = "917 / 523";
 const SOURCE_ASPECT_RATIO = "1767 / 890";
 // The -tight files are the same artwork with the transparent padding cropped
 // off, for places where the logo should fill its box (the portal top bar).
@@ -17,6 +21,7 @@ export default function AmerisLogo({
   showText = true,
   showTagline = false,
   tight = false,
+  legacy = false,
   className = "",
   style = {},
 }) {
@@ -25,9 +30,16 @@ export default function AmerisLogo({
   // The tight logo is stretched to fill the w-72 header column.
   const renderWidth = tight ? 288 : dims.maxWidth;
   const imageSizes = `(max-width: 640px) 42vw, ${renderWidth}px`;
-  const alt = showTagline || showText
-    ? "Ameris Academy logo with the tagline From Blessings to Pillars"
-    : "Ameris Academy logo";
+  let alt = "Ameris Solutions logo with the tagline Helping Children Thrive";
+  let lightSrc = "/ameris-solutions-logo.png";
+  let darkSrc = "/ameris-solutions-logo-dark.png";
+  let aspectRatio = SOLUTIONS_ASPECT_RATIO;
+  if (legacy) {
+    alt = showTagline || showText ? "Ameris Academy logo with the tagline From Blessings to Pillars" : "Ameris Academy logo";
+    lightSrc = `/ameris-logo-transparent${suffix}.png`;
+    darkSrc = `/ameris-logo-dark${suffix}.png`;
+    aspectRatio = tight ? TIGHT_ASPECT_RATIO : SOURCE_ASPECT_RATIO;
+  }
 
   return (
     <span
@@ -35,12 +47,12 @@ export default function AmerisLogo({
       style={{
         width: `${dims.maxWidth}px`,
         maxWidth: "100%",
-        aspectRatio: tight ? TIGHT_ASPECT_RATIO : SOURCE_ASPECT_RATIO,
+        aspectRatio,
         ...style,
       }}
     >
       <Image
-        src={`/ameris-logo-transparent${suffix}.png`}
+        src={lightSrc}
         alt={alt}
         fill
         sizes={imageSizes}
@@ -48,7 +60,7 @@ export default function AmerisLogo({
         draggable="false"
       />
       <Image
-        src={`/ameris-logo-dark${suffix}.png`}
+        src={darkSrc}
         alt={alt}
         fill
         sizes={imageSizes}

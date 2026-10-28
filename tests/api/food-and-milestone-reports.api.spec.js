@@ -134,16 +134,22 @@ test.describe("Food and milestone reports @api", () => {
     const rows = report.categories[0].rows;
     expect(report.categories[0].name).toBe("Gross Motor");
     expect(rows.map((r) => r.title)).toEqual(["Crawls", "Walks independently"]);
-    expect(rows[0]).toMatchObject({ worldYears: 0.7, centerYears: 0.6, difference: -0.1, status: "AHEAD", children: 1 });
-    expect(rows[1]).toMatchObject({ worldYears: 1, centerYears: null, status: null });
+    // Leo crawled at about 7 months, inside the 6-10 month range: On Track.
+    expect(rows[0]).toMatchObject({ worldYears: 0.7, competencyYears: 0.6, masteryYears: null, level: "COMPETENCY", difference: -0.1, status: "ON_TRACK", competencyChildren: 1 });
+    expect(rows[1]).toMatchObject({ worldYears: 1, competencyYears: null, status: null });
     expect(report.totalChildren).toBe(1);
+    expect(report.childrenInRange).toBe(2);
 
     // Before Leo crawled there is no center average.
     const earlier = await (await apiGet(request, `/api/v1/reports/milestone-progress?centerId=${center.id}&date=2025-03-01`, admin)).json();
-    expect(earlier.categories[0].rows[0].centerYears).toBeNull();
-    // The age range filters steps by their world standard.
-    const young = await (await apiGet(request, `/api/v1/reports/milestone-progress?centerId=${center.id}&minMonths=0&maxMonths=9`, admin)).json();
-    expect(young.categories[0].rows.map((r) => r.title)).toEqual(["Crawls"]);
+    expect(earlier.categories[0].rows[0].competencyYears).toBeNull();
+    // The age range picks children by their age on the report date: on
+    // 2026-10-01 Mia is 7 months and Leo 25 months.
+    const young = await (await apiGet(request, `/api/v1/reports/milestone-progress?centerId=${center.id}&date=2026-10-01&minMonths=0&maxMonths=9`, admin)).json();
+    expect(young.childrenInRange).toBe(1);
+    expect(young.categories[0].rows.map((r) => [r.title, r.competencyYears])).toEqual([["Crawls", null], ["Walks independently", null]]);
+    const twos = await (await apiGet(request, `/api/v1/reports/milestone-progress?centerId=${center.id}&date=2026-10-01&minMonths=24&maxMonths=36`, admin)).json();
+    expect(twos.categories[0].rows[0].competencyYears).toBe(0.6);
   });
 
   test("parents see the steps report for their own child only", async ({ request }) => {
@@ -151,12 +157,48 @@ test.describe("Food and milestone reports @api", () => {
     const own = await apiGet(request, `/api/v1/reports/child-steps?childId=${toddler.id}&date=2026-10-01`, parentCookies);
     expect(own.status(), await own.text()).toBe(200);
     const report = await own.json();
-    expect(report.achievedCount).toBe(1);
-    expect(report.categories[0].rows.map((r) => [r.title, r.status])).toEqual([["Crawls", "AHEAD"], ["Walks independently", "NOT_ACHIEVED"]]);
-    const notYet = await (await apiGet(request, `/api/v1/reports/child-steps?childId=${toddler.id}&achieved=no`, parentCookies)).json();
+    expect(report).toMatchObject({ competencyCount: 1, masteryCount: 0, totalSteps: 2 });
+    const [crawls, walks] = report.categories[0].rows;
+    expect(crawls).toMatchObject({ competency: { years: 0.6 }, mastery: null, centerCompetencyYears: 0.6, worldDifference: -0.1, centerDifference: 0, centerStatus: "ON_TRACK", worldStatus: "ON_TRACK" });
+    // Not walking a year past the 12-month expectation: Critical.
+    expect(walks).toMatchObject({ competency: null, level: null, worldStatus: "CRITICAL" });
+    const notYet = await (await apiGet(request, `/api/v1/reports/child-steps?childId=${toddler.id}&date=2026-10-01&competency=no`, parentCookies)).json();
     expect(notYet.categories[0].rows.map((r) => r.title)).toEqual(["Walks independently"]);
 
     expect((await apiGet(request, `/api/v1/reports/child-steps?childId=${baby.id}`, parentCookies)).status()).toBe(403);
     expect((await apiGet(request, `/api/v1/reports/milestone-progress?centerId=${center.id}`, parentCookies)).status()).toBe(403);
+  });
+
+  test("Mastery gets its own column, and only Mastery can be Excelling", async ({ request }) => {
+    const sits = await prisma.lesson.create({
+      data: { centerId: center.id, title: "Sits without support", isStep: true, categoryId: stepA.categoryId, ageMonths: 8, maxAgeMonths: 10 },
+    });
+    const progress = await prisma.progress.create({ data: { childId: toddler.id, lessonId: sits.id, status: "PASSED" } });
+    // Competency at 5.5 months and Mastery at 6 months, two months before the 8-month minimum.
+    await prisma.progressEntry.createMany({
+      data: [
+        { progressId: progress.id, status: "COMPLETED", occurredAt: new Date("2025-02-15T12:00:00Z") },
+        { progressId: progress.id, status: "PASSED", occurredAt: new Date("2025-03-01T12:00:00Z") },
+      ],
+    });
+    const parentCookies = await loginAsParent(request);
+    const report = await (await apiGet(request, `/api/v1/reports/child-steps?childId=${toddler.id}&date=2026-10-01&mastery=yes`, parentCookies)).json();
+    expect(report.categories[0].rows).toHaveLength(1);
+    expect(report.categories[0].rows[0]).toMatchObject({
+      title: "Sits without support",
+      competency: { years: 0.5 },
+      mastery: { years: 0.5 },
+      level: "MASTERY",
+      centerMasteryYears: 0.5,
+      worldStatus: "EXCELLING",
+      centerStatus: "ON_TRACK",
+    });
+
+    // Before Mastery was recorded, the same early Competency is only Ahead.
+    const earlier = await (await apiGet(request, `/api/v1/reports/child-steps?childId=${toddler.id}&date=2025-02-20`, parentCookies)).json();
+    expect(earlier.categories[0].rows.find((r) => r.title === "Sits without support")).toMatchObject({ level: "COMPETENCY", mastery: null, worldStatus: "AHEAD" });
+
+    const centerReport = await (await apiGet(request, `/api/v1/reports/milestone-progress?centerId=${center.id}&date=2026-10-01`, await loginAsAdmin(request))).json();
+    expect(centerReport.categories[0].rows.find((r) => r.title === "Sits without support")).toMatchObject({ masteryYears: 0.5, level: "MASTERY", status: "EXCELLING" });
   });
 });

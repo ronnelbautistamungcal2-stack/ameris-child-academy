@@ -72,6 +72,7 @@ export default async function handler(req, res) {
           centerId: child.centerId,
           createdById: user.id,
           updatedByName: displayName(me),
+          reviewedAt: new Date(),
           goals: {
             create: parsed.goals.map(({ id, strategies, ...goal }) => ({
               ...goal,

@@ -5,9 +5,9 @@ export default function TeacherTimeOff() {
   return (
     <EmployeeTimeOffPage
       LayoutComponent={TeacherLayout}
-      title="Time Off Request"
-      description="Submit paid or unpaid time-off requests here and keep your attendance summary in view."
-      requestHelpText="Approvals are managed from the admin portal under Staff Management."
+      title="My Time Off Request"
+      description="Submit time-off requests and view your attendance summary."
+      requestHelpText="Approvals are managed from Staff Management."
     />
   );
 }

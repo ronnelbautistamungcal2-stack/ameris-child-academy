@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { normalizePolicyCategory } from "@/lib/policy-categories";
+import { parseDocument } from "@/lib/policyDocuments";
 
 export default async function handler(req, res) {
   try {
@@ -34,20 +35,17 @@ async function handlePut(req, res, session) {
   const existing = await prisma.policyDocument.findUnique({ where: { id } });
   if (!existing) return res.status(404).json({ error: "Policy not found" });
 
-  const { title, description, url, roles, category, centerId } = req.body;
-
-  const data = {};
-  if (title !== undefined) data.title = title;
-  if (description !== undefined) data.description = description;
-  if (url !== undefined) data.url = url;
-  if (roles !== undefined) {
-    if (!Array.isArray(roles) || roles.length === 0) {
-      return res.status(400).json({ error: "roles must be a non-empty array" });
-    }
-    data.roles = roles;
+  // Edits send the fields that changed; check the document as it will be.
+  const merged = { ...existing, ...(req.body || {}) };
+  // Subscribers no longer receive documents (client 2026-10-02).
+  merged.roles = (merged.roles || []).filter((role) => role !== "SUBSCRIBER");
+  const parsed = parseDocument(merged, normalizePolicyCategory(merged.category));
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+  const data = parsed.data;
+  // A file that was replaced by a website (or the other way round) keeps url in step.
+  if (req.body?.url === undefined && req.body?.websiteUrl !== undefined && existing.url === existing.websiteUrl) {
+    data.url = data.websiteUrl || existing.url;
   }
-  if (category !== undefined) data.category = normalizePolicyCategory(category);
-  if (centerId !== undefined) data.centerId = centerId || null;
 
   const updated = await prisma.policyDocument.update({ where: { id }, data });
   return res.status(200).json(updated);

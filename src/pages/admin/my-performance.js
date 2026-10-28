@@ -1,12 +1,6 @@
 import AdminLayout from "@/components/admin/AdminLayout";
-import StaffPerformanceWorkspace from "@/components/staff/StaffPerformanceWorkspace";
+import MyPerformancePage from "@/components/performance/MyPerformancePage";
 
 export default function AdminMyPerformance() {
-  return (
-    <StaffPerformanceWorkspace
-      Layout={AdminLayout}
-      title="My Performance"
-      description="Your own activity, attendance, evaluations, and training hours."
-    />
-  );
+  return <MyPerformancePage Layout={AdminLayout} />;
 }

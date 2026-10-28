@@ -1,4 +1,4 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { accessibleCenterIds, getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import {
   badRequest,
@@ -17,6 +17,8 @@ import {
 import { STAFF_PORTAL_ROLES, userRoles } from "@/lib/roles";
 
 const EVALUATION_STATUSES = ["DRAFT", "SUBMITTED", "ACKNOWLEDGED"];
+// Admins and coaches write evaluations; coaches only at their own centers.
+const EVALUATOR_ROLES = ["ADMIN", "COACH"];
 
 function endOfDay(date) {
   if (!date) return undefined;
@@ -107,10 +109,16 @@ export default createApiHandler(async function handler(req, res) {
     const historyFilter = buildEvaluationHistoryFilter(from, to);
     if (historyFilter) where.AND = [historyFilter];
 
-    if (session.user.role !== "ADMIN") {
+    // ?mine=1 (My Performance) lists only the signed-in user's own; admins and
+    // coaches otherwise see staff evaluations (coaches at their centers).
+    const mine = req.query.mine === "1" || !EVALUATOR_ROLES.includes(session.user.role);
+    if (mine) {
       where.teacherId = session.user.id;
-    } else if (teacherId) {
-      where.teacherId = teacherId;
+    } else {
+      if (teacherId) where.teacherId = teacherId;
+      if (session.user.role === "COACH" && !centerId) {
+        where.centerId = { in: (await accessibleCenterIds(session.user.id)) || [] };
+      }
     }
 
     const evaluations = await prisma.teacherEvaluation.findMany({
@@ -120,14 +128,14 @@ export default createApiHandler(async function handler(req, res) {
         evaluator: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: "desc" },
-      take: 100,
+      take: mine ? 100 : 1000,
     });
 
     return res.status(200).json(evaluations);
   }
 
-  if (session.user.role !== "ADMIN") {
-    throw forbidden("Only admins can create evaluations");
+  if (!EVALUATOR_ROLES.includes(session.user.role)) {
+    throw forbidden("Only admins and coaches can create evaluations");
   }
 
   const body = ensureObject(req.body || {});
@@ -150,6 +158,8 @@ export default createApiHandler(async function handler(req, res) {
   const areasForImprovement = optionalString(body, "areasForImprovement", { nullable: true });
   const goals = optionalString(body, "goals", { nullable: true });
   const notes = optionalString(body, "notes", { nullable: true });
+  const evaluationType = optionalString(body, "evaluationType", { nullable: true });
+  const status = optionalEnum(body, "status", ["DRAFT", "SUBMITTED"]) || "DRAFT";
   const targetUser = await prisma.user.findUnique({
     where: { id: teacherId },
     select: { role: true, roles: true },
@@ -167,6 +177,8 @@ export default createApiHandler(async function handler(req, res) {
       period,
       periodStart,
       periodEnd,
+      evaluationType: evaluationType || null,
+      status,
       overallScore: overallScore ?? null,
       categories,
       strengths,

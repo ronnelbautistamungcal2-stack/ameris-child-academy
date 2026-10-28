@@ -2,6 +2,7 @@ import TeacherLayout from "@/components/teacher/TeacherLayout";
 import { apiJson } from "@/lib/api";
 import { useToast } from "@/contexts/ToastContext";
 import { useRouter } from "next/router";
+import useChecklistLinkVisit from "@/hooks/useChecklistLinkVisit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BEHAVIOR_LEVEL_OPTIONS, BEHAVIOR_TYPE_OPTIONS, CHARACTER_HIGHLIGHT_TYPE_OPTIONS } from "@/lib/dailyLogOptions";
 
@@ -194,6 +195,7 @@ const JPEG_QUALITIES = [0.88, 0.8, 0.72, 0.64, 0.56, 0.48];
 
 export default function TeacherLogs() {
   const router = useRouter();
+  useChecklistLinkVisit();
   const toast = useToast();
   const initialCenterId =
     typeof router.query.centerId === "string" ? router.query.centerId : "";

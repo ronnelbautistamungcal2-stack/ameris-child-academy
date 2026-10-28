@@ -1,6 +1,8 @@
 // A step of progression is stored as a Lesson row. These helpers cover the
-// fields that place a step in a sequence: the age it is expected at, and the
-// prior/next steps that progression tracking falls back to or advances to.
+// fields that place a step in a sequence: the age range it is expected in
+// (minimum ageYears/ageMonths, maximum maxAgeYears/maxAgeMonths — client
+// request 2026-10-23), and the prior/next steps that progression tracking
+// falls back to or advances to.
 
 // Ranges confirmed by the client: 0-18 years plus 0-11 months, so an exact
 // age such as 2 years is entered as 2 yr 0 mo.
@@ -17,14 +19,29 @@ function parseAgePart(value, options, label) {
   return { value: n };
 }
 
+const ageInMonths = (years, months) => (years == null && months == null ? null : (years || 0) * 12 + (months || 0));
+
 // Returns { data, error }. Keys left out of the body stay undefined so a PUT
-// only touches the fields it was sent.
-export function parseStepAge(body) {
-  const years = parseAgePart(body.ageYears, STEP_AGE_YEAR_OPTIONS, "Age (years)");
-  if (years.error) return { error: years.error };
-  const months = parseAgePart(body.ageMonths, STEP_AGE_MONTH_OPTIONS, "Age (months)");
-  if (months.error) return { error: months.error };
-  return { data: { ageYears: years.value, ageMonths: months.value } };
+// only touches the fields it was sent. `current` (the saved step) is used to
+// check the maximum isn't below the minimum when only one side changes.
+export function parseStepAge(body, current = {}) {
+  const parts = [
+    ["ageYears", STEP_AGE_YEAR_OPTIONS, "Minimum Age (years)"],
+    ["ageMonths", STEP_AGE_MONTH_OPTIONS, "Minimum Age (months)"],
+    ["maxAgeYears", STEP_AGE_YEAR_OPTIONS, "Maximum Age (years)"],
+    ["maxAgeMonths", STEP_AGE_MONTH_OPTIONS, "Maximum Age (months)"],
+  ];
+  const data = {};
+  for (const [key, options, label] of parts) {
+    const part = parseAgePart(body[key], options, label);
+    if (part.error) return { error: part.error };
+    data[key] = part.value;
+  }
+  const pick = (key) => (data[key] !== undefined ? data[key] : current[key] ?? null);
+  const min = ageInMonths(pick("ageYears"), pick("ageMonths"));
+  const max = ageInMonths(pick("maxAgeYears"), pick("maxAgeMonths"));
+  if (min != null && max != null && max < min) return { error: "The maximum age must not be below the minimum age" };
+  return { data };
 }
 
 // Prior/next steps must be other steps in the same center. Returns an error
@@ -69,11 +86,19 @@ export function parseStepDetails(body) {
   return data;
 }
 
-export function formatStepAge(lesson) {
+function formatAge(years, months) {
   const parts = [];
-  if (lesson?.ageYears != null) parts.push(`${lesson.ageYears} yr`);
-  if (lesson?.ageMonths != null) parts.push(`${lesson.ageMonths} mo`);
+  if (years != null) parts.push(`${years} yr`);
+  if (months != null) parts.push(`${months} mo`);
   return parts.join(" ");
+}
+
+/** "1 yr 3 mo – 2 yr 0 mo", or one side when only one is set. */
+export function formatStepAge(lesson) {
+  const min = formatAge(lesson?.ageYears, lesson?.ageMonths);
+  const max = formatAge(lesson?.maxAgeYears, lesson?.maxAgeMonths);
+  if (min && max) return min === max ? min : `${min} – ${max}`;
+  return min || (max ? `up to ${max}` : "");
 }
 
 // Steps of Progression import (Excel or CSV). One column per Add Step field;
@@ -84,8 +109,10 @@ export const STEP_IMPORT_COLUMNS = [
   { key: "title", header: "Step Description", aliases: ["stepdescription", "stepofprogression", "step", "title"] },
   { key: "category", header: "Category", aliases: ["category"] },
   { key: "subject", header: "Subject", aliases: ["subject"] },
-  { key: "ageYears", header: "Age (Years)", aliases: ["ageyears", "years", "ageyrs"] },
-  { key: "ageMonths", header: "Age (Months)", aliases: ["agemonths", "months", "agemos"] },
+  { key: "ageYears", header: "Minimum Age (Years)", aliases: ["minimumageyears", "minageyears", "ageyears", "years", "ageyrs"] },
+  { key: "ageMonths", header: "Minimum Age (Months)", aliases: ["minimumagemonths", "minagemonths", "agemonths", "months", "agemos"] },
+  { key: "maxAgeYears", header: "Maximum Age (Years)", aliases: ["maximumageyears", "maxageyears"] },
+  { key: "maxAgeMonths", header: "Maximum Age (Months)", aliases: ["maximumagemonths", "maxagemonths"] },
   { key: "term", header: "Term", aliases: ["term"] },
   { key: "description", header: "Assessment Question", aliases: ["assessmentquestion", "question"] },
   { key: "exposure", header: "Exposure", aliases: ["exposure"] },

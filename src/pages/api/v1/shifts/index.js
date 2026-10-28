@@ -1,6 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { isManagerRole } from "@/lib/roles";
+import { canManageShifts } from "@/lib/roles";
 
 export default async function handler(req, res) {
   try {
@@ -20,10 +20,13 @@ export default async function handler(req, res) {
 async function handleGet(req, res, session) {
   const { centerId, from, to, userId } = req.query;
   if (!centerId) return res.status(400).json({ error: "centerId is required" });
+  if (session.user.role !== "ADMIN" && !(await hasAccessToCenter(session.user.id, centerId))) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
 
   const where = { centerId };
 
-  if (session.user.role === "TEACHER") {
+  if (!canManageShifts(session.user.role)) {
     where.userId = session.user.id;
   } else if (userId) {
     where.userId = userId;
@@ -47,7 +50,7 @@ async function handleGet(req, res, session) {
 }
 
 async function handlePost(req, res, session) {
-  if (!isManagerRole(session.user.role)) {
+  if (!canManageShifts(session.user.role)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 

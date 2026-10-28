@@ -38,7 +38,7 @@ export default async function handler(req, res) {
             status: true,
             active: true,
             updatedAt: true,
-            lesson: { select: { ageYears: true, ageMonths: true } },
+            lesson: { select: { ageYears: true, ageMonths: true, maxAgeYears: true, maxAgeMonths: true } },
           },
         },
       },

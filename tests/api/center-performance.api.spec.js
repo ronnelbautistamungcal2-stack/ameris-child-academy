@@ -49,6 +49,8 @@ test.describe("Center Performance Overview @api", () => {
     expect(row).toMatchObject({ name: "Perf Teacher", role: "TEACHER", position: "Teacher", hoursScheduled: 0, commendations: 0, citations: 0 });
     expect(row).toHaveProperty("currentGrade");
     expect(row).toHaveProperty("priorGrade");
+    // Average SOP % (calculation still to be confirmed by the client).
+    expect(row).toHaveProperty("sopPct");
 
     expect(r.students).toEqual([
       expect.objectContaining({
@@ -58,7 +60,8 @@ test.describe("Center Performance Overview @api", () => {
         // Walking was expected at 15 months; the child is about 20 and only at Exposure.
         milestones: "CRITICAL",
         levels: { EXPOSURE: 1, COMPETENCY: 0, MASTERY: 0 },
-        ipp: "NOT_ON_TRACK",
+        // A plan that is not Active needs review.
+        ipp: "NEEDS_REVIEW",
       }),
     ]);
     expect(r.courseCorrections).toEqual([expect.objectContaining({ type: "HONESTY" })]);

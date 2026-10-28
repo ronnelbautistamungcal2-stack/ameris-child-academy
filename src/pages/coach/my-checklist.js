@@ -1,10 +1,6 @@
 import CoachLayout from "@/components/coach/CoachLayout";
-import ComingSoon from "@/components/shell/ComingSoon";
+import DailyChecklistWorkspace from "@/components/checklists/DailyChecklistWorkspace";
 
-export default function MyChecklistPage() {
-  return (
-    <CoachLayout title="Checklist">
-      <ComingSoon title="Checklist" />
-    </CoachLayout>
-  );
+export default function CoachMyChecklistPage() {
+  return <DailyChecklistWorkspace Layout={CoachLayout} mode="personal" />;
 }

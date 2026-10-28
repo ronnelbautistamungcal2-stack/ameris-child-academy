@@ -1,10 +1,10 @@
 import CoachLayout from "@/components/coach/CoachLayout";
-import ComingSoon from "@/components/shell/ComingSoon";
+import DocumentsPage from "@/components/documents/DocumentsPage";
 
-export default function ResourcesPage() {
+export default function DocumentsRolePage() {
   return (
     <CoachLayout title="Additional Resources">
-      <ComingSoon title="Additional Resources" />
+      <DocumentsPage category="RESOURCE" />
     </CoachLayout>
   );
 }

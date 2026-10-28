@@ -1,10 +1,10 @@
 import Pager from "@/components/ui/Pager";
+import StaffPerformanceTable from "@/components/reports/StaffPerformanceTable";
 import SegmentBar, { RANGE_COLORS, RANGE_TEXT } from "@/components/reports/SegmentBar";
 import { Heading, NAVY, RangePicker, card, keyOf, useRange } from "@/components/reports/reportUi";
 import { apiJson } from "@/lib/api";
 import { BEHAVIOR_TYPE_OPTIONS, CHARACTER_HIGHLIGHT_TYPE_OPTIONS } from "@/lib/dailyLogOptions";
 import { SOP_STATUSES } from "@/lib/sop";
-import { roleLabel } from "@/lib/roles";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -52,11 +52,6 @@ function rangeSegments(ranges, values) {
   return ranges.map((r, i) => ({ key: r.key, label: r.label, count: counts[i], color: RANGE_COLORS[i], text: RANGE_TEXT[i] }));
 }
 
-function gradeTone(value) {
-  const i = rangeIndex(GRADE_RANGES, value);
-  return ["bg-red-100 text-red-800", "bg-orange-100 text-orange-800", "bg-yellow-100 text-yellow-800", "bg-green-100 text-green-800", "bg-emerald-200 text-emerald-900"][i] || "bg-gray-100 text-gray-500";
-}
-
 function citizenshipTone(value) {
   const i = rangeIndex(CITIZENSHIP_RANGES, value);
   return ["bg-red-100 text-red-800", "bg-orange-100 text-orange-800", "bg-yellow-100 text-yellow-800", "bg-green-100 text-green-800", "bg-emerald-200 text-emerald-900"][i] || "bg-gray-100 text-gray-500";
@@ -85,20 +80,6 @@ function ageLabel(birthDate) {
   return `${y} yr${y === 1 ? "" : "s"}`;
 }
 
-function downloadCsv(rows) {
-  const header = ["Staff Name", "Position", "Overall Current Grade", "Overall Prior Grade", "Evaluation %", "Checklist %", "Average SOP %", "Class Citizenship %", "# Commendations", "# Citations", "Hours Worked", "Hours Scheduled", "# Hours Absence", "# Lates"];
-  const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const lines = [header.map(esc).join(",")].concat(
-    rows.map((r) => [r.name, r.position, r.currentGrade, r.priorGrade, r.evaluationPct, r.checklistPct, r.sopPct, r.citizenshipPct, r.commendations, r.citations, r.hoursWorked, r.hoursScheduled, r.hoursAbsence, r.lates].map(esc).join(",")),
-  );
-  const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "staff-performance-overview.csv";
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 function Collapsible({ title, open, onToggle, children }) {
   return (
     <section className={card}>
@@ -125,7 +106,6 @@ export default function CenterPerformance() {
   const [selected, setSelected] = useState(null); // { chart, key }
   const [staffOpen, setStaffOpen] = useState(true);
   const [studentsOpen, setStudentsOpen] = useState(true);
-  const [staffFilter, setStaffFilter] = useState({ role: "", id: "" });
   const [studentFilter, setStudentFilter] = useState({ q: "", parent: "", age: "", teacher: "" });
   const [studentPage, setStudentPage] = useState(1);
   const corrections = useRange();
@@ -187,11 +167,6 @@ export default function CenterPerformance() {
     return { title: `${titles[chart]}: ${label}`, people, kind: ["grade", "evaluation", "hr"].includes(chart) ? "staff" : "students" };
   }, [selected, staff, students]);
 
-  const staffRows = useMemo(
-    () => staff.filter((s) => (!staffFilter.role || s.role === staffFilter.role) && (!staffFilter.id || s.id === staffFilter.id)),
-    [staff, staffFilter],
-  );
-  const roles = useMemo(() => [...new Set(staff.map((s) => s.role))], [staff]);
   const teacherOptions = useMemo(() => {
     const map = new Map();
     for (const s of students) s.teacherIds.forEach((id, i) => map.set(id, s.teacher.split(", ")[i] || id));
@@ -301,64 +276,7 @@ export default function CenterPerformance() {
           )}
 
           <Collapsible title="Staff Performance Overview" open={staffOpen} onToggle={() => setStaffOpen((o) => !o)}>
-            <div className="flex flex-wrap items-end gap-3">
-              <label className={`text-sm font-semibold ${NAVY}`}>
-                Filter by Role
-                <select value={staffFilter.role} onChange={(e) => setStaffFilter({ ...staffFilter, role: e.target.value })} className={`${control} mt-1 block w-48`}>
-                  <option value="">All Roles</option>
-                  {roles.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
-                </select>
-              </label>
-              <label className={`text-sm font-semibold ${NAVY}`}>
-                Filter by Teacher
-                <select value={staffFilter.id} onChange={(e) => setStaffFilter({ ...staffFilter, id: e.target.value })} className={`${control} mt-1 block w-56`}>
-                  <option value="">All Teachers</option>
-                  {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </label>
-              <div className="ml-auto flex gap-2">
-                <button type="button" onClick={() => setStaffFilter({ role: "", id: "" })} className="rounded-lg border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-700 dark:text-blue-300">Reset Filters</button>
-                <button type="button" onClick={() => downloadCsv(staffRows)} disabled={!staffRows.length} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{"⬇"} Export</button>
-              </div>
-            </div>
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[1200px] text-center text-sm">
-                <thead>
-                  <tr className={`bg-blue-50 text-xs font-bold dark:bg-gray-800 ${NAVY}`}>
-                    {["Staff Name", "Position", "Overall Current Grade", "Overall Prior Grade", "Evaluation %", "Checklist %", "Average SOP %", "Class Citizenship %", "# Commendations", "# Citations", "Hours Worked", "Hours Scheduled", "# Hours Absence", "# Lates", "Action"].map((h, i) => (
-                      <th key={h} className={`px-2 py-2 ${i < 2 ? "text-left" : ""}`}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {staffRows.map((s) => (
-                    <tr key={s.id} className="border-t border-gray-100 text-gray-700 dark:border-gray-800 dark:text-gray-300">
-                      <td className="px-2 py-1.5 text-left font-semibold text-gray-900 dark:text-gray-100">{s.name}</td>
-                      <td className="px-2 py-1.5 text-left">{s.position}</td>
-                      <td className="px-2 py-1.5"><span className={`inline-block min-w-[44px] rounded px-2 py-0.5 font-bold ${gradeTone(s.currentGrade)}`}>{num(s.currentGrade)}</span></td>
-                      <td className="px-2 py-1.5"><span className={`inline-block min-w-[44px] rounded px-2 py-0.5 font-bold ${gradeTone(s.priorGrade)}`}>{num(s.priorGrade)}</span></td>
-                      <td className="px-2 py-1.5">{pct(s.evaluationPct)}</td>
-                      <td className="px-2 py-1.5">{pct(s.checklistPct)}</td>
-                      <td className="px-2 py-1.5">{pct(s.sopPct)}</td>
-                      <td className="px-2 py-1.5">{pct(s.citizenshipPct)}</td>
-                      <td className="px-2 py-1.5">{s.commendations}</td>
-                      <td className="px-2 py-1.5">{s.citations}</td>
-                      <td className="px-2 py-1.5">{num(s.hoursWorked)}</td>
-                      <td className="px-2 py-1.5">{num(s.hoursScheduled)}</td>
-                      <td className="px-2 py-1.5">{num(s.hoursAbsence)}</td>
-                      <td className="px-2 py-1.5">{s.lates}</td>
-                      <td className="px-2 py-1.5">
-                        <Link href={`/admin/reports/teachers?teacherId=${s.id}`} className="inline-block rounded border border-blue-600 px-4 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50 dark:text-blue-300">View</Link>
-                      </td>
-                    </tr>
-                  ))}
-                  {!staffRows.length && (
-                    <tr><td colSpan={15} className="py-4 text-gray-500">No staff match.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-2 text-sm text-gray-500">Showing {staffRows.length} staff members</p>
+            <StaffPerformanceTable staff={staff} viewHref={(row) => `/admin/reports/teachers?teacherId=${row.id}`} />
           </Collapsible>
 
           <Collapsible title="Student Performance Overview" open={studentsOpen} onToggle={() => setStudentsOpen((o) => !o)}>
@@ -398,7 +316,7 @@ export default function CenterPerformance() {
                         <td className="px-2 py-1.5"><span className={`inline-block min-w-[40px] rounded px-2 py-0.5 text-center font-bold ${citizenshipTone(s.citizenship)}`}>{num(s.citizenship)}</span></td>
                         <td className="px-2 py-1.5">{status ? <span className={`inline-block rounded px-3 py-0.5 text-xs font-bold ${status.pill}`}>{status.label}</span> : "—"}</td>
                         <td className="px-2 py-1.5">
-                          {s.ipp === "ON_TRACK" ? <span className="rounded bg-green-100 px-2 py-0.5 text-xs font-bold text-green-800">On Track</span> : s.ipp === "NOT_ON_TRACK" ? <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">Not on Track</span> : "—"}
+                          {s.ipp === "ON_TRACK" ? <span className="rounded bg-green-100 px-2 py-0.5 text-xs font-bold text-green-800">On Track</span> : s.ipp === "NEEDS_REVIEW" ? <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">Needs Review</span> : "—"}
                         </td>
                       </tr>
                     );

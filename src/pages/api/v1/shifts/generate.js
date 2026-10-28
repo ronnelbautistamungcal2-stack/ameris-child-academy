@@ -1,6 +1,7 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { isManagerRole } from "@/lib/roles";
+import { canManageShifts } from "@/lib/roles";
+import { EMPLOYED_WHERE } from "@/lib/employment";
 
 function parseMonday(value) {
   const d = new Date(value);
@@ -22,7 +23,7 @@ export default async function handler(req, res) {
       res.setHeader("Allow", ["POST"]);
       return res.status(405).end();
     }
-    if (!isManagerRole(session.user.role)) {
+    if (!canManageShifts(session.user.role)) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
@@ -42,7 +43,7 @@ export default async function handler(req, res) {
     const weekDates = Array.from({ length: 7 }, (_, i) => addDaysUTC(monday, i));
 
     const staff = await prisma.user.findMany({
-      where: { centers: { some: { centerId } } },
+      where: { centers: { some: { centerId } }, ...EMPLOYED_WHERE },
       select: { id: true, weeklySchedules: true },
     });
 

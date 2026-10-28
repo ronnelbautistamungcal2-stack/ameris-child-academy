@@ -28,6 +28,7 @@ export default function TimeSheetModal({ kind, subjectId, subjects = [], onClose
   const [edits, setEdits] = useState({}); // recordId -> { timeIn, timeOut } as "HH:MM"
   const [newRow, setNewRow] = useState({ date: "", timeIn: "", timeOut: "" });
   const [reportOpen, setReportOpen] = useState(false);
+  const [signatures, setSignatures] = useState([]);
   const [range, setRange] = useState(() => {
     const now = new Date();
     return { from: toDateInput(new Date(now.getFullYear(), now.getMonth(), 1)), to: toDateInput(now) };
@@ -42,6 +43,14 @@ export default function TimeSheetModal({ kind, subjectId, subjects = [], onClose
       setError(e.message || "Failed to load the time sheet");
     }
   }, [base]);
+
+  // Employee time sheets the employee has e-signed and submitted.
+  useEffect(() => {
+    if (kind !== "staff") return;
+    apiJson(`/api/v1/time-sheets/signatures?userId=${encodeURIComponent(currentId)}`)
+      .then((rows) => setSignatures(Array.isArray(rows) ? rows : []))
+      .catch(() => setSignatures([]));
+  }, [kind, currentId]);
 
   useEffect(() => {
     setData(null);
@@ -248,6 +257,26 @@ export default function TimeSheetModal({ kind, subjectId, subjects = [], onClose
           </table>
           {data && data.rows.length === 0 ? <p className="py-3 text-center text-sm text-gray-500">No time recorded yet.</p> : null}
         </div>
+
+        {signatures.length ? (
+          <div className="border-t border-gray-100 px-5 py-3 text-sm dark:border-gray-700">
+            <span className="font-bold text-gray-900 dark:text-white">Signed time sheets: </span>
+            {signatures.slice(0, 6).map((sig, i) => (
+              <span key={sig.id}>
+                {i ? ", " : ""}
+                <a
+                  href={`/time-sheets/report?${new URLSearchParams({ kind: "staff", id: currentId, from: sig.from, to: sig.to })}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-700 hover:underline"
+                  title={`Signed ${new Date(sig.signedAt).toLocaleString()}`}
+                >
+                  {sig.from} – {sig.to}
+                </a>
+              </span>
+            ))}
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-5 py-4 dark:border-gray-700">
           <div className="relative flex flex-wrap gap-2">

@@ -3,9 +3,11 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { userRoles } from "@/lib/roles";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 
-export default function AdminClasses() {
+const listControl = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm dark:border-gray-600 dark:bg-gray-800";
+
+export default function CoachClassroomList() {
   const [classes, setClasses] = useState([]);
   const [centers, setCenters] = useState([]);
   const [teachers, setTeachers] = useState([]);
@@ -24,6 +26,9 @@ export default function AdminClasses() {
   const [teacherDropdownOpen, setTeacherDropdownOpen] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [expandedClassId, setExpandedClassId] = useState("");
+  const [search, setSearch] = useState("");
+  const [ageFilter, setAgeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
   async function refresh() {
     setError("");
@@ -50,6 +55,19 @@ export default function AdminClasses() {
   const teacherById = useMemo(() => Object.fromEntries(teachers.map((t) => [t.id, t])), [teachers]);
 
   const sorted = useMemo(() => [...classes].sort((a, b) => (a.name || "").localeCompare(b.name || "")), [classes]);
+  const ageRanges = useMemo(() => [...new Set(classes.map((c) => c.ageRange).filter(Boolean))].sort(), [classes]);
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return sorted.filter((cl) => {
+      const assigned = Array.isArray(cl.children) ? cl.children.length : 0;
+      const full = cl.capacity != null && assigned >= cl.capacity;
+      if (q && !`${cl.name} ${(cl.teachers || []).map((tc) => tc.teacher?.name || "").join(" ")}`.toLowerCase().includes(q)) return false;
+      if (ageFilter && cl.ageRange !== ageFilter) return false;
+      if (statusFilter === "FULL" && !full) return false;
+      if (statusFilter === "OPEN" && full) return false;
+      return true;
+    });
+  }, [sorted, search, ageFilter, statusFilter]);
   const sortedTeachers = useMemo(() => [...teachers].sort((a, b) => (a.email || "").localeCompare(b.email || "")), [teachers]);
 
   const effectiveCenterId = editing?.centerId || centerId || "";
@@ -190,37 +208,16 @@ export default function AdminClasses() {
     }
   }
 
-  const AGE_COLORS = {
-    "0-1 years": { bg: "#FEF3C7", text: "#92400E", border: "#FDE68A" },
-    "2-3 years": { bg: "#DBEAFE", text: "#1E40AF", border: "#BFDBFE" },
-    "4-5 years": { bg: "#D1FAE5", text: "#065F46", border: "#A7F3D0" },
-    "6-7 years": { bg: "#EDE9FE", text: "#5B21B6", border: "#DDD6FE" },
-  };
-
   return (
-    <CoachLayout title="Classes">
-      {/* Stats */}
-      {!loading && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
-          <StatCard icon="🏫" label="Total Classrooms" value={classes.length} color="#2563eb" bg="#DBEAFE" />
-          <StatCard icon="👥" label="Total Capacity" value={classes.reduce((s, c) => s + (c.capacity || 0), 0)} color="#059669" bg="#D1FAE5" />
-          <StatCard icon="🏢" label="Centers" value={centers.length} color="#7C3AED" bg="#EDE9FE" />
-        </div>
-      )}
+    <CoachLayout title="Classroom List">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-3xl font-black text-[#0b2a5b] dark:text-blue-100">Classroom List</h1>
+        <button type="button" onClick={openCreate} className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700">
+          + Add Classroom
+        </button>
+      </div>
 
-      <div style={panelStyle}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--admin-text)" }}>Classrooms</h2>
-            <p style={{ color: "var(--admin-text-muted)", marginTop: 4, fontSize: 13 }}>
-              Create and manage classrooms, assign teachers, and set capacity limits.
-            </p>
-          </div>
-          <button type="button" style={primaryBtnStyle} onClick={openCreate}>
-            <span style={{ fontSize: 16 }}>+</span> Add Classroom
-          </button>
-        </div>
-
+      <div>
         {error && !modalOpen ? <ErrorBanner message={error} /> : null}
 
         {/* Modal */}
@@ -337,123 +334,87 @@ export default function AdminClasses() {
           </Modal>
         )}
 
-        {/* Classrooms List */}
-        <div style={{ marginTop: 20 }}>
-          {loading ? (
-            <SkeletonTable rows={4} cols={4} />
-          ) : sorted.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "40px 20px" }}>
-              <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#F3F4F6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, margin: "0 auto" }}>🏫</div>
-              <p style={{ marginTop: 12, fontWeight: 700, fontSize: 14, color: "var(--admin-text)" }}>No classrooms yet</p>
-              <p style={{ marginTop: 4, fontSize: 12, color: "var(--admin-text-muted)" }}>Create your first classroom to get started.</p>
-            </div>
-          ) : (
-            <div style={{ display: "grid", gap: 10 }}>
-              {sorted.map((cl) => {
-                const centerName = centerById[cl.centerId]?.name || cl.centerId;
-                const teacherNames = (cl.teachers || []).map((tc) => tc.teacher?.name || tc.teacher?.email || tc.teacherId);
-                const ageColor = AGE_COLORS[cl.ageRange] || null;
-
-                return (
-                  <div
-                    key={cl.id}
-                    style={{ ...cardStyle, flexWrap: "wrap" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#93C5FD"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(37,99,235,0.08)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--admin-border)"; e.currentTarget.style.boxShadow = "none"; }}
-                  >
-                    {/* Icon */}
-                    <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg, #1e3a8a, #0ea5e9)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 16, flexShrink: 0 }}>
-                      🏠
-                    </div>
-
-                    {/* Info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                        <span style={{ fontWeight: 700, fontSize: 14, color: "var(--admin-text)" }}>{cl.name}</span>
-                        {ageColor && (
-                          <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: ageColor.bg, color: ageColor.text, border: `1px solid ${ageColor.border}` }}>
-                            {cl.ageRange}
-                          </span>
-                        )}
-                        {cl.capacity != null && (
-                          <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "#F3F4F6", color: "#374151", border: "1px solid #E5E7EB" }}>
-                            Cap: {cl.capacity}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 12, fontSize: 12, color: "var(--admin-text-muted)", flexWrap: "wrap" }}>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2563eb", display: "inline-block" }} />
-                          {centerName}
-                        </span>
-                        {teacherNames.length > 0 && (
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                            👩‍🏫 {teacherNames.length <= 2 ? teacherNames.join(", ") : `${teacherNames.slice(0, 2).join(", ")} +${teacherNames.length - 2}`}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                      <button type="button" style={cardActionBtn} onClick={() => setExpandedClassId(expandedClassId === cl.id ? "" : cl.id)}>
-                        {expandedClassId === cl.id ? "Hide Roster" : "View Roster"}
-                      </button>
-                      <button type="button" style={cardActionBtn} onClick={() => openEdit(cl)}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                        Edit
-                      </button>
-                      <button type="button" style={cardDangerBtn} onClick={() => setDeleteConfirmId(cl.id)}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-                      </button>
-                    </div>
-
-                    {expandedClassId === cl.id && (
-                      <div style={{ marginTop: 16, display: "grid", gap: 12, flexBasis: "100%", width: "100%", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
-                        <div style={{ border: "1px solid var(--admin-border)", borderRadius: 12, padding: 14, background: "var(--admin-bg-secondary)" }}>
-                          <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--admin-text-muted)" }}>
-                            Assigned Teachers
-                          </div>
-                          <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
-                            {teacherNames.length ? teacherNames.map((teacherName) => (
-                              <div key={`${cl.id}-teacher-${teacherName}`} style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid var(--admin-border)", background: "var(--admin-bg)" }}>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>{teacherName}</div>
-                              </div>
-                            )) : (
-                              <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>No teachers assigned yet.</div>
-                            )}
-                          </div>
-                        </div>
-
-                        <div style={{ border: "1px solid var(--admin-border)", borderRadius: 12, padding: 14, background: "var(--admin-bg-secondary)" }}>
-                          <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--admin-text-muted)" }}>
-                            Assigned Children
-                          </div>
-                          <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
-                            {Array.isArray(cl.children) && cl.children.length ? cl.children.map((child) => (
-                              <div key={child.id} style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid var(--admin-border)", background: "var(--admin-bg)" }}>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>
-                                  {[child.firstName, child.lastName].filter(Boolean).join(" ") || "Unnamed child"}
-                                </div>
-                                {child.birthDate ? (
-                                  <div style={{ marginTop: 2, fontSize: 11, color: "var(--admin-text-muted)" }}>
-                                    DOB: {new Date(child.birthDate).toLocaleDateString()}
-                                  </div>
-                                ) : null}
-                              </div>
-                            )) : (
-                              <div style={{ fontSize: 12, color: "var(--admin-text-muted)" }}>No children assigned yet.</div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+        {/* Classroom List (client mockup 10-01) */}
+        <div className="mb-4 grid gap-3 sm:grid-cols-[2fr_1fr_1fr]">
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search classrooms..." aria-label="Search classrooms" className={listControl} />
+          <select value={ageFilter} onChange={(e) => setAgeFilter(e.target.value)} aria-label="Age group" className={listControl}>
+            <option value="">All Age Groups</option>
+            {ageRanges.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status" className={listControl}>
+            <option value="">All Statuses</option>
+            <option value="OPEN">Has Openings</option>
+            <option value="FULL">Full</option>
+          </select>
         </div>
+        {loading ? (
+          <SkeletonTable rows={4} cols={4} />
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
+            <table className="min-w-full text-sm">
+              <thead className="bg-blue-50 text-left text-[#0b2a5b] dark:bg-gray-800 dark:text-blue-100">
+                <tr>
+                  {["Classroom Name", "Age Range", "Capacity", "Assigned", "Teachers", "Actions"].map((h) => (
+                    <th key={h} className={`px-4 py-3 font-bold ${["Capacity", "Assigned", "Actions"].includes(h) ? "text-center" : ""}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                {visible.map((cl) => {
+                  const teacherNames = (cl.teachers || []).map((tc) => tc.teacher?.name || tc.teacher?.email || tc.teacherId);
+                  const assigned = Array.isArray(cl.children) ? cl.children.length : 0;
+                  const open = expandedClassId === cl.id;
+                  return (
+                    <Fragment key={cl.id}>
+                      <tr>
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-[#0b2a5b] dark:text-blue-100">{cl.name}</div>
+                          {centers.length > 1 ? <div className="text-xs text-gray-500">{centerById[cl.centerId]?.name}</div> : null}
+                        </td>
+                        <td className="px-4 py-3">{cl.ageRange || "—"}</td>
+                        <td className="px-4 py-3 text-center">{cl.capacity ?? "—"}</td>
+                        <td className={`px-4 py-3 text-center ${cl.capacity != null && assigned >= cl.capacity ? "font-bold text-red-600" : ""}`}>{assigned}</td>
+                        <td className="px-4 py-3">{teacherNames.join(", ") || "—"}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-center gap-2">
+                            <button type="button" onClick={() => setExpandedClassId(open ? "" : cl.id)} aria-expanded={open} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-semibold text-[#0b2a5b] hover:bg-gray-50 dark:text-blue-100">
+                              {open ? "Hide Roster" : "View Roster"}
+                            </button>
+                            <button type="button" onClick={() => openEdit(cl)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-semibold text-[#0b2a5b] hover:bg-gray-50 dark:text-blue-100">✎ Edit</button>
+                            <button type="button" onClick={() => setDeleteConfirmId(cl.id)} aria-label={`Delete ${cl.name}`} className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-sm text-red-600 hover:bg-red-100">🗑</button>
+                          </div>
+                        </td>
+                      </tr>
+                      {open ? (
+                        <tr>
+                          <td colSpan={6} className="bg-blue-50/50 px-6 py-3 dark:bg-gray-800">
+                            <div className="text-xs font-bold uppercase text-gray-500">Roster ({assigned})</div>
+                            {assigned ? (
+                              <ul className="mt-2 grid gap-1 sm:grid-cols-3">
+                                {cl.children.map((child) => (
+                                  <li key={child.id} className="text-sm">
+                                    <span className="font-semibold">{[child.firstName, child.lastName].filter(Boolean).join(" ") || "Unnamed child"}</span>
+                                    {child.birthDate ? <span className="ml-2 text-xs text-gray-500">DOB {new Date(child.birthDate).toLocaleDateString()}</span> : null}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="mt-1 text-sm text-gray-500">No children assigned yet.</p>
+                            )}
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
+                {!visible.length ? (
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">{sorted.length ? "No classrooms match these filters." : "No classrooms yet. Use Add Classroom to create one."}</td></tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {!loading && sorted.length ? <p className="mt-3 text-sm text-gray-500">Showing {visible.length} of {sorted.length} classrooms</p> : null}
 
         <ConfirmDialog
           open={!!deleteConfirmId}
@@ -470,18 +431,6 @@ export default function AdminClasses() {
 }
 
 /* ── Sub-components ── */
-
-function StatCard({ icon, label, value, color, bg }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 14, padding: 16, borderRadius: 14, background: "var(--admin-bg)", border: "1px solid var(--admin-border)" }}>
-      <div style={{ width: 48, height: 48, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: bg, fontSize: 22 }}>{icon}</div>
-      <div>
-        <div style={{ fontSize: 24, fontWeight: 800, color }}>{value}</div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--admin-text-muted)" }}>{label}</div>
-      </div>
-    </div>
-  );
-}
 
 function SectionHeader({ icon, title, style: extraStyle }) {
   return (
@@ -528,7 +477,6 @@ function ErrorBanner({ message }) {
 
 /* ── Styles ── */
 
-const panelStyle = { background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 14, padding: 20 };
 const formGridStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 };
 
 const inputStyle = {
@@ -537,23 +485,6 @@ const inputStyle = {
 };
 
 const fieldLabelStyle = { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--admin-text-muted)", marginBottom: 6 };
-
-const cardStyle = {
-  display: "flex", alignItems: "center", gap: 14, padding: 16,
-  borderRadius: 12, border: "1px solid var(--admin-border)", background: "var(--admin-bg)",
-  transition: "border-color 0.15s, box-shadow 0.15s",
-};
-
-const cardActionBtn = {
-  display: "inline-flex", alignItems: "center", gap: 4, padding: "7px 12px",
-  border: "1px solid var(--admin-border)", borderRadius: 8, background: "var(--admin-bg)",
-  color: "var(--admin-text)", cursor: "pointer", fontWeight: 600, fontSize: 12,
-};
-
-const cardDangerBtn = {
-  display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 7,
-  border: "1px solid #FECACA", borderRadius: 8, background: "#FEF2F2", color: "#DC2626", cursor: "pointer",
-};
 
 const primaryBtnStyle = {
   display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 18px",

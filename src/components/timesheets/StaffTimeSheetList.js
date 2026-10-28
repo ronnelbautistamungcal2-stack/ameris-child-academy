@@ -1,4 +1,6 @@
+import EmploymentStatusModal from "@/components/timesheets/EmploymentStatusModal";
 import TimeSheetModal from "@/components/timesheets/TimeSheetModal";
+import { CURRENTLY_EMPLOYED, employmentStatusLabel } from "@/lib/employment";
 import { apiJson } from "@/lib/api";
 import { useEffect, useState } from "react";
 
@@ -13,6 +15,8 @@ export default function StaffTimeSheetList() {
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState(null);
+  const [employmentId, setEmploymentId] = useState(null);
+  const [employment, setEmployment] = useState("ACTIVE");
 
   async function load() {
     try {
@@ -27,18 +31,35 @@ export default function StaffTimeSheetList() {
   }, []);
 
   const q = query.trim().toLowerCase();
-  const visible = (staff || []).filter((s) => !q || s.name.toLowerCase().includes(q) || s.role.toLowerCase().includes(q));
+  const visible = (staff || []).filter((s) => {
+    const active = s.employmentStatus === CURRENTLY_EMPLOYED;
+    if (employment === "ACTIVE" && !active) return false;
+    if (employment === "INACTIVE" && active) return false;
+    return !q || s.name.toLowerCase().includes(q) || s.role.toLowerCase().includes(q);
+  });
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-black text-gray-900 dark:text-white">Staff List</h2>
+        <div className="flex flex-wrap gap-2">
+        <select
+          value={employment}
+          onChange={(e) => setEmployment(e.target.value)}
+          aria-label="Employment status"
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+        >
+          <option value="ACTIVE">Currently Employed</option>
+          <option value="ALL">View All</option>
+          <option value="INACTIVE">Not Currently Employed</option>
+        </select>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by name or role..."
           className="w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
         />
+        </div>
       </div>
       {error ? <div className="mt-3 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div> : null}
       <div className="mt-4 overflow-x-auto">
@@ -60,7 +81,12 @@ export default function StaffTimeSheetList() {
               visible.map((person) => (
                 <tr key={person.id} className="border-b border-gray-100 dark:border-gray-800">
                   <td className="px-3 py-2 font-semibold text-gray-900 dark:text-white">{person.name}</td>
-                  <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{person.role}</td>
+                  <td className="px-3 py-2 text-gray-600 dark:text-gray-300">
+                    {person.role}
+                    {person.employmentStatus !== CURRENTLY_EMPLOYED ? (
+                      <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">{employmentStatusLabel(person.employmentStatus)}</span>
+                    ) : null}
+                  </td>
                   <td className="px-3 py-2">
                     {person.clockedIn ? (
                       <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-bold text-green-700">In since {time(person.clockIn)}</span>
@@ -80,6 +106,15 @@ export default function StaffTimeSheetList() {
                     >
                       &#128339;
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setEmploymentId(person.id)}
+                      className="ml-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                      title="Employment status"
+                      aria-label={`Employment status for ${person.name}`}
+                    >
+                      &#8942;
+                    </button>
                   </td>
                 </tr>
               ))
@@ -87,6 +122,9 @@ export default function StaffTimeSheetList() {
           </tbody>
         </table>
       </div>
+      {employmentId ? (
+        <EmploymentStatusModal userId={employmentId} onClose={() => setEmploymentId(null)} onSaved={load} />
+      ) : null}
       {openId ? (
         <TimeSheetModal
           kind="staff"

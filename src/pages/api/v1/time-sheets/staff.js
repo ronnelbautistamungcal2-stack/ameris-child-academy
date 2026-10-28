@@ -32,6 +32,7 @@ export default async function handler(req, res) {
       email: true,
       role: true,
       roles: true,
+      employmentStatus: true,
       staffAttendances: {
         where: { date: startOfLocalDay(new Date()) },
         select: { clockIn: true, clockOut: true },
@@ -47,6 +48,7 @@ export default async function handler(req, res) {
         id: user.id,
         name: user.name || user.email,
         role: userRoles(user).map(roleLabel).join(", "),
+        employmentStatus: user.employmentStatus,
         clockedIn: Boolean(today?.clockIn && !today?.clockOut),
         clockIn: today?.clockIn || null,
         clockOut: today?.clockOut || null,

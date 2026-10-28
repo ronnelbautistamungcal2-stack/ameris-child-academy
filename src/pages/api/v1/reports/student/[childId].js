@@ -2,8 +2,9 @@ import { getSession } from "@/lib/auth";
 import { behaviorTypeLabel, characterHighlightLabel } from "@/lib/dailyLogOptions";
 import { CURRENT_IPP_STATUSES } from "@/lib/ipp";
 import prisma from "@/lib/prisma";
-import { goalOffsetDays, levelForStatus, statusForOffset } from "@/lib/sop";
+import { goalStatus, levelForStatus, sopPercent } from "@/lib/sop";
 import { canViewChildReport } from "@/lib/reportAccess";
+import { canUseChild } from "@/lib/sopServer";
 
 // Student Performance Report (client mockups 2026-10-02), the same report
 // for parents, teachers, coaches and Student Support.
@@ -20,15 +21,16 @@ function dayKey(date) {
 /** Status mix (whole percentages) for a list of { step, level } goals. */
 function mix(goals, birthDate) {
   const counts = { CRITICAL: 0, AT_RISK: 0, ON_TRACK: 0, AHEAD: 0, EXCELLING: 0 };
-  for (const g of goals) counts[statusForOffset(goalOffsetDays(g.step, g.level, birthDate))] += 1;
+  for (const g of goals) counts[goalStatus(g.step, g.level, birthDate)] += 1;
   const total = goals.length || 1;
   return Object.fromEntries(Object.entries(counts).map(([k, v]) => [k, Math.round((v * 100) / total)]));
 }
 
 /**
  * GET /api/v1/reports/student/:childId[?logDate=YYYY-MM-DD]
- * Citizenship Grade scores, Active Goals, Milestones (category and subject
- * status mix from SOP Tracking), Character Highlights and Course
+ * Citizenship Grade scores, Active Goals, Milestones (the Milestones % and,
+ * per category, the status mix and the active goals with their levels, as on
+ * SOP Tracking), Character Highlights and Course
  * Corrections (newest first), open IPPs and the Student Activity Log (latest
  * entries, or one day with logDate).
  */
@@ -67,11 +69,12 @@ export default async function handler(req, res) {
 
     const [progress, logs, plans, activity] = await Promise.all([
       prisma.progress.findMany({
-        where: { childId: child.id, lesson: { isStep: true }, OR: [{ active: true }, { assessedAt: { not: null } }] },
+        where: { childId: child.id, lesson: { isStep: true }, OR: [{ active: true }, { assessedAt: { not: null } }, { status: { not: "NOT_STARTED" } }] },
         select: {
           status: true,
           active: true,
-          lesson: { select: { id: true, title: true, subCategory: true, ageYears: true, ageMonths: true, category: { select: { name: true } } } },
+          assessedAt: true,
+          lesson: { select: { id: true, title: true, description: true, subCategory: true, ageYears: true, ageMonths: true, maxAgeYears: true, maxAgeMonths: true, category: { select: { name: true } } } },
         },
       }),
       prisma.activityLog.findMany({
@@ -100,24 +103,26 @@ export default async function handler(req, res) {
       step: p.lesson,
       level: levelForStatus(p.status),
       active: p.active,
+      category: p.lesson.category?.name || "General",
     }));
     const categories = new Map();
     for (const g of goals) {
-      const cat = g.step.category?.name || "General";
-      const sub = g.step.subCategory || "Other";
-      if (!categories.has(cat)) categories.set(cat, new Map());
-      if (!categories.get(cat).has(sub)) categories.get(cat).set(sub, []);
-      categories.get(cat).get(sub).push(g);
+      if (!categories.has(g.category)) categories.set(g.category, []);
+      categories.get(g.category).push(g);
     }
     const milestones = [...categories.entries()]
       .sort(([a], [b]) => (a === "General" ? -1 : b === "General" ? 1 : a.localeCompare(b)))
-      .map(([name, subs]) => ({
+      .map(([name, list]) => ({
         name,
-        distribution: mix([...subs.values()].flat(), child.birthDate),
-        subjects: [...subs.entries()]
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([subject, list]) => ({ name: subject, distribution: mix(list, child.birthDate) })),
+        distribution: mix(list, child.birthDate),
+        goals: list
+          .filter((g) => g.active)
+          .map((g) => ({ id: g.step.id, title: g.step.title, question: g.step.description || "", level: g.level })),
       }));
+    // Parents mark off goals in the General category only; staff who track
+    // the child can mark every category (client request 2026-10-23).
+    const trackAll = await canUseChild(session.user, child);
+    const canTrack = trackAll ? "ALL" : session.user.role === "PARENT" ? "GENERAL" : null;
 
     return res.status(200).json({
       child: {
@@ -135,6 +140,8 @@ export default async function handler(req, res) {
         .reverse(),
       activeGoals: goals.filter((g) => g.active).map((g) => ({ id: g.step.id, title: g.step.title })),
       milestones,
+      milestonePct: sopPercent(goals, child.birthDate),
+      canTrack,
       characterHighlights: logs
         .filter((l) => l.type === "CHARACTER_HIGHLIGHT")
         .map((l) => ({ id: l.id, label: characterHighlightLabel(l.details?.characterHighlightType), date: dayKey(l.createdAt), notes: l.notes || "" })),

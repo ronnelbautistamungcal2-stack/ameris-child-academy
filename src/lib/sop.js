@@ -36,8 +36,8 @@ const reached = (level) => level === "COMPETENCY" || level === "MASTERY";
 // ---- Status by age ----------------------------------------------------------
 // Client definitions: Excelling = 1 month ahead, Ahead = 2 weeks ahead,
 // On Track = milestones match current age, At Risk = 2 weeks behind,
-// Critical = 1 month behind. A step's age expectation is its Age (Years) and
-// Age (Months).
+// Critical = 1 month behind. A step's age expectation is its age range:
+// Minimum Age (Years/Months) to Maximum Age (Years/Months).
 
 export const SOP_STATUSES = [
   { value: "CRITICAL", label: "Critical", bar: "bg-red-400", pill: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200" },
@@ -50,13 +50,26 @@ export const SOP_STATUSES = [
 const DAY = 86400000;
 const MONTH_DAYS = 30.44;
 
-/** A step's expected age in days, or null when it has none. */
+/** A step's minimum expected age in days, or null when it has none. */
 export function expectedAgeDays(step) {
   if (step?.ageYears == null && step?.ageMonths == null) return null;
   return ((step.ageYears || 0) * 12 + (step.ageMonths || 0)) * MONTH_DAYS;
 }
 
+/** A step's maximum expected age in days (the minimum when no maximum is set). */
+export function maxExpectedAgeDays(step) {
+  if (step?.maxAgeYears == null && step?.maxAgeMonths == null) return expectedAgeDays(step);
+  return ((step.maxAgeYears || 0) * 12 + (step.maxAgeMonths || 0)) * MONTH_DAYS;
+}
+
 export function formatExpectedAge(step) {
+  const min = formatExpectedAgeOnly(step);
+  const max = formatExpectedAgeOnly({ ageYears: step?.maxAgeYears, ageMonths: step?.maxAgeMonths });
+  if (min && max && min !== max) return `${min} – ${max}`;
+  return min || max;
+}
+
+function formatExpectedAgeOnly(step) {
   const months = (step?.ageYears || 0) * 12 + (step?.ageMonths || 0);
   if (step?.ageYears == null && step?.ageMonths == null) return "";
   if (months < 24) return `${months} months`;
@@ -64,16 +77,17 @@ export function formatExpectedAge(step) {
 }
 
 /**
- * Days ahead (positive) or behind (negative) for one goal: a reached step
- * that was expected later is ahead; an unreached step whose expected age has
- * passed is behind. Null without an age to compare.
+ * Days ahead (positive) or behind (negative) for one goal: a step reached
+ * before its minimum age is ahead; an unreached step past its maximum age is
+ * behind. Null without an age to compare.
  */
 export function goalOffsetDays(step, level, birthDate, today = new Date()) {
-  const expected = expectedAgeDays(step);
-  if (expected == null || !birthDate) return null;
+  const min = expectedAgeDays(step);
+  const max = maxExpectedAgeDays(step);
+  if (min == null && max == null) return null;
+  if (!birthDate) return null;
   const age = (today - new Date(birthDate)) / DAY;
-  const diff = expected - age;
-  return reached(level) ? Math.max(0, diff) : Math.min(0, diff);
+  return reached(level) ? Math.max(0, (min ?? max) - age) : Math.min(0, (max ?? min) - age);
 }
 
 export function statusForOffset(days) {
@@ -83,6 +97,38 @@ export function statusForOffset(days) {
   if (days <= -30) return "CRITICAL";
   if (days <= -14) return "AT_RISK";
   return "ON_TRACK";
+}
+
+/**
+ * One goal's status (client rules 2026-10-23): only Competency or Mastery can
+ * be Ahead, and only Mastery can be Excelling.
+ */
+export function goalStatus(step, level, birthDate, today = new Date()) {
+  const status = statusForOffset(goalOffsetDays(step, level, birthDate, today));
+  if (status === "EXCELLING" && level !== "MASTERY") return "AHEAD";
+  return status;
+}
+
+// What each status is worth toward the Milestones / SOP % (client 2026-10-23).
+export const SOP_STATUS_PERCENT = { CRITICAL: 40, AT_RISK: 60, ON_TRACK: 100, AHEAD: 110, EXCELLING: 120 };
+
+/**
+ * A child's Milestones %: the average of their goals' status percentages
+ * (goals: [{ step, level, category? }]). With excludeGeneral, goals in the
+ * General category (what parents work on at home) are left out — used for
+ * the teacher's SOP %. Null when there are no goals.
+ */
+export function sopPercent(goals, birthDate, { excludeGeneral = false, today = new Date() } = {}) {
+  const counted = goals.filter((g) => !excludeGeneral || (g.category ?? g.step?.category?.name ?? g.step?.category ?? "General") !== "General");
+  if (!counted.length) return null;
+  const total = counted.reduce((sum, g) => sum + SOP_STATUS_PERCENT[goalStatus(g.step, g.level, birthDate, today)], 0);
+  return Math.round(total / counted.length);
+}
+
+/** The average of children's SOP % (teacher / class SOP %), null without any. */
+export function averagePercent(values) {
+  const list = values.filter((v) => v != null);
+  return list.length ? Math.round(list.reduce((a, b) => a + b, 0) / list.length) : null;
 }
 
 /** A child's overall status: the average offset of their active goals. */
@@ -95,7 +141,7 @@ export function childStatus(goals, birthDate, today = new Date()) {
 /** Share of goals in each status, as whole percentages. */
 export function statusDistribution(goals, birthDate, today = new Date()) {
   const counts = Object.fromEntries(SOP_STATUSES.map((s) => [s.value, 0]));
-  for (const g of goals) counts[statusForOffset(goalOffsetDays(g.step, g.level, birthDate, today))] += 1;
+  for (const g of goals) counts[goalStatus(g.step, g.level, birthDate, today)] += 1;
   const total = goals.length || 1;
   return Object.fromEntries(Object.entries(counts).map(([k, v]) => [k, Math.round((v * 100) / total)]));
 }

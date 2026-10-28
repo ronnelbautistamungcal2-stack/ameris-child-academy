@@ -18,8 +18,10 @@ const ICON_TINTS = [
 
 /**
  * Two-pane document browser: a searchable list on the left and the selected
- * document rendered inline on the right, with a Print button. Used by the
- * parent Policies and Additional Resources pages.
+ * document rendered inline on the right, with a Print button. Used by every
+ * role's Policies and Additional Resources pages; `actions(doc)` adds the
+ * admin's Edit / Delete buttons. A website resource shows its details and a
+ * Visit Website button instead of a preview.
  */
 export default function DocumentLibrary({
   docs,
@@ -28,6 +30,7 @@ export default function DocumentLibrary({
   searchPlaceholder,
   emptyText,
   iconVariant = "pdf",
+  actions,
 }) {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState(null);
@@ -105,6 +108,7 @@ export default function DocumentLibrary({
                         className={`min-w-0 flex-1 truncate text-sm ${active ? "font-bold" : "font-semibold"} ${NAVY}`}
                       >
                         {doc.title}
+                        {doc.active === false ? <span className="ml-2 text-[10px] font-bold uppercase text-gray-400">Inactive</span> : null}
                       </span>
                       <svg
                         viewBox="0 0 24 24"
@@ -133,7 +137,7 @@ export default function DocumentLibrary({
         {loading ? (
           <Skeleton count={8} />
         ) : selected ? (
-          <DocumentViewer doc={selected} />
+          <DocumentViewer doc={selected} actions={actions ? actions(selected) : null} />
         ) : (
           <div className="flex h-full min-h-[240px] items-center justify-center text-sm text-gray-500 dark:text-gray-400">
             {emptyText}
@@ -144,9 +148,10 @@ export default function DocumentLibrary({
   );
 }
 
-function DocumentViewer({ doc }) {
+function DocumentViewer({ doc, actions }) {
   const frameRef = useRef(null);
-  const kind = fileKind(doc.url);
+  const isWebsite = Boolean(doc.websiteUrl) && doc.url === doc.websiteUrl;
+  const kind = isWebsite ? "website" : fileKind(doc.url);
 
   function handlePrint() {
     // Uploads are same-origin, so the embedded viewer can print directly.
@@ -169,19 +174,23 @@ function DocumentViewer({ doc }) {
           <h2 className={`text-lg font-black ${NAVY}`}>{doc.title}</h2>
           <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
             Last Updated: {formatLongDate(doc.updatedAt || doc.createdAt)}
-            {doc.description ? <span> &middot; {doc.description}</span> : null}
+            {doc.version ? <span> &nbsp;|&nbsp; Version: {doc.version}</span> : null}
+            {doc.description && !isWebsite ? <span> &middot; {doc.description}</span> : null}
           </p>
         </div>
-        <div className="flex shrink-0 gap-2">
-          <a
-            href={doc.url}
-            download
-            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-transparent dark:text-gray-200 dark:hover:bg-gray-700"
-          >
-            <DownloadIcon />
-            Download
-          </a>
-          {kind !== "other" ? (
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {actions}
+          {isWebsite ? null : (
+            <a
+              href={doc.url}
+              download
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-transparent dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              <DownloadIcon />
+              Download
+            </a>
+          )}
+          {kind === "pdf" || kind === "image" ? (
             <button
               type="button"
               onClick={handlePrint}
@@ -195,7 +204,33 @@ function DocumentViewer({ doc }) {
       </div>
 
       <div className="mt-4 flex-1 overflow-hidden rounded-xl border border-gray-200 bg-gray-100 dark:border-gray-700 dark:bg-gray-900">
-        {kind === "pdf" ? (
+        {kind === "website" ? (
+          <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 bg-white p-6 text-center dark:bg-gray-800">
+            {doc.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={doc.logoUrl} alt="" className="h-20 w-20 rounded-lg object-contain" />
+            ) : (
+              <DocIcon className="text-sky-600 dark:text-sky-300" large />
+            )}
+            {doc.description ? <p className="max-w-lg text-sm text-gray-700 dark:text-gray-300">{doc.description}</p> : null}
+            <div className="space-y-0.5 text-sm text-gray-600 dark:text-gray-400">
+              {doc.contactEmail ? (
+                <div>Email: <a href={`mailto:${doc.contactEmail}`} className="font-semibold text-sky-700 underline dark:text-sky-300">{doc.contactEmail}</a></div>
+              ) : null}
+              {doc.contactPhone ? (
+                <div>Phone: <a href={`tel:${doc.contactPhone}`} className="font-semibold text-sky-700 underline dark:text-sky-300">{doc.contactPhone}</a></div>
+              ) : null}
+            </div>
+            <a
+              href={doc.websiteUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-lg bg-[#12386a] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#0e2c54]"
+            >
+              Visit Website
+            </a>
+          </div>
+        ) : kind === "pdf" ? (
           <iframe
             key={doc.id}
             ref={frameRef}

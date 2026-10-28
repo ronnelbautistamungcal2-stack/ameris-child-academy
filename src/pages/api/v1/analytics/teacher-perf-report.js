@@ -1,4 +1,5 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { isEmployeeRole } from "@/lib/roles";
 import prisma from "@/lib/prisma";
 import { teacherPerformance } from "@/lib/teacherPerformance";
 
@@ -6,7 +7,9 @@ export default async function handler(req, res) {
   try {
     const session = await getSession(req, res);
     if (!session) return res.status(401).json({ error: "Unauthorized" });
-    if (!["ADMIN", "TEACHER", "COACH"].includes(session.user.role)) {
+    // Every employee sees their own report (My Performance); admins, coaches
+    // and HR also see their staff's (Staff Performance).
+    if (!isEmployeeRole(session.user.role)) {
       return res.status(403).json({ error: "Forbidden" });
     }
     if (req.method !== "GET") {
@@ -17,11 +20,10 @@ export default async function handler(req, res) {
     const { centerId, teacherId, from, to } = req.query;
     if (!centerId) return res.status(400).json({ error: "centerId is required" });
 
-    // Teachers can only view their own report
-    const resolvedTeacherId =
-      session.user.role === "TEACHER" ? session.user.id : teacherId;
-    if (!resolvedTeacherId) {
-      return res.status(400).json({ error: "teacherId is required" });
+    const canViewOthers = ["ADMIN", "COACH", "HR_STAFF"].includes(session.user.role);
+    const resolvedTeacherId = !teacherId || teacherId === "me" || !canViewOthers ? session.user.id : teacherId;
+    if (session.user.role !== "ADMIN" && !(await hasAccessToCenter(session.user.id, centerId))) {
+      return res.status(403).json({ error: "Forbidden" });
     }
 
     const dateFrom = from ? new Date(from) : (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d; })();

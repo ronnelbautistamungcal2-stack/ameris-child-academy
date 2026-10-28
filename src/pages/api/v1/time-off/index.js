@@ -3,11 +3,9 @@ import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { isEmployeeRole, isManagerRole, isSelfServiceEmployeeRole } from "@/lib/roles";
 import {
-  getTimeOffAvailabilityWarning,
   decorateTimeOffRequest,
   normalizeTimeOffType,
   isUnexcusedType,
-  calculateTimeOffHours,
   splitTimeOffRangeIntoWorkdays,
 } from "@/lib/time-off";
 
@@ -100,7 +98,6 @@ async function handlePost(req, res, session) {
     reason,
     coverageName,
     userId,
-    overrideBalanceWarning,
   } = req.body || {};
   if (!centerId || !startDate || !endDate) {
     return res.status(400).json({ error: "centerId, startDate, and endDate are required" });
@@ -135,32 +132,8 @@ async function handlePost(req, res, session) {
   }
   const days = workdaySplit && workdaySplit.length > 1 ? workdaySplit : null;
 
-  // Unexcused time off is an administrative record of what already happened,
-  // so it skips the balance-overage warning and reduces unpaid hours directly,
-  // even below zero.
-  if (!unexcused) {
-    const normalizedType = normalizeTimeOffType(type);
-    const totalHours = days
-      ? days.reduce((sum, day) => sum + calculateTimeOffHours(day.startDate, day.endDate), 0)
-      : undefined;
-    const warning = await getTimeOffAvailabilityWarning(prisma, {
-      userId: targetUserId,
-      centerId,
-      type: normalizedType,
-      startDate: start,
-      endDate: end,
-      precomputedHours: totalHours,
-    });
-    if (warning.overLimit && !overrideBalanceWarning) {
-      return res.status(409).json({
-        error: `This request exceeds the employee's ${warning.balanceType.toLowerCase()} hours available`,
-        code: "TIME_OFF_BALANCE_WARNING",
-        canProceed: true,
-        warning,
-      });
-    }
-  }
-
+  // Paid/unpaid balances were dropped (client decision 2026-10-22), so there
+  // is no hours-available warning any more.
   const baseData = {
     userId: targetUserId,
     centerId,

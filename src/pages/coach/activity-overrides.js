@@ -2,6 +2,7 @@ import CoachLayout from "@/components/coach/CoachLayout";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useRouter } from "next/router";
+import useChecklistLinkVisit from "@/hooks/useChecklistLinkVisit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const TYPES = [
@@ -700,6 +701,7 @@ async function uploadFilesToUrls(files) {
 
 export default function AdminActivityOverrides() {
   const router = useRouter();
+  useChecklistLinkVisit();
   const [centers, setCenters] = useState([]);
   const [children, setChildren] = useState([]);
   const [classrooms, setClassrooms] = useState([]);

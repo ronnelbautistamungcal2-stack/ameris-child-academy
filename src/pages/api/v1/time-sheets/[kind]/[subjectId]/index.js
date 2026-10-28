@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   if (!session) return res.status(401).json({ error: "Unauthorized" });
 
   const { kind, subjectId } = req.query;
-  const access = await loadTimeSheetAccess(prisma, session, kind, subjectId);
+  const access = await loadTimeSheetAccess(prisma, session, kind, subjectId, { allowSelfRead: req.method === "GET" });
   if (access.error) return res.status(access.status).json({ error: access.error });
 
   if (req.method === "GET") {

@@ -1,4 +1,5 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { splitChecklistPerAssignee } from "@/lib/dailyChecklistSplit";
 import prisma from "@/lib/prisma";
 import {
   buildDailyChecklistInclude,
@@ -32,8 +33,8 @@ function cloneItemData(item, sortOrder) {
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
-  if (session.user.role !== "ADMIN") {
-    return res.status(403).json({ error: "Only admins can duplicate checklists" });
+  if (!["ADMIN", "COACH"].includes(session.user.role)) {
+    return res.status(403).json({ error: "Only admins and coaches can duplicate checklists" });
   }
 
   if (req.method !== "POST") {
@@ -53,6 +54,9 @@ export default async function handler(req, res) {
     },
   });
   if (!source) return res.status(404).json({ error: "Checklist not found" });
+  if (session.user.role === "COACH" && !(await hasAccessToCenter(session.user.id, source.centerId))) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
 
   const nextTitle = String(title || "").trim() || `${source.title} (Copy)`;
 
@@ -69,6 +73,7 @@ export default async function handler(req, res) {
         : undefined,
       title: nextTitle,
       description: source.description,
+      noClassroom: source.noClassroom,
       category: source.category,
       frequency: source.frequency,
       repeatDays: source.repeatDays,
@@ -83,5 +88,6 @@ export default async function handler(req, res) {
     include: buildDailyChecklistInclude(),
   });
 
-  return res.status(201).json(serializeDailyChecklist(created));
+  const copyIds = await splitChecklistPerAssignee(created.id);
+  return res.status(201).json({ ...serializeDailyChecklist(created), copyIds });
 }

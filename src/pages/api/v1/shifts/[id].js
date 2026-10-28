@@ -1,6 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { isManagerRole } from "@/lib/roles";
+import { canManageShifts } from "@/lib/roles";
 
 export default async function handler(req, res) {
   try {
@@ -18,7 +18,7 @@ export default async function handler(req, res) {
 }
 
 async function handlePut(req, res, session) {
-  if (!isManagerRole(session.user.role)) {
+  if (!canManageShifts(session.user.role)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -56,7 +56,7 @@ async function handlePut(req, res, session) {
 }
 
 async function handleDelete(req, res, session) {
-  if (!isManagerRole(session.user.role)) {
+  if (!canManageShifts(session.user.role)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 

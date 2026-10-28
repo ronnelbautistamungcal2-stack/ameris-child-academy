@@ -172,7 +172,7 @@ export default function CoachDashboard() {
                     value={String(overdueAlarms.length)}
                     hint="Checklist items past due"
                     tone={overdueAlarms.length ? "rose" : "emerald"}
-                    href={`/coach/checklists?centerId=${centerId}`}
+                    href={`/coach/checklist-review?centerId=${centerId}`}
                     icon={<AlertIcon />}
                   />
                   <CoachMetricCard
@@ -307,7 +307,7 @@ export default function CoachDashboard() {
                 description="Monitor active plans and spotlight the highest-risk checklist items."
                 action={
                   <Link
-                    href={`/coach/checklists?centerId=${centerId}`}
+                    href={`/coach/checklist-review?centerId=${centerId}`}
                     className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-black uppercase tracking-[0.14em] text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
                   >
                     Open Checklists

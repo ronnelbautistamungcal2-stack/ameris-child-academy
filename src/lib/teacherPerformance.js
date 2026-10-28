@@ -4,6 +4,8 @@
 // Teacher Performance report and Center Performance (server only).
 
 import { getTimeOffBalanceSummary } from "@/lib/time-off";
+import { checklistCompletionForRange } from "@/lib/checklistReview";
+import { shiftHours, staffGradeWeightsFor, staffOverallGrade } from "@/lib/staffGrade";
 
 /**
  * Returns the report object, or null when the teacher does not exist.
@@ -116,6 +118,7 @@ export async function teacherPerformance(prisma, { teacherId, centerId, dateFrom
       teacherId: teacherId,
       centerId,
       NOT: { overallScore: null },
+      status: { not: "DRAFT" },
       OR: [
         { periodStart: { gte: dateFrom, lte: dateTo } },
         { periodEnd: { gte: dateFrom, lte: dateTo } },
@@ -133,32 +136,12 @@ export async function teacherPerformance(prisma, { teacherId, centerId, dateFrom
     ? evaluations[evaluations.length - 1].overallScore
     : null;
 
-  // ── Checklist Grade (% of daily checklist items completed by this teacher) ──
-  const totalChecklistItems = await prisma.dailyChecklistCompletion.count({
-    where: {
-      completedById: teacherId,
-      date: { gte: dateFrom, lte: dateTo },
-      item: { checklist: { centerId } },
-    },
-  });
-  const assignedChecklistItems = await prisma.dailyChecklistItem.count({
-    where: {
-      checklist: {
-        centerId,
-        active: true,
-        OR: [
-          { assignedUserId: teacherId },
-          { assignees: { some: { userId: teacherId } } },
-        ],
-      },
-    },
-  });
-  // Days in range
-  const dayRange = Math.max(1, Math.round((dateTo - dateFrom) / (1000 * 60 * 60 * 24)));
-  const expectedItems = assignedChecklistItems * dayRange;
-  const checklistPct = expectedItems > 0
-    ? Math.min(100, Math.round((totalChecklistItems / expectedItems) * 100))
-    : null;
+  // ── Checklist Grade: % of due checklist items ticked on the days worked;
+  // teachers count only the checklist they picked each day.
+  const checklistStats = await checklistCompletionForRange(prisma, { userId: teacherId, centerId, dateFrom, dateTo });
+  const totalChecklistItems = checklistStats.completedCount;
+  const assignedChecklistItems = checklistStats.assignedCount;
+  const checklistPct = checklistStats.pct;
 
   // ── HR: Hours Worked, Lates, Absences, PTO/UTO ──
   const staffAttendances = await prisma.staffAttendance.findMany({
@@ -224,39 +207,31 @@ export async function teacherPerformance(prisma, { teacherId, centerId, dateFrom
     orderBy: { date: "desc" },
   });
 
-  // ── Grade Config ──
-  const gradeConfig = await prisma.performanceGradeConfig.findUnique({ where: { centerId } });
-  const cfg = gradeConfig || {
-    citizenshipWeight: 50, evaluationWeight: 25, checklistWeight: 25,
-    lateDeductionPct: 1, absenceDeductionPct: 2,
-  };
-
-  // ── Overall Performance Grade Calculation ──
-  // Normalize citizenship: assume max score is 4 for CITIZENSHIP/BEHAVIOR type
+  // ── Overall grade: the center's Staff Overall Grade weights (Center
+  // Management) over evaluations, checklist, citations, commendations and HR.
+  const [center, shifts] = await Promise.all([
+    prisma.center.findUnique({ where: { id: centerId }, select: { staffGradeWeights: true } }),
+    prisma.shiftSchedule.findMany({
+      where: { userId: teacherId, centerId, date: { gte: dateFrom, lte: dateTo } },
+      select: { startTime: true, endTime: true },
+    }),
+  ]);
+  const cfg = staffGradeWeightsFor(center);
+  const hoursScheduled = Math.round(shifts.reduce((sum, shift) => sum + shiftHours(shift), 0) * 10) / 10;
+  const { parts: gradeParts, adjustments: gradeAdjustments, grade: overallGrade } = staffOverallGrade(
+    {
+      evaluationPct: mostRecentEvalScore,
+      checklistPct,
+      citations: citations.length,
+      commendations: commendations.length,
+      hoursWorked,
+      hoursScheduled,
+    },
+    cfg,
+  );
+  // Kept on the report for the citizenship card; not part of the grade.
   const citizenshipNorm = citizenshipAvg != null ? Math.min(100, Math.round((citizenshipAvg / 4) * 100)) : null;
-  // Normalize evaluation: assume max is 10
-  const evalNorm = mostRecentEvalScore != null ? Math.min(100, Math.round((mostRecentEvalScore / 10) * 100)) : null;
-  // Checklist pct already 0-100
-  const checklistNorm = checklistPct;
-
-  let hasGradeData = citizenshipNorm != null || evalNorm != null || checklistNorm != null;
-  let overallGrade = null;
-  if (hasGradeData) {
-    const totalWeight = (citizenshipNorm != null ? cfg.citizenshipWeight : 0) +
-      (evalNorm != null ? cfg.evaluationWeight : 0) +
-      (checklistNorm != null ? cfg.checklistWeight : 0);
-    if (totalWeight > 0) {
-      let raw = 0;
-      if (citizenshipNorm != null) raw += (citizenshipNorm * cfg.citizenshipWeight) / totalWeight;
-      if (evalNorm != null) raw += (evalNorm * cfg.evaluationWeight) / totalWeight;
-      if (checklistNorm != null) raw += (checklistNorm * cfg.checklistWeight) / totalWeight;
-      // Deductions
-      raw -= lates * cfg.lateDeductionPct;
-      raw -= absences * cfg.absenceDeductionPct;
-      overallGrade = Math.max(0, Math.min(100, Math.round(raw * 10) / 10));
-    }
-  }
-
+  const evalNorm = gradeParts.evaluations;
 
   return {
     teacher: {
@@ -273,7 +248,9 @@ export async function teacherPerformance(prisma, { teacherId, centerId, dateFrom
     milestones: { avgPct: milestonesAvgPct, byCategory: milestonesGrade },
     evaluation: { mostRecentScore: mostRecentEvalScore, normalized: evalNorm, trend: evalTrend, all: evaluations },
     checklist: { completedCount: totalChecklistItems, assignedCount: assignedChecklistItems, pct: checklistPct },
-    hr: { hoursWorked, lates, absences, ptoAvailable: ptoHours, utoAvailable: utoHours },
+    hr: { hoursWorked, hoursScheduled, hrPct: gradeParts.hr, lates, absences, ptoAvailable: ptoHours, utoAvailable: utoHours },
+    gradeParts,
+    gradeAdjustments,
     training: { totalHours: totalTrainingHours, logs: trainingLogs },
     trainingPathways,
     commendations,

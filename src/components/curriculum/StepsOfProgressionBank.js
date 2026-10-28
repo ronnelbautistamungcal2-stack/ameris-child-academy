@@ -355,6 +355,8 @@ function emptyForm(step) {
     subject: step?.subCategory || "",
     ageYears: step?.ageYears ?? "",
     ageMonths: step?.ageMonths ?? "",
+    maxAgeYears: step?.maxAgeYears ?? "",
+    maxAgeMonths: step?.maxAgeMonths ?? "",
     term: step?.term || "",
     linkedLessonId: step?.linkedLessonId || "",
     description: step?.description || "",
@@ -423,8 +425,10 @@ function StepDialog({ centerId, step, lessons, bankLessons, categories, options,
       ["Step Description", form.title],
       ["Category", form.category],
       ["Subject", form.subject],
-      ["Age (Years)", String(form.ageYears)],
-      ["Age (Months)", String(form.ageMonths)],
+      ["Minimum Age (Years)", String(form.ageYears)],
+      ["Minimum Age (Months)", String(form.ageMonths)],
+      ["Maximum Age (Years)", String(form.maxAgeYears)],
+      ["Maximum Age (Months)", String(form.maxAgeMonths)],
       ["Term", form.term],
     ].filter(([, v]) => !String(v).trim());
     if (missing.length) return setError(`Fill in ${missing.map(([label]) => label).join(", ")}.`);
@@ -438,6 +442,8 @@ function StepDialog({ centerId, step, lessons, bankLessons, categories, options,
         subCategory: form.subject,
         ageYears: Number(form.ageYears),
         ageMonths: Number(form.ageMonths),
+        maxAgeYears: Number(form.maxAgeYears),
+        maxAgeMonths: Number(form.maxAgeMonths),
         term: form.term,
         linkedLessonId: form.linkedLessonId || null,
         description: form.description,
@@ -498,25 +504,39 @@ function StepDialog({ centerId, step, lessons, bankLessons, categories, options,
               {subjectNames.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>
-          <label className={`${label} md:col-span-2`}>
-            Age (Years){req}
+          <label className={`${label} md:col-span-4`}>
+            Term{req}
+            <select value={form.term} onChange={(e) => set({ term: e.target.value })} className={`${input} mt-1`}>
+              <option value="">Choose...</option>
+              {termNames.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </label>
+          <label className={`${label} md:col-span-3`}>
+            Minimum Age (Years){req}
             <select value={form.ageYears} onChange={(e) => set({ ageYears: e.target.value })} className={`${input} mt-1`}>
               <option value="">{"—"}</option>
               {STEP_AGE_YEAR_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>
-          <label className={`${label} md:col-span-2`}>
-            Age (Months){req}
+          <label className={`${label} md:col-span-3`}>
+            Minimum Age (Months){req}
             <select value={form.ageMonths} onChange={(e) => set({ ageMonths: e.target.value })} className={`${input} mt-1`}>
               <option value="">{"—"}</option>
               {STEP_AGE_MONTH_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>
           <label className={`${label} md:col-span-3`}>
-            Term{req}
-            <select value={form.term} onChange={(e) => set({ term: e.target.value })} className={`${input} mt-1`}>
-              <option value="">Choose...</option>
-              {termNames.map((n) => <option key={n} value={n}>{n}</option>)}
+            Maximum Age (Years){req}
+            <select value={form.maxAgeYears} onChange={(e) => set({ maxAgeYears: e.target.value })} className={`${input} mt-1`}>
+              <option value="">{"—"}</option>
+              {STEP_AGE_YEAR_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </label>
+          <label className={`${label} md:col-span-3`}>
+            Maximum Age (Months){req}
+            <select value={form.maxAgeMonths} onChange={(e) => set({ maxAgeMonths: e.target.value })} className={`${input} mt-1`}>
+              <option value="">{"—"}</option>
+              {STEP_AGE_MONTH_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>
           <label className={`${label} md:col-span-3`}>
@@ -526,7 +546,7 @@ function StepDialog({ centerId, step, lessons, bankLessons, categories, options,
               {typeNames.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>
-          <div className="md:col-span-6">
+          <div className="md:col-span-9">
             <StepPicker label="Related Lesson (Optional)" lessons={bankLessons} value={form.linkedLessonId} onChange={(id) => set({ linkedLessonId: id || "" })} excludeIds={[]} />
             <p className="mt-1 text-xs text-gray-500">Linking a lesson helps teachers see which lesson supports this step.</p>
           </div>
@@ -649,6 +669,8 @@ async function downloadStepTemplate() {
     subject: "Gross Motor",
     ageYears: 0,
     ageMonths: 4,
+    maxAgeYears: 0,
+    maxAgeMonths: 6,
     term: "Term 1",
     description: "Can the child roll over without help?",
     exposure: "Rolls with help",
@@ -759,7 +781,9 @@ function ImportStepsDialog({ centerId, onClose, onImported }) {
                       <td className="px-2 py-1">{r.category || "—"}</td>
                       <td className="px-2 py-1">{r.subject || "—"}</td>
                       <td className="px-2 py-1">
-                        {formatStepAge({ ageYears: r.ageYears === "" ? null : r.ageYears, ageMonths: r.ageMonths === "" ? null : r.ageMonths }) || "—"}
+                        {formatStepAge(
+                          Object.fromEntries(["ageYears", "ageMonths", "maxAgeYears", "maxAgeMonths"].map((k) => [k, r[k] === "" || r[k] === undefined ? null : r[k]])),
+                        ) || "—"}
                       </td>
                       <td className="px-2 py-1">{normalizeStepTerm(r.term) || "—"}</td>
                     </tr>

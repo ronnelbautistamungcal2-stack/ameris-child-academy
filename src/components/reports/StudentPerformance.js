@@ -1,6 +1,6 @@
 import IppPopup from "@/components/ipp/IppPopup";
 import ActivityLogEntry from "@/components/reports/ActivityLogEntry";
-import StatusMixBar from "@/components/sop/StatusMixBar";
+import MilestonesTracker from "@/components/sop/MilestonesTracker";
 import { apiJson } from "@/lib/api";
 import dynamic from "next/dynamic";
 import { RangePicker, Heading, NAVY, card, shortDate, useRange } from "@/components/reports/reportUi";
@@ -33,7 +33,6 @@ function DatedList({ items, empty }) {
 export default function StudentPerformance({ childId, header = null }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
-  const [open, setOpen] = useState({});
   const [ippId, setIppId] = useState("");
   const [logDate, setLogDate] = useState("");
   const [activity, setActivity] = useState(null);
@@ -51,6 +50,13 @@ export default function StudentPerformance({ childId, header = null }) {
       .then(setData)
       .catch((e) => setError(e.message || "Could not load the report"));
   }, [childId]);
+
+  // After milestones are saved: refresh the report without blanking it.
+  async function reload() {
+    try {
+      setData(await apiJson(`/api/v1/reports/student/${encodeURIComponent(childId)}`));
+    } catch {}
+  }
 
   useEffect(() => {
     if (!childId || !logDate) {
@@ -102,34 +108,14 @@ export default function StudentPerformance({ childId, header = null }) {
       </div>
 
       <section className={card}>
-        <Heading icon={"\u{1F3C6}"}>Milestones</Heading>
-        {!data.milestones.length && <p className="text-sm text-gray-500">No milestones assessed yet.</p>}
-        <div className="space-y-2">
-          {data.milestones.map((m) => {
-            const isOpen = open[m.name];
-            return (
-              <div key={m.name} className="rounded-xl border border-gray-200 dark:border-gray-700">
-                <button type="button" onClick={() => setOpen({ ...open, [m.name]: !isOpen })} aria-expanded={Boolean(isOpen)} className="flex w-full flex-wrap items-center gap-3 px-3 py-2 text-left">
-                  <span className={`min-w-[180px] flex-1 text-lg font-black ${NAVY}`}>
-                    <span aria-hidden className="mr-2">{isOpen ? "▾" : "›"}</span>
-                    {m.name}
-                  </span>
-                  <StatusMixBar distribution={m.distribution} className="md:max-w-[60%]" />
-                </button>
-                {isOpen && (
-                  <div className="space-y-2 border-t border-gray-100 p-3 dark:border-gray-800">
-                    {m.subjects.map((s) => (
-                      <div key={s.name} className="flex flex-wrap items-center gap-3 rounded-lg border border-gray-100 px-3 py-2 dark:border-gray-800">
-                        <span className={`min-w-[180px] flex-1 text-sm font-semibold ${NAVY}`}>{s.name}</span>
-                        <StatusMixBar distribution={s.distribution} className="md:max-w-[55%]" />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <MilestonesTracker
+          childId={childId}
+          milestones={data.milestones}
+          percent={data.milestonePct}
+          canTrack={data.canTrack}
+          onSaved={reload}
+          heading={<Heading icon={"\u{1F3C6}"}>Milestones</Heading>}
+        />
       </section>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

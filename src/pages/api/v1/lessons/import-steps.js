@@ -48,7 +48,12 @@ export default async function handler(req, res) {
         skipped.push({ line, reason: `Ref ID ${reference} is already used earlier in the file` });
         continue;
       }
-      const age = parseStepAge({ ageYears: text(raw?.ageYears, 10), ageMonths: text(raw?.ageMonths, 10) });
+      const age = parseStepAge({
+        ageYears: text(raw?.ageYears, 10),
+        ageMonths: text(raw?.ageMonths, 10),
+        maxAgeYears: text(raw?.maxAgeYears, 10),
+        maxAgeMonths: text(raw?.maxAgeMonths, 10),
+      });
       if (age.error) {
         skipped.push({ line, reason: age.error });
         continue;
@@ -121,6 +126,8 @@ export default async function handler(req, res) {
         term: normalizeStepTerm(text(raw.term, 40)) || null,
         ageYears: row.age.ageYears ?? null,
         ageMonths: row.age.ageMonths ?? null,
+        maxAgeYears: row.age.maxAgeYears ?? null,
+        maxAgeMonths: row.age.maxAgeMonths ?? null,
         description: String(raw.description ?? "").trim().slice(0, 2000) || null,
         criteria,
         notes: String(raw.notes ?? "").trim().slice(0, 2000) || null,
@@ -138,6 +145,8 @@ export default async function handler(req, res) {
           term: ["term"],
           ageYears: ["ageYears"],
           ageMonths: ["ageMonths"],
+          maxAgeYears: ["maxAgeYears"],
+          maxAgeMonths: ["maxAgeMonths"],
           description: ["description"],
           criteria: STEP_CRITERIA_LEVELS.map(({ key }) => key),
           notes: ["notes"],

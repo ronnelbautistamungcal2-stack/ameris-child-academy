@@ -57,10 +57,12 @@ function parseDateTime(value) {
  * sheet. Coaches and HR are limited to their own centers.
  * Returns { config, subject, centerIds } or { status, error }.
  */
-export async function loadTimeSheetAccess(prisma, session, kind, subjectId) {
+export async function loadTimeSheetAccess(prisma, session, kind, subjectId, { allowSelfRead = false } = {}) {
   const config = TIME_SHEET_KINDS[kind];
   if (!config) return { status: 404, error: "Unknown time sheet" };
-  if (!config.editorRoles.includes(session.user.role)) return { status: 403, error: "Forbidden" };
+  // Employees can read (and e-sign) their own time sheet.
+  const selfRead = allowSelfRead && kind === "staff" && String(subjectId) === session.user.id;
+  if (!selfRead && !config.editorRoles.includes(session.user.role)) return { status: 403, error: "Forbidden" };
 
   let subject;
   let subjectCenterIds;
@@ -91,7 +93,7 @@ export async function loadTimeSheetAccess(prisma, session, kind, subjectId) {
   }
   if (!subject) return { status: 404, error: "Not found" };
 
-  const allowed = await accessibleCenterIds(session.user.id);
+  const allowed = selfRead ? null : await accessibleCenterIds(session.user.id);
   if (allowed && !subjectCenterIds.some((id) => allowed.includes(id))) {
     return { status: 403, error: "Forbidden" };
   }

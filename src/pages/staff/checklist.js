@@ -1,6 +1,6 @@
-import StaffChecklistWorkspace from "@/components/staff/StaffChecklistWorkspace";
+import DailyChecklistWorkspace from "@/components/checklists/DailyChecklistWorkspace";
 import StaffLayout from "@/components/staff/StaffLayout";
 
 export default function StaffChecklistPage() {
-  return <StaffChecklistWorkspace Layout={StaffLayout} />;
+  return <DailyChecklistWorkspace Layout={StaffLayout} mode="staff" />;
 }

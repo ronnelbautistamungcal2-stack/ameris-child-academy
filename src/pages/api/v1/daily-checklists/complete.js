@@ -7,6 +7,7 @@ import { canUserBeAssignedChecklist } from "@/lib/dailyChecklistAssignees";
 import prisma from "@/lib/prisma";
 import { getTeacherClassIds } from "@/lib/teacherScope";
 import { isStaffPortalRole, STAFF_PORTAL_ROLES } from "@/lib/roles";
+import { LOG_FIRST_MESSAGE, isLogActivityLink } from "@/lib/checklistLinks";
 
 function todayDateString() {
   const value = new Date();
@@ -124,6 +125,12 @@ export default async function handler(req, res) {
 
   if (req.method === "POST") {
     const { itemId, date, notes, undo, source } = req.body || {};
+    // Admins and coaches can mark a staff member's item from Checklist Review.
+    const forUserId = String(req.body?.forUserId || "").trim();
+    if (forUserId && !["ADMIN", "COACH"].includes(role)) {
+      return res.status(403).json({ error: "Only admins and coaches can mark items for someone else" });
+    }
+    const completedById = forUserId || session.user.id;
 
     if (!itemId || !date) {
       return res.status(400).json({ error: "itemId and date are required" });
@@ -209,11 +216,20 @@ export default async function handler(req, res) {
       await prisma.dailyChecklistCompletion.deleteMany({
         where: {
           itemId,
-          completedById: session.user.id,
+          completedById,
           date: completionDate,
         },
       });
       return res.status(200).json({ undone: true });
+    }
+
+    if (!forUserId && isLogActivityLink(item.directLink)) {
+      const visit = await prisma.dailyChecklistLinkVisit.findUnique({
+        where: { itemId_userId_date: { itemId, userId: completedById, date: completionDate } },
+      });
+      if (!visit) {
+        return res.status(409).json({ error: LOG_FIRST_MESSAGE });
+      }
     }
 
     // Upsert completion
@@ -221,14 +237,14 @@ export default async function handler(req, res) {
       where: {
         itemId_completedById_date: {
           itemId,
-          completedById: session.user.id,
+          completedById,
           date: completionDate,
         },
       },
       update: { notes: notes || null, completedAt: new Date() },
       create: {
         itemId,
-        completedById: session.user.id,
+        completedById,
         date: completionDate,
         notes: notes || null,
       },

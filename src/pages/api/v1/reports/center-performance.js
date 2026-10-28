@@ -1,8 +1,9 @@
-import { getSession } from "@/lib/auth";
-import { CURRENT_IPP_STATUSES } from "@/lib/ipp";
+import { accessibleCenterIds, getSession } from "@/lib/auth";
+import { EMPLOYED_WHERE } from "@/lib/employment";
+import { CURRENT_IPP_STATUSES, ippNeedsReview } from "@/lib/ipp";
 import prisma from "@/lib/prisma";
 import { EMPLOYEE_ROLES, hasAnyRole, roleLabel } from "@/lib/roles";
-import { childStatus, levelForStatus } from "@/lib/sop";
+import { averagePercent, childStatus, levelForStatus, sopPercent } from "@/lib/sop";
 import { teacherPerformance } from "@/lib/teacherPerformance";
 
 // Center Performance Overview (client mockups 2026-10-02) for one center and
@@ -42,11 +43,21 @@ export default async function handler(req, res) {
       res.setHeader("Allow", ["GET"]);
       return res.status(405).end();
     }
-    if (!hasAnyRole(session.user, ["ADMIN"])) return res.status(403).json({ error: "Forbidden" });
+    // Admins see every center; coaches and HR see the Staff Performance
+    // Overview (staffOnly) for their own centers.
+    const isAdmin = hasAnyRole(session.user, ["ADMIN"]);
+    if (!isAdmin && !hasAnyRole(session.user, ["COACH", "HR_STAFF"])) return res.status(403).json({ error: "Forbidden" });
+    const staffOnly = !isAdmin || req.query.staffOnly === "1";
+    const scope = isAdmin ? null : (await accessibleCenterIds(session.user.id)) || [];
 
-    const centers = await prisma.center.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
+    const centers = await prisma.center.findMany({
+      where: scope ? { id: { in: scope } } : {},
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
     const requested = req.query.centerId ? String(req.query.centerId) : "";
     const center = requested ? centers.find((c) => c.id === requested) : centers.find((c) => c.name === "Demo Center") || centers[0];
+    if (!center && requested && !isAdmin) return res.status(403).json({ error: "Forbidden" });
     if (!center) return res.status(requested ? 404 : 200).json(requested ? { error: "Center not found" } : { centers: [], staff: [], students: [] });
 
     const today = new Date();
@@ -62,6 +73,8 @@ export default async function handler(req, res) {
     const members = await prisma.user.findMany({
       where: {
         centers: { some: { centerId: center.id } },
+        // Reports filter "All staff" (allStaff=1) keeps people no longer employed.
+        ...(req.query.allStaff === "1" ? {} : EMPLOYED_WHERE),
         OR: [{ role: { in: STAFF_ROLES } }, { roles: { hasSome: STAFF_ROLES } }],
       },
       select: { id: true, name: true, email: true, role: true, roles: true },
@@ -99,7 +112,8 @@ export default async function handler(req, res) {
         priorGrade: prior?.overallGrade ?? null,
         evaluationPct: current?.evaluation?.normalized ?? null,
         checklistPct: current?.checklist?.pct ?? null,
-        sopPct: current?.milestones?.avgPct ?? null,
+        sopPct: null, // set below from the students
+
         citizenshipPct: current?.citizenship?.normalized ?? null,
         commendations: current?.commendations?.length ?? 0,
         citations: current?.citations?.length ?? 0,
@@ -130,14 +144,17 @@ export default async function handler(req, res) {
     const since = new Date(Date.now() - LOG_DAYS * 86400000);
     const [progress, grades, plans, logs] = await Promise.all([
       prisma.progress.findMany({
-        where: { childId: { in: childIds }, lesson: { isStep: true }, OR: [{ active: true }, { assessedAt: { not: null } }] },
-        select: { childId: true, status: true, active: true, lesson: { select: { ageYears: true, ageMonths: true } } },
+        where: { childId: { in: childIds }, lesson: { isStep: true }, OR: [{ active: true }, { assessedAt: { not: null } }, { status: { not: "NOT_STARTED" } }] },
+        select: { childId: true, status: true, active: true, lesson: { select: { ageYears: true, ageMonths: true, maxAgeYears: true, maxAgeMonths: true, category: { select: { name: true } } } } },
       }),
       prisma.activityLog.findMany({
         where: { childId: { in: childIds }, createdAt: { gte: dateFrom, lte: endOfTo }, details: { path: ["kind"], equals: "DAILY_GRADE" } },
         select: { childId: true, details: true },
       }),
-      prisma.behaviorPlan.findMany({ where: { childId: { in: childIds }, status: { in: CURRENT_IPP_STATUSES } }, select: { childId: true, status: true } }),
+      prisma.behaviorPlan.findMany({
+        where: { childId: { in: childIds }, status: { in: CURRENT_IPP_STATUSES } },
+        select: { childId: true, status: true, startDate: true, reviewSchedule: true, reviewedAt: true, createdAt: true },
+      }),
       prisma.activityLog.findMany({
         where: { childId: { in: childIds }, createdAt: { gte: since }, type: { in: ["BEHAVIOR", "CHARACTER_HIGHLIGHT"] } },
         select: { type: true, details: true, createdAt: true },
@@ -148,7 +165,7 @@ export default async function handler(req, res) {
       const mine = progress.filter((p) => p.childId === c.id);
       const active = mine.filter((p) => p.active).map((p) => ({ step: p.lesson, level: levelForStatus(p.status) }));
       const scores = grades.filter((g) => g.childId === c.id).map((g) => Number(g.details?.grade ?? g.details?.domainAvg)).filter(Number.isFinite);
-      const planStatuses = plans.filter((p) => p.childId === c.id).map((p) => p.status);
+      const myPlans = plans.filter((p) => p.childId === c.id);
       const levels = { EXPOSURE: 0, COMPETENCY: 0, MASTERY: 0 };
       for (const p of mine) {
         const level = levelForStatus(p.status);
@@ -168,10 +185,31 @@ export default async function handler(req, res) {
         citizenship: scores.length ? round1(scores.reduce((a, b) => a + b, 0) / scores.length) : null,
         milestones: active.length ? childStatus(active, c.birthDate) : null,
         levels,
-        ipp: planStatuses.length ? (planStatuses.every((s) => s === "ACTIVE") ? "ON_TRACK" : "NOT_ON_TRACK") : null,
+        ipp: myPlans.length ? (myPlans.some((p) => ippNeedsReview(p)) ? "NEEDS_REVIEW" : "ON_TRACK") : null,
       };
     });
 
+    // Average SOP % (client 2026-10-23): each of the staff member's students'
+    // average goal %, General category left out, averaged over the students.
+    const sopByChild = Object.fromEntries(
+      children.map((c) => [
+        c.id,
+        sopPercent(
+          progress
+            .filter((p) => p.childId === c.id)
+            .map((p) => ({ step: p.lesson, level: levelForStatus(p.status), category: p.lesson.category?.name || "General" })),
+          c.birthDate,
+          { excludeGeneral: true },
+        ),
+      ]),
+    );
+    for (const member of staff) {
+      member.sopPct = averagePercent(students.filter((st) => st.teacherIds.includes(member.id)).map((st) => sopByChild[st.id]));
+    }
+
+    if (staffOnly) {
+      return res.status(200).json({ centers, center, range: { from: dayKey(dateFrom), to: dayKey(dateTo) }, staff });
+    }
     return res.status(200).json({
       centers,
       center,

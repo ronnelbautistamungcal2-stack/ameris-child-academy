@@ -1,6 +1,6 @@
-import StaffPerformanceWorkspace from "@/components/staff/StaffPerformanceWorkspace";
 import StaffLayout from "@/components/staff/StaffLayout";
+import MyPerformancePage from "@/components/performance/MyPerformancePage";
 
-export default function StaffPerformancePage() {
-  return <StaffPerformanceWorkspace Layout={StaffLayout} />;
+export default function StaffPerformance() {
+  return <MyPerformancePage Layout={StaffLayout} />;
 }

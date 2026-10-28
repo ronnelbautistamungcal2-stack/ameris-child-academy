@@ -1,15 +1,10 @@
 import StaffLayout from "@/components/staff/StaffLayout";
-import StaffResourceList from "@/components/staff/StaffResourceList";
+import DocumentsPage from "@/components/documents/DocumentsPage";
 
-export default function StaffAdditionalResourcesPage() {
+export default function DocumentsRolePage() {
   return (
     <StaffLayout title="Additional Resources">
-      <StaffResourceList
-        heading="Additional Resources"
-        description="Reference material, guides, and other documents shared with your role."
-        category="RESOURCE"
-        emptyText="No additional resources have been published yet."
-      />
+      <DocumentsPage category="RESOURCE" />
     </StaffLayout>
   );
 }

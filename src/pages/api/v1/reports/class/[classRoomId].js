@@ -3,7 +3,7 @@ import { findReportableClass } from "@/lib/classReportAccess";
 import { BEHAVIOR_TYPE_OPTIONS, CHARACTER_HIGHLIGHT_TYPE_OPTIONS, behaviorTypeLabel } from "@/lib/dailyLogOptions";
 import { CURRENT_IPP_STATUSES } from "@/lib/ipp";
 import prisma from "@/lib/prisma";
-import { goalOffsetDays, levelForStatus, statusForOffset } from "@/lib/sop";
+import { averagePercent, goalStatus, levelForStatus, sopPercent } from "@/lib/sop";
 
 // Class Performance Report (client mockups 2026-10-02) for one classroom.
 
@@ -23,7 +23,7 @@ function shortName(child) {
 
 /**
  * GET /api/v1/reports/class/:classRoomId[?logDate=YYYY-MM-DD]
- * Goal totals and Milestones (from SOP Tracking), the class's Citizenship
+ * Milestones (from SOP Tracking), the class's Citizenship
  * Grade average by day, Course Correction and Character Highlight entries
  * (the page counts them for its date range), Students on an Individual
  * Plan, Students on Red Flag (an allergy, or a course correction of level 3
@@ -55,8 +55,8 @@ export default async function handler(req, res) {
 
     const [progress, logs, plans, activity] = await Promise.all([
       prisma.progress.findMany({
-        where: { childId: { in: ids }, lesson: { isStep: true }, OR: [{ active: true }, { assessedAt: { not: null } }] },
-        select: { childId: true, status: true, lesson: { select: { ageYears: true, ageMonths: true, category: { select: { name: true } } } } },
+        where: { childId: { in: ids }, lesson: { isStep: true }, OR: [{ active: true }, { assessedAt: { not: null } }, { status: { not: "NOT_STARTED" } }] },
+        select: { childId: true, status: true, lesson: { select: { ageYears: true, ageMonths: true, maxAgeYears: true, maxAgeMonths: true, category: { select: { name: true } } } } },
       }),
       prisma.activityLog.findMany({
         where: {
@@ -79,15 +79,11 @@ export default async function handler(req, res) {
       }),
     ]);
 
-    // Goals and milestones
-    const counts = { total: 0, completed: 0, failed: 0 };
+    // Milestones
     const categories = new Map();
     for (const p of progress) {
       const level = levelForStatus(p.status);
-      const status = statusForOffset(goalOffsetDays(p.lesson, level, byId[p.childId]?.birthDate));
-      counts.total += 1;
-      if (level === "MASTERY") counts.completed += 1;
-      if (status === "CRITICAL") counts.failed += 1;
+      const status = goalStatus(p.lesson, level, byId[p.childId]?.birthDate);
       const cat = p.lesson.category?.name || "General";
       if (!categories.has(cat)) categories.set(cat, { CRITICAL: 0, AT_RISK: 0, ON_TRACK: 0, AHEAD: 0, EXCELLING: 0, n: 0 });
       const c = categories.get(cat);
@@ -100,6 +96,20 @@ export default async function handler(req, res) {
         name,
         distribution: Object.fromEntries(Object.entries(mix).map(([k, v]) => [k, Math.round((v * 100) / n)])),
       }));
+
+    // Milestones % (the teacher's SOP %, client 2026-10-23): each student's
+    // average goal %, General category left out, averaged over the students.
+    const milestonePct = averagePercent(
+      children.map((c) =>
+        sopPercent(
+          progress
+            .filter((p) => p.childId === c.id)
+            .map((p) => ({ step: p.lesson, level: levelForStatus(p.status), category: p.lesson.category?.name || "General" })),
+          c.birthDate,
+          { excludeGeneral: true },
+        ),
+      ),
+    );
 
     // Citizenship: class average per day
     const grades = new Map();
@@ -132,8 +142,8 @@ export default async function handler(req, res) {
         teacher: room.teachers.map((t) => t.teacher.name || t.teacher.email).join(", "),
         students: children.length,
       },
-      goals: { ...counts, completionRate: counts.total ? Math.round((counts.completed * 100) / counts.total) : 0 },
       milestones,
+      milestonePct,
       citizenship: [...grades.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, g]) => ({ date, score: Math.round((g.sum / g.n) * 10) / 10 })),

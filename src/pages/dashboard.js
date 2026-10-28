@@ -363,7 +363,7 @@ export default function Dashboard() {
                       role === "ADMIN"
                         ? "/admin/checklists"
                         : role === "COACH"
-                          ? "/coach/checklists"
+                          ? "/coach/checklist-review"
                           : "/teacher/checklists"
                     }
                     disabled={role === "PARENT" || role === "SUBSCRIBER"}

@@ -1,5 +1,7 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { checklistCompletionForRange } from "@/lib/checklistReview";
+import { shiftHours, staffGradeWeightsFor, staffOverallGrade } from "@/lib/staffGrade";
 import { getTimeOffBalanceSummary } from "@/lib/time-off";
 
 export default async function handler(req, res) {
@@ -118,6 +120,7 @@ export default async function handler(req, res) {
         teacherId: resolvedCoachId,
         centerId,
         NOT: { overallScore: null },
+      status: { not: "DRAFT" },
       },
       select: { id: true, period: true, periodStart: true, overallScore: true, status: true, createdAt: true },
       orderBy: { createdAt: "asc" },
@@ -132,31 +135,11 @@ export default async function handler(req, res) {
       ? evaluations[evaluations.length - 1].overallScore
       : null;
 
-    // ── Checklist Grade (% of coach's assigned daily checklist items completed) ──
-    const totalChecklistCompletions = await prisma.dailyChecklistCompletion.count({
-      where: {
-        completedById: resolvedCoachId,
-        date: { gte: dateFrom, lte: dateTo },
-        item: { checklist: { centerId } },
-      },
-    });
-    const assignedChecklistItems = await prisma.dailyChecklistItem.count({
-      where: {
-        checklist: {
-          centerId,
-          active: true,
-          OR: [
-            { assignedUserId: resolvedCoachId },
-            { assignees: { some: { userId: resolvedCoachId } } },
-          ],
-        },
-      },
-    });
-    const dayRange = Math.max(1, Math.round((dateTo - dateFrom) / (1000 * 60 * 60 * 24)));
-    const expectedItems = assignedChecklistItems * dayRange;
-    const checklistPct = expectedItems > 0
-      ? Math.min(100, Math.round((totalChecklistCompletions / expectedItems) * 100))
-      : null;
+    // ── Checklist Grade: share of due items ticked on the days worked ──
+    const checklistStats = await checklistCompletionForRange(prisma, { userId: resolvedCoachId, centerId, dateFrom, dateTo });
+    const totalChecklistCompletions = checklistStats.completedCount;
+    const assignedChecklistItems = checklistStats.assignedCount;
+    const checklistPct = checklistStats.pct;
 
     // ── Team Commendations & Citations (for teachers under this coach) ──
     const [teamCommendations, teamCitations] = await Promise.all([
@@ -213,32 +196,39 @@ export default async function handler(req, res) {
       take: 10,
     });
 
-    // ── Grade Config ──
-    const gradeConfig = await prisma.coachPerformanceGradeConfig.findUnique({ where: { centerId } });
-    const cfg = gradeConfig || { teamPerformanceWeight: 50, evaluationWeight: 50, lateDeductionPct: 1, absenceDeductionPct: 2 };
-
-    // ── Overall Performance Grade ──
-    // team score: normalize teamAvgScore (0-100 scale, from composite 0-100 or obs 0-10)
+    // ── Team score (shown on the report; not part of the overall grade) ──
     let teamNorm = null;
     if (teamAvgScore != null) {
       teamNorm = useSnapshotTrend
         ? Math.min(100, Math.round(teamAvgScore)) // composite is already 0-100
         : Math.min(100, Math.round((teamAvgScore / 10) * 100)); // obs score is 0-10
     }
-    const evalNorm = mostRecentEvalScore != null ? Math.min(100, Math.round((mostRecentEvalScore / 10) * 100)) : null;
 
-    let overallGrade = null;
-    if (teamNorm != null || evalNorm != null) {
-      const totalW = (teamNorm != null ? cfg.teamPerformanceWeight : 0) + (evalNorm != null ? cfg.evaluationWeight : 0);
-      if (totalW > 0) {
-        let raw = 0;
-        if (teamNorm != null) raw += (teamNorm * cfg.teamPerformanceWeight) / totalW;
-        if (evalNorm != null) raw += (evalNorm * cfg.evaluationWeight) / totalW;
-        raw -= lates * cfg.lateDeductionPct;
-        raw -= absences * cfg.absenceDeductionPct;
-        overallGrade = Math.max(0, Math.min(100, Math.round(raw * 10) / 10));
-      }
-    }
+    // ── Overall grade: the center's Staff Overall Grade weights over the
+    // coach's own evaluations, checklist, citations, commendations and HR ──
+    const [center, shifts, ownCommendations, ownCitations] = await Promise.all([
+      prisma.center.findUnique({ where: { id: centerId }, select: { staffGradeWeights: true } }),
+      prisma.shiftSchedule.findMany({
+        where: { userId: resolvedCoachId, centerId, date: { gte: dateFrom, lte: dateTo } },
+        select: { startTime: true, endTime: true },
+      }),
+      prisma.staffCommendation.count({ where: { staffId: resolvedCoachId, centerId, date: { gte: dateFrom, lte: dateTo } } }),
+      prisma.staffCitation.count({ where: { staffId: resolvedCoachId, centerId, date: { gte: dateFrom, lte: dateTo } } }),
+    ]);
+    const cfg = staffGradeWeightsFor(center);
+    const hoursScheduled = Math.round(shifts.reduce((sum, shift) => sum + shiftHours(shift), 0) * 10) / 10;
+    const { parts: gradeParts, adjustments: gradeAdjustments, grade: overallGrade } = staffOverallGrade(
+      {
+        evaluationPct: mostRecentEvalScore,
+        checklistPct,
+        citations: ownCitations,
+        commendations: ownCommendations,
+        hoursWorked,
+        hoursScheduled,
+      },
+      cfg,
+    );
+    const evalNorm = gradeParts.evaluations;
 
     return res.status(200).json({
       coach: { id: coach.id, name: coach.name, email: coach.email, hireDate: coach.hireDate },
@@ -254,9 +244,11 @@ export default async function handler(req, res) {
       },
       evaluation: { mostRecentScore: mostRecentEvalScore, normalized: evalNorm, trend: evalTrend },
       checklist: { completedCount: totalChecklistCompletions, assignedCount: assignedChecklistItems, pct: checklistPct },
-      commendations: { teamTotal: teamCommendations },
-      citations: { teamTotal: teamCitations },
-      hr: { hoursWorked, lates, absences, ptoAvailable: ptoHours, utoAvailable: utoHours },
+      commendations: { teamTotal: teamCommendations, own: ownCommendations },
+      citations: { teamTotal: teamCitations, own: ownCitations },
+      hr: { hoursWorked, hoursScheduled, hrPct: gradeParts.hr, lates, absences, ptoAvailable: ptoHours, utoAvailable: utoHours },
+      gradeParts,
+      gradeAdjustments,
       training: { totalHours: totalTrainingHours, logs: trainingLogs },
       trainingPathways,
     });

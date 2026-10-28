@@ -1,15 +1,10 @@
 import StaffLayout from "@/components/staff/StaffLayout";
-import StaffResourceList from "@/components/staff/StaffResourceList";
+import DocumentsPage from "@/components/documents/DocumentsPage";
 
-export default function StaffPoliciesPage() {
+export default function DocumentsRolePage() {
   return (
     <StaffLayout title="Policies & Procedures">
-      <StaffResourceList
-        heading="Policies & Procedures"
-        description="Center policies and standard operating procedures published for your role."
-        category="POLICY"
-        emptyText="No policies or procedures have been published yet."
-      />
+      <DocumentsPage category="POLICY" />
     </StaffLayout>
   );
 }

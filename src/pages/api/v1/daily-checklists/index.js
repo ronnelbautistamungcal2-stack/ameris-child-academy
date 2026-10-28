@@ -28,6 +28,15 @@ import {
   checklistVisibleToStaff,
   getUserChecklistRoles,
 } from "@/lib/dailyChecklistVisibility";
+import { splitChecklistPerAssignee } from "@/lib/dailyChecklistSplit";
+
+// Admins and coaches build checklists (Checklist Manager).
+const MANAGER_ROLES = ["ADMIN", "COACH"];
+
+async function canManageCenter(session, centerId) {
+  if (session.user.role === "ADMIN") return true;
+  return session.user.role === "COACH" && !!centerId && (await hasAccessToCenter(session.user.id, centerId));
+}
 
 const LESSON_SELECT = {
   id: true,
@@ -280,11 +289,13 @@ function normalizeChecklistPayload(body = {}) {
       ? resolveMonthlySchedule(body)
       : { monthlyDay: null, monthlyWeek: null, monthlyWeekday: null };
 
+  const noClassroom = body.noClassroom === true;
   return {
     title: body.title,
     description: body.description || null,
     centerId: body.centerId,
-    classRoomIds: normalizeChecklistClassRoomIds(body.classRoomIds, body.classRoomId),
+    noClassroom,
+    classRoomIds: noClassroom ? [] : normalizeChecklistClassRoomIds(body.classRoomIds, body.classRoomId),
     assignedUserIds: normalizeChecklistAssignedUserIds(body.assignedUserIds, body.assignedUserId),
     category: ["OPENING", "CLOSING", "HEALTH_SAFETY", "CLEANING", "MEALS", "CLASSROOM", "OTHER"].includes(body.category)
       ? body.category
@@ -306,6 +317,9 @@ function applyChecklistPatch(data, body = {}) {
   }
   if (Object.prototype.hasOwnProperty.call(body, "centerId")) {
     data.centerId = body.centerId;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "noClassroom")) {
+    data.noClassroom = body.noClassroom === true;
   }
   if (Object.prototype.hasOwnProperty.call(body, "category")) {
     data.category = ["OPENING", "CLOSING", "HEALTH_SAFETY", "CLEANING", "MEALS", "CLASSROOM", "OTHER"].includes(body.category)
@@ -474,8 +488,9 @@ export default async function handler(req, res) {
       if (!ok) return res.status(403).json({ error: "Forbidden" });
     }
 
-    // Admins can preview another employee's checklist exactly as that employee sees it.
-    if (staffUserId && role !== "ADMIN") {
+    // Admins can preview another employee's checklist exactly as that employee
+    // sees it; anyone can ask for their own ("My Checklist").
+    if (staffUserId && role !== "ADMIN" && staffUserId !== session.user.id) {
       return res.status(403).json({ error: "Only admins can view another employee's checklist" });
     }
 
@@ -487,9 +502,11 @@ export default async function handler(req, res) {
       });
       if (!staffUser) return res.status(404).json({ error: "Employee not found" });
 
+      const staffRoles = getUserChecklistRoles(staffUser);
+      const asRole = String(req.query.asRole || "").trim();
       staffScope = {
         userId: staffUser.id,
-        roles: getUserChecklistRoles(staffUser),
+        roles: asRole && staffRoles.includes(asRole) ? [asRole] : staffRoles,
         teacherClassIds: await getTeacherClassIds(staffUser.id, centerId),
       };
     }
@@ -519,7 +536,7 @@ export default async function handler(req, res) {
 
     const teacherClassIds =
       role === "TEACHER" ? await getTeacherClassIds(session.user.id, centerId) : [];
-    const include = buildDailyChecklistInclude(date);
+    const include = buildDailyChecklistInclude(date, staffScope?.userId || session.user.id);
 
     const lists = await prisma.dailyChecklist.findMany({
       where,
@@ -609,8 +626,8 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    if (role !== "ADMIN") {
-      return res.status(403).json({ error: "Only admins can create checklists" });
+    if (!MANAGER_ROLES.includes(role)) {
+      return res.status(403).json({ error: "Only admins and coaches can create checklists" });
     }
 
     const { items } = req.body || {};
@@ -618,6 +635,9 @@ export default async function handler(req, res) {
 
     if (!normalized.title || !normalized.centerId) {
       return res.status(400).json({ error: "title and centerId are required" });
+    }
+    if (!(await canManageCenter(session, normalized.centerId))) {
+      return res.status(403).json({ error: "Forbidden" });
     }
 
     let classRoomIds;
@@ -663,12 +683,17 @@ export default async function handler(req, res) {
       include: buildDailyChecklistInclude(),
     });
 
-    return res.status(201).json(serializeDailyChecklist(created));
+    const copyIds = await splitChecklistPerAssignee(created.id);
+    const result = await prisma.dailyChecklist.findUnique({
+      where: { id: created.id },
+      include: buildDailyChecklistInclude(),
+    });
+    return res.status(201).json({ ...serializeDailyChecklist(result), copyIds });
   }
 
   if (req.method === "PUT") {
-    if (role !== "ADMIN") {
-      return res.status(403).json({ error: "Only admins can update checklists" });
+    if (!MANAGER_ROLES.includes(role)) {
+      return res.status(403).json({ error: "Only admins and coaches can update checklists" });
     }
 
     const { id, active, items } = req.body || {};
@@ -680,6 +705,12 @@ export default async function handler(req, res) {
     });
     if (!existingChecklist) {
       return res.status(404).json({ error: "Checklist not found" });
+    }
+    if (!(await canManageCenter(session, existingChecklist.centerId))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    if (req.body?.centerId && !(await canManageCenter(session, req.body.centerId))) {
+      return res.status(403).json({ error: "Forbidden" });
     }
 
     const data = {};
@@ -696,7 +727,9 @@ export default async function handler(req, res) {
       try {
         classRoomIds = await validateChecklistClassRoomIds(
           nextCenterId,
-          normalizeChecklistClassRoomIds(req.body?.classRoomIds, req.body?.classRoomId),
+          req.body?.noClassroom === true
+            ? []
+            : normalizeChecklistClassRoomIds(req.body?.classRoomIds, req.body?.classRoomId),
         );
         await validateChecklistItemLessonCategoryIds(nextCenterId, items);
       } catch (error) {
@@ -760,22 +793,29 @@ export default async function handler(req, res) {
       }
     }
 
+    const copyIds = await splitChecklistPerAssignee(id);
+
     // Re-fetch with updated items
     const result = await prisma.dailyChecklist.findUnique({
       where: { id },
       include: buildDailyChecklistInclude(),
     });
 
-    return res.status(200).json(serializeDailyChecklist(result));
+    return res.status(200).json({ ...serializeDailyChecklist(result), copyIds });
   }
 
   if (req.method === "DELETE") {
-    if (role !== "ADMIN") {
-      return res.status(403).json({ error: "Only admins can delete checklists" });
+    if (!MANAGER_ROLES.includes(role)) {
+      return res.status(403).json({ error: "Only admins and coaches can delete checklists" });
     }
 
     const { id } = req.body || {};
     if (!id) return res.status(400).json({ error: "id is required" });
+    const existing = await prisma.dailyChecklist.findUnique({ where: { id }, select: { centerId: true } });
+    if (!existing) return res.status(404).json({ error: "Checklist not found" });
+    if (!(await canManageCenter(session, existing.centerId))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
 
     await prisma.dailyChecklist.delete({ where: { id } });
     return res.status(200).json({ deleted: true });

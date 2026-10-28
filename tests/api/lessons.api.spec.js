@@ -278,12 +278,15 @@ test.describe("Lessons API prior/next steps and age @api", () => {
       title: `QA Middle Step ${suffix}`,
       ageYears: 2,
       ageMonths: 6,
+      maxAgeYears: 3,
+      maxAgeMonths: 0,
       priorStepId: prior.id,
       nextStepId: next.id,
     });
     expect(res.status()).toBe(201);
     expect(step.ageYears).toBe(2);
     expect(step.ageMonths).toBe(6);
+    expect(step).toMatchObject({ maxAgeYears: 3, maxAgeMonths: 0 });
     expect(step.priorStep.title).toBe(`QA Prior Step ${suffix}`);
     expect(step.nextStep.title).toBe(`QA Next Step ${suffix}`);
 
@@ -293,6 +296,9 @@ test.describe("Lessons API prior/next steps and age @api", () => {
       { priorStepId: "nonexistent-step" },
       { ageYears: 19 },
       { ageMonths: 12 },
+      { maxAgeMonths: 12 },
+      // Maximum below the saved minimum (2 yr 6 mo).
+      { maxAgeYears: 2, maxAgeMonths: 0 },
     ];
     for (const body of invalid) {
       const bad = await apiPut(request, `/api/v1/lessons/${step.id}`, body, cookies);
@@ -300,7 +306,7 @@ test.describe("Lessons API prior/next steps and age @api", () => {
     }
 
     // The ends of the client's ranges are accepted: 0-18 years, 0-11 months.
-    for (const body of [{ ageYears: 18, ageMonths: 0 }, { ageYears: 0, ageMonths: 11 }]) {
+    for (const body of [{ ageYears: 18, ageMonths: 0, maxAgeYears: 18, maxAgeMonths: 11 }, { ageYears: 0, ageMonths: 11 }]) {
       const ok = await apiPut(request, `/api/v1/lessons/${step.id}`, body, cookies);
       expect(ok.status(), JSON.stringify(body)).toBe(200);
     }

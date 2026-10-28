@@ -1,10 +1,10 @@
 import AdminLayout from "@/components/admin/AdminLayout";
-import ComingSoon from "@/components/shell/ComingSoon";
+import DocumentsPage from "@/components/documents/DocumentsPage";
 
-export default function ResourcesPage() {
+export default function DocumentsRolePage() {
   return (
-    <AdminLayout title="Resources">
-      <ComingSoon title="Resources" />
+    <AdminLayout title="Additional Resources">
+      <DocumentsPage category="RESOURCE" />
     </AdminLayout>
   );
 }

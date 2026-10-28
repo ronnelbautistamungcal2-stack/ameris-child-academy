@@ -1,10 +1,11 @@
+import MessagesWorkspace from "@/components/messages/MessagesWorkspace";
 import TeacherLayout from "@/components/teacher/TeacherLayout";
-import MessageInbox from "@/components/messages/MessageInbox";
 
+// Same layout as the parent Messages page (client request 2026-10-02).
 export default function TeacherMessages() {
   return (
     <TeacherLayout title="Messages">
-      <MessageInbox embedded />
+      <MessagesWorkspace variant="inbox" />
     </TeacherLayout>
   );
 }

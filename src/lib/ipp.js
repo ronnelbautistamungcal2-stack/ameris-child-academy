@@ -82,6 +82,25 @@ export function nextReviewDate(startDate, schedule, today = new Date()) {
   return next;
 }
 
+/**
+ * True when a review date (start date plus whole review periods) has passed
+ * (before `today`) since the plan was last saved, or the plan's status is
+ * not Active. Client answer 2026-10-22: "On Track" means the plan is active;
+ * otherwise it needs review.
+ */
+export function ippNeedsReview(plan, today = new Date()) {
+  if (plan.status !== "ACTIVE") return true;
+  const months = IPP_REVIEW_SCHEDULES.find((s) => s.value === plan.reviewSchedule)?.months;
+  if (!plan.startDate || !months) return false;
+  const start = new Date(plan.startDate);
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  let due = null;
+  for (let n = 1, next = addMonths(start, months); next < todayStart && n < 600; n += 1, next = addMonths(start, months * n)) due = next;
+  if (!due) return false;
+  const reviewed = plan.reviewedAt || plan.createdAt || start;
+  return new Date(reviewed) < due;
+}
+
 function text(value, max = 200) {
   const v = String(value ?? "").trim();
   return v ? v.slice(0, max) : null;

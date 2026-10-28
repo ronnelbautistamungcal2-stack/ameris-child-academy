@@ -1,4 +1,5 @@
 import { getSession } from "@/lib/auth";
+import { profileTabData } from "@/lib/childProfile";
 import prisma from "@/lib/prisma";
 import {
   decorateChildWithTodayAttendance,
@@ -115,7 +116,8 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "PUT") {
-    if (!["ADMIN", "TEACHER"].includes(session.user.role)) {
+    // Teachers only view a student's profile (client request 07-02, B34).
+    if (session.user.role !== "ADMIN") {
       return res.status(403).json({ error: "Forbidden" });
     }
 
@@ -172,6 +174,10 @@ export default async function handler(req, res) {
         });
       }
     }
+
+    const existing = await prisma.child.findUnique({ where: { id }, select: { feedingPlan: true } });
+    if (!existing) return res.status(404).json({ error: "Child not found" });
+    const tabData = profileTabData(req.body, existing);
 
     const child = await prisma.$transaction(async (tx) => {
       await tx.child.update({
@@ -263,6 +269,8 @@ export default async function handler(req, res) {
               ? new Date(enrollmentEndDate)
               : null
             : undefined,
+          // Edit Child tabs; last so the synced allergies / feeding plan win.
+          ...tabData,
         },
       });
 

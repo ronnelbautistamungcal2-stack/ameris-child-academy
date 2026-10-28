@@ -1,16 +1,10 @@
-import AdminComingSoon from "@/components/admin/AdminComingSoon";
+import AdminLayout from "@/components/admin/AdminLayout";
+import AdminBillingWorkspace from "@/components/billing/AdminBillingWorkspace";
 
 export default function AdminBilling() {
   return (
-    <AdminComingSoon
-      icon="💳"
-      title="Billing"
-      description="Family invoicing, payments, and tuition tracking."
-      planned={[
-        "Confirm what billing covers: tuition, fees, subsidies, or all three",
-        "Decide whether payments are processed here or tracked from an outside system",
-        "Confirm how this relates to the existing Subscriptions page",
-      ]}
-    />
+    <AdminLayout title="Billing">
+      <AdminBillingWorkspace />
+    </AdminLayout>
   );
 }

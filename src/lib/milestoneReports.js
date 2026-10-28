@@ -1,15 +1,20 @@
 // Milestone Progress Report and Child Steps of Progression Report (client
-// request 2026-10-23). The world standard age of a step is the average of its
-// minimum and maximum age (Steps of Progression Bank); a child "completes" a
-// step the first time it is recorded at Competency or Mastery.
+// requests 2026-10-23 and 2026-10-28). The world standard age of a step is the
+// average of its minimum and maximum age (Steps of Progression Bank). A child
+// reaches Competency the first time the step is recorded at Competency or
+// Mastery, and Mastery the first time it is recorded at Mastery. Statuses use
+// the SOP Tracking scale: Critical / At Risk / On Track / Ahead / Excelling.
 
 import { isDateKey, localDateKey } from "@/lib/foodReports";
 import prisma from "@/lib/prisma";
 import { enrolledWhere } from "@/lib/reportAccess";
+import { expectedAgeDays, maxExpectedAgeDays, statusForOffset } from "@/lib/sop";
 
 const MONTH_DAYS = 30.44;
 const YEAR_DAYS = 365.25;
+const DAY = 86400000;
 const round1 = (n) => Math.round(n * 10) / 10;
+const avg = (list) => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : null);
 
 /** A step's world standard age in years, or null when it has no ages. */
 export function worldStandardYears(step) {
@@ -20,23 +25,45 @@ export function worldStandardYears(step) {
   return (months * MONTH_DAYS) / YEAR_DAYS;
 }
 
-/**
- * Ahead when completed at least 0.1 years (about 5 weeks) before the world
- * standard, Behind when 0.3 years or more after it, otherwise On Track.
- */
-export function milestoneStatus(difference) {
-  if (difference == null) return null;
-  const d = round1(difference);
-  if (d <= -0.1) return "AHEAD";
-  if (d >= 0.3) return "BEHIND";
-  return "ON_TRACK";
+/** SOP rule: only Competency or Mastery can be Ahead, only Mastery Excelling. */
+function capped(status, level) {
+  return status === "EXCELLING" && level !== "MASTERY" ? "AHEAD" : status;
 }
 
-export const MILESTONE_STATUS_LABELS = { AHEAD: "Ahead", ON_TRACK: "On Track", BEHIND: "Behind", NOT_ACHIEVED: "Not Achieved" };
+/**
+ * Status against the step's age range, with the SOP thresholds (2 weeks /
+ * 1 month). Reached before the minimum age is ahead and after the maximum age
+ * is behind; not reached while older than the maximum age is behind.
+ */
+export function worldStatus(step, level, ageYearsAt) {
+  if (ageYearsAt == null) return null;
+  const min = expectedAgeDays(step);
+  const max = maxExpectedAgeDays(step);
+  const age = ageYearsAt * YEAR_DAYS;
+  let offset = age > max ? max - age : 0;
+  if (level && age < min) offset = min - age;
+  return capped(statusForOffset(offset), level);
+}
+
+/** Status against the center average age (years) for the same level. */
+export function centerStatus(centerYears, level, ageYearsAt) {
+  if (centerYears == null || ageYearsAt == null) return null;
+  const offset = (centerYears - ageYearsAt) * YEAR_DAYS;
+  return capped(statusForOffset(level ? offset : Math.min(0, offset)), level);
+}
 
 function ageYears(birthDate, at) {
   if (!birthDate || !at) return null;
-  return (new Date(at).getTime() - new Date(birthDate).getTime()) / (YEAR_DAYS * 86400000);
+  return (new Date(at).getTime() - new Date(birthDate).getTime()) / (YEAR_DAYS * DAY);
+}
+
+/** Whole months old on a date. */
+function ageMonthsOn(birthDate, at) {
+  const b = new Date(birthDate);
+  const d = new Date(at);
+  let months = (d.getFullYear() - b.getFullYear()) * 12 + (d.getMonth() - b.getMonth());
+  if (d.getDate() < b.getDate()) months -= 1;
+  return months;
 }
 
 /** The center's step categories with their sub categories (report filters). */
@@ -56,8 +83,8 @@ async function stepFilters(centerId) {
     .map((c) => ({ id: c.id, name: c.name, subCategories: [...c.subCategories].sort() }));
 }
 
-/** Steps matching the filters whose world standard falls in the age range (months). */
-async function loadSteps(centerId, { categoryId, subCategory, minMonths, maxMonths }) {
+/** Steps matching the category filters that have a world standard age. */
+async function loadSteps(centerId, { categoryId, subCategory }) {
   const steps = await prisma.lesson.findMany({
     where: { centerId, isStep: true, ...(categoryId ? { categoryId } : {}), ...(subCategory ? { subCategory } : {}) },
     select: {
@@ -71,35 +98,65 @@ async function loadSteps(centerId, { categoryId, subCategory, minMonths, maxMont
       category: { select: { id: true, name: true, sortOrder: true } },
     },
   });
-  return steps
-    .map((s) => ({ ...s, world: worldStandardYears(s) }))
-    .filter((s) => s.world != null)
-    .filter((s) => (minMonths == null || s.world * 12 >= minMonths - 0.01) && (maxMonths == null || s.world * 12 <= maxMonths + 0.01));
+  return steps.map((s) => ({ ...s, world: worldStandardYears(s) })).filter((s) => s.world != null);
 }
 
-/** When each child first reached Competency or Mastery on each step, up to the report date. */
-async function completions(stepIds, childWhere, reportDate) {
+/**
+ * The center's children counted in the averages: born by the report date and,
+ * with an age range, that age on the report date (client 2026-10-28).
+ */
+async function childrenInRange(centerId, reportDate, { minMonths, maxMonths, enrolledOnly = false }) {
+  const children = await prisma.child.findMany({
+    where: { centerId, birthDate: { not: null, lte: reportDate }, ...(enrolledOnly ? enrolledWhere() : {}) },
+    select: { id: true, birthDate: true },
+  });
+  return children.filter((c) => {
+    const months = ageMonthsOn(c.birthDate, reportDate);
+    return (minMonths == null || months >= minMonths) && (maxMonths == null || months <= maxMonths);
+  });
+}
+
+/**
+ * When each child first reached Competency and Mastery on each step, up to the
+ * report date: [{ childId, stepId, competency: { at, age }, mastery: { at, age } | null }].
+ */
+async function completions(stepIds, childIds, reportDate) {
+  if (!stepIds.length || !childIds.length) return [];
   const rows = await prisma.progress.findMany({
-    where: { lessonId: { in: stepIds }, child: childWhere, status: { in: ["COMPLETED", "PASSED"] } },
+    where: { lessonId: { in: stepIds }, childId: { in: childIds }, status: { in: ["COMPLETED", "PASSED"] } },
     select: {
       childId: true,
       lessonId: true,
+      status: true,
       achievedAt: true,
       assessedAt: true,
       updatedAt: true,
       child: { select: { birthDate: true } },
-      entries: { where: { status: { in: ["COMPLETED", "PASSED"] } }, orderBy: { occurredAt: "asc" }, take: 1, select: { occurredAt: true } },
+      entries: { where: { status: { in: ["COMPLETED", "PASSED"] } }, orderBy: { occurredAt: "asc" }, select: { status: true, occurredAt: true } },
     },
   });
   const out = [];
   for (const r of rows) {
-    const at = r.entries[0]?.occurredAt || r.achievedAt || r.assessedAt || r.updatedAt;
-    if (!at || at > reportDate) continue;
-    const age = ageYears(r.child.birthDate, at);
-    if (age == null || age < 0) continue;
-    out.push({ childId: r.childId, stepId: r.lessonId, at, age });
+    const fallback = r.achievedAt || r.assessedAt || r.updatedAt;
+    const reach = (at) => {
+      if (!at || at > reportDate) return null;
+      const age = ageYears(r.child.birthDate, at);
+      return age == null || age < 0 ? null : { at, age };
+    };
+    const competency = reach(r.entries[0]?.occurredAt || fallback);
+    if (!competency) continue;
+    const mastery = reach(r.entries.find((e) => e.status === "PASSED")?.occurredAt || (r.status === "PASSED" ? fallback : null));
+    out.push({ childId: r.childId, stepId: r.lessonId, competency, mastery });
   }
   return out;
+}
+
+/** Center average ages (years) at Competency and Mastery for one step. */
+function centerAverages(done, stepId) {
+  const forStep = done.filter((d) => d.stepId === stepId);
+  const competency = forStep.map((d) => d.competency.age);
+  const mastery = forStep.filter((d) => d.mastery).map((d) => d.mastery.age);
+  return { competency: avg(competency), mastery: avg(mastery), competencyChildren: competency.length, masteryChildren: mastery.length };
 }
 
 function groupByCategory(rows) {
@@ -117,67 +174,102 @@ function endOfDay(dateKey) {
   return new Date(`${dateKey}T23:59:59.999`);
 }
 
-/** Milestone Progress Report: center average age at completion vs. the world standard. */
+const years = (n) => (n == null ? null : round1(n));
+const stepFields = (s) => ({
+  id: s.id,
+  title: s.title,
+  subCategory: s.subCategory || "",
+  categoryId: s.category?.id || null,
+  category: s.category?.name || "",
+  sortOrder: s.category?.sortOrder,
+  world: s.world,
+  worldYears: round1(s.world),
+});
+
+/**
+ * Milestone Progress Report: the center's average age at Competency and at
+ * Mastery vs. the world standard. The difference and status use Mastery when
+ * any child has reached it, otherwise Competency.
+ */
 export async function milestoneProgressReport({ centerId, date, categoryId, subCategory, minMonths, maxMonths, enrolledOnly = false }) {
-  const [steps, filters] = await Promise.all([loadSteps(centerId, { categoryId, subCategory, minMonths, maxMonths }), stepFilters(centerId)]);
-  const done = await completions(steps.map((s) => s.id), { centerId, ...(enrolledOnly ? enrolledWhere() : {}) }, endOfDay(date));
+  const reportDate = endOfDay(date);
+  const [steps, filters, children] = await Promise.all([
+    loadSteps(centerId, { categoryId, subCategory }),
+    stepFilters(centerId),
+    childrenInRange(centerId, reportDate, { minMonths, maxMonths, enrolledOnly }),
+  ]);
+  const done = await completions(steps.map((s) => s.id), children.map((c) => c.id), reportDate);
   const rows = steps.map((s) => {
-    const ages = done.filter((d) => d.stepId === s.id).map((d) => d.age);
-    const center = ages.length ? ages.reduce((a, b) => a + b, 0) / ages.length : null;
-    const difference = center == null ? null : round1(center) - round1(s.world);
+    const c = centerAverages(done, s.id);
+    const level = c.mastery != null ? "MASTERY" : c.competency != null ? "COMPETENCY" : null;
+    const age = level === "MASTERY" ? c.mastery : c.competency;
     return {
-      id: s.id,
-      title: s.title,
-      subCategory: s.subCategory || "",
-      categoryId: s.category?.id || null,
-      category: s.category?.name || "",
-      sortOrder: s.category?.sortOrder,
-      world: s.world,
-      worldYears: round1(s.world),
-      centerYears: center == null ? null : round1(center),
-      difference: difference == null ? null : round1(difference),
-      status: milestoneStatus(difference),
-      children: ages.length,
+      ...stepFields(s),
+      competencyYears: years(c.competency),
+      masteryYears: years(c.mastery),
+      competencyChildren: c.competencyChildren,
+      masteryChildren: c.masteryChildren,
+      level,
+      difference: age == null ? null : round1(round1(age) - round1(s.world)),
+      status: level ? worldStatus(s, level, age) : null,
     };
   });
   return {
     date,
+    childrenInRange: children.length,
     totalChildren: new Set(done.map((d) => d.childId)).size,
     categories: groupByCategory(rows),
     filters,
   };
 }
 
-/** Child Steps of Progression Report: the child's age when they completed each step vs. the world standard. */
-export async function childStepsReport({ child, date, categoryId, subCategory, minMonths, maxMonths, achieved }) {
-  const [steps, filters] = await Promise.all([loadSteps(child.centerId, { categoryId, subCategory, minMonths, maxMonths }), stepFilters(child.centerId)]);
-  const done = await completions(steps.map((s) => s.id), { id: child.id }, endOfDay(date));
-  const ageNow = ageYears(child.birthDate, endOfDay(date));
+/**
+ * Child Steps of Progression Report: the child's age at Competency and at
+ * Mastery next to the center averages (the center's children in the age range
+ * on the report date) and the world standard. Differences and statuses use the
+ * child's highest level reached; a step not reached is compared at the child's
+ * age on the report date.
+ */
+export async function childStepsReport({ child, date, categoryId, subCategory, minMonths, maxMonths, competency, mastery }) {
+  const reportDate = endOfDay(date);
+  const [steps, filters, peers] = await Promise.all([
+    loadSteps(child.centerId, { categoryId, subCategory }),
+    stepFilters(child.centerId),
+    childrenInRange(child.centerId, reportDate, { minMonths, maxMonths }),
+  ]);
+  const stepIds = steps.map((s) => s.id);
+  const [done, peerDone] = await Promise.all([completions(stepIds, [child.id], reportDate), completions(stepIds, peers.map((p) => p.id), reportDate)]);
+  const ageNow = ageYears(child.birthDate, reportDate);
   let rows = steps.map((s) => {
-    const c = done.find((d) => d.stepId === s.id);
-    const difference = c ? round1(c.age) - round1(s.world) : null;
+    const mine = done.find((d) => d.stepId === s.id);
+    const center = centerAverages(peerDone, s.id);
+    const level = mine?.mastery ? "MASTERY" : mine ? "COMPETENCY" : null;
+    const age = level === "MASTERY" ? mine.mastery.age : level ? mine.competency.age : ageNow;
+    const centerAge = level === "MASTERY" ? center.mastery : center.competency;
     return {
-      id: s.id,
-      title: s.title,
-      subCategory: s.subCategory || "",
-      categoryId: s.category?.id || null,
-      category: s.category?.name || "",
-      sortOrder: s.category?.sortOrder,
-      world: s.world,
-      worldYears: round1(s.world),
-      childYears: c ? round1(c.age) : null,
-      achievedOn: c ? c.at : null,
-      difference: difference == null ? null : round1(difference),
-      status: c ? milestoneStatus(difference) : "NOT_ACHIEVED",
+      ...stepFields(s),
+      competency: mine ? { at: mine.competency.at, years: round1(mine.competency.age) } : null,
+      mastery: mine?.mastery ? { at: mine.mastery.at, years: round1(mine.mastery.age) } : null,
+      centerCompetencyYears: years(center.competency),
+      centerMasteryYears: years(center.mastery),
+      level,
+      centerDifference: level && centerAge != null ? round1(round1(age) - round1(centerAge)) : null,
+      worldDifference: level ? round1(round1(age) - round1(s.world)) : null,
+      centerStatus: centerStatus(centerAge, level, age),
+      worldStatus: worldStatus(s, level, age),
     };
   });
-  if (achieved === "yes") rows = rows.filter((r) => r.childYears != null);
-  if (achieved === "no") rows = rows.filter((r) => r.childYears == null);
+  if (competency === "yes") rows = rows.filter((r) => r.competency);
+  if (competency === "no") rows = rows.filter((r) => !r.competency);
+  if (mastery === "yes") rows = rows.filter((r) => r.mastery);
+  if (mastery === "no") rows = rows.filter((r) => !r.mastery);
   return {
     date,
     child: { id: child.id, name: `${child.firstName || ""} ${child.lastName || ""}`.trim(), birthDate: child.birthDate, ageYears: ageNow == null ? null : round1(ageNow) },
-    achievedCount: rows.filter((r) => r.childYears != null).length,
+    competencyCount: rows.filter((r) => r.competency).length,
+    masteryCount: rows.filter((r) => r.mastery).length,
     totalSteps: rows.length,
+    childrenInRange: peers.length,
     categories: groupByCategory(rows),
     filters,
   };
@@ -198,6 +290,7 @@ export function milestoneParams(query) {
     maxMonths,
     categoryId: query.categoryId ? String(query.categoryId) : null,
     subCategory: query.subCategory ? String(query.subCategory) : null,
-    achieved: ["yes", "no"].includes(query.achieved) ? query.achieved : null,
+    competency: ["yes", "no"].includes(query.competency) ? query.competency : null,
+    mastery: ["yes", "no"].includes(query.mastery) ? query.mastery : null,
   };
 }

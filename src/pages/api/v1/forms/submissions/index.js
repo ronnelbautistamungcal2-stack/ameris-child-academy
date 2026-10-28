@@ -1,6 +1,7 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { isChildLinkedToParent } from "@/lib/child-parent-links";
+import { buildCertification } from "@/lib/formCertification";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -66,12 +67,23 @@ export default async function handler(req, res) {
       expiresAt.setDate(expiresAt.getDate() + template.renewalPeriodDays);
     }
 
+    // Parents certify and e-sign each form (client 36-01, D4); the server
+    // stamps when and who.
+    let stored = data ?? null;
+    if (user.role === "PARENT") {
+      const certification = buildCertification(req.body?.certification, user);
+      if (!certification) {
+        return res.status(400).json({ error: "Check the certification and type your name to sign the form" });
+      }
+      stored = { ...(data && typeof data === "object" ? data : {}), certification };
+    }
+
     const created = await prisma.formSubmission.create({
       data: {
         templateId,
         submittedById: user.id,
         childId: childId || null,
-        data: data ?? null,
+        data: stored,
         expiresAt,
       },
       include: { template: true, child: true },

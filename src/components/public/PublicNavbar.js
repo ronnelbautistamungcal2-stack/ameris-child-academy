@@ -54,7 +54,7 @@ export default function PublicNavbar() {
           className="block shrink-0"
           style={{ height: LOGO_HEIGHT, width: `calc(${LOGO_HEIGHT} * ${LOGO_ASPECT})` }}
         >
-          <AmerisLogo tight showText={false} className="drop-shadow-sm" style={{ width: "100%" }} />
+          <AmerisLogo legacy tight showText={false} className="drop-shadow-sm" style={{ width: "100%" }} />
         </Link>
 
         <nav className="ml-auto hidden items-center gap-1 text-[13px] font-semibold text-slate-700 md:flex lg:gap-2">

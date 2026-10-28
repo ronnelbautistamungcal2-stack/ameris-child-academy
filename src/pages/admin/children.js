@@ -19,9 +19,10 @@ import {
   getParentContacts,
 } from "@/lib/child-contacts";
 import { useToast } from "@/contexts/ToastContext";
+import Link from "next/link";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import AuthorizedPickupSection from "@/components/admin/AuthorizedPickupSection";
+import EditChildDialog from "@/components/children/EditChildDialog";
 import TimeSheetModal from "@/components/timesheets/TimeSheetModal";
 
 function createParentContacts(value = []) {
@@ -710,20 +711,17 @@ export default function AdminChildren() {
     setDocumentExpirationTouched(createDocumentExpirationTouched());
   }, []);
 
+  // Add / Edit open the tabbed Edit Child box.
+  const [childDialog, setChildDialog] = useState(null); // {} new, { id } edit
   const openCreate = useCallback(() => {
     setError("");
-    resetForm();
-    setModalOpen(true);
-  }, [resetForm]);
+    setChildDialog({});
+  }, []);
 
-  const openEdit = useCallback(
-    (child) => {
-      setError("");
-      startEdit(child);
-      setModalOpen(true);
-    },
-    [startEdit],
-  );
+  const openEdit = useCallback((child) => {
+    setError("");
+    setChildDialog({ id: child.id });
+  }, []);
 
   const closeModal = useCallback(() => {
     setModalOpen(false);
@@ -2147,14 +2145,13 @@ export default function AdminChildren() {
 
                     {/* Actions */}
                     <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-                      <button
-                        type="button"
+                      <Link
+                        href={`/admin/children/${encodeURIComponent(ch.id)}`}
                         style={cardActionButton}
-                        onClick={() => openProfile(ch.id)}
                         title="View profile"
                       >
                         View Profile
-                      </button>
+                      </Link>
                       <button
                         type="button"
                         style={cardActionButton}
@@ -2416,521 +2413,17 @@ export default function AdminChildren() {
         </Modal>
       ) : null}
 
-      {/* Modal */}
-      {modalOpen ? (
-        <Modal
-          title={editing ? `Edit — ${editing.firstName} ${editing.lastName || ""}` : "Add New Child"}
-          onClose={closeModal}
-        >
-          {error ? <ErrorBanner message={error} /> : null}
-
-          <form onSubmit={editing ? saveEdit : createChild}>
-            {/* Section: Basic Info */}
-            <SectionHeader icon="👤" title="Basic Information" />
-            <div style={formGridStyle}>
-              <Field label="First Name">
-                <input
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  style={inputStyle}
-                  required
-                  placeholder="First name"
-                />
-              </Field>
-              <Field label="Last Name">
-                <input
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  style={inputStyle}
-                  placeholder="Last name"
-                />
-              </Field>
-              <Field label="Birth Date">
-                <input
-                  value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
-                  style={inputStyle}
-                  type="date"
-                />
-              </Field>
-              <Field label="Enrollment Start">
-                <input
-                  value={enrollmentStartDate}
-                  onChange={(e) => setEnrollmentStartDate(e.target.value)}
-                  style={inputStyle}
-                  type="date"
-                />
-              </Field>
-              <Field label="Enrollment End">
-                <input
-                  value={enrollmentEndDate}
-                  onChange={(e) => setEnrollmentEndDate(e.target.value)}
-                  style={inputStyle}
-                  type="date"
-                />
-              </Field>
-            </div>
-
-            {/* Section: Placement */}
-            <SectionHeader icon="🏫" title="Placement" style={{ marginTop: 20 }} />
-            <div style={formGridStyle}>
-              <Field label={editing ? "Center (set at creation)" : "Center"}>
-                <select
-                  value={centerId}
-                  onChange={(e) => setCenterId(e.target.value)}
-                  style={inputStyle}
-                  required={!editing}
-                  disabled={!!editing}
-                >
-                  <option value="">
-                    {editing ? "(unchanged)" : "Select a center"}
-                  </option>
-                  {centers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Classroom">
-                <select
-                  value={classRoomId}
-                  onChange={(e) => setClassRoomId(e.target.value)}
-                  style={inputStyle}
-                >
-                  <option value="">(none)</option>
-                  {classes
-                    .filter((cl) => !centerId || cl.centerId === centerId)
-                    .map((cl) => (
-                      <option key={cl.id} value={cl.id}>
-                        {cl.name}
-                      </option>
-                    ))}
-                </select>
-              </Field>
-              {parentAccountIds.map((parentAccountId, index) => (
-                <Field key={`linked-parent-${index + 1}`} label={`Linked Parent Account ${index + 1}`}>
-                  <select
-                    value={parentAccountId}
-                    onChange={(e) => updateParentAccount(index, e.target.value)}
-                    style={inputStyle}
-                  >
-                    <option value="">(optional)</option>
-                    {parents.map((p) => {
-                      const alreadySelected = parentAccountIds.some(
-                        (selectedId, selectedIndex) =>
-                          selectedIndex !== index && selectedId === p.id,
-                      );
-                      return (
-                        <option key={p.id} value={p.id} disabled={alreadySelected}>
-                          {p.email || p.name || p.id}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </Field>
-              ))}
-            </div>
-
-            {!editing ? (
-              <>
-                <SectionHeader
-                  icon="Copy"
-                  title="Copy Family Contacts"
-                  style={{ marginTop: 20 }}
-                />
-                <div style={formGridStyle}>
-                  <Field label="Copy from another child">
-                    <select
-                      value={copyContactsFromChildId}
-                      onChange={(e) => {
-                        const nextChildId = e.target.value;
-                        setCopyContactsFromChildId(nextChildId);
-                        if (nextChildId) applyContactTemplate(nextChildId);
-                      }}
-                      style={inputStyle}
-                    >
-                      <option value="">(optional)</option>
-                      {contactTemplateChildren.map((child) => (
-                        <option key={child.id} value={child.id}>
-                          {childFullName(child)}
-                        </option>
-                      ))}
-                    </select>
-                    <div style={{ marginTop: 6, fontSize: 12, color: "var(--admin-text-muted)" }}>
-                      Copies linked parent accounts, parent contacts, and emergency contacts into this new child record.
-                    </div>
-                  </Field>
-                </div>
-              </>
-            ) : null}
-
-            <SectionHeader icon="👪" title="Parent Contacts" style={{ marginTop: 20 }} />
-            <div style={formGridStyle}>
-              {parentContacts.map((contact, index) => (
-                <div
-                  key={contact.label}
-                  style={{
-                    border: "1px solid var(--admin-border)",
-                    borderRadius: 12,
-                    padding: 14,
-                    background: "var(--admin-bg-secondary)",
-                  }}
-                >
-                  <div style={{ fontWeight: 800, fontSize: 13, color: "var(--admin-text)", marginBottom: 10 }}>
-                    {contact.label}
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
-                    <Field label="Name">
-                      <input
-                        value={contact.name}
-                        onChange={(e) => updateParentContact(index, "name", e.target.value)}
-                        style={inputStyle}
-                        placeholder={contact.label}
-                      />
-                    </Field>
-                    <Field label="Email">
-                      <input
-                        value={contact.email}
-                        onChange={(e) => updateParentContact(index, "email", e.target.value)}
-                        style={inputStyle}
-                        placeholder="name@example.com"
-                      />
-                    </Field>
-                    <Field label="Phone">
-                      <input
-                        value={contact.phone}
-                        onChange={(e) => updateParentContact(index, "phone", e.target.value)}
-                        style={inputStyle}
-                        placeholder="(555) 000-0000"
-                      />
-                    </Field>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Section: Health & Safety */}
-            <SectionHeader icon="🏥" title="Health & Safety" style={{ marginTop: 20 }} />
-            <div style={formGridStyle}>
-              {emergencyContacts.map((contact, index) => (
-                <div
-                  key={contact.label}
-                  style={{
-                    border: "1px solid var(--admin-border)",
-                    borderRadius: 12,
-                    padding: 14,
-                    background: "var(--admin-bg-secondary)",
-                  }}
-                >
-                  <div style={{ fontWeight: 800, fontSize: 13, color: "var(--admin-text)", marginBottom: 10 }}>
-                    {contact.label}
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
-                    <Field label="Name">
-                      <input
-                        value={contact.name}
-                        onChange={(e) => updateEmergencyContact(index, "name", e.target.value)}
-                        style={inputStyle}
-                        placeholder="Emergency contact name"
-                      />
-                    </Field>
-                    <Field label="Phone">
-                      <input
-                        value={contact.phone}
-                        onChange={(e) => updateEmergencyContact(index, "phone", e.target.value)}
-                        style={inputStyle}
-                        placeholder="(555) 000-0000"
-                      />
-                    </Field>
-                  </div>
-                </div>
-              ))}
-              <Field label="Allergies/Special Notes">
-                <input
-                  value={allergies}
-                  onChange={(e) => setAllergies(e.target.value)}
-                  style={inputStyle}
-                  placeholder="e.g. peanuts, dairy"
-                />
-              </Field>
-              <Field label="Carpool (optional)">
-                <input
-                  value={carpool}
-                  onChange={(e) => setCarpool(e.target.value)}
-                  style={inputStyle}
-                  placeholder="e.g. School 1"
-                />
-              </Field>
-            </div>
-
-            {/* Feeding Plan (infants only) */}
-            {isInfant ? (
-              <>
-                <SectionHeader icon="🍼" title="Feeding Plan (0-1 years)" style={{ marginTop: 20 }} />
-                <div style={formGridStyle}>
-                  <Field label="What they eat">
-                    <input
-                      value={feedingFoods}
-                      onChange={(e) => setFeedingFoods(e.target.value)}
-                      style={inputStyle}
-                      placeholder="e.g. purees, solids"
-                    />
-                  </Field>
-                  <Field label="Formula">
-                    <input
-                      value={feedingFormula}
-                      onChange={(e) => setFeedingFormula(e.target.value)}
-                      style={inputStyle}
-                    />
-                  </Field>
-                  <Field label="# Bottles / day">
-                    <input
-                      value={feedingBottlesPerDay}
-                      onChange={(e) => setFeedingBottlesPerDay(e.target.value)}
-                      style={inputStyle}
-                      inputMode="numeric"
-                      placeholder="e.g. 4"
-                    />
-                  </Field>
-                  <Field label="Bottle notes">
-                    <input
-                      value={feedingBottleNotes}
-                      onChange={(e) => setFeedingBottleNotes(e.target.value)}
-                      style={inputStyle}
-                    />
-                  </Field>
-                </div>
-              </>
-            ) : null}
-
-            {editing?.id ? (
-              <AuthorizedPickupSection
-                childId={editing.id}
-                centerId={editing.centerId}
-                otherChildren={children.filter((c) => c.id !== editing.id && c.centerId === editing.centerId)}
-              />
-            ) : null}
-
-            {/* Section: Documents */}
-            <SectionHeader icon="📄" title="Documents" style={{ marginTop: 20 }} />
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
-              <Field label="Health Assessment">
-                <input
-                  type="file"
-                  multiple
-                  onChange={(e) =>
-                    setHealthAssessmentFiles(Array.from(e.target.files || []))
-                  }
-                  style={inputStyle}
-                />
-                <input
-                  type="date"
-                  value={documentExpirations.healthAssessmentDocuments}
-                  onChange={(e) => updateDocumentExpiration("healthAssessmentDocuments", e.target.value)}
-                  style={{ ...inputStyle, marginTop: 6 }}
-                  title="Expiration date"
-                />
-                {healthAssessmentDocuments.length > 0 && (
-                  <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
-                    {healthAssessmentDocuments.map((d, idx) => (
-                      <DocRow
-                        key={`${d?.url || "doc"}-${idx}`}
-                        doc={d}
-                        onRemove={() =>
-                          setHealthAssessmentDocuments((cur) =>
-                            cur.filter((_, i) => i !== idx),
-                          )
-                        }
-                      />
-                    ))}
-                  </div>
-                )}
-              </Field>
-
-              <Field label="Enrollment Documents">
-                <input
-                  type="file"
-                  multiple
-                  onChange={(e) =>
-                    setEnrollmentFiles(Array.from(e.target.files || []))
-                  }
-                  style={inputStyle}
-                />
-                <input
-                  type="date"
-                  value={documentExpirations.enrollmentDocuments}
-                  onChange={(e) => updateDocumentExpiration("enrollmentDocuments", e.target.value)}
-                  style={{ ...inputStyle, marginTop: 6 }}
-                  title="Expiration date"
-                />
-                {enrollmentDocuments.length > 0 && (
-                  <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
-                    {enrollmentDocuments.map((d, idx) => (
-                      <DocRow
-                        key={`${d?.url || "doc"}-${idx}`}
-                        doc={d}
-                        onRemove={() =>
-                          setEnrollmentDocuments((cur) =>
-                            cur.filter((_, i) => i !== idx),
-                          )
-                        }
-                      />
-                    ))}
-                  </div>
-                )}
-              </Field>
-              <DocumentUploadField
-                label="IEF"
-                filesSetter={setIefFiles}
-                docs={iefDocuments}
-                onRemove={(idx) => setIefDocuments((cur) => cur.filter((_, i) => i !== idx))}
-                expirationValue={documentExpirations.iefDocuments}
-                onExpirationChange={(value) => updateDocumentExpiration("iefDocuments", value)}
-              />
-              <DocumentUploadField
-                label="Immunizations"
-                filesSetter={setImmunizationFiles}
-                docs={immunizationDocuments}
-                onRemove={(idx) => setImmunizationDocuments((cur) => cur.filter((_, i) => i !== idx))}
-                expirationValue={documentExpirations.immunizationDocuments}
-                onExpirationChange={(value) =>
-                  updateDocumentExpiration("immunizationDocuments", value)
-                }
-              />
-              <DocumentUploadField
-                label="Infant Documents"
-                filesSetter={setInfantFiles}
-                docs={infantDocuments}
-                onRemove={(idx) => setInfantDocuments((cur) => cur.filter((_, i) => i !== idx))}
-                expirationValue={documentExpirations.infantDocuments}
-                onExpirationChange={(value) => updateDocumentExpiration("infantDocuments", value)}
-              />
-              <DocumentUploadField
-                label="Other"
-                filesSetter={setOtherFiles}
-                docs={otherDocuments}
-                onRemove={(idx) => setOtherDocuments((cur) => cur.filter((_, i) => i !== idx))}
-                expirationValue={documentExpirations.otherDocuments}
-                onExpirationChange={(value) => updateDocumentExpiration("otherDocuments", value)}
-              />
-            </div>
-
-            {/* Steps of Progression (edit only) */}
-            {editing ? (
-              <>
-                <SectionHeader icon="📈" title="Steps of Progression" style={{ marginTop: 20 }} />
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, marginBottom: 10 }}>
-                  <div style={filterLabelStyle}>Domain:</div>
-                  <select
-                    value={stepsDomain}
-                    onChange={(e) => setStepsDomain(e.target.value)}
-                    style={{ ...inputStyle, width: "auto", minWidth: 160 }}
-                  >
-                    <option value="">All domains</option>
-                    {stepDomains.map((d) => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {stepsError ? <ErrorBanner message={stepsError} /> : null}
-
-                {stepsLoading ? (
-                  <div style={{ color: "var(--admin-text-muted)", fontSize: 13 }}>Loading steps...</div>
-                ) : (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
-                    <StepsGroup
-                      title="Catch-up (Overdue)"
-                      rows={catchupRows}
-                      onToggle={setChecklistItemCompleted}
-                      variant="danger"
-                    />
-                    <StepsGroup
-                      title="Currently Working On"
-                      rows={currentRows}
-                      onToggle={setChecklistItemCompleted}
-                      variant="info"
-                    />
-                    <StepsGroup
-                      title="Upcoming"
-                      rows={upcomingRows}
-                      onToggle={setChecklistItemCompleted}
-                      variant="muted"
-                    />
-                  </div>
-                )}
-              </>
-            ) : null}
-
-            {/* Transfer Record (edit only) */}
-            {editing && (
-              <>
-                <SectionHeader icon="📦" title="Transfer Record" style={{ marginTop: 20 }} />
-                <div style={infoBoxStyle}>
-                  <p style={{ color: "var(--admin-text-muted)", fontSize: 12, margin: 0 }}>
-                    Download a comprehensive record package for child transfer.
-                  </p>
-                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                    <button type="button" style={secondaryButtonStyle} onClick={() => window.open(`/api/v1/children/${editing.id}/transfer-record?format=json`, "_blank")}>
-                      Export JSON
-                    </button>
-                    <button type="button" style={secondaryButtonStyle} onClick={() => window.open(`/api/v1/children/${editing.id}/transfer-record?format=csv`, "_blank")}>
-                      Export CSV
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Permissions (edit only) */}
-            {editing && (
-              <>
-                <SectionHeader icon="🔒" title="Permissions" style={{ marginTop: 20 }} />
-                <p style={{ color: "var(--admin-text-muted)", fontSize: 12, margin: "0 0 10px" }}>
-                  Manage photo release, field trip, medical treatment, and other permissions.
-                </p>
-                {permissionsLoading ? (
-                  <div style={{ color: "var(--admin-text-muted)", fontSize: 13 }}>Loading permissions...</div>
-                ) : (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8 }}>
-                    {[
-                      { value: "PHOTO_RELEASE", label: "Photo Release", icon: "📷" },
-                      { value: "FIELD_TRIP", label: "Field Trip", icon: "🚌" },
-                      { value: "MEDICAL_TREATMENT", label: "Medical Treatment", icon: "🏥" },
-                      { value: "TRANSPORTATION", label: "Transportation", icon: "🚗" },
-                      { value: "SUNSCREEN_APPLICATION", label: "Sunscreen", icon: "☀️" },
-                      { value: "WATER_ACTIVITIES", label: "Water Activities", icon: "💧" },
-                    ].map((pt) => {
-                      const perm = childPermissions.find((p) => p.permissionType === pt.value);
-                      const status = perm?.status || "PENDING";
-                      return (
-                        <PermissionCard
-                          key={pt.value}
-                          pt={pt}
-                          status={status}
-                          editingId={editing.id}
-                          setChildPermissions={setChildPermissions}
-                          setError={setError}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* Form Actions */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--admin-border)" }}>
-              <button type="button" style={secondaryButtonStyle} onClick={closeModal}>
-                Cancel
-              </button>
-              <button type="submit" style={primaryButtonStyle}>
-                {editing ? "Save Changes" : "Create Child"}
-              </button>
-            </div>
-          </form>
-        </Modal>
+      {childDialog ? (
+        <EditChildDialog
+          childId={childDialog.id || null}
+          defaultCenterId={dashboardCenterId || ""}
+          onClose={() => setChildDialog(null)}
+          onSaved={async (created) => {
+            setChildDialog(null);
+            await refresh();
+            toast.success(created?.id ? "Child added." : "Child updated.");
+          }}
+        />
       ) : null}
 
       <ConfirmDialog

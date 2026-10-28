@@ -86,12 +86,10 @@ export default function Login() {
             className="mx-auto block w-[min(260px,70vw)] lg:mx-0 lg:-mt-56 lg:w-[500px]"
             aria-label="Ameris Academy home"
           >
-            <AmerisLogo
-              size="xl"
-              showTagline
-              className="drop-shadow-[0_2px_12px_rgba(255,255,255,0.85)]"
-              style={{ width: "100%" }}
-            />
+            {/* A light panel keeps the grey tagline readable over the photo. */}
+            <span className="block rounded-3xl bg-white/85 p-4 shadow-xl shadow-slate-900/15 backdrop-blur-sm sm:p-6 dark:bg-gray-900/85">
+              <AmerisLogo size="xl" showTagline style={{ width: "100%" }} />
+            </span>
           </Link>
 
           {/* Login card */}

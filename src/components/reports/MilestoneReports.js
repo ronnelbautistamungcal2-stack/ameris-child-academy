@@ -2,11 +2,15 @@ import { CenterSelect, NAVY, ReportControls, ReportMessage, ReportSheet, input, 
 import { isCurrentlyEnrolled, useReportFilters } from "@/components/reports/ReportFilters";
 import { apiJson } from "@/lib/api";
 import { localDateKey } from "@/lib/foodReports";
+import { SOP_STATUSES } from "@/lib/sop";
 import { useEffect, useMemo, useState } from "react";
 
 // Milestone Progress Report (center average vs. world standard) and Child
-// Steps of Progression Report (one child vs. world standard), client request
-// 2026-10-23. Both group the steps by category like the client's sheet.
+// Steps of Progression Report (one child vs. the center and the world
+// standard), client requests 2026-10-23 and 2026-10-28: Competency and Mastery
+// in their own columns, the five SOP statuses, and the age range picks the
+// children by their age on the report date. Both group the steps by category
+// like the client's sheet.
 
 const AGE_OPTIONS = [0, 3, 6, 9, 12, 18, 24, 30, 36, 48, 60, 72, 96, 120, 144];
 const CATEGORY_TONES = [
@@ -17,22 +21,15 @@ const CATEGORY_TONES = [
   "bg-violet-100 text-[#0b2a5b]",
   "bg-cyan-100 text-[#0b2a5b]",
 ];
-const STATUS = {
-  AHEAD: ["Ahead", "bg-blue-100 text-blue-900"],
-  ON_TRACK: ["On Track", "bg-green-100 text-green-900"],
-  BEHIND: ["Behind", "bg-red-100 text-red-900"],
-  NOT_ACHIEVED: ["Not Achieved", "bg-gray-100 text-gray-700"],
-};
-
 const ageLabel = (m) => (m < 24 ? `${m} months` : `${m / 12} years`);
 const fmt = (n) => (n == null ? "—" : n.toFixed(1));
 const diff = (n) => (n == null ? "—" : `${n > 0 ? "+" : ""}${n.toFixed(1)}`);
 
 function useFilters() {
-  return useState({ date: localDateKey(new Date()), minMonths: "", maxMonths: "", categoryId: "", subCategory: "", achieved: "" });
+  return useState({ date: localDateKey(new Date()), minMonths: "", maxMonths: "", categoryId: "", subCategory: "", competency: "", mastery: "" });
 }
 
-function FilterFields({ filters, setFilters, options, showAchieved }) {
+function FilterFields({ filters, setFilters, options, showLevels }) {
   const set = (patch) => setFilters((f) => ({ ...f, ...patch }));
   const category = options.find((c) => c.id === filters.categoryId);
   return (
@@ -43,14 +40,14 @@ function FilterFields({ filters, setFilters, options, showAchieved }) {
       </label>
       <div className="grid grid-cols-2 gap-2">
         <label className="block text-sm font-bold">
-          Age From
+          Children&apos;s Age From
           <select value={filters.minMonths} onChange={(e) => set({ minMonths: e.target.value })} className={input}>
             <option value="">Any</option>
             {AGE_OPTIONS.map((m) => <option key={m} value={m}>{ageLabel(m)}</option>)}
           </select>
         </label>
         <label className="block text-sm font-bold">
-          Age To
+          Children&apos;s Age To
           <select value={filters.maxMonths} onChange={(e) => set({ maxMonths: e.target.value })} className={input}>
             <option value="">Any</option>
             {AGE_OPTIONS.filter((m) => m > 0).map((m) => <option key={m} value={m}>{ageLabel(m)}</option>)}
@@ -71,15 +68,22 @@ function FilterFields({ filters, setFilters, options, showAchieved }) {
           {(category?.subCategories || []).map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       </label>
-      {showAchieved ? (
-        <label className="block text-sm font-bold">
-          Achieved
-          <select value={filters.achieved} onChange={(e) => set({ achieved: e.target.value })} className={input}>
-            <option value="">All Steps</option>
-            <option value="yes">Achieved</option>
-            <option value="no">Not Achieved</option>
-          </select>
-        </label>
+      {showLevels ? (
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            ["competency", "Competency"],
+            ["mastery", "Mastery"],
+          ].map(([key, label]) => (
+            <label key={key} className="block text-sm font-bold">
+              {label}
+              <select value={filters[key]} onChange={(e) => set({ [key]: e.target.value })} className={input}>
+                <option value="">All Steps</option>
+                <option value="yes">Reached</option>
+                <option value="no">Not Reached</option>
+              </select>
+            </label>
+          ))}
+        </div>
       ) : null}
     </>
   );
@@ -87,24 +91,24 @@ function FilterFields({ filters, setFilters, options, showAchieved }) {
 
 function query(filters, extra) {
   const qs = new URLSearchParams(extra);
-  for (const key of ["date", "minMonths", "maxMonths", "categoryId", "subCategory", "achieved"]) if (filters[key] !== "") qs.set(key, filters[key]);
+  for (const key of ["date", "minMonths", "maxMonths", "categoryId", "subCategory", "competency", "mastery"]) if (filters[key] !== "") qs.set(key, filters[key]);
   return qs.toString();
 }
 
 function ageRangeText(filters) {
   if (filters.minMonths === "" && filters.maxMonths === "") return "All ages";
   const min = filters.minMonths === "" ? 0 : Number(filters.minMonths);
-  if (filters.maxMonths === "") return `${ageLabel(min)} and up`;
-  return `${min} – ${filters.maxMonths} Months`;
+  if (filters.maxMonths === "") return `${ageLabel(min)} and up on the report date`;
+  return `${min} – ${filters.maxMonths} months on the report date`;
 }
 
 function StepTable({ categories, columns, cells }) {
   return (
-    <table className="w-full min-w-[720px] border-collapse text-sm">
+    <table className="w-full min-w-[960px] border-collapse text-sm">
       <thead>
         <tr className={`border-y-2 border-blue-200 ${NAVY}`}>
           <th className="px-3 py-2 text-left text-base font-black">Category/Goal</th>
-          {columns.map((c) => <th key={c} className="w-36 border-l border-blue-200 px-2 py-2 text-center text-xs font-black">{c}</th>)}
+          {columns.map((c) => <th key={c} className="w-28 border-l border-blue-200 px-2 py-2 text-center text-xs font-black">{c}</th>)}
         </tr>
       </thead>
       <tbody>
@@ -138,8 +142,22 @@ function CategoryRows({ cat, tone, span, cells }) {
 }
 
 function statusCell(status) {
-  const [label, cls] = STATUS[status] || ["No Data", "text-gray-400"];
-  return { value: label, className: cls };
+  const meta = SOP_STATUSES.find((s) => s.value === status);
+  if (!meta) return { value: "—", className: "text-gray-400" };
+  return { value: <span className={`inline-block min-w-[5.5rem] rounded px-2 py-0.5 text-xs font-semibold ${meta.pill}`}>{meta.label}</span> };
+}
+
+/** The child's age at a level, with the date it was checked off underneath. */
+function reachedCell(level) {
+  if (!level) return { value: "—" };
+  return {
+    value: (
+      <>
+        <span className="font-semibold">{fmt(level.years)}</span>
+        <span className="block text-[11px] text-gray-500">{new Date(level.at).toLocaleDateString("en-US")}</span>
+      </>
+    ),
+  };
 }
 
 export function MilestoneProgressReport() {
@@ -177,18 +195,19 @@ export function MilestoneProgressReport() {
           meta={[
             ["Report Date", longDate(data.date)],
             ["Age Range", ageRangeText(filters)],
-            ["Total Children", data.totalChildren],
+            ["Children in Range", data.childrenInRange],
+            ["Children Reaching a Step", data.totalChildren],
             ["World Standard", "Steps of Progression age ranges"],
           ]}
         >
           {data.categories.length ? (
             <StepTable
               categories={data.categories}
-              columns={["World Standard Average Age (years)", "Center Average Age (years)", "Difference (years)", "Status"]}
-              cells={(r) => [{ value: fmt(r.worldYears) }, { value: fmt(r.centerYears) }, { value: diff(r.difference) }, statusCell(r.status)]}
+              columns={["Center Competency (avg. years)", "Center Mastery (avg. years)", "World Standard Average Age (years)", "Difference (years)", "Status"]}
+              cells={(r) => [{ value: fmt(r.competencyYears) }, { value: fmt(r.masteryYears) }, { value: fmt(r.worldYears) }, { value: diff(r.difference) }, statusCell(r.status)]}
             />
           ) : (
-            <p className="px-6 py-8 text-center text-sm text-gray-500">No steps with minimum and maximum ages match these filters.</p>
+            <p className="px-6 py-8 text-center text-sm text-gray-500">No steps with ages match these filters.</p>
           )}
         </ReportSheet>
       )}
@@ -238,7 +257,7 @@ export function ChildStepsReport({ parent = false }) {
               .map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </label>
-        <FilterFields filters={filters} setFilters={setFilters} options={data?.filters || []} showAchieved />
+        <FilterFields filters={filters} setFilters={setFilters} options={data?.filters || []} showLevels />
       </ReportControls>
       {error ? <ReportMessage tone="red">{error}</ReportMessage> : null}
       {!childId ? (
@@ -248,25 +267,46 @@ export function ChildStepsReport({ parent = false }) {
       ) : (
         <ReportSheet
           title="Child Steps of Progression Report"
-          subtitle={`${data.child.name} vs. World Standard`}
+          subtitle="Milestone Achievement — Center and World Standard"
           copyright
           meta={[
             ["Report Date", longDate(data.date)],
             ["Child", child?.name || data.child.name],
             ["Date of Birth", longDate(data.child.birthDate)],
-            ["Age", data.child.ageYears != null ? `${data.child.ageYears.toFixed(1)} years` : "—"],
-            ["Age Range", ageRangeText(filters)],
-            ["Steps Achieved", `${data.achievedCount} of ${data.totalSteps}`],
+            ["Age at Report", data.child.ageYears != null ? `${data.child.ageYears.toFixed(1)} years` : "—"],
+            ["Center Age Range", ageRangeText(filters)],
+            ["Steps at Competency", `${data.competencyCount} of ${data.totalSteps}`],
+            ["Steps at Mastery", `${data.masteryCount} of ${data.totalSteps}`],
           ]}
         >
           {data.categories.length ? (
             <StepTable
               categories={data.categories}
-              columns={["World Standard Average Age (years)", "Age Achieved (years)", "Difference (years)", "Status"]}
-              cells={(r) => [{ value: fmt(r.worldYears) }, { value: fmt(r.childYears) }, { value: diff(r.difference) }, statusCell(r.status)]}
+              columns={[
+                "Child's Competency (years)",
+                "Center Competency (avg. years)",
+                "Child's Mastery (years)",
+                "Center Mastery (avg. years)",
+                "World Standard Average Age (years)",
+                "Difference (Center)",
+                "Difference (World)",
+                "Center Status",
+                "World Status",
+              ]}
+              cells={(r) => [
+                reachedCell(r.competency),
+                { value: fmt(r.centerCompetencyYears) },
+                reachedCell(r.mastery),
+                { value: fmt(r.centerMasteryYears) },
+                { value: fmt(r.worldYears) },
+                { value: diff(r.centerDifference) },
+                { value: diff(r.worldDifference) },
+                statusCell(r.centerStatus),
+                statusCell(r.worldStatus),
+              ]}
             />
           ) : (
-            <p className="px-6 py-8 text-center text-sm text-gray-500">No steps with minimum and maximum ages match these filters.</p>
+            <p className="px-6 py-8 text-center text-sm text-gray-500">No steps with ages match these filters.</p>
           )}
         </ReportSheet>
       )}

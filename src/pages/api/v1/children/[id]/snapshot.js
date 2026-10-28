@@ -10,7 +10,8 @@ import {
   pickChildSnapshot,
 } from "@/lib/childSnapshot";
 
-const STAFF_ROLES = ["ADMIN", "TEACHER", "COACH"];
+// Teachers only view a student's profile (client request 07-02, B34).
+const STAFF_ROLES = ["ADMIN", "COACH"];
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);

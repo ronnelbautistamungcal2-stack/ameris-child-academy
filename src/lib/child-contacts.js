@@ -15,11 +15,13 @@ export function normalizeParentContacts(value) {
       return {
         label: cleanString(row.label, 40) || `Parent ${index + 1}`,
         name: cleanString(row.name),
+        relationship: cleanString(row.relationship, 40),
         email: cleanString(row.email),
         phone: cleanString(row.phone, 40),
+        address: cleanString(row.address, 300),
       };
     })
-    .filter((item) => item.name || item.email || item.phone);
+    .filter((item) => item.name || item.email || item.phone || item.address);
 }
 
 export function normalizeEmergencyContacts(value) {
@@ -32,9 +34,17 @@ export function normalizeEmergencyContacts(value) {
         label: cleanString(row.label, 40) || `Emergency ${index + 1}`,
         name: cleanString(row.name),
         phone: cleanString(row.phone, 40),
+        address: cleanString(row.address, 300),
       };
     })
-    .filter((item) => item.name || item.phone);
+    .filter((item) => item.name || item.phone || item.address);
+}
+
+/** The single out-of-area emergency contact (Edit Child > Contacts). */
+export function normalizeOutOfAreaContact(value) {
+  const row = value && typeof value === "object" ? value : {};
+  const contact = { name: cleanString(row.name), phone: cleanString(row.phone, 40), address: cleanString(row.address, 300) };
+  return contact.name || contact.phone || contact.address ? contact : null;
 }
 
 export function formatContactLine(contact, options = {}) {

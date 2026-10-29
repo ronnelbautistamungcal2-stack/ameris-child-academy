@@ -1,4 +1,4 @@
-import { characterHighlightLabel } from "@/lib/dailyLogOptions";
+import { characterHighlightLabel, courseCorrectionSummary, ippSummary } from "@/lib/dailyLogOptions";
 import { useState } from "react";
 
 // Student Activity Log: one expandable row per Daily Log entry. Parents saw
@@ -19,6 +19,7 @@ export const ACTIVITY_TYPE_LABELS = {
   INCIDENT: "Incident",
   TOILETING: "Toileting",
   CHARACTER_HIGHLIGHT: "Character Highlight",
+  IPP: "IPP",
   OTHER: "Grade",
 };
 
@@ -64,6 +65,13 @@ export default function ActivityLogEntry({ activity: a }) {
       }
       if (a.notes) parts.push(a.notes);
       return parts.join(" | ") || null;
+    }
+    if (a.type === "BEHAVIOR" && details.kind !== "DAILY_GRADE") {
+      const summary = courseCorrectionSummary(details);
+      return [summary, a.notes].filter(Boolean).join(" | ") || null;
+    }
+    if (a.type === "IPP") {
+      return [ippSummary(details), a.notes].filter(Boolean).join(" | ") || null;
     }
     return a.notes || null;
   }
@@ -121,6 +129,7 @@ const ACTIVITY_PILL = {
   CITIZENSHIP: "bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-200",
   INCIDENT: "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-200",
   BEHAVIOR: "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-200",
+  IPP: "bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-200",
   DEFAULT: "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200",
 };
 
@@ -128,7 +137,7 @@ export const ACTIVITY_ICONS = {
   NAP: "💤", BOTTLE: "🍼", MEAL: "🍽️", SNACK: "🥨",
   DIAPER_CHANGE: "🧷", ACTIVITY: "🎨", CITIZENSHIP: "⭐",
   ACCOMPLISHMENT: "🏆", INCIDENT: "⚠️", BEHAVIOR: "📋",
-  TASK_CHECKLIST: "✅", TOILETING: "🚽", CHARACTER_HIGHLIGHT: "🏅", OTHER: "📝",
+  TASK_CHECKLIST: "✅", TOILETING: "🚽", CHARACTER_HIGHLIGHT: "🏅", IPP: "🧭", OTHER: "📝",
 };
 
 function ActivityIcon({ type }) {

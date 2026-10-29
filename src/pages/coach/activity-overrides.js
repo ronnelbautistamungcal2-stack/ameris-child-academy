@@ -1,7 +1,10 @@
 import CoachLayout from "@/components/coach/CoachLayout";
+import DailyLogForm from "@/components/dailyLog/DailyLogForm";
+import { courseCorrectionSummary, ippSummary } from "@/lib/dailyLogOptions";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useRouter } from "next/router";
+import { useSession } from "next-auth/react";
 import useChecklistLinkVisit from "@/hooks/useChecklistLinkVisit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -361,6 +364,8 @@ function buildFormFromActivity(activity) {
       behaviorType: details.behaviorType || "OTHER",
       behaviorLevel: details.behaviorLevel || "1",
       ipp: !!details.ipp,
+      // Entries made from the Character Guide keep their guide choice.
+      guideSummary: details.behaviorId ? courseCorrectionSummary(details) : "",
       toiletingType: details.toiletingType || "SUCCESS",
       characterHighlightType: details.characterHighlightType || "BROTHERS_KEEPER",
     },
@@ -546,8 +551,11 @@ function formatActivitySummary(activity) {
   if (activity?.type === "DIAPER_CHANGE") {
     return `${details.diaperType || "Routine"}${mediaCount ? ` | ${mediaCount} photo${mediaCount === 1 ? "" : "s"}` : ""}`;
   }
+  if (activity?.type === "IPP") return ippSummary(details);
   if (activity?.type === "BEHAVIOR") {
-    const parts = [details.behaviorType || "", details.behaviorLevel ? `Level ${details.behaviorLevel}` : ""].filter(Boolean);
+    const parts = details.behaviorId
+      ? [courseCorrectionSummary(details)]
+      : [details.behaviorType || "", details.behaviorLevel ? `Level ${details.behaviorLevel}` : ""].filter(Boolean);
     if (mediaCount) parts.push(`${mediaCount} photo${mediaCount === 1 ? "" : "s"}`);
     return parts.join(" | ") || "Course Correction entry";
   }
@@ -702,6 +710,9 @@ async function uploadFilesToUrls(files) {
 export default function AdminActivityOverrides() {
   const router = useRouter();
   useChecklistLinkVisit();
+  const { data: session } = useSession();
+  // Admins can still add a log for an earlier day; everyone else logs today.
+  const isAdmin = session?.user?.role === "ADMIN";
   const [centers, setCenters] = useState([]);
   const [children, setChildren] = useState([]);
   const [classrooms, setClassrooms] = useState([]);
@@ -1178,136 +1189,114 @@ export default function AdminActivityOverrides() {
   }
 
   return (
-    <CoachLayout title="Log Activity">
-      <Panel style={heroPanelStyle}>
-        <div style={{ display: "grid", gap: 18 }}>
-          <div style={heroTopRowStyle}>
-            <div style={heroIdentityStyle}>
-              <div style={heroIconStyle}>AL</div>
-              <div>
-                <div style={heroEyebrowStyle}>Admin Activity Log</div>
-                <h2 style={{ margin: "6px 0 0", fontSize: 24, fontWeight: 800, color: "var(--admin-text)" }}>
-                  {childLabel || selectedCenterName || "Center activity control"}
-                </h2>
-                <p style={{ margin: "10px 0 0", maxWidth: 700, fontSize: 13, lineHeight: 1.65, color: "var(--admin-text-muted)" }}>
-                  Review logs, correct timestamps, and create admin entries using the same structured logging flow as teachers.
-                </p>
-              </div>
-            </div>
-            <div style={simpleHeaderMetaStyle}>
-              <HeroPill tone="indigo">{selectedCenterName || "Select a center"}</HeroPill>
-              <HeroPill tone={childLabel ? "emerald" : "slate"}>{childLabel || "Center-wide review"}</HeroPill>
-            </div>
-          </div>
-          <div style={heroMetricsGridStyle}>
-            <div style={heroMetricCardStyle}>
-              <div style={heroMetricLabelStyle}>Logs in view</div>
-              <div style={heroMetricValueStyle}>{activityStats.total}</div>
-              <div style={heroMetricHintStyle}>Current scope</div>
-            </div>
-            <div style={heroMetricCardStyle}>
-              <div style={heroMetricLabelStyle}>With Photos</div>
-              <div style={heroMetricValueStyle}>{activityStats.withPhotos}</div>
-              <div style={heroMetricHintStyle}>Media attached</div>
-            </div>
-            <div style={heroMetricCardStyle}>
-              <div style={heroMetricLabelStyle}>Assessments</div>
-              <div style={heroMetricValueStyle}>{activityStats.assessments}</div>
-              <div style={heroMetricHintStyle}>Citizenship Grade or domain scoring</div>
-            </div>
-          </div>
-        </div>
-      </Panel>
+    <CoachLayout title="Daily Log">
+      {/* Same logging as the teacher Daily Log; children in a dropdown. */}
+      <DailyLogForm childPicker="dropdown" onLogged={loadActivities} />
 
       {error ? <AlertBanner kind="error" message={error} onDismiss={dismissError} /> : null}
       {success ? <AlertBanner kind="success" message={success} onDismiss={dismissSuccess} /> : null}
 
-      <Panel>
-        <div style={scopeLayoutStyle}>
-          <div style={{ minWidth: 0 }}>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Scope</div>
-              <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.6, color: "var(--admin-text-muted)" }}>
-                Choose a center and optionally narrow the page to one child before creating a log.
+      {isAdmin ? (
+        <details style={{ marginTop: 16 }}>
+          <summary style={{ cursor: "pointer", fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>Backdated entry (admin)</summary>
+          <div style={{ marginTop: 12 }}>
+          <Panel>
+            <div style={scopeLayoutStyle}>
+              <div style={{ minWidth: 0 }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Scope</div>
+                  <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.6, color: "var(--admin-text-muted)" }}>
+                    Choose a center and optionally narrow the page to one child before creating a log.
+                  </div>
+                </div>
+                <div style={{ ...responsiveTwoColStyle, marginTop: 14 }}>
+                  <Field label="Center" style={{ minWidth: 0 }}>
+                    <select value={centerId} onChange={(event) => handleCenterChange(event.target.value)} style={inputStyle}>
+                      <option value="">Select a center...</option>
+                      {centers.map((center) => (
+                        <option key={center.id} value={center.id}>
+                          {center.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Child" style={{ minWidth: 0 }}>
+                    <select
+                      value={childId}
+                      onChange={(event) => handleChildChange(event.target.value)}
+                      style={{ ...inputStyle, opacity: centerId ? 1 : 0.55 }}
+                      disabled={!centerId}
+                    >
+                      <option value="">{centerId ? "All children in this center" : "Select a center first"}</option>
+                      {children
+                        .slice()
+                        .sort((left, right) => fullChildName(left).localeCompare(fullChildName(right)))
+                        .map((child) => (
+                          <option key={child.id} value={child.id}>
+                            {fullChildName(child)}
+                          </option>
+                        ))}
+                    </select>
+                  </Field>
+                </div>
+              </div>
+              <div style={scopeSummaryCardStyle}>
+                <div style={scopeSummaryLabelStyle}>Current view</div>
+                <div style={scopeSummaryTitleStyle}>
+                  {childLabel || selectedCenterName || "Center activity control"}
+                </div>
+                <div style={scopeNoteStyle}>
+                  {childLabel
+                    ? `New entries will attach to ${childLabel}.`
+                    : selectedCenterName
+                      ? "The list shows every child log in this center. Select a child to create a new entry."
+                      : "Pick a center first so logs and children stay aligned."}
+                </div>
+                <div style={{ ...simpleHeaderMetaStyle, marginTop: 12 }}>
+                  <HeroPill tone="sky">{activityStats.total} logs</HeroPill>
+                  <HeroPill tone="emerald">{activityStats.withPhotos} with photos</HeroPill>
+                  <HeroPill tone="slate">{childLabel ? "Entry enabled" : "Review mode"}</HeroPill>
+                </div>
               </div>
             </div>
-            <div style={{ ...responsiveTwoColStyle, marginTop: 14 }}>
-              <Field label="Center" style={{ minWidth: 0 }}>
-                <select value={centerId} onChange={(event) => handleCenterChange(event.target.value)} style={inputStyle}>
-                  <option value="">Select a center...</option>
-                  {centers.map((center) => (
-                    <option key={center.id} value={center.id}>
-                      {center.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Child" style={{ minWidth: 0 }}>
-                <select
-                  value={childId}
-                  onChange={(event) => handleChildChange(event.target.value)}
-                  style={{ ...inputStyle, opacity: centerId ? 1 : 0.55 }}
-                  disabled={!centerId}
-                >
-                  <option value="">{centerId ? "All children in this center" : "Select a center first"}</option>
-                  {children
-                    .slice()
-                    .sort((left, right) => fullChildName(left).localeCompare(fullChildName(right)))
-                    .map((child) => (
-                      <option key={child.id} value={child.id}>
-                        {fullChildName(child)}
-                      </option>
-                    ))}
-                </select>
-              </Field>
-            </div>
-          </div>
-          <div style={scopeSummaryCardStyle}>
-            <div style={scopeSummaryLabelStyle}>Current view</div>
-            <div style={scopeSummaryTitleStyle}>
-              {childLabel || selectedCenterName || "Center activity control"}
-            </div>
-            <div style={scopeNoteStyle}>
-              {childLabel
-                ? `New entries will attach to ${childLabel}.`
-                : selectedCenterName
-                  ? "The list shows every child log in this center. Select a child to create a new entry."
-                  : "Pick a center first so logs and children stay aligned."}
-            </div>
-            <div style={{ ...simpleHeaderMetaStyle, marginTop: 12 }}>
-              <HeroPill tone="sky">{activityStats.total} logs</HeroPill>
-              <HeroPill tone="emerald">{activityStats.withPhotos} with photos</HeroPill>
-              <HeroPill tone="slate">{childLabel ? "Entry enabled" : "Review mode"}</HeroPill>
-            </div>
-          </div>
-        </div>
-      </Panel>
+          </Panel>
 
-      {childId ? (
-        <Panel style={{ marginTop: 16 }}>
-          <ActivityComposer
-            title="New Activity Log"
-            description="This form matches the teacher flow, with admin control over the full entry date and time."
-            childLabel={childLabel}
-            form={createForm}
-            onTypeChange={(nextType) => setCreateForm((current) => applyTypeChange(current, nextType))}
-            onFormFieldChange={(key, value) => setFormField(setCreateForm, key, value)}
-            onNestedFieldChange={(field, value) => setNestedField(setCreateForm, field, value)}
-            onUploadPhotos={(files) => handlePhotoUpload(files, "create")}
-            onRemoveMedia={(index) => removeMedia(setCreateForm, index)}
-            photoInputRef={createPhotoInputRef}
-            uploadingPhotos={uploadingCreatePhotos}
-            busy={savingCreate}
-            onSubmit={createActivity}
-            submitLabel="Create Log"
-          />
-        </Panel>
+          {childId ? (
+            <Panel style={{ marginTop: 16 }}>
+              <ActivityComposer
+                title="New Activity Log"
+                description="This form matches the teacher flow, with admin control over the full entry date and time."
+                childLabel={childLabel}
+                form={createForm}
+                onTypeChange={(nextType) => setCreateForm((current) => applyTypeChange(current, nextType))}
+                onFormFieldChange={(key, value) => setFormField(setCreateForm, key, value)}
+                onNestedFieldChange={(field, value) => setNestedField(setCreateForm, field, value)}
+                onUploadPhotos={(files) => handlePhotoUpload(files, "create")}
+                onRemoveMedia={(index) => removeMedia(setCreateForm, index)}
+                photoInputRef={createPhotoInputRef}
+                uploadingPhotos={uploadingCreatePhotos}
+                busy={savingCreate}
+                onSubmit={createActivity}
+                submitLabel="Create Log"
+              />
+            </Panel>
+          ) : null}
+          </div>
+        </details>
       ) : null}
 
       <Panel style={{ marginTop: 16 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <span style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Activity Logs</span>
+            <select value={centerId} onChange={(event) => handleCenterChange(event.target.value)} aria-label="Activity logs center" style={{ ...inputStyle, width: "auto", minWidth: 200 }}>
+              <option value="">Select a center...</option>
+              {centers.map((center) => (
+                <option key={center.id} value={center.id}>
+                  {center.name}
+                </option>
+              ))}
+            </select>
             {activities.length ? (
               <span style={countChipStyle}>
                 {filteredActivities.length}
@@ -1893,7 +1882,11 @@ function ActivityComposer({
                   </Field>
                 ) : null}
 
-                {supportsBehaviorDetails(form.type) ? (
+                {supportsBehaviorDetails(form.type) && form.fields.guideSummary ? (
+                  <Field label="Character Guide" style={{ minWidth: 0, gridColumn: "1 / -1" }}>
+                    <div style={{ fontSize: 13, color: "var(--admin-text)" }}>{form.fields.guideSummary}</div>
+                  </Field>
+                ) : supportsBehaviorDetails(form.type) ? (
                   <>
                     <Field label="Behavior type" style={{ minWidth: 0 }}>
                       <select

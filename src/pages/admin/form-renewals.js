@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import FormLibraryPanel from "@/components/admin/FormLibraryPanel";
 import { Modal } from "@/components/training/trainingUi";
 import Skeleton from "@/components/ui/Skeleton";
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
@@ -8,7 +9,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 // Admin Form Renewals (client mockups 36-02/03): each child's renewing forms
 // with expiration, days until due, status and a note; Add Form puts a new
 // form on the parents' Forms & Renewals page; a sent form opens with its
-// e-signature.
+// e-signature. The Form Library tab manages every form template (family,
+// child, age group, staff).
 
 const NAVY = "text-[#0b2a5b] dark:text-blue-100";
 const control = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800";
@@ -53,6 +55,8 @@ export default function FormRenewals() {
   const [error, setError] = useState("");
   const [adding, setAdding] = useState(false);
   const [viewing, setViewing] = useState("");
+  const [view, setView] = useState("renewals");
+  const [success, setSuccess] = useState("");
 
   useSyncedCenterId(centerId, setCenterId, centers);
 
@@ -115,10 +119,38 @@ export default function FormRenewals() {
               <option value="">All Centers</option>
               {centers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
-            <button type="button" onClick={() => setAdding(true)} className="rounded-lg bg-[#0b2a5b] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#123a7a]">+ Add Form</button>
+            {view === "renewals" ? (
+              <button type="button" onClick={() => setAdding(true)} className="rounded-lg bg-[#0b2a5b] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#123a7a]">+ Add Form</button>
+            ) : null}
           </div>
         </div>
+        <div className="flex gap-6 border-b border-gray-200 text-sm font-semibold dark:border-gray-700">
+          {[
+            ["renewals", "Renewals"],
+            ["library", "Form Library"],
+          ].map(([key, text]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                setView(key);
+                setError("");
+                setSuccess("");
+              }}
+              aria-pressed={view === key}
+              className={`-mb-px border-b-2 pb-2 ${view === key ? "border-[#0b2a5b] text-[#0b2a5b] dark:border-blue-200 dark:text-blue-100" : "border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400"}`}
+            >
+              {text}
+            </button>
+          ))}
+        </div>
         {error ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+        {success ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{success}</div> : null}
+
+        {view === "library" ? (
+          <FormLibraryPanel onError={setError} onSuccess={setSuccess} />
+        ) : (
+        <>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
@@ -217,6 +249,8 @@ export default function FormRenewals() {
               </span>
             </div>
           </div>
+        )}
+        </>
         )}
       </div>
 

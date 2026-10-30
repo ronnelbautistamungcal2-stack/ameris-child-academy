@@ -6,6 +6,8 @@ import {
   teacherCanAccessChild,
 } from "@/lib/teacherScope";
 import { isChildLinkedToParent } from "@/lib/child-parent-links";
+import { displayName } from "@/lib/ipp";
+import { IPP_MANAGER_ROLES, loadIppForUser } from "@/lib/ippAccess";
 
 function sameCalendarDay(left, right) {
   return (
@@ -78,17 +80,23 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    // Create activity log (teachers/admins only)
-    if (!["ADMIN", "TEACHER"].includes(session.user.role)) {
+    // Create activity log (teachers, coaches at their centers, admins)
+    if (!["ADMIN", "TEACHER", "COACH"].includes(session.user.role)) {
       return res
         .status(403)
-        .json({ error: "Only teachers and admins can log activities" });
+        .json({ error: "Only teachers, coaches and admins can log activities" });
     }
 
     const { childId: cId, type: actType, details, notes, createdAt } = req.body;
 
     if (!cId || !actType) {
       return res.status(400).json({ error: "childId and type required" });
+    }
+
+    if (session.user.role === "COACH") {
+      const childRecord = await prisma.child.findUnique({ where: { id: cId }, select: { centerId: true } });
+      if (!childRecord) return res.status(404).json({ error: "Child not found" });
+      if (!(await hasAccessToCenter(session.user.id, childRecord.centerId))) return res.status(403).json({ error: "Forbidden" });
     }
 
     if (session.user.role === "TEACHER") {
@@ -127,6 +135,28 @@ export default async function handler(req, res) {
 
     const isBackdated = !sameCalendarDay(logDate, now);
 
+    // IPP entries from the Daily Log (client 2026-10-02 sheet 35): a request
+    // for a plan, or a log against the child's current plan.
+    let ippPlan = null;
+    if (actType === "IPP") {
+      const kind = details?.kind;
+      const text = (key) => String(details?.[key] || "").trim();
+      if (kind === "REQUEST") {
+        if (!text("primaryConcern")) return res.status(400).json({ error: "Enter the primary concern" });
+        if (!text("areaOfConcern")) return res.status(400).json({ error: "Choose the area of concern" });
+      } else if (kind === "LOG") {
+        const access = await loadIppForUser(session.user, details.planId, { goals: { select: { id: true, title: true } } });
+        if (access.error) return res.status(access.status).json({ error: access.error });
+        if (!access.canLog) return res.status(403).json({ error: "Only staff can add to the IPP log" });
+        if (access.plan.childId !== cId) return res.status(400).json({ error: "That plan belongs to another child" });
+        if (details.goalId && !access.plan.goals.some((g) => g.id === details.goalId)) return res.status(400).json({ error: "That goal is not on this plan" });
+        if (!text("tactic")) return res.status(400).json({ error: "Enter the tactic used" });
+        ippPlan = access.plan;
+      } else {
+        return res.status(400).json({ error: "Choose Request IPP or Log IPP" });
+      }
+    }
+
     const activity = await prisma.activityLog.create({
       data: {
         childId: cId,
@@ -142,6 +172,27 @@ export default async function handler(req, res) {
 
     // Get child's center to emit socket event
     const child = await prisma.child.findUnique({ where: { id: cId } });
+    if (ippPlan) {
+      // The entry also goes on the plan's own IPP Log.
+      const pad = (n) => String(n).padStart(2, "0");
+      const day = `${logDate.getFullYear()}-${pad(logDate.getMonth() + 1)}-${pad(logDate.getDate())}`;
+      const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true, email: true } });
+      await prisma.behaviorPlanLog.create({
+        data: {
+          planId: ippPlan.id,
+          goalId: details.goalId || null,
+          date: new Date(`${day}T00:00:00.000Z`),
+          tactic: String(details.tactic).trim().slice(0, 200),
+          tacticDetail: details.time ? `Logged at ${details.time} from the Daily Log` : null,
+          observation: String(details.observation || "").trim().slice(0, 1000) || null,
+          enteredById: session.user.id,
+          enteredByName: displayName(me),
+        },
+      });
+    }
+    if (child && actType === "IPP" && details.kind === "REQUEST") {
+      await notifyIppRequest(child, activity, session.user);
+    }
     if (child) {
       emitActivityLog(child.centerId, activity);
 
@@ -172,4 +223,34 @@ export default async function handler(req, res) {
 
   res.setHeader("Allow", ["GET", "POST"]);
   res.status(405).end();
+}
+
+/**
+ * Request IPP: tell the people who manage plans (admins, and the center's
+ * coaches and Student Support) that a teacher asked for one.
+ */
+async function notifyIppRequest(child, activity, user) {
+  const childName = `${child.firstName || ""} ${child.lastName || ""}`.trim() || "A child";
+  const recipients = await prisma.user.findMany({
+    where: {
+      OR: [
+        { role: "ADMIN" },
+        { centers: { some: { centerId: child.centerId, role: { in: IPP_MANAGER_ROLES } } } },
+      ],
+    },
+    select: { id: true, role: true },
+  }).catch(() => []);
+  const notifications = recipients
+    .filter((r) => r.id !== user.id)
+    .map((r) => ({
+      recipientId: r.id,
+      type: "COMPLIANCE_ALERT",
+      title: "IPP Requested",
+      body: `${user.name || user.email || "A teacher"} requested an Individual Progress Plan for ${childName}: ${activity.details?.primaryConcern || ""}`.trim(),
+      link: r.role === "STUDENT_SUPPORT" ? `/staff/student-support/progress-plans/new?childId=${child.id}` : `/coach/activity-overrides?childId=${child.id}`,
+      metadata: { activityId: activity.id, childId: child.id },
+    }));
+  if (!notifications.length) return;
+  await prisma.notification.createMany({ data: notifications, skipDuplicates: true }).catch(() => {});
+  notifications.forEach((n) => emitNotification(n.recipientId, n));
 }

@@ -33,6 +33,7 @@ enum ActivityType {
   INCIDENT
   TOILETING
   CHARACTER_HIGHLIGHT
+  IPP
   OTHER
 }
 
@@ -2274,6 +2275,16 @@ model ParentInvolvementActivity {
   endsAt       DateTime?
   // Volunteer slots; null means no limit (shown as "—").
   capacity     Int?
+  // Event details (client mockup 16-05): ACTIVE events show to parents,
+  // PLANNING ones only to staff. audience: ALL, INFANT, TODDLER, PRESCHOOL,
+  // CLASSROOMS (then classRoomIds). roles: [{ id, name, description, needed }].
+  location     String?
+  status       String              @default("ACTIVE")
+  audience     String[]            @default(["ALL"])
+  classRoomIds String[]            @default([])
+  roles        Json                @default("[]")
+  details      String?
+  createdById  String?
   sortOrder    Int                 @default(0)
   active       Boolean             @default(true)
   createdAt    DateTime            @default(now())
@@ -2295,6 +2306,13 @@ model ParentInvolvement {
   children   Child[]                   @relation("ParentInvolvementChildren")
   // LOG = time already given, SIGNUP = a volunteer slot the parent committed to.
   kind       String                    @default("LOG")
+  // Volunteer role picked when signing up (from the activity's roles).
+  roleId     String?
+  roleName   String?
+  // { statement, signedName, signedAt, signedById } — the parent's e-signature.
+  signature  Json?
+  // Set when staff added the row on Volunteer Tracking.
+  enteredById String?
   notes      String?
   occurredAt DateTime                  @default(now())
   endedAt    DateTime?
@@ -2542,4 +2560,36 @@ model TimeSheetAudit {
 
   @@index([kind, childId, day])
   @@index([kind, userId, day])
+}
+
+// Character Guide (client mockups 40-01..13): behavior categories and the
+// decision tree for each behavior. A Course Correction tree branches by the
+// reason for the behavior, then lists the steps for each offense; a
+// Character Highlight tree branches by trait with a praise prompt and reward
+// options. The tree itself is JSON (see src/lib/characterGuide.js).
+model CharacterCategory {
+  id          String              @id @default(uuid())
+  name        String              @unique
+  description String?
+  sortOrder   Int                 @default(0)
+  behaviors   CharacterBehavior[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+}
+
+model CharacterBehavior {
+  id          String            @id @default(uuid())
+  category    CharacterCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  categoryId  String
+  name        String
+  type        String // COURSE_CORRECTION | CHARACTER_HIGHLIGHT
+  level       Int               @default(1)
+  description String
+  tree        Json
+  updatedById String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([categoryId])
+  @@index([type])
 }

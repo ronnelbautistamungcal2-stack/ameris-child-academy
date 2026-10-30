@@ -7,14 +7,18 @@ const PHOTO_PATH = path.resolve(__dirname, "../../public/icons/icon-192.png");
 async function selectScope(page) {
   await page.goto("/coach/activity-overrides");
   await waitForLoadingDone(page);
-  await expect(page.getByText("Admin Activity Log")).toBeVisible();
-  const centerSelect = page.getByRole("combobox", { name: "Center", exact: true });
-  const childSelect = page.getByRole("combobox", { name: "Child", exact: true });
+  // Since 7c the page opens with the teacher Daily Log form; the admin's
+  // backdated-entry tools sit in their own section.
+  const backdated = page.locator("details").filter({ hasText: "Backdated entry (admin)" });
+  await backdated.locator("summary").click();
+  const centerSelect = backdated.getByRole("combobox", { name: "Center", exact: true });
+  const childSelect = backdated.getByRole("combobox", { name: "Child", exact: true });
   await expect(centerSelect).toBeEnabled();
   await centerSelect.selectOption({ label: "Demo Center" });
   await expect(childSelect).toBeEnabled();
   await childSelect.selectOption({ label: "Child One" });
   await expect(page.getByRole("button", { name: "Create Log" })).toBeVisible();
+  return backdated;
 }
 
 async function openChildDrawer(page) {
@@ -47,7 +51,7 @@ test.describe("Admin activity overrides", () => {
     const updatedNote = `${note} updated`;
     const createButton = page.getByRole("button", { name: "Create Log" });
 
-    await selectScope(page);
+    const scope = await selectScope(page);
 
     await page.route("**/api/v1/uploads", async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 800));
@@ -59,9 +63,9 @@ test.describe("Admin activity overrides", () => {
     const pad = (value) => String(value).padStart(2, "0");
     const dateTime = `${backdated.getFullYear()}-${pad(backdated.getMonth() + 1)}-${pad(backdated.getDate())}T09:15`;
 
-    await page.locator('input[type="datetime-local"]').first().fill(dateTime);
-    await page.getByLabel("Description").fill(note);
-    await page.getByLabel("Activity photos").setInputFiles(PHOTO_PATH);
+    await scope.locator('input[type="datetime-local"]').first().fill(dateTime);
+    await scope.getByLabel("Description").fill(note);
+    await scope.getByLabel("Activity photos").setInputFiles(PHOTO_PATH);
 
     await expect(page.getByText("Photos are still uploading. Save will unlock when the upload finishes.")).toBeVisible();
     await expect(createButton).toBeDisabled();
@@ -107,22 +111,22 @@ test.describe("Admin activity overrides", () => {
   test("shows inline validation before saving invalid override data", async ({ page }) => {
     const createButton = page.getByRole("button", { name: "Create Log" });
 
-    await selectScope(page);
+    const scope = await selectScope(page);
 
-    await page.getByRole("button", { name: "Nap" }).click();
-    await page.getByLabel("Extra Details JSON").fill("[]");
+    await scope.getByRole("button", { name: "Nap" }).click();
+    await scope.getByLabel("Extra Details JSON").fill("[]");
 
     await expect(page.getByText("Extra details must be a JSON object.")).toBeVisible();
     await expect(createButton).toBeDisabled();
 
-    await page.getByLabel("Extra Details JSON").fill("");
-    await page.getByLabel("Start time").fill("11:00");
-    await page.getByLabel("End time").fill("09:00");
+    await scope.getByLabel("Extra Details JSON").fill("");
+    await scope.getByLabel("Start time").fill("11:00");
+    await scope.getByLabel("End time").fill("09:00");
 
     await expect(page.getByText("Nap end time must be after the start time.")).toBeVisible();
     await expect(createButton).toBeDisabled();
 
-    await page.getByLabel("End time").fill("11:30");
+    await scope.getByLabel("End time").fill("11:30");
     await expect(page.getByText("Nap end time must be after the start time.")).toHaveCount(0);
     await expect(createButton).toBeEnabled();
   });

@@ -11,7 +11,7 @@ test.describe("Admin Form Library", () => {
   });
 
   test("form renewals page offers a renewals and a form library view", async ({ page }) => {
-    await expect(page.getByRole("heading", { name: "Form Renewals" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Form Renewals", level: 1 })).toBeVisible();
     await expect(page.getByRole("button", { name: "Renewals", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Form Library", exact: true })).toBeVisible();
   });

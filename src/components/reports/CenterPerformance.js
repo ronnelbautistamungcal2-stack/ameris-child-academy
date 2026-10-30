@@ -3,7 +3,7 @@ import StaffPerformanceTable from "@/components/reports/StaffPerformanceTable";
 import SegmentBar, { RANGE_COLORS, RANGE_TEXT } from "@/components/reports/SegmentBar";
 import { Heading, NAVY, RangePicker, card, keyOf, useRange } from "@/components/reports/reportUi";
 import { apiJson } from "@/lib/api";
-import { BEHAVIOR_TYPE_OPTIONS, CHARACTER_HIGHLIGHT_TYPE_OPTIONS } from "@/lib/dailyLogOptions";
+import { CHARACTER_HIGHLIGHT_TYPE_OPTIONS, courseCorrectionTypeOptions } from "@/lib/dailyLogOptions";
 import { SOP_STATUSES } from "@/lib/sop";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -188,9 +188,12 @@ export default function CenterPerformance() {
   const ages = useMemo(() => [...new Set(students.map((s) => ageYears(s.birthDate)).filter((a) => a != null))].sort((a, b) => a - b), [students]);
 
   const correctionBars = useMemo(() => {
-    const tally = Object.fromEntries(BEHAVIOR_TYPE_OPTIONS.map((t) => [t.value, 0]));
-    for (const e of data?.courseCorrections || []) if (corrections.inRange(e.date)) tally[e.type in tally ? e.type : "OTHER"] += 1;
-    return BEHAVIOR_TYPE_OPTIONS.map((t) => ({ label: t.label, count: tally[t.value] }));
+    // Character Guide categories that were logged, plus any older types.
+    const entries = (data?.courseCorrections || []).filter((e) => corrections.inRange(e.date));
+    const options = courseCorrectionTypeOptions([], entries);
+    const tally = Object.fromEntries(options.map((t) => [t.value, 0]));
+    for (const e of entries) tally[e.type || "OTHER"] += 1;
+    return options.map((t) => ({ label: t.label, count: tally[t.value] }));
   }, [data, corrections]);
   const highlightBars = useMemo(() => {
     const tally = Object.fromEntries(CHARACTER_HIGHLIGHT_TYPE_OPTIONS.map((t) => [t.value, 0]));

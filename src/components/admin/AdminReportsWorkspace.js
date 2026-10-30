@@ -1,3 +1,4 @@
+import { courseCorrectionSummary, ippSummary } from "@/lib/dailyLogOptions";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { isCurrentlyEnrolled, useReportFilters } from "@/components/reports/ReportFilters";
@@ -397,6 +398,7 @@ const ACTIVITY_TYPE_LABELS = {
   INCIDENT: "Incident",
   TOILETING: "Toileting",
   CHARACTER_HIGHLIGHT: "Character Highlight",
+  IPP: "IPP",
   OTHER: "Grade",
 };
 
@@ -812,6 +814,13 @@ function ActivityLogEntry({ activity: a }) {
       }
       if (a.notes) parts.push(a.notes);
       return parts.join(" | ") || null;
+    }
+    if (a.type === "BEHAVIOR" && details.kind !== "DAILY_GRADE") {
+      const summary = courseCorrectionSummary(details);
+      return [summary, a.notes].filter(Boolean).join(" | ") || null;
+    }
+    if (a.type === "IPP") {
+      return [ippSummary(details), a.notes].filter(Boolean).join(" | ") || null;
     }
     return a.notes || null;
   }
@@ -1435,7 +1444,7 @@ const CLASS_ACTIVITY_ICONS = {
   NAP: "💤", BOTTLE: "🍼", MEAL: "🍽️", SNACK: "🥨",
   DIAPER_CHANGE: "🧷", ACTIVITY: "🎨", CITIZENSHIP: "⭐",
   ACCOMPLISHMENT: "🏆", INCIDENT: "⚠️", BEHAVIOR: "📋",
-  TASK_CHECKLIST: "✅", TOILETING: "🚽", CHARACTER_HIGHLIGHT: "🌟", OTHER: "📝",
+  TASK_CHECKLIST: "✅", TOILETING: "🚽", CHARACTER_HIGHLIGHT: "🌟", IPP: "🧭", OTHER: "📝",
 };
 
 function ClassPerformanceTab({ centerId, classes, dateFrom, dateTo }) {

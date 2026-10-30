@@ -149,7 +149,7 @@ export default async function handler(req, res) {
         .filter((l) => l.type === "BEHAVIOR" && l.details?.kind !== "DAILY_GRADE")
         .map((l) => ({
           id: l.id,
-          label: behaviorTypeLabel(l.details?.behaviorType),
+          label: l.details?.behaviorName || behaviorTypeLabel(l.details?.behaviorType),
           level: Number(l.details?.behaviorLevel) || null,
           date: dayKey(l.createdAt),
           notes: l.notes || "",

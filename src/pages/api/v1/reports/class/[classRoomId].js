@@ -1,6 +1,6 @@
 import { getSession } from "@/lib/auth";
 import { findReportableClass } from "@/lib/classReportAccess";
-import { BEHAVIOR_TYPE_OPTIONS, CHARACTER_HIGHLIGHT_TYPE_OPTIONS, behaviorTypeLabel } from "@/lib/dailyLogOptions";
+import { CHARACTER_HIGHLIGHT_TYPE_OPTIONS, behaviorTypeLabel, courseCorrectionTypeOptions } from "@/lib/dailyLogOptions";
 import { CURRENT_IPP_STATUSES } from "@/lib/ipp";
 import prisma from "@/lib/prisma";
 import { averagePercent, goalStatus, levelForStatus, sopPercent } from "@/lib/sop";
@@ -131,7 +131,7 @@ export default async function handler(req, res) {
     }
     for (const l of corrections) {
       if (Number(l.details?.behaviorLevel) >= RED_FLAG_LEVEL) {
-        redFlags.push({ childId: l.childId, name: shortName(byId[l.childId]), flag: behaviorTypeLabel(l.details?.behaviorType), level: Number(l.details.behaviorLevel), date: dayKey(l.createdAt) });
+        redFlags.push({ childId: l.childId, name: shortName(byId[l.childId]), flag: l.details?.behaviorName || behaviorTypeLabel(l.details?.behaviorType), level: Number(l.details.behaviorLevel), date: dayKey(l.createdAt) });
       }
     }
 
@@ -147,7 +147,10 @@ export default async function handler(req, res) {
       citizenship: [...grades.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, g]) => ({ date, score: Math.round((g.sum / g.n) * 10) / 10 })),
-      courseCorrectionTypes: BEHAVIOR_TYPE_OPTIONS,
+      courseCorrectionTypes: courseCorrectionTypeOptions(
+        (await prisma.characterCategory.findMany({ select: { name: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] })).map((c) => c.name),
+        corrections.map((l) => ({ type: l.details?.behaviorType || "OTHER" })),
+      ),
       characterHighlightTypes: CHARACTER_HIGHLIGHT_TYPE_OPTIONS,
       courseCorrections: corrections.map((l) => ({ type: l.details?.behaviorType || "OTHER", date: dayKey(l.createdAt) })),
       characterHighlights: logs

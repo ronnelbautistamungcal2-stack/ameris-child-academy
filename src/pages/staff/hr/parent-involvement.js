@@ -1,12 +1,13 @@
+import InvolvementWorkspace from "@/components/involvement/InvolvementWorkspace";
 import StaffLayout from "@/components/staff/StaffLayout";
-import ComingSoon from "@/components/shell/ComingSoon";
 
 const ROLES = ["HR_STAFF"];
 
+// HR: same as admin without Volunteer Tracking (client sheet 16, B75).
 export default function ParentInvolvementPage() {
   return (
     <StaffLayout title="Parent Involvement" roles={ROLES}>
-      <ComingSoon title="Parent Involvement" />
+      <InvolvementWorkspace showTracking={false} />
     </StaffLayout>
   );
 }

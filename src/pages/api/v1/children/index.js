@@ -1,5 +1,5 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
-import { profileTabData } from "@/lib/childProfile";
+import { changeStamps, profileTabData } from "@/lib/childProfile";
 import prisma from "@/lib/prisma";
 import {
   attendanceByChildId,
@@ -284,6 +284,7 @@ export default async function handler(req, res) {
         ? emergencyContact.trim()
         : null);
 
+    const newTabData = profileTabData(req.body);
     const child = await prisma.$transaction(async (tx) => {
       const created = await tx.child.create({
         data: {
@@ -318,7 +319,11 @@ export default async function handler(req, res) {
             ? new Date(enrollmentEndDate)
             : null,
           // Edit Child tabs (schedule, health & safety, care plan, ...).
-          ...profileTabData(req.body),
+          ...newTabData,
+          ...changeStamps({}, {
+            allergies: "allergies" in newTabData ? newTabData.allergies : (typeof allergies === "string" && allergies.trim()) || null,
+            feedingPlan: "feedingPlan" in newTabData ? newTabData.feedingPlan : normalizeFeedingPlan(feedingPlan),
+          }),
         },
       });
 

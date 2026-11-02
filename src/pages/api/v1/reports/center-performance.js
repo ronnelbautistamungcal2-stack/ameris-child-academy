@@ -100,7 +100,8 @@ export default async function handler(req, res) {
       for (const t of timeOff.filter((x) => x.userId === m.id)) {
         for (let d = new Date(t.startDate); d <= t.endDate; d.setDate(d.getDate() + 1)) absentDays.add(dayKey(d));
       }
-      const hoursAbsence = mine.filter((s) => absentDays.has(dayKey(s.date))).reduce((sum, s) => sum + shiftHours(s), 0);
+      const missed = mine.filter((s) => absentDays.has(dayKey(s.date)));
+      const hoursAbsence = missed.reduce((sum, s) => sum + shiftHours(s), 0);
       const worked = current?.hr?.hoursWorked ?? 0;
       const role = (m.roles?.length ? m.roles : [m.role]).find((r) => STAFF_ROLES.includes(r)) || m.role;
       staff.push({
@@ -121,6 +122,8 @@ export default async function handler(req, res) {
         hoursScheduled: round1(scheduled),
         hoursAbsence: round1(hoursAbsence),
         lates: current?.hr?.lates ?? 0,
+        // Scheduled shifts missed (marked absent or on approved time off).
+        absences: missed.length,
         hrPct: scheduled > 0 ? Math.min(100, Math.round((worked / scheduled) * 100)) : null,
       });
     }

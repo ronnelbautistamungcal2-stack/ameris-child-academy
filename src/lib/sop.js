@@ -113,13 +113,15 @@ export function goalStatus(step, level, birthDate, today = new Date()) {
 export const SOP_STATUS_PERCENT = { CRITICAL: 40, AT_RISK: 60, ON_TRACK: 100, AHEAD: 110, EXCELLING: 120 };
 
 /**
- * A child's Milestones %: the average of their goals' status percentages
- * (goals: [{ step, level, category? }]). With excludeGeneral, goals in the
- * General category (what parents work on at home) are left out — used for
- * the teacher's SOP %. Null when there are no goals.
+ * A child's Milestones %: the average of the status percentages of the goals
+ * they are currently working on (client "Average SOP Calculation"
+ * 2026-11-02; goals: [{ step, level, active, category? }], inactive ones —
+ * e.g. mastered — are left out). With excludeGeneral, goals in the General
+ * category (what parents work on at home) are left out too — used for the
+ * teacher's SOP %. Null when there are no such goals.
  */
 export function sopPercent(goals, birthDate, { excludeGeneral = false, today = new Date() } = {}) {
-  const counted = goals.filter((g) => !excludeGeneral || (g.category ?? g.step?.category?.name ?? g.step?.category ?? "General") !== "General");
+  const counted = goals.filter((g) => g.active && (!excludeGeneral || (g.category ?? g.step?.category?.name ?? g.step?.category ?? "General") !== "General"));
   if (!counted.length) return null;
   const total = counted.reduce((sum, g) => sum + SOP_STATUS_PERCENT[goalStatus(g.step, g.level, birthDate, today)], 0);
   return Math.round(total / counted.length);

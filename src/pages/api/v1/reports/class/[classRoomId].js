@@ -56,7 +56,7 @@ export default async function handler(req, res) {
     const [progress, logs, plans, activity] = await Promise.all([
       prisma.progress.findMany({
         where: { childId: { in: ids }, lesson: { isStep: true }, OR: [{ active: true }, { assessedAt: { not: null } }, { status: { not: "NOT_STARTED" } }] },
-        select: { childId: true, status: true, lesson: { select: { ageYears: true, ageMonths: true, maxAgeYears: true, maxAgeMonths: true, category: { select: { name: true } } } } },
+        select: { childId: true, status: true, active: true, lesson: { select: { ageYears: true, ageMonths: true, maxAgeYears: true, maxAgeMonths: true, category: { select: { name: true } } } } },
       }),
       prisma.activityLog.findMany({
         where: {
@@ -98,26 +98,30 @@ export default async function handler(req, res) {
       }));
 
     // Milestones % (the teacher's SOP %, client 2026-10-23): each student's
-    // average goal %, General category left out, averaged over the students.
+    // average % over the goals they are working on, General category left
+    // out, averaged over the students.
     const milestonePct = averagePercent(
       children.map((c) =>
         sopPercent(
           progress
             .filter((p) => p.childId === c.id)
-            .map((p) => ({ step: p.lesson, level: levelForStatus(p.status), category: p.lesson.category?.name || "General" })),
+            .map((p) => ({ step: p.lesson, level: levelForStatus(p.status), active: p.active, category: p.lesson.category?.name || "General" })),
           c.birthDate,
           { excludeGeneral: true },
         ),
       ),
     );
 
-    // Citizenship: class average per day
+    // Citizenship: each student's grades (for the weighted class %) and the
+    // class average per day (for the chart).
+    const studentGrades = [];
     const grades = new Map();
     for (const l of logs) {
       if (l.details?.kind !== "DAILY_GRADE") continue;
       const score = Number(l.details.grade ?? l.details.domainAvg);
       if (!Number.isFinite(score)) continue;
       const key = dayKey(l.createdAt);
+      studentGrades.push({ childId: l.childId, date: key, score });
       const g = grades.get(key) || { sum: 0, n: 0 };
       grades.set(key, { sum: g.sum + score, n: g.n + 1 });
     }
@@ -147,6 +151,7 @@ export default async function handler(req, res) {
       citizenship: [...grades.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, g]) => ({ date, score: Math.round((g.sum / g.n) * 10) / 10 })),
+      citizenshipGrades: studentGrades,
       courseCorrectionTypes: courseCorrectionTypeOptions(
         (await prisma.characterCategory.findMany({ select: { name: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] })).map((c) => c.name),
         corrections.map((l) => ({ type: l.details?.behaviorType || "OTHER" })),

@@ -28,7 +28,8 @@ function mix(goals, birthDate) {
 
 /**
  * GET /api/v1/reports/student/:childId[?logDate=YYYY-MM-DD]
- * Citizenship Grade scores, Active Goals, Milestones (the Milestones % and,
+ * Citizenship Grade scores, Active Goals, Milestones (the Milestones % over
+ * the goals currently worked on in every category and,
  * per category, the status mix and the active goals with their levels, as on
  * SOP Tracking), Character Highlights and Course
  * Corrections (newest first), open IPPs and the Student Activity Log (latest

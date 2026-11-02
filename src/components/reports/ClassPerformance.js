@@ -2,6 +2,7 @@ import ActivityLogEntry from "@/components/reports/ActivityLogEntry";
 import { Heading, NAVY, RangePicker, card, useRange } from "@/components/reports/reportUi";
 import StatusMixBar from "@/components/sop/StatusMixBar";
 import { apiJson } from "@/lib/api";
+import { classCitizenshipPercent } from "@/lib/citizenship";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 
@@ -78,8 +79,9 @@ export default function ClassPerformance({ classRoomId, header = null }) {
   }, [classRoomId, logDate]);
 
   const points = useMemo(() => (data?.citizenship || []).filter((p) => citizenship.inRange(p.date)), [data, citizenship]);
-  // Average citizenship grade % for the chart's dates (grades are out of 10).
-  const citizenshipPct = points.length ? Math.round((points.reduce((sum, p) => sum + p.score, 0) / points.length) * 10) : null;
+  // Average Citizenship Grade % for the chart's dates: each student's
+  // average grade weighted (5 = 100%), averaged over the students.
+  const citizenshipPct = useMemo(() => classCitizenshipPercent((data?.citizenshipGrades || []).filter((g) => citizenship.inRange(g.date))), [data, citizenship]);
   const correctionBars = useMemo(() => (data ? counts(data.courseCorrections, data.courseCorrectionTypes, corrections.inRange) : []), [data, corrections]);
   const highlightBars = useMemo(() => (data ? counts(data.characterHighlights, data.characterHighlightTypes, highlights.inRange) : []), [data, highlights]);
   // Allergies always count; a level 3+ course correction counts inside the
@@ -103,7 +105,11 @@ export default function ClassPerformance({ classRoomId, header = null }) {
         <section className={card}>
           <div className="flex items-center gap-3">
             <Heading icon={"⭐"}>Citizenship Grade</Heading>
-            {citizenshipPct != null ? <span className={`mb-3 text-2xl font-black ${NAVY}`}>{citizenshipPct}%</span> : null}
+            {citizenshipPct != null ? (
+              <span className={`mb-3 text-2xl font-black ${NAVY}`} title="Average citizenship grade % for these dates" data-testid="class-citizenship-percent">
+                {citizenshipPct}%
+              </span>
+            ) : null}
           </div>
           <RangePicker {...citizenship} label="Citizenship Grade" />
           {points.length ? <CitizenshipChart points={points} /> : <p className="py-6 text-center text-sm text-gray-500">No citizenship grades in these dates.</p>}

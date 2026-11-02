@@ -139,6 +139,21 @@ export function redFlags(child, openPlans = []) {
 
 const has = (body, key) => Object.prototype.hasOwnProperty.call(body || {}, key);
 
+const sameJson = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+/**
+ * allergiesUpdatedAt / feedingPlanUpdatedAt for a child write (the Kitchen
+ * dashboard's Allergy and Infant Feeding Updates): set when the new value
+ * (undefined = not being written) differs from the stored one and something
+ * is now or was recorded.
+ */
+export function changeStamps(before = {}, next = {}, now = new Date()) {
+  const stamps = {};
+  if (next.allergies !== undefined && (next.allergies || null) !== (before.allergies || null)) stamps.allergiesUpdatedAt = now;
+  if (next.feedingPlan !== undefined && !sameJson(next.feedingPlan, before.feedingPlan) && (next.feedingPlan || before.feedingPlan)) stamps.feedingPlanUpdatedAt = now;
+  return stamps;
+}
+
 /**
  * The Edit Child tab fields in a create/update body, ready for Prisma. Keeps
  * Child.allergies (read across the app) and Child.feedingPlan (read by the

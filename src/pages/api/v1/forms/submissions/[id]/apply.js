@@ -1,4 +1,5 @@
 import { getSession } from "@/lib/auth";
+import { changeStamps } from "@/lib/childProfile";
 import prisma from "@/lib/prisma";
 
 const ALLOWED_FIELDS = [
@@ -59,7 +60,7 @@ export default async function handler(req, res) {
   await prisma.$transaction([
     prisma.child.update({
       where: { id: submission.childId },
-      data: childUpdate,
+      data: { ...childUpdate, ...changeStamps(submission.child || {}, childUpdate) },
     }),
     prisma.formSubmission.update({
       where: { id },

@@ -1,5 +1,5 @@
 import { getSession } from "@/lib/auth";
-import { profileTabData } from "@/lib/childProfile";
+import { changeStamps, profileTabData } from "@/lib/childProfile";
 import prisma from "@/lib/prisma";
 import {
   decorateChildWithTodayAttendance,
@@ -175,9 +175,14 @@ export default async function handler(req, res) {
       }
     }
 
-    const existing = await prisma.child.findUnique({ where: { id }, select: { feedingPlan: true } });
+    const existing = await prisma.child.findUnique({ where: { id }, select: { feedingPlan: true, allergies: true } });
     if (!existing) return res.status(404).json({ error: "Child not found" });
     const tabData = profileTabData(req.body, existing);
+    const has = (key) => Object.prototype.hasOwnProperty.call(req.body, key);
+    const stamps = changeStamps(existing, {
+      allergies: "allergies" in tabData ? tabData.allergies : has("allergies") ? (typeof allergies === "string" && allergies.trim()) || null : undefined,
+      feedingPlan: "feedingPlan" in tabData ? tabData.feedingPlan : has("feedingPlan") ? normalizeFeedingPlan(feedingPlan) : undefined,
+    });
 
     const child = await prisma.$transaction(async (tx) => {
       await tx.child.update({
@@ -271,6 +276,7 @@ export default async function handler(req, res) {
             : undefined,
           // Edit Child tabs; last so the synced allergies / feeding plan win.
           ...tabData,
+          ...stamps,
         },
       });
 

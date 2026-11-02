@@ -465,6 +465,9 @@ model Child {
   infantDocuments               Json?
   otherDocuments                Json?
   feedingPlan                   Json?
+  // When the allergies / infant feeding plan last changed (Kitchen dashboard).
+  allergiesUpdatedAt            DateTime?
+  feedingPlanUpdatedAt          DateTime?
   // Edit Child tabs (client mockups 07-04..11): weekly schedule
   // { MONDAY: { attends, dropOff, pickUp }, ... }, Health & Safety
   // { allergies[], conditions[], notes, pediatrician }, the Care Plan

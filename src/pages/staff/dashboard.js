@@ -1,3 +1,4 @@
+import { HrDashboard, KitchenDashboard, StudentSupportDashboard } from "@/components/dashboard/StaffRoleDashboards";
 import StaffCalendarPanel from "@/components/staff/StaffCalendarPanel";
 import StaffLayout from "@/components/staff/StaffLayout";
 import Skeleton, { SkeletonCard } from "@/components/ui/Skeleton";
@@ -13,6 +14,7 @@ import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
 import { hasChecklistClassroomScope } from "@/lib/dailyChecklistClassrooms";
 import { groupTimeOffRequests } from "@/lib/time-off";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -40,7 +42,28 @@ function compareByUpdatedAt(left, right) {
   return rightTime - leftTime;
 }
 
+// Kitchen, HR and Student Support have their own dashboards (client mockups
+// 03-Dashboards 16, 19, 17); Other Staff keep the workspace below.
+const ROLE_DASHBOARDS = {
+  KITCHEN_STAFF: KitchenDashboard,
+  HR_STAFF: HrDashboard,
+  STUDENT_SUPPORT: StudentSupportDashboard,
+};
+
 export default function StaffDashboardPage() {
+  const { data: session, status } = useSession();
+  const RoleView = ROLE_DASHBOARDS[session?.user?.role];
+  if (status === "loading" || RoleView) {
+    return (
+      <StaffLayout title="Dashboard" shellMaxWidthClassName="max-w-[1760px]" contentMaxWidthClassName="max-w-[1440px]">
+        {RoleView ? <RoleView /> : null}
+      </StaffLayout>
+    );
+  }
+  return <OtherStaffDashboard />;
+}
+
+function OtherStaffDashboard() {
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
   const [metrics, setMetrics] = useState(null);

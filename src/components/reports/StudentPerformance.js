@@ -69,6 +69,8 @@ export default function StudentPerformance({ childId, header = null }) {
   }, [childId, logDate]);
 
   const points = useMemo(() => (data?.citizenship || []).filter((p) => citizenship.inRange(p.date)), [data, citizenship]);
+  // Average Citizenship Grade for the chart's dates: the grades / how many were recorded.
+  const citizenshipAvg = points.length ? Math.round((points.reduce((sum, p) => sum + p.score, 0) / points.length) * 10) / 10 : null;
   const highlightItems = useMemo(() => (data?.characterHighlights || []).filter((h) => highlights.inRange(h.date)), [data, highlights]);
   const correctionItems = useMemo(() => (data?.courseCorrections || []).filter((c) => corrections.inRange(c.date)), [data, corrections]);
 
@@ -89,7 +91,14 @@ export default function StudentPerformance({ childId, header = null }) {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section className={card}>
-          <Heading icon={"⭐"}>Citizenship Grade</Heading>
+          <div className="flex items-center gap-3">
+            <Heading icon={"⭐"}>Citizenship Grade</Heading>
+            {citizenshipAvg != null ? (
+              <span className={`mb-3 text-2xl font-black ${NAVY}`} title="Average citizenship grade for these dates" data-testid="citizenship-average">
+                {citizenshipAvg}
+              </span>
+            ) : null}
+          </div>
           <RangePicker {...citizenship} label="Citizenship Grade" />
           {points.length ? <CitizenshipChart points={points} /> : <p className="py-6 text-center text-sm text-gray-500">No citizenship grades in these dates.</p>}
         </section>

@@ -33,8 +33,8 @@ test.describe("Class Performance Report @api", () => {
     const walk = (await (await apiPost(request, "/api/v1/lessons", { centerId, isStep: true, title: "Walks", reference: "SP-1", categoryId: cat.id, ageYears: 1, ageMonths: 3 }, admin)).json()).id;
     const dev = await (await apiPost(request, "/api/v1/lesson-categories", { centerId, name: "Development" }, admin)).json();
     const stack = (await (await apiPost(request, "/api/v1/lessons", { centerId, isStep: true, title: "Stacks blocks", reference: "SP-2", categoryId: dev.id, ageYears: 2, ageMonths: 6 }, admin)).json()).id;
-    await apiPut(request, `/api/v1/sop/${ana}`, { mode: "assessment", levels: [{ stepId: walk, level: "MASTERY" }, { stepId: stack, level: "MASTERY" }] }, admin);
-    await apiPut(request, `/api/v1/sop/${ben}`, { mode: "assessment", levels: [{ stepId: walk, level: "NOT_STARTED" }, { stepId: stack, level: "NOT_STARTED" }] }, admin);
+    await apiPut(request, `/api/v1/sop/${ana}`, { mode: "assessment", levels: [{ stepId: walk, level: "MASTERY" }, { stepId: stack, level: "COMPETENCY" }], generate: true }, admin);
+    await apiPut(request, `/api/v1/sop/${ben}`, { mode: "assessment", levels: [{ stepId: walk, level: "NOT_STARTED" }, { stepId: stack, level: "NOT_STARTED" }], generate: true }, admin);
 
     const log = (childId, type, details, days) => apiPost(request, "/api/v1/activities", { childId, type, details, createdAt: daysAgo(days) }, admin);
     await log(ana, "OTHER", { kind: "DAILY_GRADE", grade: 8 }, 2);
@@ -62,10 +62,13 @@ test.describe("Class Performance Report @api", () => {
     // Ana mastered walking; Ben (about 20 months, walking expected at 15) is a month behind.
     expect(r.goals).toBeUndefined();
     expect(r.milestones[0]).toMatchObject({ name: "General", distribution: { CRITICAL: 50, EXCELLING: 0 } });
-    // Milestones % leaves General out: Ana mastered stacking (30 mo) ~10 months
-    // early = Excelling 120%; Ben hasn't, but isn't past 30 months = On Track 100%.
-    expect(r.milestonePct).toBe(110);
+    // Milestones % leaves General out and counts goals being worked on: Ana
+    // reached Competency on stacking (30 mo) ~10 months early = Ahead 110%
+    // (only Mastery can be Excelling); Ben hasn't, but isn't past 30 months =
+    // On Track 100%.
+    expect(r.milestonePct).toBe(105);
     expect(r.citizenship).toEqual([expect.objectContaining({ score: 7 })]);
+    expect(r.citizenshipGrades.map((g) => g.score).sort()).toEqual([6, 8]);
     expect(r.courseCorrections.map((c) => c.type).sort()).toEqual(["PHYSICAL_VIOLENCE", "RESPECT"]);
     expect(r.characterHighlights).toEqual([expect.objectContaining({ type: "BROTHERS_KEEPER" })]);
     expect(r.ipps).toEqual([expect.objectContaining({ name: "Ben T.", focusArea: "Behavior" })]);

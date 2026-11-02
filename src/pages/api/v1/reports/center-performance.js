@@ -190,14 +190,15 @@ export default async function handler(req, res) {
     });
 
     // Average SOP % (client 2026-10-23): each of the staff member's students'
-    // average goal %, General category left out, averaged over the students.
+    // average % over the goals they are working on, General category left
+    // out, averaged over the students.
     const sopByChild = Object.fromEntries(
       children.map((c) => [
         c.id,
         sopPercent(
           progress
             .filter((p) => p.childId === c.id)
-            .map((p) => ({ step: p.lesson, level: levelForStatus(p.status), category: p.lesson.category?.name || "General" })),
+            .map((p) => ({ step: p.lesson, level: levelForStatus(p.status), active: p.active, category: p.lesson.category?.name || "General" })),
           c.birthDate,
           { excludeGeneral: true },
         ),

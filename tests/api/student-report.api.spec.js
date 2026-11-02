@@ -35,12 +35,13 @@ test.describe("Student Performance Report @api", () => {
       (await (await apiPost(request, "/api/v1/lessons", { centerId, isStep: true, title, reference: ref, categoryId: cat.id, subCategory: "Gross Motor", ageYears: years, ageMonths: months }, admin)).json()).id;
     walk = await step("Walks independently", "SP-1", 1, 3); // expected 15 months: behind
     const climb = await step("Climbs on low furniture", "SP-2", 2, 0); // expected 24 months: on track
+    const run = await step("Runs", "SP-4", 1, 6); // mastered, so no longer worked on
     const dev = await (await apiPost(request, "/api/v1/lesson-categories", { centerId, name: "Development" }, admin)).json();
     devStep = (await (await apiPost(request, "/api/v1/lessons", { centerId, isStep: true, title: "Stacks blocks", reference: "SP-3", categoryId: dev.id, ageYears: 2, ageMonths: 6 }, admin)).json()).id;
     await apiPut(
       request,
       `/api/v1/sop/${childId}`,
-      { mode: "assessment", levels: [{ stepId: walk, level: "EXPOSURE" }, { stepId: climb, level: "NOT_STARTED" }, { stepId: devStep, level: "NOT_STARTED" }], generate: true },
+      { mode: "assessment", levels: [{ stepId: walk, level: "EXPOSURE" }, { stepId: climb, level: "NOT_STARTED" }, { stepId: run, level: "MASTERY" }, { stepId: devStep, level: "NOT_STARTED" }], generate: true },
       admin,
     );
 
@@ -84,12 +85,13 @@ test.describe("Student Performance Report @api", () => {
     expect(r.citizenship.map((p) => p.score)).toEqual([9, 6]);
     expect(r.activeGoals.map((g) => g.title).sort()).toEqual(["Climbs on low furniture", "Stacks blocks", "Walks independently"]);
 
-    // Walking (15 mo) not reached at ~20 mo is Critical; climbing (24 mo) and
-    // stacking (30 mo) are On Track.
+    // Walking (15 mo) not reached at ~20 mo is Critical; climbing (24 mo),
+    // running (mastered at 20 mo, expected 18) and stacking (30 mo) are On Track.
     expect(r.milestones.map((m) => m.name)).toEqual(["General", "Development"]);
-    expect(r.milestones[0]).toMatchObject({ name: "General", distribution: { CRITICAL: 50, ON_TRACK: 50 } });
+    expect(r.milestones[0]).toMatchObject({ name: "General", distribution: { CRITICAL: 33, ON_TRACK: 67 } });
     expect(r.milestones[0].goals.map((g) => g.title).sort()).toEqual(["Climbs on low furniture", "Walks independently"]);
-    // Milestones %: (40 + 100 + 100) / 3.
+    // Milestones % counts only the goals being worked on (mastered Runs is
+    // left out): (40 + 100 + 100) / 3.
     expect(r.milestonePct).toBe(80);
     expect(r.canTrack).toBe("ALL");
 

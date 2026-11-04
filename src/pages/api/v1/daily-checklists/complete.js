@@ -7,7 +7,7 @@ import { canUserBeAssignedChecklist } from "@/lib/dailyChecklistAssignees";
 import prisma from "@/lib/prisma";
 import { getTeacherClassIds } from "@/lib/teacherScope";
 import { isStaffPortalRole, STAFF_PORTAL_ROLES } from "@/lib/roles";
-import { LOG_FIRST_MESSAGE, isLogActivityLink } from "@/lib/checklistLinks";
+import { linkFirstMessage, requiresLinkVisit } from "@/lib/checklistLinks";
 
 function todayDateString() {
   const value = new Date();
@@ -223,12 +223,12 @@ export default async function handler(req, res) {
       return res.status(200).json({ undone: true });
     }
 
-    if (!forUserId && isLogActivityLink(item.directLink)) {
+    if (!forUserId && requiresLinkVisit(item.directLink)) {
       const visit = await prisma.dailyChecklistLinkVisit.findUnique({
         where: { itemId_userId_date: { itemId, userId: completedById, date: completionDate } },
       });
       if (!visit) {
-        return res.status(409).json({ error: LOG_FIRST_MESSAGE });
+        return res.status(409).json({ error: linkFirstMessage(item.directLink) });
       }
     }
 

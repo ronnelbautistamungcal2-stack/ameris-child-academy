@@ -142,6 +142,20 @@ export function ImportantNoticesCard({ notices = [], loading, actionHref = "/par
                 </span>
                 <ChevronRight className="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
               </Link>
+              {onSign ? (
+                <button
+                  type="button"
+                  onClick={() => onSign(child)}
+                  disabled={signingId === child.id}
+                  aria-label={`${child.signedIn ? "Sign out" : "Sign in"} ${child.name}`}
+                  className={
+                    "shrink-0 rounded-lg px-3 py-1.5 text-xs font-extrabold text-white shadow-sm disabled:opacity-60 " +
+                    (child.signedIn ? "bg-slate-700 hover:bg-slate-800" : "bg-emerald-600 hover:bg-emerald-700")
+                  }
+                >
+                  {signingId === child.id ? "Saving..." : child.signedIn ? "Sign Out" : "Sign In"}
+                </button>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -157,11 +171,14 @@ const AVATAR_TONES = [
   "bg-gradient-to-br from-fuchsia-500 to-purple-600",
 ];
 
+/** onSign(child) adds a Sign In / Sign Out button per child (child.signedIn). */
 export function MyChildrenCard({
   childRows = [],
   loading,
   error,
   actionHref = "/parent/children",
+  onSign,
+  signingId = "",
 }) {
   return (
     <ParentCard
@@ -192,10 +209,10 @@ export function MyChildrenCard({
       ) : (
         <ul className="divide-y divide-gray-100 dark:divide-gray-700">
           {childRows.map((child, index) => (
-            <li key={child.id}>
+            <li key={child.id} className="flex items-center gap-2">
               <Link
                 href={"/parent/children?childId=" + encodeURIComponent(child.id)}
-                className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-sky-50 dark:hover:bg-gray-700/50"
+                className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-sky-50 dark:hover:bg-gray-700/50"
               >
                 <span
                   className={

@@ -1,7 +1,7 @@
 import { Modal, NAVY, control, fileToBase64 } from "@/components/training/trainingUi";
 import { apiJson } from "@/lib/api";
 import { TRAINING_SOURCES } from "@/lib/training";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 // Record Training pop-up (client mockups 05 and 08). Staff record their own
 // training; with `staff` (coach Staff Training) it records it for the
@@ -12,7 +12,22 @@ const req = <span className="text-red-500"> *</span>;
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function RecordTrainingDialog({ centerId, staff, onClose, onSaved }) {
-  const [form, setForm] = useState({ topic: "", hours: "", nonInteractiveHours: "", interactiveHours: "", date: today(), performedBy: "", source: TRAINING_SOURCES[0], description: "" });
+  const [form, setForm] = useState({ topic: "", hours: "", nonInteractiveHours: "", interactiveHours: "", date: today(), performedBy: "", source: TRAINING_SOURCES[0], description: "", trainingItemId: "" });
+  // Optional Training Pathway: the pathway trainings in the bank, searchable.
+  const [pathways, setPathways] = useState([]);
+  const [pathwaySearch, setPathwaySearch] = useState("");
+  useEffect(() => {
+    if (!centerId) return;
+    apiJson(`/api/v1/training/pathways?centerId=${encodeURIComponent(centerId)}`)
+      .then((res) => setPathways(Array.isArray(res?.pathways) ? res.pathways : []))
+      .catch(() => setPathways([]));
+  }, [centerId]);
+  const pathwayOptions = useMemo(() => {
+    const q = pathwaySearch.trim().toLowerCase();
+    return pathways
+      .map((p) => ({ ...p, items: (p.items || []).filter((i) => !q || `${p.title || p.name || ""} ${i.title}`.toLowerCase().includes(q)) }))
+      .filter((p) => p.items.length);
+  }, [pathways, pathwaySearch]);
   const [attachment, setAttachment] = useState(null); // { url, name }
   const [allStaff, setAllStaff] = useState(false);
   const [picked, setPicked] = useState([]);
@@ -73,6 +88,7 @@ export default function RecordTrainingDialog({ centerId, staff, onClose, onSaved
           description: form.description.trim() || null,
           certificateUrl: attachment?.url || null,
           certificateFileName: attachment?.name || null,
+          trainingItemId: form.trainingItemId || null,
           ...(userIds ? { userIds } : {}),
         }),
       });
@@ -110,6 +126,29 @@ export default function RecordTrainingDialog({ centerId, staff, onClose, onSaved
           Topic{req}
           <input value={form.topic} onChange={(e) => set({ topic: e.target.value })} placeholder="Enter training topic..." className={control} />
         </label>
+        <div className={label}>
+          Training Pathway <span className="font-normal text-gray-500">(optional)</span>
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+            <input value={pathwaySearch} onChange={(e) => setPathwaySearch(e.target.value)} placeholder="Search pathways..." aria-label="Search pathways" className={control} />
+            <select
+              value={form.trainingItemId}
+              onChange={(e) => {
+                const item = pathways.flatMap((p) => p.items || []).find((i) => i.id === e.target.value);
+                set({ trainingItemId: e.target.value, ...(item && !form.topic.trim() ? { topic: item.title } : {}) });
+              }}
+              aria-label="Training Pathway"
+              className={control}
+            >
+              <option value="">Not part of a pathway</option>
+              {pathwayOptions.map((p) => (
+                <optgroup key={p.id} label={p.title || p.name}>
+                  {p.items.map((i) => <option key={i.id} value={i.id}>{i.title}</option>)}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+          {form.trainingItemId ? <span className="text-xs font-normal text-gray-500">Saving marks this training completed for everyone who attended, so it counts toward their pathway.</span> : null}
+        </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <label className={label}>
             Hours{req}

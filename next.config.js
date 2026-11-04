@@ -15,6 +15,16 @@ const nextConfig = {
     return config;
   },
 
+  // A production server only serves public/ files that existed at build time,
+  // so photos and PDFs uploaded later 404ed (client 2026-10-29: log photos,
+  // child photos, form PDFs). Anything public/ doesn't have falls through to
+  // a route that reads public/uploads at request time.
+  async rewrites() {
+    return {
+      afterFiles: [{ source: "/uploads/:name", destination: "/api/v1/uploaded-files/:name" }],
+    };
+  },
+
   async redirects() {
     return [
       // Retired parent pages: notification settings moved into Account Settings and

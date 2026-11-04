@@ -47,9 +47,11 @@ export default async function handler(req, res) {
   }
 
   const staff = await centerStaff(centerId);
+  // includeLogs=1: each person's trainings too (Staff Training report, every staff member at once).
+  const includeLogs = req.query.includeLogs === "1";
   const logs = await prisma.trainingLog.findMany({
     where: { centerId, userId: { in: staff.map((s) => s.id) }, ...(date ? { date } : {}) },
-    select: { userId: true, hours: true, nonInteractiveHours: true, interactiveHours: true },
+    ...(includeLogs ? { orderBy: { date: "asc" } } : { select: { userId: true, hours: true, nonInteractiveHours: true, interactiveHours: true } }),
   });
   const byUser = {};
   for (const l of logs) (byUser[l.userId] ||= []).push(l);
@@ -60,7 +62,9 @@ export default async function handler(req, res) {
       pictureUrl: s.pictureUrl,
       position: roleLabel(s.roles[0] || s.role),
       department: s.staffDepartment || "",
+      hireDate: s.hireDate || null,
       ...totals(byUser[s.id] || []),
+      ...(includeLogs ? { logs: (byUser[s.id] || []).map((l) => ({ id: l.id, topic: l.topic, source: l.source, date: l.date, hours: l.hours, nonInteractiveHours: l.nonInteractiveHours, interactiveHours: l.interactiveHours })) } : {}),
     })),
   );
 }

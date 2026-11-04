@@ -6,6 +6,7 @@ import { itemMatchesDate } from "@/lib/checklistSchedule";
 import { checklistVisibleToStaff, getUserChecklistRoles } from "@/lib/dailyChecklistVisibility";
 import { roleLabel, STAFF_PORTAL_ROLES } from "@/lib/roles";
 import { EMPLOYED_WHERE } from "@/lib/employment";
+import { isCenterOpenOn } from "@/lib/centerSettings";
 
 export const REVIEW_ROLES = ["TEACHER", ...STAFF_PORTAL_ROLES, "COACH"];
 
@@ -15,9 +16,14 @@ export const REVIEW_STATUSES = [
   { value: "NOT_STARTED", label: "Not Started" },
   { value: "ABSENT", label: "Absent" },
   { value: "NO_CHECKLIST", label: "No Checklist" },
+  { value: "CLOSED", label: "Center Closed" },
 ];
 
 export function dayKey(date) {
+  // new Date("2026-10-29") is UTC midnight, which is still Oct 28 on a server
+  // west of UTC; that showed the previous day's checklist (client 2026-10-29).
+  const match = typeof date === "string" && date.match(/^(\d{4}-\d{2}-\d{2})(?:$|T00:00:00(?:\.000)?Z$)/);
+  if (match) return match[1];
   const d = new Date(date);
   return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0")].join("-");
 }
@@ -105,6 +111,8 @@ export async function checklistReview(prisma, { centerId, date, userId = "" }) {
     orderBy: [{ name: "asc" }, { email: "asc" }],
   });
   const ids = members.map((m) => m.id);
+  const center = await prisma.center.findUnique({ where: { id: centerId }, select: { careSchedule: true } });
+  const closed = !isCenterOpenOn(center, key);
   const startOfDay = new Date(`${key}T00:00:00`);
   const endOfDay = new Date(startOfDay);
   endOfDay.setDate(endOfDay.getDate() + 1);
@@ -166,7 +174,7 @@ export async function checklistReview(prisma, { centerId, date, userId = "" }) {
     const updates = [...items.map((i) => i.completedAt), ...myNotes.map((n) => n.updatedAt)].filter(Boolean).map((d) => new Date(d));
     const rooms = [...new Map(lists.flatMap(roomsOf).map((r) => [r.id, r])).values()];
     const role = primaryRole(member);
-    const pct = items.length ? Math.round((done * 100) / items.length) : null;
+    const pct = items.length && !closed ? Math.round((done * 100) / items.length) : null;
     return {
       id: member.id,
       name: member.name || member.email,
@@ -185,7 +193,7 @@ export async function checklistReview(prisma, { centerId, date, userId = "" }) {
         ? [absence?.notes || (off ? `Time off${off.reason ? ` – ${off.reason}` : ""}` : "Absent")].filter(Boolean).join("; ")
         : myNotes.map((n) => n.notes).join(" · "),
       lastUpdated: updates.length ? new Date(Math.max(...updates.map((d) => d.getTime()))) : null,
-      status: absent ? "ABSENT" : !items.length ? "NO_CHECKLIST" : done === items.length ? "COMPLETE" : done ? "IN_PROGRESS" : "NOT_STARTED",
+      status: closed ? "CLOSED" : absent ? "ABSENT" : !items.length ? "NO_CHECKLIST" : done === items.length ? "COMPLETE" : done ? "IN_PROGRESS" : "NOT_STARTED",
       ...(userId ? { items } : {}),
     };
   });
@@ -212,17 +220,30 @@ export async function checklistReview(prisma, { centerId, date, userId = "" }) {
  * the days they worked (attendance that isn't Absent, else weekdays without
  * approved time off). Teachers count only the checklist they picked each day.
  */
+/**
+ * The day a range end stands for. Reports pass "YYYY-MM-DD" strings or
+ * new Date("YYYY-MM-DD") (UTC midnight), which is the evening before on a
+ * server west of UTC, so a Date at exactly UTC midnight is read as that UTC day.
+ */
+function rangeKey(value) {
+  if (typeof value === "string") return dayKey(value);
+  const d = new Date(value);
+  if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0 && d.getUTCMilliseconds() === 0) return utcKey(d);
+  return dayKey(d);
+}
+
 export async function checklistCompletionForRange(prisma, { userId, centerId, dateFrom, dateTo }) {
   const member = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, role: true, roles: true } });
   if (!member) return { completedCount: 0, assignedCount: 0, pct: null };
   const from = new Date(dateFrom);
   const to = new Date(dateTo);
+  const center = await prisma.center.findUnique({ where: { id: centerId }, select: { careSchedule: true } });
   const [checklists, classMap, choices, completions, attendance, timeOff] = await Promise.all([
     loadCenterChecklists(prisma, centerId),
     teacherClassMap(prisma, centerId, [userId]),
-    prisma.dailyChecklistChoice.findMany({ where: { userId, date: { gte: dbDay(dayKey(from)), lte: dbDay(dayKey(to)) } } }),
+    prisma.dailyChecklistChoice.findMany({ where: { userId, date: { gte: dbDay(rangeKey(dateFrom)), lte: dbDay(rangeKey(dateTo)) } } }),
     prisma.dailyChecklistCompletion.findMany({
-      where: { completedById: userId, date: { gte: dbDay(dayKey(from)), lte: dbDay(dayKey(to)) }, item: { checklist: { centerId } } },
+      where: { completedById: userId, date: { gte: dbDay(rangeKey(dateFrom)), lte: dbDay(rangeKey(dateTo)) }, item: { checklist: { centerId } } },
       select: { itemId: true, date: true },
     }),
     prisma.staffAttendance.findMany({ where: { userId, centerId, date: { gte: from, lte: to } }, select: { date: true, status: true } }),
@@ -252,6 +273,7 @@ export async function checklistCompletionForRange(prisma, { userId, centerId, da
   let assigned = 0;
   let completed = 0;
   for (const key of days) {
+    if (!isCenterOpenOn(center, key)) continue;
     const doneIds = doneByDay.get(key) || new Set();
     const lists = listsForDay({
       member,

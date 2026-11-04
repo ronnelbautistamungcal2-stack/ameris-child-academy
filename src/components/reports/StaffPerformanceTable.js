@@ -63,36 +63,39 @@ export default function StaffPerformanceTable({ staff, viewHref, children }) {
           <button type="button" onClick={() => downloadCsv(rows)} disabled={!rows.length} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{"⬇"} Export</button>
         </div>
       </div>
-      <div className="mt-3 overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
-        <table className="w-full min-w-[1200px] text-center text-sm">
-          <thead>
-            <tr className={`bg-blue-50 text-xs font-bold dark:bg-gray-800 ${NAVY}`}>
+      {/* Every column fits on screen (client request 2026-10-29): headers wrap,
+          cells are compact, and the box scrolls itself with the header pinned
+          rather than needing a page scroll to reach a sideways scrollbar. */}
+      <div className="mt-3 max-h-[70vh] overflow-auto rounded-xl border border-gray-200 dark:border-gray-700">
+        <table className="w-full text-center text-xs">
+          <thead className="sticky top-0 z-10">
+            <tr className={`bg-blue-50 text-[11px] font-bold leading-tight dark:bg-gray-800 ${NAVY}`}>
               {[...COLUMNS, "Action"].map((h, i) => (
-                <th key={h} className={`px-2 py-2 ${i < 2 ? "text-left" : ""}`}>{h}</th>
+                <th key={h} className={`px-1.5 py-2 align-bottom ${i < 2 ? "text-left" : ""}`}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {rows.map((s) => (
               <tr key={s.id} className="border-t border-gray-100 text-gray-700 dark:border-gray-800 dark:text-gray-300">
-                <td className="px-2 py-1.5 text-left font-semibold">
+                <td className="px-1.5 py-1.5 text-left font-semibold">
                   <Link href={viewHref(s)} className="text-gray-900 hover:text-blue-700 hover:underline dark:text-gray-100">{s.name}</Link>
                 </td>
-                <td className="px-2 py-1.5 text-left">{s.position}</td>
-                <td className="px-2 py-1.5"><span className={`inline-block min-w-[44px] rounded px-2 py-0.5 font-bold ${gradeTone(s.currentGrade)}`}>{num(s.currentGrade)}</span></td>
-                <td className="px-2 py-1.5"><span className={`inline-block min-w-[44px] rounded px-2 py-0.5 font-bold ${gradeTone(s.priorGrade)}`}>{num(s.priorGrade)}</span></td>
-                <td className="px-2 py-1.5">{pct(s.evaluationPct)}</td>
-                <td className="px-2 py-1.5">{pct(s.checklistPct)}</td>
-                <td className="px-2 py-1.5">{pct(s.sopPct)}</td>
-                <td className="px-2 py-1.5">{pct(s.citizenshipPct)}</td>
-                <td className="px-2 py-1.5">{s.commendations}</td>
-                <td className="px-2 py-1.5">{s.citations}</td>
-                <td className="px-2 py-1.5">{num(s.hoursWorked)}</td>
-                <td className="px-2 py-1.5">{num(s.hoursScheduled)}</td>
-                <td className="px-2 py-1.5">{num(s.hoursAbsence)}</td>
-                <td className="px-2 py-1.5">{s.lates}</td>
-                <td className="px-2 py-1.5">
-                  <Link href={viewHref(s)} className="inline-block rounded border border-blue-600 px-4 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50 dark:text-blue-300">View</Link>
+                <td className="px-1.5 py-1.5 text-left">{s.position}</td>
+                <td className="px-1.5 py-1.5"><span className={`inline-block min-w-[36px] rounded px-1.5 py-0.5 font-bold ${gradeTone(s.currentGrade)}`}>{num(s.currentGrade)}</span></td>
+                <td className="px-1.5 py-1.5"><span className={`inline-block min-w-[36px] rounded px-1.5 py-0.5 font-bold ${gradeTone(s.priorGrade)}`}>{num(s.priorGrade)}</span></td>
+                <td className="px-1.5 py-1.5">{pct(s.evaluationPct)}</td>
+                <td className="px-1.5 py-1.5">{pct(s.checklistPct)}</td>
+                <td className="px-1.5 py-1.5">{pct(s.sopPct)}</td>
+                <td className="px-1.5 py-1.5">{pct(s.citizenshipPct)}</td>
+                <td className="px-1.5 py-1.5">{s.commendations}</td>
+                <td className="px-1.5 py-1.5">{s.citations}</td>
+                <td className="px-1.5 py-1.5">{num(s.hoursWorked)}</td>
+                <td className="px-1.5 py-1.5">{num(s.hoursScheduled)}</td>
+                <td className="px-1.5 py-1.5">{num(s.hoursAbsence)}</td>
+                <td className="px-1.5 py-1.5">{s.lates}</td>
+                <td className="px-1.5 py-1.5">
+                  <Link href={viewHref(s)} className="inline-block rounded border border-blue-600 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50 dark:text-blue-300">View</Link>
                 </td>
               </tr>
             ))}

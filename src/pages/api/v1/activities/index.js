@@ -1,4 +1,5 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { sendDirectMessage } from "@/lib/directMessages";
 import prisma from "@/lib/prisma";
 import { emitActivityLog, emitNotification } from "@/lib/socket";
 import {
@@ -250,7 +251,41 @@ async function notifyIppRequest(child, activity, user) {
       link: r.role === "STUDENT_SUPPORT" ? `/staff/student-support/progress-plans/new?childId=${child.id}` : `/coach/activity-overrides?childId=${child.id}`,
       metadata: { activityId: activity.id, childId: child.id },
     }));
-  if (!notifications.length) return;
-  await prisma.notification.createMany({ data: notifications, skipDuplicates: true }).catch(() => {});
-  notifications.forEach((n) => emitNotification(n.recipientId, n));
+  if (notifications.length) {
+    await prisma.notification.createMany({ data: notifications, skipDuplicates: true }).catch(() => {});
+    notifications.forEach((n) => emitNotification(n.recipientId, n));
+  }
+
+  // It also lands as a Request in Student Support's and the coach's
+  // Messages (client request 2026-10-29): the teacher's own coach when one is
+  // assigned, else the center's coaches.
+  const [support, assignedCoaches, centerCoaches, sender] = await Promise.all([
+    prisma.user.findMany({
+      where: { centers: { some: { centerId: child.centerId } }, OR: [{ role: "STUDENT_SUPPORT" }, { roles: { has: "STUDENT_SUPPORT" } }] },
+      select: { id: true },
+    }),
+    prisma.coachTeamMember.findMany({ where: { staffId: user.id }, select: { coachId: true } }),
+    prisma.user.findMany({
+      where: { centers: { some: { centerId: child.centerId } }, OR: [{ role: "COACH" }, { roles: { has: "COACH" } }] },
+      select: { id: true },
+    }),
+    prisma.user.findUnique({ where: { id: user.id }, select: { id: true, name: true, email: true, role: true } }),
+  ]).catch(() => [[], [], [], null]);
+  if (!sender) return;
+  const coachIds = assignedCoaches.length ? assignedCoaches.map((c) => c.coachId) : centerCoaches.map((c) => c.id);
+  const message = {
+    sender,
+    centerId: child.centerId,
+    title: `IPP request: ${childName}`,
+    body: [
+      `${sender.name || sender.email || "A teacher"} is requesting an Individual Progress Plan for ${childName}.`,
+      activity.details?.primaryConcern ? `Primary concern: ${activity.details.primaryConcern}` : "",
+      activity.details?.areaOfConcern ? `Area of concern: ${activity.details.areaOfConcern}` : "",
+      activity.notes ? `Notes: ${activity.notes}` : "",
+    ].filter(Boolean).join("\n"),
+    type: "REQUEST",
+    senderRole: user.role,
+  };
+  await sendDirectMessage({ ...message, recipientIds: support.map((s) => s.id), recipientRole: "STUDENT_SUPPORT" }).catch(() => {});
+  await sendDirectMessage({ ...message, recipientIds: coachIds, recipientRole: "COACH" }).catch(() => {});
 }

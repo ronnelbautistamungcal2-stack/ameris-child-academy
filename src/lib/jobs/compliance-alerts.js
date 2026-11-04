@@ -125,7 +125,7 @@ async function runComplianceAlerts({ centerId = null, initiatedBy = "scheduler" 
       type: "COMPLIANCE_ALERT",
       title: "Compliance Alert",
       body: alertBody,
-      link: "/admin/teacher-logging-alerts",
+      link: "/admin/compliance-alerts",
       metadata: {
         alertDate: todayKey,
         centerId,

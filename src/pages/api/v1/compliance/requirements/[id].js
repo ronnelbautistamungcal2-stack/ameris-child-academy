@@ -6,8 +6,10 @@ import { serializeRequirement } from "./index";
 /**
  * PUT    /api/v1/compliance/requirements/:id { ...requirement }        edit
  * PUT    /api/v1/compliance/requirements/:id { action: "complete" }    mark it done:
- *        logs the completion and moves nextDue to the next repeat
- * PUT    /api/v1/compliance/requirements/:id { action: "undo" }        clear this cycle's completion
+ *        logs the completion, keeps this row as completed and, when it
+ *        repeats, adds a new row due on the next repeat -> { requirement, next }
+ * PUT    /api/v1/compliance/requirements/:id { action: "undo" }        reopen it and drop
+ *        the untouched next row it created -> { requirement, removedId }
  * DELETE /api/v1/compliance/requirements/:id
  * Admins only.
  */
@@ -21,27 +23,51 @@ export default async function handler(req, res) {
   if (req.method === "PUT") {
     const action = req.body?.action;
     if (action === "complete") {
-      const next = nextDueAfter(requirement.frequency, requirement.nextDue, requirement.repeatOn);
-      const updated = await prisma.$transaction(async (tx) => {
+      if (requirement.done) return res.status(200).json({ requirement: serializeRequirement(requirement), next: null });
+      const nextDue = nextDueAfter(requirement.frequency, requirement.nextDue, requirement.repeatOn);
+      const result = await prisma.$transaction(async (tx) => {
         await tx.complianceCompletion.create({ data: { requirementId: requirement.id, dueDate: requirement.nextDue, completedById: session.user.id } });
-        return tx.complianceRequirement.update({
+        const done = await tx.complianceRequirement.update({
           where: { id: requirement.id },
-          data: { lastCompletedAt: new Date(), ...(next ? { nextDue: next } : {}) },
+          data: { done: true, lastCompletedAt: new Date() },
         });
+        const next = nextDue
+          ? await tx.complianceRequirement.create({
+              data: {
+                centerId: requirement.centerId,
+                name: requirement.name,
+                description: requirement.description,
+                category: requirement.category,
+                frequency: requirement.frequency,
+                repeatOn: requirement.repeatOn,
+                appliesToRoles: requirement.appliesToRoles,
+                ageGroups: requirement.ageGroups,
+                notes: requirement.notes,
+                nextDue,
+                previousId: requirement.id,
+                createdById: session.user.id,
+              },
+            })
+          : null;
+        return { done, next };
       });
-      return res.status(200).json(serializeRequirement(updated));
+      return res.status(200).json({ requirement: serializeRequirement(result.done), next: result.next ? serializeRequirement(result.next) : null });
     }
     if (action === "undo") {
       const last = await prisma.complianceCompletion.findFirst({ where: { requirementId: requirement.id }, orderBy: { completedAt: "desc" } });
+      // The row this check-off created goes too, unless it was checked off itself.
+      const followUp = await prisma.complianceRequirement.findFirst({ where: { previousId: requirement.id, done: false } });
       const updated = await prisma.$transaction(async (tx) => {
         if (last) await tx.complianceCompletion.delete({ where: { id: last.id } });
+        if (followUp) await tx.complianceRequirement.delete({ where: { id: followUp.id } });
         const previous = await tx.complianceCompletion.findFirst({ where: { requirementId: requirement.id }, orderBy: { completedAt: "desc" } });
         return tx.complianceRequirement.update({
           where: { id: requirement.id },
-          data: { lastCompletedAt: previous?.completedAt || null, ...(last ? { nextDue: last.dueDate } : {}) },
+          // Rows from before the split moved nextDue forward; put it back.
+          data: { done: false, lastCompletedAt: previous?.completedAt || null, ...(last && !requirement.done ? { nextDue: last.dueDate } : {}) },
         });
       });
-      return res.status(200).json(serializeRequirement(updated));
+      return res.status(200).json({ requirement: serializeRequirement(updated), removedId: followUp?.id || null });
     }
     const parsed = parseRequirement({ ...requirement, nextDue: keyOf(new Date(requirement.nextDue)), ...(req.body || {}) });
     if (parsed.error) return res.status(400).json({ error: parsed.error });

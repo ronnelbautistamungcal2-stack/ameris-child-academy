@@ -145,7 +145,6 @@ export default function AppShell({
         "/staff",
         "/parent",
         "/coach",
-        "/subscriber",
         "/settings",
       ]);
       if (exactOnly.has(href)) return activePath === href;
@@ -881,8 +880,6 @@ function getRoleDotClass(role) {
       return "bg-amber-500";
     case "PARENT":
       return "bg-rose-500";
-    case "SUBSCRIBER":
-      return "bg-cyan-500";
     default:
       return "bg-gray-400";
   }

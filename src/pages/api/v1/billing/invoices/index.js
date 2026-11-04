@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   const month = /^\d{4}-\d{2}$/.test(String(req.query.month || "")) ? req.query.month : null;
 
   const invoices = await prisma.billingInvoice.findMany({
-    where: { centerId, ...(month ? { period: { lte: month } } : {}) },
+    where: { centerId },
     include: INVOICE_INCLUDE,
     orderBy: [{ period: "desc" }],
   });
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     parents.set(inv.parent.id, entry);
   }
   const rank = { OVERDUE: 3, DUE_SOON: 2, OPEN: 1, PAID: 0 };
-  let list = [...parents.values()].map((p) => {
+  let list = [...parents.values()].filter((p) => !month || p.invoices.some((i) => i.period === month)).map((p) => {
     const monthInvoices = month ? p.invoices.filter((i) => i.period === month) : p.invoices;
     const owing = p.invoices.filter((i) => i.balanceCents > 0);
     const worst = owing.reduce((s, i) => (rank[i.status] > rank[s] ? i.status : s), "PAID");
@@ -51,7 +51,8 @@ export default async function handler(req, res) {
       classRoomIds: [...new Set([...p.childIds].map((id) => byId[id]?.classRoomId).filter(Boolean))],
       balanceCents: owing.reduce((s, i) => s + i.balanceCents, 0),
       status: owing.length ? worst : "PAID",
-      invoices: monthInvoices.length ? monthInvoices : p.invoices.slice(0, 3),
+      // Every invoice for the parent; the Month filter narrows it (client request 2026-10-29).
+      invoices: monthInvoices,
     };
   });
 

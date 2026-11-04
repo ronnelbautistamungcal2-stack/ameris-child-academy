@@ -11,6 +11,7 @@ const INCLUDE = {
       lastName: true,
       birthDate: true,
       photoUrl: true,
+      center: { select: { name: true } },
       classRoom: {
         select: { name: true, teachers: { select: { teacher: { select: { name: true, email: true } } } } },
       },
@@ -42,6 +43,7 @@ function serialize(plan, access) {
       classroom: child.classRoom?.name || "",
       teacher: (child.classRoom?.teachers || []).map((t) => displayName(t.teacher)).join(", "),
       parent: parent ? displayName(parent) : "",
+      centerName: child.center?.name || "",
     },
     startDate: plan.startDate,
     reviewSchedule: plan.reviewSchedule || "",
@@ -99,6 +101,8 @@ function serialize(plan, access) {
  * GET /api/v1/ipp/:id   The whole plan for the plan page.
  * PUT /api/v1/ipp/:id   Edit Plan: replaces the plan fields and its goals,
  *                       strategies and supports (managers only).
+ * PATCH /api/v1/ipp/:id { status: "CLOSED" | "ACTIVE" }  Close Plan / Reopen
+ *                       (managers only, client request 2026-10-29).
  */
 export default async function handler(req, res) {
   try {
@@ -137,7 +141,17 @@ export default async function handler(req, res) {
       return res.status(200).json(serialize(fresh.plan, fresh));
     }
 
-    res.setHeader("Allow", ["GET", "PUT"]);
+    if (req.method === "PATCH") {
+      if (!access.canManage) return res.status(403).json({ error: "Only Student Support, coaches and admins can close progress plans" });
+      const status = String(req.body?.status || "").toUpperCase();
+      if (!["CLOSED", "ACTIVE"].includes(status)) return res.status(400).json({ error: "status must be CLOSED or ACTIVE" });
+      const me = await prisma.user.findUnique({ where: { id: user.id }, select: { name: true, email: true } });
+      await prisma.behaviorPlan.update({ where: { id: access.plan.id }, data: { status, updatedByName: displayName(me) } });
+      const fresh = await loadIppForUser(user, access.plan.id, INCLUDE);
+      return res.status(200).json(serialize(fresh.plan, fresh));
+    }
+
+    res.setHeader("Allow", ["GET", "PUT", "PATCH"]);
     return res.status(405).end();
   } catch (e) {
     console.error("ipp/[id] error:", e);

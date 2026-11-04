@@ -1,4 +1,5 @@
 import CoachLayout from "@/components/coach/CoachLayout";
+import ActivityPhotos from "@/components/reports/ActivityPhotos";
 import DailyLogForm from "@/components/dailyLog/DailyLogForm";
 import { courseCorrectionSummary, ippSummary } from "@/lib/dailyLogOptions";
 import { SkeletonTable } from "@/components/ui/Skeleton";
@@ -1585,6 +1586,7 @@ export default function AdminActivityOverrides() {
                             ))}
                           </div>
                         ) : null}
+                        {!isEditing ? <ActivityPhotos activity={activity} className="mt-2" /> : null}
                         {isEditing ? (
                           <div style={{ marginTop: 12 }}>
                             <ActivityComposer

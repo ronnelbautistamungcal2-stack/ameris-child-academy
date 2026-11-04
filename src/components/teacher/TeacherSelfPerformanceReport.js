@@ -1,4 +1,7 @@
 import { SkeletonTable } from "@/components/ui/Skeleton";
+import CenterPerformance from "@/components/reports/CenterPerformance";
+import ClassPerformance from "@/components/reports/ClassPerformance";
+import { useSession } from "next-auth/react";
 import { formatStaffGradeFormula } from "@/lib/staffGrade";
 import { apiJson } from "@/lib/api";
 import dynamic from "next/dynamic";
@@ -44,6 +47,16 @@ export default function TeacherSelfPerformanceReport({ centerId, centers, loadin
   const [dateTo, setDateTo] = useState(initialTo || defaultDateTo());
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
+  const { data: session } = useSession();
+  const role = session?.user?.role || "";
+  // Teachers: their own classes' Citizenship and Milestones cards.
+  const [myClasses, setMyClasses] = useState([]);
+  useEffect(() => {
+    if (role !== "TEACHER" || userId !== "me") return;
+    apiJson("/api/v1/reports/classes")
+      .then((rows) => setMyClasses(Array.isArray(rows) ? rows : []))
+      .catch(() => setMyClasses([]));
+  }, [role, userId]);
 
   const loadReport = useCallback(async () => {
     if (!centerId) return;
@@ -67,7 +80,7 @@ export default function TeacherSelfPerformanceReport({ centerId, centers, loadin
     <div className="space-y-4">
       {/* Selector + date filters */}
       <div className="rounded-2xl border border-gray-200 bg-white p-5">
-        <div className="text-sm font-extrabold text-gray-900 mb-3">Teacher Performance Report</div>
+        <div className="text-sm font-extrabold text-gray-900 mb-3">{userId === "me" ? "My Performance Report" : "Staff Performance Report"}</div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <label className="block">
             <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Center</div>
@@ -136,8 +149,12 @@ export default function TeacherSelfPerformanceReport({ centerId, centers, loadin
             </div>
           </div>
 
-          {/* Class Citizenship Grade + Milestones Grade */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Citizenship and Milestones by role (client requests 2026-10-29): teachers
+              get the Class Performance cards for their classes; coaches and Student
+              Support get the Center Performance student bars for their students; HR,
+              Kitchen and Other Staff don't have these sections. */}
+          {userId !== "me" ? (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="rounded-2xl border border-gray-200 bg-white p-5">
               <div className="text-sm font-extrabold text-gray-900">Class Citizenship Grade</div>
               <p className="mt-0.5 text-xs text-gray-500">Average citizenship score of your class over time.</p>
@@ -161,6 +178,41 @@ export default function TeacherSelfPerformanceReport({ centerId, centers, loadin
               </div>
             </div>
           </div>
+          ) : role === "TEACHER" ? (
+            myClasses.map((room) => (
+              <div key={room.id} className="space-y-2">
+                <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">{room.name}</div>
+                <ClassPerformance classRoomId={room.id} sections={["grades"]} />
+              </div>
+            ))
+          ) : role === "COACH" || role === "STUDENT_SUPPORT" ? (
+            <CenterPerformance studentsOnly fixedCenterId={centerId} />
+          ) : role === "ADMIN" ? (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="text-sm font-extrabold text-gray-900">Class Citizenship Grade</div>
+              <p className="mt-0.5 text-xs text-gray-500">Average citizenship score of your class over time.</p>
+              <div className="mt-1 text-xs text-gray-600">Class avg: <span className="font-bold text-gray-900">{report.citizenship?.avg != null ? report.citizenship.avg : "—"}</span></div>
+              <div className="mt-3">
+                <TrendLineChart
+                  data={report.citizenship?.trend || []}
+                  lines={[{ key: "score", label: "Class Avg Score", color: "#0284c7" }]}
+                  yLabel="Score"
+                />
+              </div>
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="text-sm font-extrabold text-gray-900">Milestones Grade</div>
+              <p className="mt-0.5 text-xs text-gray-500">Steps of progression completed — % passed by category.</p>
+              <div className="mt-1 text-xs text-gray-600">Avg: <span className="font-bold text-gray-900">{report.milestones?.avgPct != null ? `${report.milestones.avgPct}%` : "—"}</span></div>
+              <div className="mt-3">
+                {milestoneChartData.length > 0
+                  ? <MilestonesBarChart data={milestoneChartData} />
+                  : <div className="flex h-48 items-center justify-center text-sm text-gray-500">No milestone data.</div>}
+              </div>
+            </div>
+          </div>
+          ) : null}
 
           {/* Evaluation Grade + Checklist Grade */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

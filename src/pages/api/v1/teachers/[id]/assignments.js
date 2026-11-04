@@ -25,7 +25,7 @@ export default async function handler(req, res) {
     const { centerIds, classIds, teamMemberIds } = req.body || {};
 
     const centers = Array.isArray(centerIds) ? centerIds.filter(Boolean) : null;
-    const classes = isTeacher && Array.isArray(classIds) ? classIds.filter(Boolean) : null;
+    const classes = (isTeacher || isCoach) && Array.isArray(classIds) ? classIds.filter(Boolean) : null;
     const teamMembers = isCoach && Array.isArray(teamMemberIds)
       ? teamMemberIds.filter((tid) => Boolean(tid) && tid !== id)
       : null;

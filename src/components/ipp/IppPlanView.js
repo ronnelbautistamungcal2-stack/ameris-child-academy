@@ -24,8 +24,8 @@ export function PlanHeader({ plan }) {
     ["Next Review Date", formatDate(plan.nextReviewDate)],
   ];
   return (
-    <div className={`${card} flex flex-col gap-4 p-4 xl:flex-row xl:items-center`}>
-      <div className="flex items-center gap-4">
+    <div className={`${card} flex flex-col gap-4 p-4 lg:flex-row lg:items-center`}>
+      <div className="flex min-w-0 flex-1 items-center gap-4">
         {c.photoUrl ? (
           <img src={c.photoUrl} alt="" className="h-20 w-20 rounded-full object-cover" />
         ) : (
@@ -44,7 +44,8 @@ export function PlanHeader({ plan }) {
           {c.parent && <div>Parent/Guardian: <b>{c.parent}</b></div>}
         </div>
       </div>
-      <div className="grid flex-1 grid-cols-2 gap-3 border-gray-200 sm:grid-cols-4 xl:border-l xl:pl-4 dark:border-gray-700">
+      {/* Two columns so the labels never squeeze together (client request 2026-10-29). */}
+      <div className="grid shrink-0 grid-cols-2 gap-x-6 gap-y-3 border-gray-200 lg:w-[330px] lg:border-l lg:pl-4 dark:border-gray-700 print:w-auto print:grid-cols-4">
         {facts.map(([k, v]) => (
           <div key={k} className="text-sm">
             <div className="text-gray-500">{k}</div>

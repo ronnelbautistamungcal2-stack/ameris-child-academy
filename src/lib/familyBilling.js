@@ -5,6 +5,7 @@
 
 import { hasAccessToCenter } from "@/lib/auth";
 import { buildParentLinkedChildWhere, isChildLinkedToParent } from "@/lib/child-parent-links";
+import { normalizeChargeType } from "@/lib/chargeTypes";
 import prisma from "@/lib/prisma";
 import { emitNotification } from "@/lib/socket";
 
@@ -83,6 +84,7 @@ export function serializeInvoice(invoice) {
       childName: childName(c.child),
       description: c.description,
       amountCents: c.amountCents,
+      chargeType: c.chargeType || "OTHER",
     })),
     payments: invoice.payments.map((p) => ({ id: p.id, amountCents: p.amountCents, paidAt: p.paidAt, method: p.method || "", note: p.note || "" })),
     ...invoiceSummary(invoice),
@@ -137,7 +139,7 @@ export async function addCharges({ user, centerId, parentId, date, rows }) {
     if (!description) return { status: 400, error: "Enter a description for each charge" };
     const amountCents = parseAmountCents(row?.amount);
     if (!amountCents) return { status: 400, error: "Enter an amount for each charge" };
-    lines.push({ childId: child?.id || null, description, amountCents });
+    lines.push({ childId: child?.id || null, description, amountCents, chargeType: normalizeChargeType(row?.chargeType) });
   }
   const created = await prisma.$transaction(async (tx) => {
     const invoice = await invoiceFor(tx, { parentId, centerId, period: periodOf(date) });
@@ -169,6 +171,7 @@ export function serializeCharge(c) {
     date: dateKey(c.date),
     description: c.description,
     amountCents: c.amountCents,
+    chargeType: c.chargeType || "OTHER",
     invoiceId: c.invoiceId,
     child: c.child ? { id: c.child.id, name: childName(c.child), birthDate: c.child.birthDate, photoUrl: c.child.photoUrl, classroom: c.child.classRoom?.name || "" } : null,
     parent: c.invoice?.parent ? { id: c.invoice.parent.id, name: c.invoice.parent.name || c.invoice.parent.email } : null,

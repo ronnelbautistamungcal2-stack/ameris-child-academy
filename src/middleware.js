@@ -36,7 +36,6 @@ const ROUTE_ROLES = {
   "/staff": STAFF_PORTAL_ROLES,
   "/parent": ["PARENT"],
   "/coach": ["COACH"],
-  "/subscriber": ["SUBSCRIBER"],
 };
 
 export async function middleware(request) {

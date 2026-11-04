@@ -28,10 +28,21 @@ export const PROFILE_INCLUDE = {
  */
 export async function profileAccess(user, child) {
   if (!child) return { view: false };
-  if (hasAnyRole(user, ["ADMIN"])) return { view: true, editAll: true, editFamily: true };
-  if (hasAnyRole(user, ["PARENT"]) && isChildLinkedToParent(child, user.id)) return { view: true, editAll: false, editFamily: true };
+  // The role the user is signed in as decides, not every role they hold: an
+  // admin who is also a parent sees only their own children as a parent
+  // (client request 2026-10-29).
+  const active = activeRole(user);
+  if (active === "ADMIN") return { view: true, editAll: true, editFamily: true };
+  if (active === "PARENT") {
+    return isChildLinkedToParent(child, user.id) ? { view: true, editAll: false, editFamily: true } : { view: false };
+  }
   if (await canUseChild(user, child)) return { view: true, editAll: false, editFamily: false };
   return { view: false };
+}
+
+function activeRole(user) {
+  if (user?.role) return String(user.role).toUpperCase();
+  return hasAnyRole(user, ["ADMIN"]) ? "ADMIN" : hasAnyRole(user, ["PARENT"]) ? "PARENT" : "";
 }
 
 function fullName(person) {
@@ -40,7 +51,7 @@ function fullName(person) {
 
 /** Children shown in the profile's switcher: a parent's own children, else the child's classroom. */
 async function switcherChildren(user, child) {
-  const where = hasAnyRole(user, ["PARENT"]) && !hasAnyRole(user, ["ADMIN"])
+  const where = activeRole(user) === "PARENT"
     ? buildParentLinkedChildWhere(user.id)
     : child.classRoomId
       ? { classRoomId: child.classRoomId, OR: [{ enrollmentEndDate: null }, { enrollmentEndDate: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } }] }

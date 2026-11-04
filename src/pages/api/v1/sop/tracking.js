@@ -54,6 +54,7 @@ export default async function handler(req, res) {
           name: `${c.firstName || ""} ${c.lastName || ""}`.trim(),
           photoUrl: c.photoUrl,
           classroom: c.classRoom?.name || "",
+          birthDate: c.birthDate,
           activeGoals: active.length,
           lastUpdate: last,
           status: active.length

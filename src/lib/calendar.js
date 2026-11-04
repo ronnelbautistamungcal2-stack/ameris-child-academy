@@ -1,3 +1,41 @@
+import { roleLabel } from "@/lib/roles";
+
+// "Apply to Roles" on a calendar event (client mockup 2026-10-29). An event
+// with no roles is for everyone.
+export const EVENT_ROLE_OPTIONS = [
+  { value: "ADMIN", label: "Admin" },
+  { value: "COACH", label: "Coach" },
+  { value: "TEACHER", label: "Teacher" },
+  { value: "KITCHEN_STAFF", label: "Kitchen" },
+  { value: "HR_STAFF", label: "HR" },
+  { value: "OTHER_STAFF", label: "Other Staff" },
+  { value: "STUDENT_SUPPORT", label: "Student Support" },
+  { value: "PARENT", label: "Parents" },
+];
+export const EVENT_STAFF_ROLES = EVENT_ROLE_OPTIONS.map((o) => o.value).filter((r) => r !== "PARENT");
+const EVENT_ROLE_VALUES = new Set(EVENT_ROLE_OPTIONS.map((o) => o.value));
+
+/** Keeps known roles only; null when the input isn't an array. */
+export function parseEventRoles(value) {
+  if (!Array.isArray(value)) return null;
+  return [...new Set(value.map((r) => String(r || "").toUpperCase()).filter((r) => EVENT_ROLE_VALUES.has(r)))];
+}
+
+/** Prisma filter: events for everyone or for this role. Admins see them all. */
+export function eventRoleWhere(role) {
+  if (String(role || "").toUpperCase() === "ADMIN") return {};
+  return { OR: [{ roles: { isEmpty: true } }, { roles: { has: String(role || "").toUpperCase() } }] };
+}
+
+export function eventRolesLabel(roles) {
+  const list = Array.isArray(roles) ? roles : [];
+  if (!list.length) return "Everyone";
+  if (EVENT_STAFF_ROLES.every((r) => list.includes(r))) {
+    return list.includes("PARENT") ? "All Staff, Parents" : "All Staff";
+  }
+  return list.map((r) => EVENT_ROLE_OPTIONS.find((o) => o.value === r)?.label || roleLabel(r)).join(", ");
+}
+
 const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 export function isDateOnlyValue(value) {

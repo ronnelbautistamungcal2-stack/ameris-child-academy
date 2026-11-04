@@ -3,14 +3,18 @@ import TimeSheetModal from "@/components/timesheets/TimeSheetModal";
 import Skeleton from "@/components/ui/Skeleton";
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
-import { formatDayKey, todayKey } from "@/lib/checklistTime";
-import { payPeriodSettingsFor, RANGE_OPTIONS, rangeContaining, stepRange } from "@/lib/payPeriods";
-import { roleLabel } from "@/lib/roles";
+import { todayKey } from "@/lib/checklistTime";
+import { payPeriodSettingsFor, rangeContaining } from "@/lib/payPeriods";
+import { EMPLOYEE_ROLES, roleLabel } from "@/lib/roles";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 // Staff Attendance Overview (client mockups 25-Staff-Attendance), for coaches
-// and HR: hours worked per employee for the pay period (highest first), the
-// day's sign in/out with the clock icon opening Employee Time.
+// and HR: hours worked per employee for a date range (the current pay period
+// to start with, highest first), the day's sign in/out with the clock icon
+// opening Employee Time.
+
+// Every staff role, Kitchen, HR and Student Support included (client request 2026-10-29).
+const ROLE_FILTER_OPTIONS = EMPLOYEE_ROLES.filter((r) => r !== "ADMIN");
 
 const AVATAR_TONES = ["bg-pink-100 text-pink-700", "bg-sky-100 text-sky-700", "bg-violet-100 text-violet-700", "bg-emerald-100 text-emerald-700", "bg-amber-100 text-amber-700", "bg-indigo-100 text-indigo-700"];
 const control = "rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800";
@@ -44,14 +48,12 @@ function attendanceState(p) {
 export default function StaffAttendanceOverview({ Layout, layoutProps = {} }) {
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
-  const [rangeKind, setRangeKind] = useState("PAY_PERIOD");
   const [range, setRange] = useState(() => rangeContaining("PAY_PERIOD"));
   const [date, setDate] = useState(todayKey());
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
-  const [deptFilter, setDeptFilter] = useState("");
   const [dayOpen, setDayOpen] = useState(true);
   const [daySearch, setDaySearch] = useState("");
   const [roomFilter, setRoomFilter] = useState("");
@@ -63,7 +65,7 @@ export default function StaffAttendanceOverview({ Layout, layoutProps = {} }) {
   // The center's pay schedule (Center Management) decides the pay periods.
   const payPeriod = useMemo(() => payPeriodSettingsFor(centers.find((c) => c.id === centerId)), [centers, centerId]);
   useEffect(() => {
-    setRange(rangeContaining(rangeKind, todayKey(), payPeriod));
+    setRange(rangeContaining("PAY_PERIOD", todayKey(), payPeriod));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [payPeriod]);
 
@@ -93,11 +95,8 @@ export default function StaffAttendanceOverview({ Layout, layoutProps = {} }) {
   }, [load]);
 
   const staff = data?.staff || [];
-  const roles = useMemo(() => [...new Set(staff.map((p) => p.role))].sort(), [staff]);
-  const departments = useMemo(() => [...new Set(staff.map((p) => p.department).filter(Boolean))].sort(), [staff]);
   const filtered = staff.filter((p) => {
-    if (roleFilter && p.role !== roleFilter) return false;
-    if (deptFilter && p.department !== deptFilter) return false;
+    if (roleFilter && !(p.roles || [p.role]).includes(roleFilter)) return false;
     const q = search.trim().toLowerCase();
     return !q || p.name.toLowerCase().includes(q);
   });
@@ -126,14 +125,8 @@ export default function StaffAttendanceOverview({ Layout, layoutProps = {} }) {
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search staff..." className={`${control} w-full`} aria-label="Search staff" />
             <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className={`${control} w-full`} aria-label="Role">
               <option value="">All Roles</option>
-              {roles.map((r) => (
+              {ROLE_FILTER_OPTIONS.map((r) => (
                 <option key={r} value={r}>{roleLabel(r)}</option>
-              ))}
-            </select>
-            <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} className={`${control} w-full`} aria-label="Department">
-              <option value="">All Departments</option>
-              {departments.map((d) => (
-                <option key={d} value={d}>{d}</option>
               ))}
             </select>
           </div>
@@ -159,34 +152,17 @@ export default function StaffAttendanceOverview({ Layout, layoutProps = {} }) {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex items-center gap-3">
               <span className="text-5xl text-blue-600" aria-hidden>👥</span>
-              <div>
-                <h1 className={`text-3xl font-black ${NAVY}`}>Staff Attendance</h1>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Total hours worked by each employee ({RANGE_OPTIONS.find((o) => o.value === rangeKind)?.label.toLowerCase()}).
-                </p>
-              </div>
+              <h1 className={`text-3xl font-black ${NAVY}`}>Staff Attendance</h1>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center rounded-lg border border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800">
-                <button type="button" onClick={() => setRange(stepRange(rangeKind, range, -1, payPeriod))} className="px-3 py-2 text-blue-700" aria-label="Previous period">‹</button>
-                <span className={`min-w-[190px] text-center text-sm font-bold ${NAVY}`}>
-                  {formatDayKey(range.from, { month: "short", day: "numeric", year: "numeric" })} - {formatDayKey(range.to, { month: "short", day: "numeric", year: "numeric" })}
-                </span>
-                <button type="button" onClick={() => setRange(stepRange(rangeKind, range, 1, payPeriod))} className="px-3 py-2 text-blue-700" aria-label="Next period">›</button>
-              </div>
-              <select
-                value={rangeKind}
-                onChange={(e) => {
-                  setRangeKind(e.target.value);
-                  setRange(rangeContaining(e.target.value, todayKey(), payPeriod));
-                }}
-                className={`${control} text-blue-700`}
-                aria-label="Period"
-              >
-                {RANGE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+                Start Date
+                <input type="date" value={range.from} max={range.to} onChange={(e) => e.target.value && setRange((r) => ({ ...r, from: e.target.value }))} className={`${control} mt-1 block`} />
+              </label>
+              <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+                End Date
+                <input type="date" value={range.to} min={range.from} onChange={(e) => e.target.value && setRange((r) => ({ ...r, to: e.target.value }))} className={`${control} mt-1 block`} />
+              </label>
             </div>
           </div>
 

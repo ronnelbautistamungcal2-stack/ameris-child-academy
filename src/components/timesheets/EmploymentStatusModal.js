@@ -101,10 +101,7 @@ export default function EmploymentStatusModal({ userId, onClose, onSaved }) {
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4 print:hidden dark:border-gray-700">
-          <button type="button" onClick={() => window.print()} className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50">
-            🖨 Print
-          </button>
+        <div className="flex items-center justify-end border-t border-gray-200 px-6 py-4 print:hidden dark:border-gray-700">
           <div className="flex gap-2">
             <button type="button" onClick={onClose} className="rounded-lg border border-gray-300 px-5 py-2 text-sm font-bold text-gray-800 hover:bg-gray-50 dark:text-gray-200">
               Cancel

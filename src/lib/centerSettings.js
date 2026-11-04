@@ -36,7 +36,7 @@ export const DAYS = [
 ];
 
 // Roles a center can grant on the Roles tab (saved for later; not enforced).
-export const CENTER_ROLE_OPTIONS = ROLE_OPTIONS.filter((role) => role !== "SUBSCRIBER");
+export const CENTER_ROLE_OPTIONS = ROLE_OPTIONS;
 
 export const MAX_AGE_MONTHS = 18 * 12;
 
@@ -47,6 +47,21 @@ export function defaultCareSchedule() {
   return Object.fromEntries(
     DAYS.map(({ key }, i) => [key, i < 5 ? { open: true, start: "07:30", end: "16:45" } : { open: false, start: null, end: null }]),
   );
+}
+
+const WEEKDAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+/**
+ * Whether the center is open on a "YYYY-MM-DD" day, per the Care & Schedule
+ * tab (weekdays open when nothing was saved). Closed days get no checklist
+ * grade and no meal report rows (client requests 2026-10-29).
+ */
+export function isCenterOpenOn(center, key) {
+  const [y, m, d] = String(key).split("-").map(Number);
+  const weekday = WEEKDAY_KEYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  const schedule = center?.careSchedule && typeof center.careSchedule === "object" ? center.careSchedule : defaultCareSchedule();
+  const day = schedule[weekday];
+  return day ? day.open !== false : weekday !== "saturday" && weekday !== "sunday";
 }
 
 export function defaultMeals() {

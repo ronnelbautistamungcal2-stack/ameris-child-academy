@@ -34,6 +34,15 @@ export default function PrintableReport({ title, subtitle, header, generatedAt, 
           </div>
         ) : null}
       </div>
+      {/* Time sheets and audit reports print portrait (client request 2026-10-29). */}
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: portrait;
+            margin: 10mm;
+          }
+        }
+      `}</style>
     </div>
   );
 }

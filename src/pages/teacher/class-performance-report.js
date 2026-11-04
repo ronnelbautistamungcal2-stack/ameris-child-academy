@@ -4,7 +4,7 @@ import TeacherLayout from "@/components/teacher/TeacherLayout";
 export default function TeacherClassPerformanceReportPage() {
   return (
     <TeacherLayout title="Class Performance Report">
-      <ClassReportWorkspace />
+      <ClassReportWorkspace showClassList={false} />
     </TeacherLayout>
   );
 }

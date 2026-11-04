@@ -8,7 +8,7 @@ import { NAVY } from "@/components/reports/reportUi";
 import Skeleton from "@/components/ui/Skeleton";
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
-import { LOG_FIRST_MESSAGE, checklistItemHref } from "@/lib/checklistLinks";
+import { LOG_FIRST_MESSAGE, MENU_FIRST_MESSAGE, checklistItemHref } from "@/lib/checklistLinks";
 import { collectChecklistLessonAttachments } from "@/lib/checklistLessonResources";
 import { formatDayKey, formatTaskTime, shiftDayKey, sortByTaskTime, todayKey } from "@/lib/checklistTime";
 import { getChecklistClassRooms } from "@/lib/dailyChecklistClassrooms";
@@ -73,9 +73,11 @@ export default function DailyChecklistWorkspace({ Layout, mode = "staff", title 
       .catch((e) => setError(e.message || "Failed to load centers"));
   }, []);
 
+  // The checklist follows the role you are signed in as; there is no Role
+  // picker any more (client request 2026-10-29).
   useEffect(() => {
     if (mode !== "staff" || !staffRoles.length) return;
-    setRole((current) => (staffRoles.includes(current) ? current : staffRoles.includes(session?.user?.role) ? session.user.role : staffRoles[0]));
+    setRole(staffRoles.includes(session?.user?.role) ? session.user.role : staffRoles[0]);
   }, [mode, staffRoles, session]);
 
   useEffect(() => {
@@ -223,22 +225,7 @@ export default function DailyChecklistWorkspace({ Layout, mode = "staff", title 
                 ))}
               </select>
             </label>
-          ) : (
-            <label className="block w-56">
-              <span className={`text-sm font-bold ${NAVY}`}>Department / Role</span>
-              <select
-                value={mode === "staff" ? role : session?.user?.role || ""}
-                onChange={(e) => setRole(e.target.value)}
-                disabled={mode !== "staff" || staffRoles.length < 2}
-                className={selectClass}
-                aria-label="Department / Role"
-              >
-                {(mode === "staff" ? staffRoles : [session?.user?.role || ""]).map((r) => (
-                  <option key={r} value={r}>{roleLabel(r)}</option>
-                ))}
-              </select>
-            </label>
-          )}
+          ) : null}
           <label className="block w-44">
             <span className={`text-sm font-bold ${NAVY}`}>Date</span>
             <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} className={selectClass} aria-label="Date" />
@@ -408,9 +395,11 @@ function ChecklistItems({ checklist, isDone, canComplete, busyItem, onToggle, on
                 </div>
               ) : null}
               {needsVisit && blockedId === item.id ? (
-                <div role="alert" className="mt-1 rounded border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700">{LOG_FIRST_MESSAGE}</div>
+                <div role="alert" className="mt-1 rounded border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700">{item.menuLink ? MENU_FIRST_MESSAGE : LOG_FIRST_MESSAGE}</div>
               ) : needsVisit ? (
-                <div className="mt-1 text-[11px] font-semibold text-amber-700">Click the Log Activity link to log this activity before checking it off.</div>
+                <div className="mt-1 text-[11px] font-semibold text-amber-700">
+                  {item.menuLink ? "Click the menu link to open the menu before checking it off." : "Click the Log Activity link to log this activity before checking it off."}
+                </div>
               ) : null}
             </div>
           </li>

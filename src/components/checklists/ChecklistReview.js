@@ -5,7 +5,7 @@ import Skeleton from "@/components/ui/Skeleton";
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
 import { formatDayKey, formatTaskTime, shiftDayKey, todayKey } from "@/lib/checklistTime";
-import { roleLabel } from "@/lib/roles";
+import { EMPLOYEE_ROLES, roleLabel } from "@/lib/roles";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -20,6 +20,7 @@ const STATUS_OPTIONS = [
   { value: "NOT_STARTED", label: "Not Started" },
   { value: "ABSENT", label: "Absent" },
   { value: "NO_CHECKLIST", label: "No Checklist" },
+  { value: "CLOSED", label: "Center Closed" },
 ];
 const AVATAR_TONES = [
   "bg-pink-100 text-pink-700",
@@ -29,6 +30,8 @@ const AVATAR_TONES = [
   "bg-amber-100 text-amber-700",
   "bg-indigo-100 text-indigo-700",
 ];
+// Kitchen included, Coach and Admin left out (client request 2026-10-29).
+const ROLE_FILTER_OPTIONS = EMPLOYEE_ROLES.filter((r) => r !== "ADMIN" && r !== "COACH");
 const selectClass = "mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800";
 
 function initials(name) {
@@ -50,15 +53,19 @@ function Avatar({ row, size = "h-9 w-9 text-xs" }) {
   );
 }
 
-function formatUpdated(value, date) {
+// "Today" means the update happened today, not that the reviewed day is
+// today: an item ticked the evening before used to read "Today 4:58 PM" in
+// the morning (client request 2026-10-29).
+function formatUpdated(value) {
   if (!value) return "—";
   const d = new Date(value);
   const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  return date === todayKey() ? `Today ${time}` : `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} ${time}`;
+  return todayKey(d) === todayKey() ? `Today ${time}` : `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} ${time}`;
 }
 
 function CompletionCell({ row }) {
   if (row.status === "ABSENT") return <span className="font-bold text-red-600">Absent</span>;
+  if (row.status === "CLOSED") return <span className="text-gray-500">Center closed</span>;
   if (row.pct == null) return <span className="text-gray-500">No checklist</span>;
   const bar = row.pct >= 80 ? "bg-emerald-500" : row.pct >= 50 ? "bg-amber-400" : "bg-red-500";
   return (
@@ -115,7 +122,6 @@ export default function ChecklistReview({ Layout, messagesPath }) {
     load();
   }, [load]);
 
-  const roles = useMemo(() => [...new Set(rows.map((r) => r.role))], [rows]);
   const rooms = useMemo(() => {
     const map = new Map();
     for (const r of rows) r.classRoomIds.forEach((id, i) => map.set(id, r.area.split(", ")[i] || id));
@@ -154,20 +160,23 @@ export default function ChecklistReview({ Layout, messagesPath }) {
 
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <label className="block">
-              <span className={`text-sm font-bold ${NAVY}`}>Center</span>
-              <select value={centerId} onChange={(e) => setCenterId(e.target.value)} className={selectClass} aria-label="Center">
-                <option value="">Select a center...</option>
-                {centers.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </label>
+            {/* One center needs no picker (client request 2026-10-29). */}
+            {centers.length > 1 ? (
+              <label className="block">
+                <span className={`text-sm font-bold ${NAVY}`}>Center</span>
+                <select value={centerId} onChange={(e) => setCenterId(e.target.value)} className={selectClass} aria-label="Center">
+                  <option value="">Select a center...</option>
+                  {centers.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <label className="block">
               <span className={`text-sm font-bold ${NAVY}`}>Department / Role</span>
               <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className={selectClass} aria-label="Department / Role">
                 <option value="">All Roles</option>
-                {roles.map((r) => (
+                {ROLE_FILTER_OPTIONS.map((r) => (
                   <option key={r} value={r}>{roleLabel(r)}</option>
                 ))}
               </select>
@@ -234,7 +243,7 @@ export default function ChecklistReview({ Layout, messagesPath }) {
                       {row.status === "ABSENT" ? "—" : row.missing.length ? row.missing.slice(0, 3).join(", ") + (row.missing.length > 3 ? ` +${row.missing.length - 3} more` : "") : "—"}
                     </td>
                     <td className="max-w-[200px] px-3 py-2.5 text-gray-700 dark:text-gray-300">{row.notes || "—"}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-gray-700 dark:text-gray-300">{formatUpdated(row.lastUpdated, date)}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-gray-700 dark:text-gray-300">{formatUpdated(row.lastUpdated)}</td>
                     <td className="px-3 py-2.5 text-center">
                       <button type="button" onClick={() => setDetailId(row.id)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-800 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200">
                         View Details
@@ -399,7 +408,7 @@ function StaffChecklistDetails({ userId, centerId, centerName, date, messagesPat
               </div>
               <div>
                 <div className="text-xs font-semibold text-gray-500">Last Updated</div>
-                <div className={`font-bold ${NAVY}`}>{formatUpdated(row.lastUpdated, date)}</div>
+                <div className={`font-bold ${NAVY}`}>{formatUpdated(row.lastUpdated)}</div>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <div>

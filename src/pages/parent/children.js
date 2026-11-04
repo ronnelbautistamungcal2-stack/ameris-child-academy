@@ -253,7 +253,7 @@ export default function ParentChildren() {
               onEditSnapshot={() => setEditingSnapshot(true)}
             />
 
-            <StudentPerformance childId={selectedChildId} />
+            <StudentPerformance childId={selectedChildId} familyView />
           </div>
         ) : null}
       </div>

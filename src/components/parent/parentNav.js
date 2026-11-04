@@ -1,5 +1,3 @@
-import { otherPagesGroup } from "@/components/shell/navExtras";
-
 const iconClass = "h-5 w-5 shrink-0";
 
 // Follows the client's Parent Navigation list (2026-10-02 requests).
@@ -64,5 +62,13 @@ export const PARENT_NAV_ITEMS = [
       </svg>
     ),
   },
-  otherPagesGroup([{ href: "/parent/contact", label: "Contact Us" }]),
+  {
+    href: "/parent/contact",
+    label: "Contact Us",
+    icon: (
+      <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="2">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 5.5A2.5 2.5 0 015.5 3h1.2a1 1 0 01.95.68l1.1 3.3a1 1 0 01-.5 1.2l-1.6.8a11 11 0 005.4 5.4l.8-1.6a1 1 0 011.2-.5l3.3 1.1a1 1 0 01.68.95v1.2A2.5 2.5 0 0118.5 21h-1C9.5 21 3 14.5 3 6.5v-1z" />
+      </svg>
+    ),
+  },
 ];

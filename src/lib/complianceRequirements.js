@@ -18,7 +18,7 @@ export const FREQUENCIES = [
   { value: "QUARTERLY", label: "Quarterly", months: 3 },
   { value: "SEMI_ANNUALLY", label: "Every 6 months", months: 6 },
   { value: "ANNUALLY", label: "Annually", months: 12 },
-  { value: "ONCE", label: "One time", months: null },
+  { value: "ONCE", label: "Don't repeat", months: null },
 ];
 
 export const STATUS_META = {
@@ -66,13 +66,15 @@ function cycleStart(frequency, nextDue) {
 }
 
 /**
- * COMPLETED when the cycle just finished was checked off (early or late) and
+ * COMPLETED once the row is checked off (done). Rows from before rows were
+ * split per due date: COMPLETED when the cycle just finished was checked off (early or late) and
  * the next due date is not yet close: half a period away, at most 30 days
  * (so a monthly task stays done for two weeks). A done one-time requirement
  * stays COMPLETED. Otherwise OVERDUE past its due date, DUE_SOON within 30
  * days, else UPCOMING.
  */
 export function requirementStatus(req, today = new Date()) {
+  if (req.done) return "COMPLETED";
   const todayKey = keyOf(new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())));
   const due = keyOf(new Date(req.nextDue));
   const days = (fromKey(due) - fromKey(todayKey)) / 86400000;

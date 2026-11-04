@@ -40,7 +40,8 @@ test.describe("Student profile pages", () => {
 
   test.afterAll(async ({ request }) => {
     if (childId) await prisma.child.delete({ where: { id: childId } }).catch(() => {});
-    await prisma.teacherClass.deleteMany({ where: { classId: room?.id } });
+    // Only with a room: classId undefined would match, and delete, every teacher's classes.
+    if (room?.id) await prisma.teacherClass.deleteMany({ where: { classId: room.id } });
     if (center?.id) await apiDelete(request, `/api/v1/centers/${center.id}`, await loginAsAdmin(request));
     await prisma.$disconnect();
   });

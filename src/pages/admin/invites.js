@@ -4,7 +4,7 @@ import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 import { STAFF_PORTAL_ROLES } from "@/lib/roles";
 
-const ROLES = ["PARENT", "TEACHER", ...STAFF_PORTAL_ROLES, "COACH", "SUBSCRIBER"];
+const ROLES = ["PARENT", "TEACHER", ...STAFF_PORTAL_ROLES, "COACH"];
 
 export default function AdminInvites() {
   const [invites, setInvites] = useState([]);

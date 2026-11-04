@@ -28,10 +28,10 @@ export default function StaffMemberPerformance({ Layout, layoutProps = {}, backH
   }, [router.isReady, router.query.centerId]);
 
   return (
-    <Layout title="Teacher Performance" {...layoutProps}>
+    <Layout title="Staff Performance" {...layoutProps}>
       <div className="space-y-4">
         <Link href={backHref} className="text-sm font-semibold text-blue-700 hover:underline dark:text-blue-300">‹ Back to Staff Performance</Link>
-        <h1 className={`text-3xl font-black ${NAVY}`}>Teacher Performance</h1>
+        <h1 className={`text-3xl font-black ${NAVY}`}>Staff Performance</h1>
         {userId && centerId ? (
           <TeacherSelfPerformanceReport
             centerId={centerId}

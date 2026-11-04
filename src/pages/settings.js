@@ -4,7 +4,7 @@ import { useRequireRole } from "@/hooks/useRequireRole";
 import { apiJson } from "@/lib/api";
 import { useToast } from "@/contexts/ToastContext";
 import NotificationPreferences from "@/components/parent/NotificationPreferences";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { STAFF_PORTAL_ROLES } from "@/lib/roles";
 
 const STAFF_ROLES = new Set(["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "COACH"]);
@@ -19,7 +19,7 @@ const ALLOWED_IMAGE_TYPES = new Set([
 export default function SettingsPage() {
   const toast = useToast();
   const { session, status, allowed, update } = useRequireRole(
-    ["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "PARENT", "COACH", "SUBSCRIBER"],
+    ["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "PARENT", "COACH"],
     "/login",
   );
 
@@ -42,7 +42,6 @@ export default function SettingsPage() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarRemoving, setAvatarRemoving] = useState(false);
 
-  const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -54,11 +53,6 @@ export default function SettingsPage() {
   const displayName =
     name.trim() || session?.user?.name || session?.user?.email || "Account";
 
-  useEffect(() => {
-    if (mustChangePassword) {
-      setShowPasswordForm(true);
-    }
-  }, [mustChangePassword]);
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -191,7 +185,6 @@ export default function SettingsPage() {
         }),
       });
       toast.success("Password changed successfully.");
-      setShowPasswordForm(false);
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -268,420 +261,204 @@ export default function SettingsPage() {
     return <div className="p-6 text-sm text-gray-600">Redirecting...</div>;
   }
 
+  const isParentRole = role === "PARENT";
+  const photoCard = (
+    <SettingsCard title="Profile Photo">
+      <div className="flex flex-col items-center gap-3 py-2 text-center">
+        {livePictureUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={livePictureUrl} alt={displayName} className="h-36 w-36 rounded-full object-cover" />
+        ) : (
+          <div className="flex h-36 w-36 items-center justify-center rounded-full bg-gray-200 text-4xl font-black text-gray-500 dark:bg-gray-700" aria-hidden="true">
+            {initials(displayName)}
+          </div>
+        )}
+        <label className={`cursor-pointer rounded-lg border border-blue-600 px-5 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 dark:text-blue-300 ${profileBusy ? "pointer-events-none opacity-60" : ""}`}>
+          {avatarUploading ? "Uploading..." : "Change Photo"}
+          <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" className="sr-only" disabled={profileBusy} onChange={(e) => { handleAvatarSelected(e.target.files?.[0]); e.target.value = ""; }} />
+        </label>
+        {livePictureUrl ? (
+          <button type="button" onClick={handleAvatarRemove} disabled={profileBusy} className="text-xs font-semibold text-red-600 hover:underline disabled:opacity-60">
+            {avatarRemoving ? "Removing..." : "Remove photo"}
+          </button>
+        ) : null}
+        <p className="text-xs text-gray-500">JPG, PNG or GIF. Max size 5 MB.</p>
+      </div>
+    </SettingsCard>
+  );
+
+  const detailsCard = (
+    <SettingsCard title="Profile Details">
+      <form onSubmit={saveProfile} className="space-y-3">
+        <FormField label="Full Name *">
+          <input value={name} onChange={(e) => setName(e.target.value)} className={inputClassName} disabled={profileBusy} required />
+        </FormField>
+        <FormField label="Email Address *">
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClassName} disabled={profileBusy} required />
+        </FormField>
+        <div className={`grid gap-3 ${isStaffRole ? "sm:grid-cols-2" : ""}`}>
+          <FormField label="Date of Birth">
+            <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className={inputClassName} disabled={profileBusy} />
+          </FormField>
+          {isStaffRole ? (
+            <FormField label="Date of Hire">
+              <input type="date" value={doh} onChange={(e) => setDoh(e.target.value)} className={inputClassName} disabled={profileBusy} />
+            </FormField>
+          ) : null}
+        </div>
+        <FormField label="About You" hint={`${aboutMe.length}/500`}>
+          <textarea value={aboutMe} onChange={(e) => setAboutMe(e.target.value.slice(0, 500))} maxLength={500} className={`${inputClassName} min-h-[90px] resize-y`} disabled={profileBusy} />
+        </FormField>
+        <div className="flex justify-end">
+          <button type="submit" disabled={profileBusy} className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60">
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      </form>
+    </SettingsCard>
+  );
+
+  const passwordCard = (
+    <SettingsCard title="Change Password">
+      {mustChangePassword ? (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Your account is using a temporary password. Set a new password now to unlock the rest of the system.
+        </div>
+      ) : null}
+      <form onSubmit={handlePasswordChange} className="space-y-3">
+        {!mustChangePassword ? (
+          <FormField label="Current Password *">
+            <PasswordInput value={currentPassword} onChange={setCurrentPassword} disabled={changingPassword} />
+          </FormField>
+        ) : null}
+        <FormField label="New Password *">
+          <PasswordInput value={newPassword} onChange={setNewPassword} disabled={changingPassword} minLength={8} />
+        </FormField>
+        <FormField label="Confirm New Password *">
+          <PasswordInput value={confirmPassword} onChange={setConfirmPassword} disabled={changingPassword} minLength={8} />
+        </FormField>
+        {passwordError ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{passwordError}</div> : null}
+        <div className="flex justify-end">
+          <button type="submit" disabled={changingPassword} className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60">
+            {changingPassword ? "Updating..." : "Update Password"}
+          </button>
+        </div>
+      </form>
+    </SettingsCard>
+  );
+
+  const preferencesCard = <AccountPreferences userId={session?.user?.id} wide={isParentRole} />;
+
   return (
     <>
-      <div className="space-y-6">
+      {/* Account Settings (client mockups 2026-10-29: r077 all roles, r079 parents). */}
+      <div className="space-y-5">
+        <h1 className="text-3xl font-black text-[#0b2a5b] dark:text-blue-100">Account Settings</h1>
         {error ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
             {error}
           </div>
         ) : null}
-
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[360px_1fr]">
-          <aside className="space-y-6">
-            <SettingsCard
-              title="Profile photo"
-              description="Your photo auto-saves as soon as you upload it."
-              className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white"
-              headerClassName="border-white/10 [&_h2]:text-white [&_p]:text-slate-300"
-            >
-              <AvatarUploader
-                imageUrl={livePictureUrl}
-                displayName={displayName}
-                email={email || session?.user?.email}
-                busy={profileBusy}
-                uploading={avatarUploading}
-                removing={avatarRemoving}
-                onSelectFile={handleAvatarSelected}
-                onRemove={handleAvatarRemove}
-              />
-            </SettingsCard>
-
-            <SettingsCard
-              title="Account snapshot"
-              description="Quick reference details tied to this login."
-            >
-              <div className="space-y-4">
-                <SnapshotRow label="Name" value={displayName} />
-                <SnapshotRow label="Email" value={email || session?.user?.email || "-"} />
-                <SnapshotRow label="Role" value={formatRoleLabel(role)} />
-                <div className="rounded-2xl border border-gray-200 bg-gray-50/80 px-4 py-3">
-                  <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-gray-500">
-                    User ID
-                  </div>
-                  <div className="mt-2 break-all font-mono text-xs text-gray-700">
-                    {session?.user?.id}
-                  </div>
-                </div>
-              </div>
-            </SettingsCard>
-          </aside>
-
-          <section className="space-y-6">
-            <SettingsCard
-              title="Profile details"
-              description="Update the information coworkers and staff use most often."
-              action={
-                loadingProfile ? (
-                  <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-extrabold uppercase tracking-[0.16em] text-sky-700">
-                    Syncing profile
-                  </span>
-                ) : null
-              }
-            >
-              <form onSubmit={saveProfile} className="space-y-5">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <FormField label="Display name">
-                    <input
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className={inputClassName}
-                      placeholder="How your name should appear"
-                      disabled={profileBusy}
-                    />
-                  </FormField>
-
-                  <FormField label="Email address">
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className={inputClassName}
-                      placeholder="you@example.com"
-                      disabled={profileBusy}
-                      required
-                    />
-                  </FormField>
-
-                  <FormField label="Date of birth">
-                    <input
-                      type="date"
-                      value={dob}
-                      onChange={(e) => setDob(e.target.value)}
-                      className={inputClassName}
-                      disabled={profileBusy}
-                    />
-                  </FormField>
-
-                  {isStaffRole ? (
-                    <FormField label="Date of hire">
-                      <input
-                        type="date"
-                        value={doh}
-                        onChange={(e) => setDoh(e.target.value)}
-                        className={inputClassName}
-                        disabled={profileBusy}
-                      />
-                    </FormField>
-                  ) : null}
-
-                  <div className="rounded-[24px] border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-4">
-                    <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-gray-500">
-                      Profile photo status
-                    </div>
-                    <div className="mt-2 text-lg font-black text-gray-900">
-                      {livePictureUrl ? "Photo uploaded" : "No photo yet"}
-                    </div>
-                    <div className="mt-1 text-sm text-gray-600">
-                      {livePictureUrl
-                        ? "Your latest uploaded photo is already linked to the account."
-                        : "Upload a real picture from the card on the left so staff can recognize you quickly."}
-                    </div>
-                  </div>
-                </div>
-
-                <FormField
-                  label="About you"
-                  hint={`${aboutMe.trim().length} characters`}
-                >
-                  <textarea
-                    value={aboutMe}
-                    onChange={(e) => setAboutMe(e.target.value)}
-                    className={`${inputClassName} min-h-[140px] resize-y`}
-                    placeholder="Share a short introduction, role context, or anything useful for the team."
-                    disabled={profileBusy}
-                  />
-                </FormField>
-
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    type="submit"
-                    className="rounded-2xl bg-gradient-to-r from-blue-800 to-sky-600 px-5 py-2.5 text-sm font-extrabold text-white shadow-sm transition hover:from-blue-900 hover:to-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={profileBusy}
-                  >
-                    {saving ? "Saving..." : "Save profile"}
-                  </button>
-                  <div className="text-sm text-gray-500">
-                    {loadingProfile
-                      ? "Loading current profile..."
-                      : avatarUploading
-                        ? "Uploading photo..."
-                        : avatarRemoving
-                          ? "Removing photo..."
-                          : "Profile photo changes save immediately. Text changes save when you click the button."}
-                  </div>
-                </div>
-              </form>
-            </SettingsCard>
-
-            <SettingsCard
-              title="Password"
-              description={
-                mustChangePassword
-                  ? "Change your password before continuing to the rest of the app."
-                  : "Change your account password and keep access secure."
-              }
-            >
-              {mustChangePassword ? (
-                <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
-                  Your account is using a temporary password. Set a new password now to unlock the rest of the system.
-                </div>
-              ) : null}
-              {!showPasswordForm ? (
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
-                    Use at least 8 characters and avoid reusing old passwords.
-                  </div>
-                  <button
-                    type="button"
-                    className="rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-                    onClick={() => setShowPasswordForm(true)}
-                  >
-                    Change password
-                  </button>
-                </div>
-              ) : (
-                <form onSubmit={handlePasswordChange} className="space-y-4">
-                  <div className={`grid grid-cols-1 gap-4 ${mustChangePassword ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
-                    {!mustChangePassword ? (
-                      <FormField label="Current password">
-                        <input
-                          type="password"
-                          value={currentPassword}
-                          onChange={(e) => setCurrentPassword(e.target.value)}
-                          required
-                          className={inputClassName}
-                          disabled={changingPassword}
-                        />
-                      </FormField>
-                    ) : null}
-
-                    <FormField label="New password">
-                      <input
-                        type="password"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        required
-                        minLength={8}
-                        className={inputClassName}
-                        disabled={changingPassword}
-                      />
-                    </FormField>
-
-                    <FormField label="Confirm new password">
-                      <input
-                        type="password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        required
-                        minLength={8}
-                        className={inputClassName}
-                        disabled={changingPassword}
-                      />
-                    </FormField>
-                  </div>
-
-                  {passwordError ? (
-                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
-                      {passwordError}
-                    </div>
-                  ) : null}
-
-                  <div className="flex flex-wrap items-center gap-3">
-                    <button
-                      type="submit"
-                      disabled={changingPassword}
-                      className="rounded-2xl bg-gradient-to-r from-blue-800 to-sky-600 px-5 py-2.5 text-sm font-extrabold text-white shadow-sm transition hover:from-blue-900 hover:to-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {changingPassword ? "Changing..." : "Update password"}
-                    </button>
-                    {!mustChangePassword ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowPasswordForm(false);
-                          setCurrentPassword("");
-                          setNewPassword("");
-                          setConfirmPassword("");
-                          setPasswordError("");
-                        }}
-                        className="rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-                      >
-                        Cancel
-                      </button>
-                    ) : null}
-                  </div>
-                </form>
-              )}
-            </SettingsCard>
-
-            {session?.user?.id ? <KioskPinCard userId={session.user.id} /> : null}
-
-            {role === "PARENT" ? (
-              <SettingsCard
-                title="Notification settings"
-                description="Choose which family alerts reach you through the portal notification bell."
-              >
-                <NotificationPreferences />
-              </SettingsCard>
-            ) : null}
-
-            {role !== "PARENT" ? (
-              <SettingsCard
-                title="Danger zone"
-                description="Delete access is intentionally restricted."
-                className="border-red-200"
-              >
-                <div className="rounded-2xl border border-red-200 bg-red-50/80 p-4">
-                  <div className="text-base font-extrabold text-red-800">
-                    Account deletion is not self-service
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-red-700">
-                    Contact an administrator if you need this account permanently removed. This prevents accidental data loss across messages, child records, and reporting history.
-                  </p>
-                  <button
-                    type="button"
-                    className="mt-4 rounded-2xl bg-red-500 px-4 py-2 text-sm font-extrabold text-white opacity-70"
-                    disabled
-                    title="Contact an administrator to delete your account"
-                  >
-                    Delete account
-                  </button>
-                </div>
-              </SettingsCard>
-            ) : null}
-          </section>
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+          {photoCard}
+          {detailsCard}
         </div>
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          {passwordCard}
+          {isParentRole ? (
+            <SettingsCard title="Notification Settings">
+              <NotificationPreferences />
+            </SettingsCard>
+          ) : (
+            preferencesCard
+          )}
+        </div>
+        {isParentRole ? preferencesCard : null}
+        {session?.user?.id && !isParentRole ? <KioskPinCard userId={session.user.id} /> : null}
       </div>
     </>
   );
 }
 
-function AvatarUploader({
-  imageUrl,
-  displayName,
-  email,
-  busy,
-  uploading,
-  removing,
-  onSelectFile,
-  onRemove,
-}) {
-  const inputRef = useRef(null);
-  const [dragOver, setDragOver] = useState(false);
-  const initialsText = initials(displayName || email || "User");
-
-  function openPicker() {
-    if (!busy) inputRef.current?.click();
-  }
-
-  async function handleFile(file) {
-    if (!file) return;
-    await onSelectFile(file);
-    if (inputRef.current) inputRef.current.value = "";
-  }
-
+function PasswordInput({ value, onChange, disabled, minLength }) {
+  const [show, setShow] = useState(false);
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-4">
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={displayName}
-            className="h-20 w-20 rounded-[24px] border border-white/10 object-cover shadow-lg"
-          />
-        ) : (
-          <div className="grid h-20 w-20 place-items-center rounded-[24px] border border-white/10 bg-white/10 text-2xl font-black text-white shadow-lg">
-            {initialsText}
-          </div>
-        )}
-
-        <div className="min-w-0">
-          <div className="truncate text-xl font-black text-white">{displayName}</div>
-          <div className="mt-1 truncate text-sm text-slate-300">{email || "No email address"}</div>
-          <div className="mt-3 inline-flex rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-200">
-            {imageUrl ? "Uploaded photo" : "Initials fallback"}
-          </div>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        onClick={openPicker}
-        onDragOver={(e) => {
-          e.preventDefault();
-          if (!busy) setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragOver(false);
-          if (busy) return;
-          const file = e.dataTransfer?.files?.[0];
-          if (file) handleFile(file);
-        }}
-        className={[
-          "w-full rounded-[24px] border border-dashed px-4 py-5 text-left transition",
-          dragOver
-            ? "border-sky-300 bg-sky-400/10"
-            : "border-white/15 bg-white/5 hover:bg-white/10",
-          busy ? "cursor-not-allowed opacity-70" : "cursor-pointer",
-        ].join(" ")}
-        disabled={busy}
-      >
-        <div className="text-sm font-extrabold text-white">
-          {uploading
-            ? "Uploading profile photo..."
-            : removing
-              ? "Removing profile photo..."
-              : "Click to upload or drag and drop"}
-        </div>
-        <div className="mt-1 text-sm text-slate-300">
-          JPG, PNG, WEBP, or GIF up to 5MB.
-        </div>
-      </button>
-
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={openPicker}
-          disabled={busy}
-          className="rounded-2xl bg-white px-4 py-2 text-sm font-extrabold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {imageUrl ? "Replace photo" : "Choose photo"}
-        </button>
-        {imageUrl ? (
-          <button
-            type="button"
-            onClick={onRemove}
-            disabled={busy}
-            className="rounded-2xl border border-white/15 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Remove photo
-          </button>
-        ) : null}
-      </div>
-
+    <div className="relative">
       <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => handleFile(e.target.files?.[0])}
+        type={show ? "text" : "password"}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required
+        minLength={minLength}
+        disabled={disabled}
+        className={`${inputClassName} pr-10`}
       />
+      <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? "Hide password" : "Show password"} className="absolute right-2 top-1/2 -translate-y-1/2 px-1 text-gray-500">
+        {show ? "🙈" : "👁"}
+      </button>
     </div>
   );
 }
+
+const LANGUAGES = ["English", "Spanish"];
+const DATE_FORMATS = ["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"];
+const TIME_ZONES = [
+  ["America/New_York", "(GMT-05:00) Eastern Time (US & Canada)"],
+  ["America/Chicago", "(GMT-06:00) Central Time (US & Canada)"],
+  ["America/Denver", "(GMT-07:00) Mountain Time (US & Canada)"],
+  ["America/Phoenix", "(GMT-07:00) Arizona"],
+  ["America/Los_Angeles", "(GMT-08:00) Pacific Time (US & Canada)"],
+  ["America/Anchorage", "(GMT-09:00) Alaska"],
+  ["Pacific/Honolulu", "(GMT-10:00) Hawaii"],
+];
+
+/** Language, date format and time zone, kept in this browser for now. */
+function AccountPreferences({ userId, wide }) {
+  const key = `aca:accountPreferences:${userId || "me"}`;
+  const [prefs, setPrefs] = useState({ language: "English", dateFormat: "MM/DD/YYYY", timeZone: "America/Denver" });
+  const [savedNote, setSavedNote] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(key) || "null");
+      if (stored) setPrefs((p) => ({ ...p, ...stored }));
+    } catch {
+      // keep the defaults
+    }
+  }, [key]);
+  function change(patch) {
+    const next = { ...prefs, ...patch };
+    setPrefs(next);
+    try {
+      window.localStorage.setItem(key, JSON.stringify(next));
+      setSavedNote(true);
+    } catch {
+      setSavedNote(false);
+    }
+  }
+  return (
+    <SettingsCard title="Account Preferences">
+      <div className={`grid gap-3 ${wide ? "sm:grid-cols-2" : ""}`}>
+        <FormField label="Preferred Language">
+          <select value={prefs.language} onChange={(e) => change({ language: e.target.value })} className={inputClassName}>
+            {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </FormField>
+        <FormField label="Date Format">
+          <select value={prefs.dateFormat} onChange={(e) => change({ dateFormat: e.target.value })} className={inputClassName}>
+            {DATE_FORMATS.map((f) => <option key={f} value={f}>{f}</option>)}
+          </select>
+        </FormField>
+        <FormField label="Time Zone">
+          <select value={prefs.timeZone} onChange={(e) => change({ timeZone: e.target.value })} className={inputClassName}>
+            {TIME_ZONES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </FormField>
+      </div>
+      {savedNote ? <p className="mt-2 text-xs text-gray-500">Saved.</p> : null}
+    </SettingsCard>
+  );
+}
+
 
 // "View PIN" (client request 2026-10-02): after re-entering their password a
 // user sees the 6-digit PIN they set at the front-desk kiosk. It cannot be
@@ -851,23 +628,7 @@ function FormField({ label, hint, children }) {
   );
 }
 
-function SnapshotRow({ label, value }) {
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-gray-50/80 px-4 py-3">
-      <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-gray-500">
-        {label}
-      </div>
-      <div className="mt-1 text-sm font-semibold text-gray-900">{value}</div>
-    </div>
-  );
-}
 
-function formatRoleLabel(role) {
-  return String(role || "User")
-    .toLowerCase()
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
 
 function initials(value) {
   const parts = String(value || "")

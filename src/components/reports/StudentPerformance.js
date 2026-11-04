@@ -1,5 +1,6 @@
 import IppPopup from "@/components/ipp/IppPopup";
 import ActivityLogEntry from "@/components/reports/ActivityLogEntry";
+import ChildPhotos from "@/components/reports/ChildPhotos";
 import MilestonesTracker from "@/components/sop/MilestonesTracker";
 import { apiJson } from "@/lib/api";
 import dynamic from "next/dynamic";
@@ -13,29 +14,69 @@ import { useEffect, useMemo, useState } from "react";
 
 const CitizenshipChart = dynamic(() => import("@/components/reports/CitizenshipChart"), { ssr: false });
 
+// Click an entry to read what the teacher logged (client request 2026-10-29).
 function DatedList({ items, empty }) {
+  const [openId, setOpenId] = useState("");
   if (!items.length) return <p className="py-3 text-sm text-gray-500">{empty}</p>;
   return (
     <ul className="mt-3 divide-y divide-gray-100 border-y border-gray-100 dark:divide-gray-800 dark:border-gray-800">
-      {items.map((item) => (
-        <li key={item.id} className={`flex items-center justify-between gap-3 py-2 text-[15px] ${NAVY}`} title={item.notes || undefined}>
-          <span>
-            {item.label}
-            {item.level ? <span className="ml-2 rounded bg-rose-100 px-1.5 py-0.5 text-xs font-bold text-rose-700 dark:bg-rose-900/40 dark:text-rose-200">Level {item.level}</span> : null}
-          </span>
-          <span className="shrink-0">{shortDate(item.date)}</span>
-        </li>
-      ))}
+      {items.map((item) => {
+        const open = openId === item.id;
+        return (
+          <li key={item.id}>
+            <button
+              type="button"
+              onClick={() => setOpenId(open ? "" : item.id)}
+              aria-expanded={open}
+              className={`flex w-full items-center justify-between gap-3 py-2 text-left text-[15px] hover:bg-blue-50/50 dark:hover:bg-gray-800 ${NAVY}`}
+            >
+              <span>
+                {item.label}
+                {item.level ? <span className="ml-2 rounded bg-rose-100 px-1.5 py-0.5 text-xs font-bold text-rose-700 dark:bg-rose-900/40 dark:text-rose-200">Level {item.level}</span> : null}
+              </span>
+              <span className="flex shrink-0 items-center gap-2">
+                {shortDate(item.date)}
+                <span aria-hidden className={`text-xs text-gray-400 transition ${open ? "rotate-90" : ""}`}>›</span>
+              </span>
+            </button>
+            {open ? (
+              <div className="mb-2 rounded-lg bg-blue-50/60 px-3 py-2 text-sm text-gray-700 dark:bg-gray-800 dark:text-gray-200">
+                {item.notes || item.description || "No description was logged."}
+                {item.loggedBy ? <div className="mt-1 text-xs text-gray-500">Logged by {item.loggedBy}</div> : null}
+              </div>
+            ) : null}
+          </li>
+        );
+      })}
     </ul>
   );
 }
 
-export default function StudentPerformance({ childId, header = null }) {
+/** Activity log entries with a heading for each day (client request 2026-10-29). */
+function groupByDay(list) {
+  const groups = [];
+  for (const a of list) {
+    const d = new Date(a.createdAt);
+    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    if (!groups.length || groups[groups.length - 1].key !== key) {
+      groups.push({ key, label: d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }), items: [] });
+    }
+    groups[groups.length - 1].items.push(a);
+  }
+  return groups;
+}
+
+/**
+ * familyView (parents): the activity log is a drop-down section with each
+ * entry's note shown, and a Photos section follows it.
+ */
+export default function StudentPerformance({ childId, header = null, familyView = false }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [ippId, setIppId] = useState("");
   const [logDate, setLogDate] = useState("");
   const [activity, setActivity] = useState(null);
+  const [logOpen, setLogOpen] = useState(!familyView);
   const citizenship = useRange();
   const highlights = useRange();
   const corrections = useRange();
@@ -160,8 +201,19 @@ export default function StudentPerformance({ childId, header = null }) {
       </div>
 
       <section className={card}>
-        <h3 className="text-base font-black text-gray-900 dark:text-gray-100">Student Activity Log</h3>
-        <p className="text-sm text-gray-500">Daily activity log.</p>
+        {familyView ? (
+          <button type="button" onClick={() => setLogOpen((o) => !o)} aria-expanded={logOpen} className="flex w-full items-center justify-between text-left">
+            <span className="text-base font-black text-gray-900 dark:text-gray-100">Student Activity Log</span>
+            <span aria-hidden className={`text-lg text-blue-700 transition ${logOpen ? "rotate-180" : ""}`}>▾</span>
+          </button>
+        ) : (
+          <>
+            <h3 className="text-base font-black text-gray-900 dark:text-gray-100">Student Activity Log</h3>
+            <p className="text-sm text-gray-500">Daily activity log.</p>
+          </>
+        )}
+        {logOpen ? (
+        <>
         <label className="mt-3 block text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">
           Jump to Date
           <span className="mt-1 flex gap-2">
@@ -173,13 +225,24 @@ export default function StudentPerformance({ childId, header = null }) {
             )}
           </span>
         </label>
-        <div className="mt-3 space-y-2">
-          {activityList.map((a) => (
-            <ActivityLogEntry key={a.id} activity={a} />
+        <div className="mt-3 space-y-3">
+          {groupByDay(activityList).map((group) => (
+            <div key={group.key}>
+              <div className="mb-1.5 border-b border-gray-200 pb-1 text-xs font-bold uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:text-gray-400">{group.label}</div>
+              <div className="space-y-2">
+                {group.items.map((a) => (
+                  <ActivityLogEntry key={a.id} activity={a} inline={familyView} />
+                ))}
+              </div>
+            </div>
           ))}
           {!activityList.length && <p className="text-sm text-gray-500">{logDate ? "No activity logs for that date." : "No activity logs yet."}</p>}
         </div>
+        </>
+        ) : null}
       </section>
+
+      {familyView ? <ChildPhotos childId={childId} childName={[data.child?.firstName, data.child?.lastName].filter(Boolean).join(" ")} /> : null}
 
       {ippId && <IppPopup planId={ippId} onClose={() => setIppId("")} />}
     </div>

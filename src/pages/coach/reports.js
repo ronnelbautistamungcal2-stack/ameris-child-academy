@@ -1,5 +1,7 @@
-import CoachActivityReport from "@/components/coach/CoachActivityReport";
 import CoachLayout from "@/components/coach/CoachLayout";
+import CarpoolReport from "@/components/reports/CarpoolReport";
+import MilestoneChangeLog from "@/components/reports/MilestoneChangeLog";
+import StaffTrainingReport from "@/components/reports/StaffTrainingReport";
 import StaffPerformanceOverview from "@/components/performance/StaffPerformanceOverview";
 import ClassReportWorkspace from "@/components/reports/ClassReportWorkspace";
 import InfantFeedingPlanReport from "@/components/reports/InfantFeedingPlanReport";
@@ -24,13 +26,15 @@ const REPORTS = {
   "meal-production": { label: "Meal Production Record", render: () => <MealProductionReport /> },
   "meal-claim": { label: "Meal Claim", render: () => <MealClaimReport /> },
   "staff-performance": { label: "Staff Performance", render: () => <StaffPerformanceOverview Layout={Plain} basePath="/coach/staff-performance" /> },
-  "coaching-activity": { label: "Coaching Activity", render: () => <CoachActivityReport /> },
+  "carpool": { label: "Carpool Report", render: () => <CarpoolReport /> },
+  "milestone-changes": { label: "Milestone Change Log", render: () => <MilestoneChangeLog /> },
+  "staff-training": { label: "Staff Training Report", render: () => <StaffTrainingReport /> },
 };
 
 const CATEGORIES = [
-  { label: "Children & Development", icon: "🧒", keys: ["student-performance", "class-performance", "milestone-progress", "child-steps"] },
+  { label: "Children & Development", icon: "🧒", keys: ["student-performance", "class-performance", "milestone-progress", "child-steps", "milestone-changes", "carpool"] },
   { label: "Meals", icon: "🍽️", keys: ["infant-feeding-plan", "infant-feeding", "meal-production", "meal-claim"] },
-  { label: "Staff", icon: "👥", keys: ["staff-performance", "coaching-activity"] },
+  { label: "Staff", icon: "👥", keys: ["staff-performance", "staff-training"] },
 ].map((cat) => ({ ...cat, reports: cat.keys.map((key) => ({ key, label: REPORTS[key].label })) }));
 
 export default function CoachReports() {

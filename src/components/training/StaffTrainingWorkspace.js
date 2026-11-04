@@ -163,20 +163,33 @@ export default function StaffTrainingWorkspace() {
           }}
         />
       ) : null}
-      {viewing ? <ViewTraining centerId={centerId} member={viewing} range={range} onClose={() => setViewing(null)} /> : null}
+      {viewing ? (
+        <ViewTraining
+          centerId={centerId}
+          centerName={centers.find((c) => c.id === centerId)?.name || ""}
+          member={viewing}
+          range={range}
+          onClose={() => setViewing(null)}
+        />
+      ) : null}
     </div>
   );
 }
 
-function ViewTraining({ centerId, member, range, onClose }) {
+// One employee's training for a date range (client request 2026-10-29: its
+// own date range, with the center name and the range on the printed report).
+function ViewTraining({ centerId, centerName, member, range: pageRange, onClose }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
+  const [range, setRange] = useState(pageRange);
 
   useEffect(() => {
-    apiJson(`/api/v1/training/hours?centerId=${encodeURIComponent(centerId)}&userId=${encodeURIComponent(member.id)}`)
+    setData(null);
+    const qs = new URLSearchParams({ centerId, userId: member.id, from: range.from, to: range.to });
+    apiJson(`/api/v1/training/hours?${qs}`)
       .then(setData)
       .catch((e) => setError(e.message || "Failed to load training"));
-  }, [centerId, member.id]);
+  }, [centerId, member.id, range]);
 
   function print() {
     const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -188,7 +201,9 @@ function ViewTraining({ centerId, member, range, onClose }) {
     w.document.write(`<!doctype html><html><head><title>Training Report - ${esc(member.name)}</title><style>
       body{font-family:system-ui,sans-serif;color:#0b2a5b;padding:24px}table{width:100%;border-collapse:collapse;font-size:13px}
       th,td{border:1px solid #ccd;padding:6px 8px;text-align:left}th{background:#eef3fb}.tot{display:flex;gap:40px;margin-top:16px;font-size:14px}
-    </style></head><body><h1>Training Report</h1><p><b>${esc(member.name)}</b> &middot; ${esc(member.position)}<br>Date Hired: ${esc(fmtDate(data.user.hireDate))}</p>
+      .center{text-align:center}h1{margin:0 0 4px}
+    </style></head><body><div class="center"><h1>${esc(centerName || "Training Report")}</h1><div>Training Report &middot; ${esc(fmtDate(range.from))} – ${esc(fmtDate(range.to))}</div></div>
+    <p><b>${esc(member.name)}</b> &middot; ${esc(member.position)}<br>Date Hired: ${esc(fmtDate(data.user.hireDate))}</p>
     <table><thead><tr><th>Topic</th><th>Source of Training</th><th>Date Completed</th><th>Non Interactive Time (Hours)</th><th>Interactive Time (Hours)</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="tot"><span>Total Hours: <b>${fmtHours(data.totals.hours)}</b></span><span>Total Non-Interactive Hours: <b>${fmtHours(data.totals.nonInteractiveHours)}</b></span><span>Total Interactive Hours: <b>${fmtHours(data.totals.interactiveHours)}</b></span></div>
     </body></html>`);
@@ -218,6 +233,17 @@ function ViewTraining({ centerId, member, range, onClose }) {
             </div>
             <button type="button" onClick={print} className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50">🖨 Print Report</button>
           </div>
+          <div className="flex flex-wrap items-end gap-3">
+            {centerName ? <div className={`mr-auto text-lg font-black ${NAVY}`}>{centerName}</div> : null}
+            <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Start Date
+              <input type="date" value={range.from} max={range.to} onChange={(e) => e.target.value && setRange((r) => ({ ...r, from: e.target.value }))} className={`${control} mt-1 block`} />
+            </label>
+            <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              End Date
+              <input type="date" value={range.to} min={range.from} onChange={(e) => e.target.value && setRange((r) => ({ ...r, to: e.target.value }))} className={`${control} mt-1 block`} />
+            </label>
+          </div>
           <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
             <table className="min-w-full text-sm">
               <thead className={thead}>
@@ -245,7 +271,7 @@ function ViewTraining({ centerId, member, range, onClose }) {
               </div>
             ))}
           </div>
-          <p className="text-xs text-gray-500">Shows all recorded training. The list on the page counts {fmtDate(range.from)} – {fmtDate(range.to)}.</p>
+          <p className="text-xs text-gray-500">Training completed {fmtDate(range.from)} – {fmtDate(range.to)}.</p>
         </div>
       )}
     </Modal>

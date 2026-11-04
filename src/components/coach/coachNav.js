@@ -1,5 +1,3 @@
-import { otherPagesGroup } from "@/components/shell/navExtras";
-
 const icons = {
   dashboard: (
     <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
@@ -134,12 +132,4 @@ export const COACH_NAV_ITEMS = [
     label: "Messages",
     icon: icons.messages,
   },
-  otherPagesGroup([
-    { href: "/coach/compliance", label: "Compliance" },
-    { href: "/coach/observations", label: "Observations" },
-    { href: "/coach/follow-ups", label: "Follow-ups" },
-    { href: "/coach/permission-policies", label: "Family Permission Policies" },
-    // Move into Reports.
-    { href: "/coach/carpool-report", label: "Carpool Report" },
-  ]),
 ];

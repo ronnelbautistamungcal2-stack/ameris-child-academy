@@ -8,7 +8,11 @@ import { normalizeStepTerm, parseStepAge, STEP_CRITERIA_LEVELS } from "@/lib/pro
 // IDs, linked once every row is saved so a row can point at a later one.
 // Related Lesson names a Lesson Bank lesson by its Ref ID or its title.
 
-const MAX_ROWS = 2000;
+// A 15 MB spreadsheet (client request 2026-10-29) is far more than the
+// default 1 MB request body once its rows are JSON.
+export const config = { api: { bodyParser: { sizeLimit: "40mb" } } };
+
+const MAX_ROWS = 10000;
 const text = (value, max) => String(value ?? "").trim().replace(/\s+/g, " ").slice(0, max);
 const lower = (value) => text(value, 500).toLowerCase();
 

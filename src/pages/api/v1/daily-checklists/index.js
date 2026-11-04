@@ -1,4 +1,5 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { CHECKLIST_ROLE_VALUES } from "@/lib/dailyChecklistVisibility";
 import { normalizeChecklistClassRoomIds } from "@/lib/dailyChecklistClassrooms";
 import { normalizeChecklistAssignedUserIds } from "@/lib/dailyChecklistAssignees";
 import {
@@ -291,6 +292,7 @@ function normalizeChecklistPayload(body = {}) {
 
   const noClassroom = body.noClassroom === true;
   return {
+    roles: normalizeChecklistRoles(body.roles),
     title: body.title,
     description: body.description || null,
     centerId: body.centerId,
@@ -308,7 +310,14 @@ function normalizeChecklistPayload(body = {}) {
   };
 }
 
+function normalizeChecklistRoles(value) {
+  return Array.isArray(value) ? [...new Set(value.map((r) => String(r || "").toUpperCase()).filter((r) => CHECKLIST_ROLE_VALUES.includes(r)))] : [];
+}
+
 function applyChecklistPatch(data, body = {}) {
+  if (Object.prototype.hasOwnProperty.call(body, "roles")) {
+    data.roles = normalizeChecklistRoles(body.roles);
+  }
   if (Object.prototype.hasOwnProperty.call(body, "title")) {
     data.title = body.title;
   }
@@ -503,7 +512,11 @@ export default async function handler(req, res) {
       if (!staffUser) return res.status(404).json({ error: "Employee not found" });
 
       const staffRoles = getUserChecklistRoles(staffUser);
-      const asRole = String(req.query.asRole || "").trim();
+      // My Checklist shows the checklists of the role you are signed in as:
+      // a coach who is also a teacher sees only coach checklists there
+      // (client request 2026-10-29). An admin previewing someone sees them all.
+      const ownRole = staffUser.id === session.user.id && staffRoles.includes(role) ? role : "";
+      const asRole = ownRole || String(req.query.asRole || "").trim();
       staffScope = {
         userId: staffUser.id,
         roles: asRole && staffRoles.includes(asRole) ? [asRole] : staffRoles,

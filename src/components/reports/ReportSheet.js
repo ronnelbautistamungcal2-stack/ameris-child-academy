@@ -83,7 +83,7 @@ export function ReportMessage({ children, tone = "gray" }) {
 }
 
 /** The printable sheet: a navy title block, optional facts box, the body and the copyright. */
-export function ReportSheet({ heading = "Ameris Academy", title, subtitle, meta = [], copyright = false, children }) {
+export function ReportSheet({ heading = "Ameris Academy", title, subtitle, meta = [], copyright = false, orientation = "landscape", children }) {
   return (
     <div id="report-print-sheet" className="overflow-hidden rounded-2xl border border-gray-200 bg-white text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
       <div className="flex flex-wrap items-start justify-between gap-4 px-6 pb-4 pt-5">
@@ -108,7 +108,7 @@ export function ReportSheet({ heading = "Ameris Academy", title, subtitle, meta 
       <style jsx global>{`
         @media print {
           @page {
-            size: landscape;
+            size: ${orientation};
             margin: 8mm;
           }
           body * {

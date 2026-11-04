@@ -91,6 +91,11 @@ export default function IppForm({ plan }) {
   }, [plan]);
 
   const set = (patch) => setForm((prev) => ({ ...prev, ...patch }));
+  const [studentSearch, setStudentSearch] = useState("");
+  const studentMatches = children.filter((c) => {
+    const q = studentSearch.trim().toLowerCase();
+    return !q || c.name.toLowerCase().includes(q) || c.id === form.childId;
+  });
   const goal = form.goals[Math.min(selected, form.goals.length - 1)];
   const goalIndex = form.goals.indexOf(goal);
   const setGoal = (patch) => set({ goals: form.goals.map((g, i) => (i === goalIndex ? { ...g, ...patch } : g)) });
@@ -180,12 +185,16 @@ export default function IppForm({ plan }) {
           ) : (
             <label className={`${label} md:col-span-3`}>
               Student{req}
-              <select value={form.childId} onChange={(e) => set({ childId: e.target.value })} className={`${input} mt-1 md:w-1/2`}>
-                <option value="">Select a child...</option>
-                {children.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}{c.classroom ? ` — ${c.classroom}` : ""}</option>
-                ))}
-              </select>
+              {/* Type to find the student; names only (client request 2026-10-29). */}
+              <div className="mt-1 flex flex-col gap-2 md:w-1/2">
+                <input value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} placeholder="Search student name..." aria-label="Search student name" className={input} />
+                <select value={form.childId} onChange={(e) => set({ childId: e.target.value })} className={input} aria-label="Student">
+                  <option value="">{studentMatches.length ? "Select a child..." : "No student matches"}</option>
+                  {studentMatches.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
             </label>
           )}
           <label className={label}>

@@ -137,6 +137,11 @@ export default function TrainingModule({ item, progress, heading, onChanged }) {
           />
           I have reviewed and understand the information in this training.
         </label>
+        {p.acknowledgedAt ? (
+          <p className="mt-1 text-xs font-semibold text-emerald-700">
+            Acknowledged on {new Date(p.acknowledgedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+          </p>
+        ) : null}
         {p.acknowledgedAt && p.status !== "COMPLETED" ? (
           <p className="mt-1 text-xs text-gray-500">This training will be marked complete once your supervisor signs off the requirements above.</p>
         ) : null}

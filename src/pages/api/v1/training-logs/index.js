@@ -104,6 +104,17 @@ export default createApiHandler(async function handler(req, res) {
         ? [...new Set(normalizedUserIds)]
         : [fallbackUserId || session.user.id];
 
+  // Record Training can apply the session to a pathway's training: each
+  // attendee gets that training marked completed, so it counts toward their
+  // pathway percentage (client request 2026-10-29).
+  const trainingItemId = optionalString(body, "trainingItemId", { nullable: true });
+  const trainingItem = trainingItemId
+    ? await prisma.trainingItem.findFirst({ where: { id: trainingItemId, centerId }, select: { id: true } })
+    : null;
+  if (trainingItemId && !trainingItem) {
+    return res.status(400).json({ ok: false, message: "That pathway training was not found", error: { code: "BAD_REQUEST", message: "That pathway training was not found" } });
+  }
+
   const createdLogs = await prisma.$transaction(
     targetUserIds.map((targetUserId) =>
       prisma.trainingLog.create({
@@ -129,6 +140,19 @@ export default createApiHandler(async function handler(req, res) {
       }),
     ),
   );
+
+  if (trainingItem) {
+    const completedAt = date || new Date();
+    await prisma.$transaction(
+      targetUserIds.map((userId) =>
+        prisma.trainingProgress.upsert({
+          where: { userId_trainingItemId: { userId, trainingItemId: trainingItem.id } },
+          update: { status: "COMPLETED", completedAt, acknowledgedAt: completedAt, observationStatus: "COMPLETED", handsOnStatus: "COMPLETED" },
+          create: { userId, trainingItemId: trainingItem.id, status: "COMPLETED", startedAt: completedAt, completedAt, acknowledgedAt: completedAt, observationStatus: "COMPLETED", handsOnStatus: "COMPLETED", materialsViewed: [] },
+        }),
+      ),
+    );
+  }
 
   return res.status(201).json(createdLogs.length === 1 ? createdLogs[0] : createdLogs);
 }, { methods: ["GET", "POST"], logLabel: "training-logs error:" });

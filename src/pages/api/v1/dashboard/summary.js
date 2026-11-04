@@ -97,7 +97,7 @@ async function attendanceSnapshot(centerId, day) {
 async function adminView(centerId, today) {
   const requirements = await prisma.complianceRequirement.findMany({
     where: { OR: [{ centerId }, { centerId: null }] },
-    select: { frequency: true, nextDue: true, lastCompletedAt: true },
+    select: { frequency: true, nextDue: true, lastCompletedAt: true, done: true },
   });
   return { redFlags: requirements.filter((r) => requirementStatus(r, today) === "OVERDUE").length };
 }

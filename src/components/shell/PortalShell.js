@@ -15,7 +15,6 @@ import { buildStaffNavItems } from "@/components/staff/staffNav";
 import { TEACHER_NAV_ITEMS } from "@/components/teacher/teacherNav";
 import { PARENT_NAV_ITEMS } from "@/components/parent/parentNav";
 import { COACH_NAV_ITEMS } from "@/components/coach/coachNav";
-import { SUBSCRIBER_NAV_ITEMS } from "@/components/subscriber/subscriberNav";
 import { apiJson } from "@/lib/api";
 import { useNewMessages, useUserSocket } from "@/hooks/useSocket";
 import { isStaffPortalRole } from "@/lib/roles";
@@ -31,7 +30,6 @@ function navForRole(role) {
   if (isStaffPortalRole(role)) return buildStaffNavItems({ role });
   if (role === "COACH") return COACH_NAV_ITEMS;
   if (role === "PARENT") return PARENT_NAV_ITEMS;
-  if (role === "SUBSCRIBER") return SUBSCRIBER_NAV_ITEMS;
   return FALLBACK_NAV;
 }
 

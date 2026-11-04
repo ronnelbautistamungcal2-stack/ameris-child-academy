@@ -1,10 +1,13 @@
+import DrillDownList from "@/components/reports/DrillDownList";
 import Pager from "@/components/ui/Pager";
 import StaffPerformanceTable from "@/components/reports/StaffPerformanceTable";
 import SegmentBar, { RANGE_COLORS, RANGE_TEXT } from "@/components/reports/SegmentBar";
 import { Heading, NAVY, RangePicker, card, keyOf, useRange } from "@/components/reports/reportUi";
 import { apiJson } from "@/lib/api";
 import { CHARACTER_HIGHLIGHT_TYPE_OPTIONS, courseCorrectionTypeOptions } from "@/lib/dailyLogOptions";
+import { studentReportHref } from "@/lib/reportLinks";
 import { SOP_STATUSES } from "@/lib/sop";
+import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -92,8 +95,16 @@ function Collapsible({ title, open, onToggle, children }) {
   );
 }
 
-export default function CenterPerformance() {
-  const [centerId, setCenterId] = useState("");
+/**
+ * studentsOnly: just the Student Performance bars (with the click-through
+ * list), for a coach's or Student Support's My Performance.
+ */
+export default function CenterPerformance({ studentsOnly = false, fixedCenterId = "", showCounts = false }) {
+  const { data: session } = useSession();
+  const viewerRole = session?.user?.role || "";
+  const [pickedCorrection, setPickedCorrection] = useState("");
+  const [pickedHighlight, setPickedHighlight] = useState("");
+  const [centerId, setCenterId] = useState(fixedCenterId);
   const [range, setRange] = useState(() => {
     const to = new Date();
     const from = new Date();
@@ -114,7 +125,7 @@ export default function CenterPerformance() {
   useEffect(() => {
     setLoading(true);
     setError("");
-    const q = new URLSearchParams({ from: range.start, to: range.end, ...(centerId ? { centerId } : {}) });
+    const q = new URLSearchParams({ from: range.start, to: range.end, ...(centerId ? { centerId } : {}), ...(studentsOnly ? { view: "students" } : {}) });
     apiJson(`/api/v1/reports/center-performance?${q}`)
       .then((d) => {
         setData(d);
@@ -122,7 +133,7 @@ export default function CenterPerformance() {
       })
       .catch((e) => setError(e.message || "Could not load the center report"))
       .finally(() => setLoading(false));
-  }, [centerId, range]);
+  }, [centerId, range, studentsOnly]);
 
   const staff = useMemo(() => data?.staff || [], [data]);
   const students = useMemo(() => data?.students || [], [data]);
@@ -193,23 +204,56 @@ export default function CenterPerformance() {
     const options = courseCorrectionTypeOptions([], entries);
     const tally = Object.fromEntries(options.map((t) => [t.value, 0]));
     for (const e of entries) tally[e.type || "OTHER"] += 1;
-    return options.map((t) => ({ label: t.label, count: tally[t.value] }));
+    return options.map((t) => ({ key: t.value, label: t.label, count: tally[t.value] }));
   }, [data, corrections]);
   const highlightBars = useMemo(() => {
     const tally = Object.fromEntries(CHARACTER_HIGHLIGHT_TYPE_OPTIONS.map((t) => [t.value, 0]));
     for (const e of data?.characterHighlights || []) if (highlights.inRange(e.date)) tally[e.type in tally ? e.type : "OTHER"] += 1;
-    return CHARACTER_HIGHLIGHT_TYPE_OPTIONS.map((t) => ({ label: t.label, count: tally[t.value] }));
+    return CHARACTER_HIGHLIGHT_TYPE_OPTIONS.map((t) => ({ key: t.value, label: t.label, count: tally[t.value] }));
   }, [data, highlights]);
 
   const select = (chart) => (key) => setSelected((cur) => (cur?.chart === chart && cur?.key === key ? null : { chart, key }));
   const isSel = (chart) => (selected?.chart === chart ? selected.key : null);
+
+  if (studentsOnly) {
+    return (
+      <section className={`${card} space-y-5`}>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 className={`text-2xl font-black ${NAVY}`}>Student Performance</h2>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className={`text-xs font-semibold ${NAVY}`}>
+              From
+              <input type="date" value={range.start} max={range.end} onChange={(e) => e.target.value && setRange({ ...range, start: e.target.value })} className={`${control} mt-1 block`} />
+            </label>
+            <label className={`text-xs font-semibold ${NAVY}`}>
+              To
+              <input type="date" value={range.end} min={range.start} onChange={(e) => e.target.value && setRange({ ...range, end: e.target.value })} className={`${control} mt-1 block`} />
+            </label>
+          </div>
+        </div>
+        {error && <div role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+        {loading && !data ? <p className="text-sm text-gray-500">Loading...</p> : null}
+        {data ? (
+          <>
+            <SegmentBar title="Citizenship (0 - 10)" segments={charts.citizenship} selected={isSel("citizenship")} onSelect={select("citizenship")} />
+            <SegmentBar title="Milestone Competency" segments={charts.competency} selected={isSel("competency")} onSelect={select("competency")} />
+            <SegmentBar title="Milestone Progress" segments={charts.progress} selected={isSel("progress")} onSelect={select("progress")} />
+            {picked ? (
+              <DrillDownList title={picked.title} entries={picked.people.map((p) => ({ childId: p.id, name: p.name, detail: p.detail }))} onClose={() => setSelected(null)} />
+            ) : null}
+          </>
+        ) : null}
+      </section>
+    );
+  }
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1 className={`text-4xl font-black ${NAVY}`}>Center Performance Overview</h1>
         <div className="flex flex-wrap items-end gap-3">
-          {data?.centers?.length > 1 && (
+          {/* Always shown so the center can be switched (client request 2026-10-29). */}
+          {data?.centers?.length > 0 && (
             <label className={`text-xs font-semibold ${NAVY}`}>
               Center
               <select value={centerId} onChange={(e) => { setSelected(null); setCenterId(e.target.value); }} className={`${control} mt-1 block w-48`}>
@@ -230,6 +274,21 @@ export default function CenterPerformance() {
 
       {error && <div role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
       {loading && <p className="text-sm text-gray-500">Working out the center&apos;s figures...</p>}
+
+      {/* Overview report: # of children and # of staff (client request 2026-10-29). */}
+      {showCounts && data ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:w-2/3">
+          {[["🧒", students.length, "Children"], ["👥", staff.length, "Staff"]].map(([icon, value, label]) => (
+            <div key={label} className="flex items-center gap-3 rounded-xl bg-blue-50 p-4 dark:bg-gray-800">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-xl shadow-sm" aria-hidden>{icon}</span>
+              <span>
+                <span className={`block text-2xl font-black ${NAVY}`}>{value}</span>
+                <span className="text-sm text-[#0b2a5b] dark:text-blue-100"># of {label}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {data && (
         <>
@@ -267,9 +326,9 @@ export default function CenterPerformance() {
                 {picked.people.map((p) => (
                   <li key={p.id} className="flex justify-between border-b border-gray-100 py-1.5 text-sm dark:border-gray-800">
                     {picked.kind === "staff" ? (
-                      <Link href={`/admin/reports/teachers?teacherId=${p.id}`} className="font-semibold text-blue-700 hover:underline dark:text-blue-300">{p.name}</Link>
+                      <Link href={`/admin/reports/staff-performance?staffId=${p.id}`} className="font-semibold text-blue-700 hover:underline dark:text-blue-300">{p.name}</Link>
                     ) : (
-                      <span className="font-semibold text-gray-800 dark:text-gray-100">{p.name}</span>
+                      <Link href={studentReportHref(viewerRole, p.id)} className="font-semibold text-blue-700 hover:underline dark:text-blue-300">{p.name}</Link>
                     )}
                     <span className="text-gray-500">{p.detail}</span>
                   </li>
@@ -279,7 +338,7 @@ export default function CenterPerformance() {
           )}
 
           <Collapsible title="Staff Performance Overview" open={staffOpen} onToggle={() => setStaffOpen((o) => !o)}>
-            <StaffPerformanceTable staff={staff} viewHref={(row) => `/admin/reports/teachers?teacherId=${row.id}`} />
+            <StaffPerformanceTable staff={staff} viewHref={(row) => `/admin/reports/staff-performance?staffId=${row.id}`} />
           </Collapsible>
 
           <Collapsible title="Student Performance Overview" open={studentsOpen} onToggle={() => setStudentsOpen((o) => !o)}>
@@ -312,7 +371,9 @@ export default function CenterPerformance() {
                     const status = SOP_STATUSES.find((x) => x.value === s.milestones);
                     return (
                       <tr key={s.id} className="border-t border-gray-100 text-gray-700 dark:border-gray-800 dark:text-gray-300">
-                        <td className="px-2 py-1.5 font-semibold text-blue-700 dark:text-blue-300">{s.name}</td>
+                        <td className="px-2 py-1.5 font-semibold">
+                          <Link href={studentReportHref(viewerRole, s.id)} className="text-blue-700 hover:underline dark:text-blue-300">{s.name}</Link>
+                        </td>
                         <td className="px-2 py-1.5">{s.parent || "—"}</td>
                         <td className="px-2 py-1.5">{ageLabel(s.birthDate)}</td>
                         <td className="px-2 py-1.5">{s.teacher || "—"}</td>
@@ -341,13 +402,30 @@ export default function CenterPerformance() {
               <Heading icon={"\u{1F6A8}"}>Course Correction</Heading>
               <p className="-mt-2 mb-2 text-sm text-gray-500">Number of course corrections logged by category.</p>
               <RangePicker {...corrections} label="Course Correction" />
-              <CountsBarChart data={correctionBars} color="#f87171" />
+              <CountsBarChart data={correctionBars} color="#f87171" selected={pickedCorrection} onSelect={(bar) => setPickedCorrection((cur) => (cur === bar.key ? "" : bar.key))} />
+              {pickedCorrection ? (
+                <DrillDownList
+                  title={correctionBars.find((b) => b.key === pickedCorrection)?.label || "Course Correction"}
+                  entries={(data.courseCorrections || []).filter((e) => (e.type || "OTHER") === pickedCorrection && corrections.inRange(e.date))}
+                  onClose={() => setPickedCorrection("")}
+                />
+              ) : null}
             </section>
             <section className={card}>
               <Heading icon={"\u{1F3C5}"}>Character Highlights</Heading>
               <p className="-mt-2 mb-2 text-sm text-gray-500">Number of character highlights logged by category.</p>
               <RangePicker {...highlights} label="Character Highlight" />
-              <CountsBarChart data={highlightBars} color="#2f855a" />
+              <CountsBarChart data={highlightBars} color="#2f855a" selected={pickedHighlight} onSelect={(bar) => setPickedHighlight((cur) => (cur === bar.key ? "" : bar.key))} />
+              {pickedHighlight ? (
+                <DrillDownList
+                  title={highlightBars.find((b) => b.key === pickedHighlight)?.label || "Character Highlight"}
+                  entries={(data.characterHighlights || []).filter((e) => {
+                    const known = CHARACTER_HIGHLIGHT_TYPE_OPTIONS.some((t) => t.value === e.type);
+                    return (known ? e.type : "OTHER") === pickedHighlight && highlights.inRange(e.date);
+                  })}
+                  onClose={() => setPickedHighlight("")}
+                />
+              ) : null}
             </section>
           </div>
         </>

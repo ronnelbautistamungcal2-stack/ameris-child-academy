@@ -14,7 +14,6 @@ import {
 import { ageInMonths } from "@/lib/ageUtils";
 import { toDateKey, todaysMenuRows } from "@/lib/menuPlan";
 import { buildParentNotices } from "@/lib/parentNotices";
-import { ParentButton } from "@/components/parent/ParentUI";
 import { useShellTitle } from "@/components/shell/PortalShell";
 import { isStaffPortalRole } from "@/lib/roles";
 
@@ -366,7 +365,7 @@ export default function Dashboard() {
                           ? "/coach/checklist-review"
                           : "/teacher/checklists"
                     }
-                    disabled={role === "PARENT" || role === "SUBSCRIBER"}
+                    disabled={role === "PARENT"}
                   />
                 </div>
               </div>
@@ -493,7 +492,6 @@ export default function Dashboard() {
                     <Shortcut href="/admin/children" label="Students" />
                     <Shortcut href="/coach/classes" label="Classrooms" />
                     <Shortcut href="/admin/lessons" label="Lessons" />
-                    <Shortcut href="/admin/subscriptions" label="Subscriptions" />
                   </div>
                 </div>
               ) : null}
@@ -510,40 +508,6 @@ export default function Dashboard() {
   );
 }
 
-function ParentApprovalAlert({ plans }) {
-  const count = plans.length;
-  const firstChildName = (() => {
-    const child = plans[0]?.child;
-    return child ? `${child.firstName || ""} ${child.lastName || ""}`.trim() : "";
-  })();
-
-  return (
-    <div className="w-full rounded-[24px] border border-amber-300 bg-amber-50 p-4 shadow-[0_18px_45px_-30px_rgba(217,119,6,0.4)] dark:border-amber-500/40 dark:bg-amber-950/30">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-          <div>
-            <div className="text-sm font-black tracking-tight text-amber-900 dark:text-amber-100">
-              {count === 1
-                ? `An Individual Progress Plan for ${firstChildName || "your child"} needs your approval`
-                : `${count} Individual Progress Plans need your approval`}
-            </div>
-            <p className="mt-1 text-[13px] leading-5 text-amber-800/90 dark:text-amber-200/80">
-              Review the plan details and record your approval decision.
-            </p>
-          </div>
-        </div>
-        <ParentButton href="/parent/children?tab=progress_plan" className="shrink-0 px-3 py-2 text-xs">
-          Review now
-        </ParentButton>
-      </div>
-    </div>
-  );
-}
 
 function ParentDashboard({ centers, children, loading, error, submissions }) {
   const childList = useMemo(() => children || [], [children]);
@@ -551,8 +515,12 @@ function ParentDashboard({ centers, children, loading, error, submissions }) {
 
   const [events, setEvents] = useState([]);
   const [notifications, setNotifications] = useState([]);
-  const [behaviorPlans, setBehaviorPlans] = useState([]);
   const [menuRows, setMenuRows] = useState(null);
+  // Sign In / Sign Out from the dashboard and the new-messages bubble (client request 2026-10-29).
+  const [signedIn, setSignedIn] = useState({});
+  const [signingId, setSigningId] = useState("");
+  const [signError, setSignError] = useState("");
+  const [unreadMessages, setUnreadMessages] = useState(0);
 
   // Events drive both the calendar grid and the date-based notices.
   useEffect(() => {
@@ -605,20 +573,6 @@ function ParentDashboard({ centers, children, loading, error, submissions }) {
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const plans = await apiJson("/api/v1/behavior-plans");
-        if (!cancelled) setBehaviorPlans(Array.isArray(plans) ? plans : []);
-      } catch {
-        if (!cancelled) setBehaviorPlans([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -635,10 +589,6 @@ function ParentDashboard({ centers, children, loading, error, submissions }) {
     };
   }, []);
 
-  const pendingPlanApprovals = useMemo(
-    () => behaviorPlans.filter((plan) => !plan.parentApproved),
-    [behaviorPlans],
-  );
 
   const classroomNames = useMemo(() => {
     const map = new Map();
@@ -662,15 +612,51 @@ function ParentDashboard({ centers, children, loading, error, submissions }) {
               : "Age " + Math.floor(months / 12);
         const classLabel = classroomNames.get(child.classRoomId) || "";
 
+        const att = child.todayAttendance;
         return {
           id: child.id,
           name: [child.firstName, child.lastName].filter(Boolean).join(" "),
           initials: initials(child.firstName, child.lastName),
           meta: [ageLabel, classLabel].filter(Boolean).join("  |  ") || "View profile",
+          signedIn: child.id in signedIn ? signedIn[child.id] : Boolean(att?.checkedInAt && !att?.checkedOutAt),
         };
       }),
-    [childList, classroomNames],
+    [childList, classroomNames, signedIn],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = () =>
+      apiJson("/api/v1/messages/threads")
+        .then((threads) => {
+          if (cancelled) return;
+          const list = Array.isArray(threads) ? threads : [];
+          setUnreadMessages(list.reduce((sum, t) => sum + (t.archivedAt ? 0 : t.unreadCount || 0), 0));
+        })
+        .catch(() => {});
+    refresh();
+    window.addEventListener("focus", refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
+
+  async function toggleSignIn(row) {
+    setSigningId(row.id);
+    setSignError("");
+    try {
+      await apiJson(row.signedIn ? "/api/v1/attendance/check-out" : "/api/v1/attendance/check-in", {
+        method: "POST",
+        body: JSON.stringify({ childId: row.id }),
+      });
+      setSignedIn((cur) => ({ ...cur, [row.id]: !row.signedIn }));
+    } catch (e) {
+      setSignError(e.message || "Could not update sign in");
+    } finally {
+      setSigningId("");
+    }
+  }
 
   const notices = useMemo(
     () => buildParentNotices({ events, submissions, notifications }),
@@ -679,14 +665,21 @@ function ParentDashboard({ centers, children, loading, error, submissions }) {
 
   return (
     <div className="space-y-4">
-      {pendingPlanApprovals.length > 0 ? (
-        <ParentApprovalAlert plans={pendingPlanApprovals} />
-      ) : null}
-
+      <Link
+        href="/parent/messages"
+        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-5 py-4 shadow-sm transition hover:bg-sky-100 sm:w-72 dark:border-sky-800 dark:bg-sky-950/30"
+      >
+        <span>
+          <span className="block text-sm font-bold text-[#12386a] dark:text-sky-100">New Messages</span>
+          <span className="block text-3xl font-black text-[#12386a] dark:text-sky-100">{unreadMessages}</span>
+        </span>
+        <span aria-hidden="true" className="text-3xl">💬</span>
+      </Link>
+      {signError ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{signError}</div> : null}
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         <div className="space-y-4">
           <ImportantNoticesCard notices={notices} loading={loading} />
-          <MyChildrenCard childRows={childRows} loading={loading} error={error} />
+          <MyChildrenCard childRows={childRows} loading={loading} error={error} onSign={toggleSignIn} signingId={signingId} />
         </div>
 
         <div className="space-y-4">

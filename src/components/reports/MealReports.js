@@ -1,8 +1,9 @@
 import { CenterSelect, NAVY, ReportControls, ReportMessage, ReportSheet, input, longDate, monthRange, shortDate, useReportCenters } from "@/components/reports/ReportSheet";
 import { isCurrentlyEnrolled, useReportFilters } from "@/components/reports/ReportFilters";
 import { apiJson } from "@/lib/api";
+import { exportToExcel } from "@/lib/exportTable";
 import { MEALS } from "@/lib/menuPlan";
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 
 // Infant Feeding Report, Meal Production Record and Meal Claim (client
 // request 2026-10-23), generated from Admin > Reports.
@@ -33,9 +34,27 @@ export function InfantFeedingReport() {
   const { centers, centerId, setCenterId } = useReportCenters();
   const [children, setChildren] = useState([]);
   const [childId, setChildId] = useState("");
+  const [childSearch, setChildSearch] = useState("");
   const [range, setRange] = useState(() => monthRange());
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
+
+  // Infants only (under 12 months on the report's start date), searchable by
+  // name (client request 2026-10-29).
+  const infantChoices = useMemo(() => {
+    const start = new Date(`${range.from}T00:00:00`);
+    const q = childSearch.trim().toLowerCase();
+    return children.filter((c) => {
+      if (c.id === childId) return true;
+      if (filters.children !== "ALL" && !isCurrentlyEnrolled(c)) return false;
+      if (c.birthDate) {
+        const b = new Date(c.birthDate);
+        const months = (start.getFullYear() - b.getFullYear()) * 12 + start.getMonth() - b.getMonth();
+        if (months >= 12) return false;
+      }
+      return !q || c.name.toLowerCase().includes(q);
+    });
+  }, [children, childId, childSearch, filters.children, range.from]);
 
   useEffect(() => {
     if (!centerId) return;
@@ -59,12 +78,14 @@ export function InfantFeedingReport() {
       <ReportControls title="Infant Feeding Report">
         <CenterSelect centers={centers} centerId={centerId} setCenterId={(id) => { setCenterId(id); setChildId(""); }} />
         <label className="block text-sm font-bold">
-          Child
+          Search Infant
+          <input value={childSearch} onChange={(e) => setChildSearch(e.target.value)} placeholder="Type a name..." className={input} />
+        </label>
+        <label className="block text-sm font-bold">
+          Infant
           <select value={childId} onChange={(e) => setChildId(e.target.value)} className={input}>
-            <option value="">Select a child...</option>
-            {children
-              .filter((c) => filters.children === "ALL" || isCurrentlyEnrolled(c) || c.id === childId)
-              .map((c) => <option key={c.id} value={c.id}>{c.name}{c.enrolled ? "" : " (not enrolled)"}</option>)}
+            <option value="">{infantChoices.length ? "Select an infant..." : "No infants match"}</option>
+            {infantChoices.map((c) => <option key={c.id} value={c.id}>{c.name}{c.enrolled ? "" : " (not enrolled)"}</option>)}
           </select>
         </label>
         <DateRange range={range} setRange={setRange} />
@@ -173,8 +194,10 @@ export function MealProductionReport() {
         <ReportMessage>Loading…</ReportMessage>
       ) : (
         <ReportSheet heading="Ameris Solutions" title={`${data.meal.label} - Production Record`} subtitle={`${longDate(data.from)} – ${longDate(data.to)}`}>
+          {/* The headings stay in view while scrolling (client request 2026-10-29). */}
+          <div className="max-h-[75vh] overflow-auto print:max-h-none print:overflow-visible">
           <table className="w-full min-w-[900px] border-collapse text-sm">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-white dark:bg-gray-900 print:static">
               <tr>
                 <th colSpan={2 + cols} />
                 <th colSpan={groups.length} className="border-x border-t border-gray-800 px-2 py-1 text-center text-xs font-bold">Planned # Served</th>
@@ -218,7 +241,8 @@ export function MealProductionReport() {
               })}
             </tbody>
           </table>
-          <p className="px-6 py-2 text-xs text-gray-500">Planned # served is typed in here. Actual # served counts the children whose {data.meal.label.toLowerCase()} a teacher logged on Log Activity.</p>
+          </div>
+          <p className="px-6 py-2 text-xs text-gray-500">Only days the center is open are listed. Planned # served is typed in here. Actual # served counts the children whose {data.meal.label.toLowerCase()} a teacher logged on Log Activity.</p>
         </ReportSheet>
       )}
     </div>
@@ -233,6 +257,8 @@ export function MealClaimReport() {
   const [view, setView] = useState("claim");
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
+  const [classroom, setClassroom] = useState("");
+  const classrooms = useMemo(() => [...new Set((data?.rows || []).map((r) => r.classroom).filter(Boolean))].sort(), [data]);
 
   useEffect(() => {
     if (!centerId) return;
@@ -254,11 +280,47 @@ export function MealClaimReport() {
     </div>
   );
 
+  function exportClaim() {
+    const letters = data.meals;
+    const rows = data.rows.filter((r) => !classroom || r.classroom === classroom);
+    const headers = ["Child First Name", "Child Last Name", "Date of Birth", "Age", "Classroom", ...data.dates.flatMap((d) => letters.map((m) => `${d} ${m.letter}`)), ...letters.map((m) => `${m.label} Total`)];
+    const body = rows.map((r) => [
+      r.firstName,
+      r.lastName,
+      r.birthDate ? new Date(r.birthDate).toLocaleDateString("en-US", { timeZone: "UTC" }) : "",
+      r.age,
+      r.classroom,
+      ...data.dates.flatMap((d) => letters.map((m) => (r.cells[`${d}|${m.key}`] ? 1 : ""))),
+      ...letters.map((m) => r.totals[m.key]),
+    ]);
+    const summary = data.summary.meals.map((m) => [m.label, m.total, m.days, Number(m.average.toFixed(1))]);
+    exportToExcel(`meal-claim-${data.from}-to-${data.to}`, [
+      { name: "Meal Claim", headers, rows: body },
+      { name: "Summary", headers: ["Meal type", "Total meals served", "Days meal served", "Avg meals / service day"], rows: summary },
+    ]).catch((e) => setError(e.message || "Export failed"));
+  }
+
+  const actions = (
+    <div className="flex flex-wrap gap-2">
+      {toggle}
+      <button type="button" onClick={exportClaim} disabled={!data} className="rounded-lg border border-emerald-600 px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+        Export to Excel
+      </button>
+    </div>
+  );
+
   return (
     <div className="space-y-4">
-      <ReportControls title="Meal Claim" actions={toggle}>
+      <ReportControls title="Meal Claim" actions={actions}>
         <CenterSelect centers={centers} centerId={centerId} setCenterId={setCenterId} />
         <DateRange range={range} setRange={setRange} />
+        <label className="block text-sm font-bold">
+          Classroom
+          <select value={classroom} onChange={(e) => setClassroom(e.target.value)} className={input}>
+            <option value="">All Classrooms</option>
+            {classrooms.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
       </ReportControls>
       {error ? <ReportMessage tone="red">{error}</ReportMessage> : null}
       {!centerId ? (
@@ -297,14 +359,30 @@ export function MealClaimReport() {
           </table>
         </ReportSheet>
       ) : (
-        <MealClaimSheet data={data} />
+        <MealClaimSheet data={data} classroom={classroom} />
       )}
     </div>
   );
 }
 
-function MealClaimSheet({ data }) {
+const SORTS = [
+  ["firstName", "Child First Name"],
+  ["lastName", "Child Last Name"],
+  ["birthDate", "Date of Birth"],
+  ["classroom", "Classroom"],
+];
+// Widths of the pinned child columns, so each sticks just right of the last.
+const PIN = [{ left: 0, w: 110 }, { left: 110, w: 110 }, { left: 220, w: 90 }, { left: 310, w: 44 }, { left: 354, w: 120 }];
+
+function MealClaimSheet({ data, classroom = "" }) {
   const letters = data.meals;
+  const [sort, setSort] = useState({ key: "firstName", dir: 1 });
+  const rows = useMemo(() => {
+    const list = data.rows.filter((r) => !classroom || r.classroom === classroom);
+    const val = (r) => (sort.key === "birthDate" ? (r.birthDate ? new Date(r.birthDate).getTime() : 0) : String(r[sort.key] || "").toLowerCase());
+    return list.slice().sort((a, b) => (val(a) < val(b) ? -1 : val(a) > val(b) ? 1 : 0) * sort.dir);
+  }, [data.rows, classroom, sort]);
+  const pinStyle = (i) => ({ position: "sticky", left: PIN[i].left, minWidth: PIN[i].w, maxWidth: PIN[i].w });
   const dayLabel = (key) => {
     const d = new Date(`${key}T00:00:00`);
     return `${d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()} ${d.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit" })}`;
@@ -312,10 +390,27 @@ function MealClaimSheet({ data }) {
   const cell = "border-l border-gray-200 px-1 py-1 text-center dark:border-gray-700";
   return (
     <ReportSheet title="Meal Claim" subtitle={`${longDate(data.from)} – ${longDate(data.to)}`}>
-      <table className="border-collapse text-xs">
-        <thead>
+      {/* Child columns stay put when scrolling across the dates, and the date and
+          meal headings stay put when scrolling down (client request 2026-10-29). */}
+      <div className="max-h-[75vh] overflow-auto print:max-h-none print:overflow-visible">
+      <table className="border-separate border-spacing-0 text-xs">
+        <thead className="sticky top-0 z-20 print:static">
           <tr className={HEAD}>
-            {["Child First Name", "Child Last Name", "Date of Birth", "Age", "Classroom"].map((h) => <th key={h} rowSpan={2} className="whitespace-nowrap px-2 py-1 text-left font-bold">{h}</th>)}
+            {["Child First Name", "Child Last Name", "Date of Birth", "Age", "Classroom"].map((h, i) => {
+              const key = SORTS.find(([, label]) => label === h)?.[0];
+              return (
+                <th key={h} rowSpan={2} style={pinStyle(i)} className={`z-30 whitespace-nowrap bg-[#16305e] px-2 py-1 text-left font-bold print:static`}>
+                  {key ? (
+                    <button type="button" onClick={() => setSort((s) => ({ key, dir: s.key === key ? -s.dir : 1 }))} className="inline-flex items-center gap-1" aria-label={`Sort by ${h}`}>
+                      {h}
+                      <span aria-hidden>{sort.key === key ? (sort.dir === 1 ? "▲" : "▼") : "↕"}</span>
+                    </button>
+                  ) : (
+                    h
+                  )}
+                </th>
+              );
+            })}
             {data.dates.map((d) => <th key={d} colSpan={letters.length} className="border-l border-white/40 px-1 py-1 text-center font-bold">{dayLabel(d)}</th>)}
             {letters.map((m) => <th key={m.key} rowSpan={2} className="border-l border-white/40 px-1 py-1 text-center font-bold">{m.label} Total</th>)}
           </tr>
@@ -324,13 +419,11 @@ function MealClaimSheet({ data }) {
           </tr>
         </thead>
         <tbody>
-          {data.rows.map((r) => (
+          {rows.map((r) => (
             <tr key={r.id} className={ZEBRA}>
-              <td className="whitespace-nowrap px-2 py-1">{r.firstName}</td>
-              <td className="whitespace-nowrap px-2 py-1">{r.lastName}</td>
-              <td className="whitespace-nowrap px-2 py-1 text-right">{r.birthDate ? new Date(r.birthDate).toLocaleDateString("en-US", { timeZone: "UTC" }) : ""}</td>
-              <td className="px-2 py-1 text-right">{r.age}</td>
-              <td className="whitespace-nowrap px-2 py-1">{r.classroom}</td>
+              {[r.firstName, r.lastName, r.birthDate ? new Date(r.birthDate).toLocaleDateString("en-US", { timeZone: "UTC" }) : "", r.age, r.classroom].map((v, i) => (
+                <td key={i} style={pinStyle(i)} className={`z-10 truncate whitespace-nowrap bg-white px-2 py-1 dark:bg-gray-900 print:static ${i === 2 || i === 3 ? "text-right" : ""}`}>{v}</td>
+              ))}
               {data.dates.map((d) => letters.map((m) => <td key={`${d}-${m.key}`} className={cell}>{r.cells[`${d}|${m.key}`] ? 1 : ""}</td>))}
               {letters.map((m) => <td key={m.key} className={`${cell} font-semibold`}>{r.totals[m.key]}</td>)}
             </tr>
@@ -347,6 +440,7 @@ function MealClaimSheet({ data }) {
           </tr>
         </tbody>
       </table>
+      </div>
       <p className={`px-6 py-2 text-xs text-gray-500 ${NAVY}`}>A 1 means a teacher logged that meal or snack for the child on Log Activity. B Breakfast · A AM Snack · L Lunch · P PM Snack · D Dinner · E Evening Snack.</p>
     </ReportSheet>
   );

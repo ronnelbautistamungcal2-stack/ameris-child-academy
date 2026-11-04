@@ -38,9 +38,14 @@ async function apiPatch(request, path, body, cookies) {
   });
 }
 
-async function apiDelete(request, path, cookies) {
+// Deleting a center asks for the admin's password twice; the suite signs in as the demo admin.
+const CENTER_DELETE_PASSWORD = process.env.TEST_ADMIN_PASSWORD || "adminpass";
+
+async function apiDelete(request, path, cookies, data) {
+  const body = data ?? (/^\/api\/v1\/centers\/[^/?]+$/.test(path) ? { password: CENTER_DELETE_PASSWORD, confirmPassword: CENTER_DELETE_PASSWORD } : undefined);
   return request.delete(path, {
     headers: cookies ? { Cookie: cookies } : {},
+    ...(body ? { data: body } : {}),
   });
 }
 

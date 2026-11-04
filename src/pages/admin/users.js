@@ -2,7 +2,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useSession } from "next-auth/react";
-import { hasEmployeeRole, ROLE_OPTIONS, STAFF_DEPARTMENTS, userRoles } from "@/lib/roles";
+import { hasEmployeeRole, ROLE_OPTIONS, userRoles } from "@/lib/roles";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -17,7 +17,6 @@ const ROLE_CONFIG = {
   STUDENT_SUPPORT: { color: "#0d9488", bg: "#f0fdfa", darkBg: "rgba(13,148,136,0.18)", label: "Student Support", icon: "briefcase" },
   PARENT: { color: "#059669", bg: "#ecfdf5", darkBg: "rgba(5,150,105,0.18)", label: "Parent", icon: "heart" },
   COACH: { color: "#d97706", bg: "#fffbeb", darkBg: "rgba(217,119,6,0.18)", label: "Coach", icon: "star" },
-  SUBSCRIBER: { color: "#6b7280", bg: "#f9fafb", darkBg: "rgba(107,114,128,0.18)", label: "Subscriber", icon: "user" },
 };
 
 const PAGE_SIZE = 15;
@@ -64,7 +63,6 @@ export default function AdminUsers() {
   const [dob, setDob] = useState("");
   const [hireDate, setHireDate] = useState("");
   const [aboutMe, setAboutMe] = useState("");
-  const [staffDepartment, setStaffDepartment] = useState("");
   const [pictureUrl, setPictureUrl] = useState("");
   const [weeklySchedules, setWeeklySchedules] = useState([]);
 
@@ -168,7 +166,6 @@ export default function AdminUsers() {
     setDob("");
     setHireDate("");
     setAboutMe("");
-    setStaffDepartment("");
     setPictureUrl("");
     setWeeklySchedules([]);
   }, []);
@@ -185,7 +182,6 @@ export default function AdminUsers() {
     setDob(user.dob ? String(user.dob).slice(0, 10) : "");
     setHireDate(user.hireDate ? String(user.hireDate).slice(0, 10) : "");
     setAboutMe(user.aboutMe || "");
-    setStaffDepartment(user.staffDepartment || "");
     setPictureUrl(user.pictureUrl || "");
     setWeeklySchedules(normalizeWeeklySchedules(user));
   }, []);
@@ -272,7 +268,6 @@ export default function AdminUsers() {
           dob: employeeProfileNeeded ? dob || null : null,
           hireDate: employeeProfileNeeded ? hireDate || null : null,
           aboutMe: employeeProfileNeeded ? aboutMe || null : null,
-          staffDepartment: employeeProfileNeeded ? staffDepartment || null : null,
           pictureUrl: employeeProfileNeeded ? pictureUrl || null : null,
           weeklySchedules: employeeProfileNeeded ? validScheduleBlocks : [],
         }),
@@ -305,7 +300,6 @@ export default function AdminUsers() {
           dob: employeeProfileNeeded ? dob || null : null,
           hireDate: employeeProfileNeeded ? hireDate || null : null,
           aboutMe: employeeProfileNeeded ? aboutMe || null : null,
-          staffDepartment: employeeProfileNeeded ? staffDepartment || null : null,
           pictureUrl: employeeProfileNeeded ? pictureUrl || null : null,
           weeklySchedules: employeeProfileNeeded ? validScheduleBlocks : [],
         }),
@@ -527,20 +521,6 @@ export default function AdminUsers() {
                       type="date"
                     />
                   </Field>
-                  <Field label="Department">
-                    <select
-                      value={staffDepartment}
-                      onChange={(e) => setStaffDepartment(e.target.value)}
-                      style={inputStyle}
-                    >
-                      <option value="">Not assigned</option>
-                      {STAFF_DEPARTMENTS.map((dept) => (
-                        <option key={dept} value={dept}>
-                          {dept}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
                   <Field label="Profile Picture">
                     <PictureUpload value={pictureUrl} onChange={setPictureUrl} />
                   </Field>
@@ -672,7 +652,6 @@ export default function AdminUsers() {
               { key: "PARENT", label: "Parents" },
               { key: "ADMIN", label: "Admins" },
               { key: "COACH", label: "Coaches" },
-              { key: "SUBSCRIBER", label: "Subscribers" },
             ].map((t) => (
               <button
                 key={t.key}
@@ -775,8 +754,8 @@ export default function AdminUsers() {
 function UserRow({ user, isSelf, onEdit, onToggleDisabled, onDelete }) {
   const [hovered, setHovered] = useState(false);
   const roles = userRoles(user);
-  const primaryRole = roles[0] || user.role || "SUBSCRIBER";
-  const rc = ROLE_CONFIG[primaryRole] || ROLE_CONFIG.SUBSCRIBER;
+  const primaryRole = roles[0] || user.role || "PARENT";
+  const rc = ROLE_CONFIG[primaryRole] || ROLE_CONFIG.PARENT;
   const initials = getInitials(user.name || user.email);
 
   return (
@@ -832,7 +811,7 @@ function UserRow({ user, isSelf, onEdit, onToggleDisabled, onDelete }) {
       <td style={tdStyle}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
           {roles.map((role) => {
-            const roleConfig = ROLE_CONFIG[role] || ROLE_CONFIG.SUBSCRIBER;
+            const roleConfig = ROLE_CONFIG[role] || ROLE_CONFIG.PARENT;
             return (
               <span
                 key={role}

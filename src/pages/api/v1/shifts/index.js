@@ -1,4 +1,5 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { coachTeamUserIds, onCoachTeam } from "@/lib/coachTeam";
 import prisma from "@/lib/prisma";
 import { canManageShifts } from "@/lib/roles";
 
@@ -46,7 +47,7 @@ async function handleGet(req, res, session) {
     take: 500,
   });
 
-  return res.status(200).json(shifts);
+  return res.status(200).json(onCoachTeam(shifts, await coachTeamUserIds(prisma, session), "userId"));
 }
 
 async function handlePost(req, res, session) {

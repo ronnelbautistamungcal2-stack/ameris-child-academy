@@ -11,7 +11,6 @@ const NAV_FILES = [
   "src/components/teacher/teacherNav.js",
   "src/components/parent/parentNav.js",
   "src/components/staff/staffNav.js",
-  "src/components/subscriber/subscriberNav.js",
 ];
 
 const hrefs = [

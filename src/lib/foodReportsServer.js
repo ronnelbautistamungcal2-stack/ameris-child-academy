@@ -12,6 +12,7 @@ import {
   mealKeyForLog,
   mealLabel,
 } from "@/lib/foodReports";
+import { isCenterOpenOn } from "@/lib/centerSettings";
 import { dbDate } from "@/lib/menuAccess";
 import { COMPONENTS, MEALS, ageGroupsFor, componentsFor } from "@/lib/menuPlan";
 import prisma from "@/lib/prisma";
@@ -97,6 +98,22 @@ export async function infantFeedingReport({ centerId, childId, from, to }) {
   }
   // Kitchen portions fill in each meal's components (a meal the teacher didn't log still shows).
   const mealOrder = MEALS.map((m) => m.key);
+  // Bottle offered (oz) is the formula portion the kitchen recorded (client
+  // request 2026-10-29): the day's formula portions, in meal order, go on the
+  // day's bottles in time order; extra portions become bottle rows of their own.
+  const formulaByDay = {};
+  for (const p of portions) {
+    if (p.component !== "breastMilkOrFormula") continue;
+    (formulaByDay[p.date.toISOString().slice(0, 10)] ||= []).push(p);
+  }
+  for (const [date, list] of Object.entries(formulaByDay)) {
+    list.sort((a, b) => mealOrder.indexOf(a.meal) - mealOrder.indexOf(b.meal));
+    const bottles = dayOf(date).rows.filter((r) => r.activity === "Bottle").sort((a, b) => a.minutes - b.minutes);
+    list.forEach((p, i) => {
+      if (bottles[i]) bottles[i].offered = p.amount;
+      else dayOf(date).rows.push({ time: "", minutes: 10000 + mealOrder.indexOf(p.meal), activity: "Bottle", milk: "Formula", offered: p.amount, consumed: "", components: [] });
+    });
+  }
   for (const p of portions) {
     // Formula shows on the bottle rows only, as on the client's sheet.
     if (p.component === "breastMilkOrFormula") continue;
@@ -157,7 +174,7 @@ async function mealLogsByDay(centerId, from, to) {
  * number served (children whose meal the teachers logged).
  */
 export async function mealProductionReport({ centerId, meal, from, to }) {
-  const center = await prisma.center.findUnique({ where: { id: centerId }, select: { id: true, name: true, mealAgeGroups: true } });
+  const center = await prisma.center.findUnique({ where: { id: centerId }, select: { id: true, name: true, mealAgeGroups: true, careSchedule: true } });
   const groups = ageGroupsFor(center).filter((g) => !g.key.endsWith("Infants"));
   const [menu, planned, served] = await Promise.all([
     prisma.menuItem.findMany({ where: { centerId, meal, kind: "SERVED", date: { gte: dbDate(from), lte: dbDate(to) } } }),
@@ -168,7 +185,8 @@ export async function mealProductionReport({ centerId, meal, from, to }) {
   const births = Object.fromEntries(
     (await prisma.child.findMany({ where: { id: { in: childIds } }, select: { id: true, birthDate: true } })).map((c) => [c.id, c.birthDate]),
   );
-  const rows = dateKeysBetween(from, to).map((date) => {
+  // Only the days the center is open (Care & Schedule), client request 2026-10-29.
+  const rows = dateKeysBetween(from, to).filter((date) => isCenterOpenOn(center, date)).map((date) => {
     const components = [];
     for (const g of groups) {
       for (const component of componentsFor(meal, g.key)) {

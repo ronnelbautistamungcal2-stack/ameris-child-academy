@@ -77,7 +77,7 @@ function buildRoleMembershipWhere(roles, centerIds = []) {
 
 export function canUseMessageAudiences(user) {
   const roles = userRoles(user);
-  return !roles.includes("PARENT") && !roles.includes("SUBSCRIBER");
+  return !roles.includes("PARENT");
 }
 
 export function getMessageAudienceOption(key) {

@@ -69,11 +69,15 @@ export function formatExpectedAge(step) {
   return min || max;
 }
 
+// Years and months from a year on: "1 yr 3 mo – 1 yr 8 mo", not
+// "15 months – 20 months" (client request 2026-10-29).
 function formatExpectedAgeOnly(step) {
   const months = (step?.ageYears || 0) * 12 + (step?.ageMonths || 0);
   if (step?.ageYears == null && step?.ageMonths == null) return "";
-  if (months < 24) return `${months} months`;
-  return step.ageMonths ? `${step.ageYears} yr ${step.ageMonths} mo` : `${step.ageYears} years`;
+  if (months < 12) return `${months} month${months === 1 ? "" : "s"}`;
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  return rest ? `${years} yr ${rest} mo` : `${years} yr${years === 1 ? "" : "s"}`;
 }
 
 /**

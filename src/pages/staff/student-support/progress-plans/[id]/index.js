@@ -13,6 +13,20 @@ export default function ProgressPlanPage() {
   const { id } = router.query;
   const [plan, setPlan] = useState(null);
   const [error, setError] = useState("");
+  const [closing, setClosing] = useState(false);
+
+  async function setStatus(status) {
+    if (status === "CLOSED" && !window.confirm("Close this plan? It moves to View All and stops showing as a current plan.")) return;
+    setClosing(true);
+    setError("");
+    try {
+      setPlan(await apiJson(`/api/v1/ipp/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }));
+    } catch (e) {
+      setError(e.message || "Could not update the plan");
+    } finally {
+      setClosing(false);
+    }
+  }
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -45,6 +59,17 @@ export default function ProgressPlanPage() {
                 <Link href={`/staff/student-support/progress-plans/${plan.id}/edit`} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700">
                   {"✎"} Edit Plan
                 </Link>
+              )}
+              {plan.canManage && (
+                plan.status === "CLOSED" ? (
+                  <button type="button" onClick={() => setStatus("ACTIVE")} disabled={closing} className="rounded-lg border border-emerald-600 px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60">
+                    Reopen Plan
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => setStatus("CLOSED")} disabled={closing} className="rounded-lg border border-gray-400 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:text-gray-200">
+                    {closing ? "Closing..." : "Close Plan"}
+                  </button>
+                )
               )}
             </div>
           )}

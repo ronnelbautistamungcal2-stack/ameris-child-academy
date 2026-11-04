@@ -1,4 +1,5 @@
 import { accessibleCenterIds, getSession } from "@/lib/auth";
+import { coachTeamUserIds, onCoachTeam } from "@/lib/coachTeam";
 import prisma from "@/lib/prisma";
 import { EMPLOYEE_ROLES, isManagerRole } from "@/lib/roles";
 import { EMPLOYED_WHERE } from "@/lib/employment";
@@ -37,7 +38,7 @@ export default async function handler(req, res) {
         coachTeamMembers: { include: { staff: { select: { id: true, name: true, email: true } } } },
       },
     });
-    return res.status(200).json(staff);
+    return res.status(200).json(onCoachTeam(staff, await coachTeamUserIds(prisma, session)));
   }
 
   res.setHeader("Allow", ["GET"]);

@@ -74,13 +74,13 @@ export default function ParentFeesWorkspace() {
   const load = useCallback(async () => {
     if (!centerId) return;
     try {
-      const qs = new URLSearchParams({ centerId, ...rangeParams(range), ...(classRoomId ? { classRoomId } : {}), ...(search.trim() ? { q: search.trim() } : {}) });
+      const qs = new URLSearchParams({ centerId, ...rangeParams(range), ...(search.trim() ? { q: search.trim() } : {}) });
       setCharges(await apiJson(`/api/v1/billing/charges?${qs}`));
       setError("");
     } catch (e) {
       setError(e.message || "Failed to load parent fees");
     }
-  }, [centerId, range, classRoomId, search]);
+  }, [centerId, range, search]);
 
   useEffect(() => {
     const timer = setTimeout(load, 250);
@@ -116,10 +116,6 @@ export default function ParentFeesWorkspace() {
 
       <div className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_auto]">
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by student or parent name..." aria-label="Search" className={control} />
-        <select value={classRoomId} onChange={(e) => setClassRoomId(e.target.value)} aria-label="Classroom" className={control}>
-          <option value="">All Classrooms</option>
-          {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
         <select value={range} onChange={(e) => setRange(e.target.value)} aria-label="Dates" className={control}>
           {DATE_RANGES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
         </select>
@@ -134,22 +130,17 @@ export default function ParentFeesWorkspace() {
         <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
           <table className="min-w-full text-sm">
             <thead className="bg-blue-50 text-left text-[#0b2a5b] dark:bg-gray-800 dark:text-blue-100">
-              <tr>{["Student Name", "Age", "Classroom", "Parent Name", "Date", "Item Issued", "Amount", "Actions"].map((h) => <th key={h} className="px-4 py-3 font-bold">{h}</th>)}</tr>
+              <tr>{["Student Name", "Age", "Parent Name", "Date", "Item Issued", "Amount"].map((h) => <th key={h} className="px-4 py-3 font-bold">{h}</th>)}</tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
               {charges.map((c) => (
                 <tr key={c.id}>
                   <td className="px-4 py-2.5 font-semibold text-[#0b2a5b] dark:text-blue-100">{c.child?.name || "—"}</td>
                   <td className="px-4 py-2.5">{ageYears(c.child?.birthDate)}</td>
-                  <td className="px-4 py-2.5">{c.child?.classroom || "—"}</td>
                   <td className="px-4 py-2.5">{c.parent?.name || "—"}</td>
                   <td className="whitespace-nowrap px-4 py-2.5">{fmt(c.date)}</td>
                   <td className="px-4 py-2.5">{c.description}</td>
                   <td className="px-4 py-2.5">{money(c.amountCents)}</td>
-                  <td className="whitespace-nowrap px-4 py-2.5">
-                    <button type="button" onClick={() => setEditing(c)} className="mr-2 rounded-lg border border-gray-300 px-3 py-1 text-sm font-semibold">✎ Edit</button>
-                    <button type="button" onClick={() => setDeleting(c)} aria-label={`Delete ${c.description}`} className="rounded-lg border border-red-200 bg-red-50 px-3 py-1 text-sm text-red-600">🗑</button>
-                  </td>
                 </tr>
               ))}
               {!charges.length ? <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-500">No parent fees yet.</td></tr> : null}

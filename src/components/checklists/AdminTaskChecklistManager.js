@@ -26,8 +26,9 @@ import {
   normalizeLessonSource,
 } from "@/lib/lessonScheduling";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { STAFF_PORTAL_ROLES } from "@/lib/roles";
-import { isLogActivityLink } from "@/lib/checklistLinks";
+import { roleLabel, STAFF_PORTAL_ROLES } from "@/lib/roles";
+import { CHECKLIST_ROLE_VALUES } from "@/lib/dailyChecklistVisibility";
+import { isLogActivityLink, isMenuLink } from "@/lib/checklistLinks";
 
 const CARD_STYLE = { border: "border-l-sky-400", bg: "bg-sky-50", text: "text-sky-700" };
 
@@ -215,6 +216,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
   const [newMonthlyDay, setNewMonthlyDay] = useState("");
   const [newClassRoomIds, setNewClassRoomIds] = useState([]);
   const [newNoClassroom, setNewNoClassroom] = useState(false);
+  const [newRoles, setNewRoles] = useState([]);
   const [classroomAccordionOpen, setClassroomAccordionOpen] = useState(false);
   const [newAssignedUserIds, setNewAssignedUserIds] = useState([]);
   const [assigneeAccordionOpen, setAssigneeAccordionOpen] = useState(false);
@@ -276,6 +278,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
     setNewMonthlyDay("");
     setNewClassRoomIds([]);
     setNewNoClassroom(false);
+    setNewRoles([]);
     setClassroomAccordionOpen(false);
     setNewAssignedUserIds([]);
     setAssigneeAccordionOpen(false);
@@ -305,6 +308,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
     setNewMonthlyDay(checklist.monthlyDay ? String(checklist.monthlyDay) : "");
     setNewClassRoomIds(normalizeChecklistClassRoomIds(checklist.classRoomIds, checklist.classRoomId));
     setNewNoClassroom(!!checklist.noClassroom);
+    setNewRoles(Array.isArray(checklist.roles) ? checklist.roles : []);
     setNewAssignedUserIds(
       Array.isArray(checklist.assignedUserIds) && checklist.assignedUserIds.length
         ? checklist.assignedUserIds
@@ -427,6 +431,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
           repeatDays: newFrequency === "WEEKLY" ? normalizeRepeatDays(newRepeatDays) : [],
           monthlyDay: newFrequency === "MONTHLY" ? normalizeMonthlyDay(newMonthlyDay) : null,
           noClassroom: newNoClassroom,
+          roles: newRoles,
           classRoomIds: newNoClassroom ? [] : normalizeChecklistClassRoomIds(newClassRoomIds),
           assignedUserIds: newAssignedUserIds,
           items: newItems
@@ -775,6 +780,25 @@ export default function AdminTaskChecklistManager({ centerId }) {
                   className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:border-sky-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-200"
                 />
               </label>
+
+              {/* Role: the checklist only shows for these roles (client request 2026-10-29). */}
+              <fieldset className="block">
+                <legend className="mb-1 text-xs font-semibold text-gray-500">Role</legend>
+                <div className="flex flex-wrap gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                  {CHECKLIST_ROLE_VALUES.map((r) => (
+                    <label key={r} className="flex cursor-pointer items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={newRoles.includes(r)}
+                        onChange={() => setNewRoles((current) => (current.includes(r) ? current.filter((x) => x !== r) : [...current, r]))}
+                        className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+                      />
+                      {roleLabel(r)}
+                    </label>
+                  ))}
+                  <p className="w-full text-xs text-gray-500">{newRoles.length ? "Only these roles see this checklist." : "None picked: every role that is assigned can see it."}</p>
+                </div>
+              </fieldset>
 
               <label className="block">
                 <div className="mb-1 text-xs font-semibold text-gray-500">Classrooms</div>
@@ -1146,6 +1170,10 @@ export default function AdminTaskChecklistManager({ centerId }) {
                         {isLogActivityLink(item.directLink) ? (
                           <div className="mt-1 text-[11px] font-semibold text-sky-700">
                             Links to Log Activity: staff must open it from this item before they can check it off.
+                          </div>
+                        ) : isMenuLink(item.directLink) ? (
+                          <div className="mt-1 text-[11px] font-semibold text-sky-700">
+                            Links to the menu: staff must open it from this item before they can check it off.
                           </div>
                         ) : null}
                       </label>

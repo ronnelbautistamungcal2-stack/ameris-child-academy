@@ -3,7 +3,7 @@ import Skeleton from "@/components/ui/Skeleton";
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
 import { shiftDayKey, todayKey } from "@/lib/checklistTime";
-import { roleLabel } from "@/lib/roles";
+import { isEmployeeRole, roleLabel } from "@/lib/roles";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 // Shift Schedules (client mockup 23-Shift-Schedules), for coaches and HR: one
@@ -107,7 +107,11 @@ export default function ShiftSchedulesWorkspace({ Layout, layoutProps = {} }) {
     return map;
   }, [shifts]);
 
-  const roles = useMemo(() => [...new Set(staff.flatMap((u) => (u.roles?.length ? u.roles : [u.role])))].sort(), [staff]);
+  // Staff roles only: a teacher who is also a parent shouldn't add Parent (client request 2026-10-29).
+  const roles = useMemo(
+    () => [...new Set(staff.flatMap((u) => (u.roles?.length ? u.roles : [u.role])))].filter(isEmployeeRole).sort(),
+    [staff],
+  );
   const departments = useMemo(() => [...new Set(staff.map((u) => u.staffDepartment).filter(Boolean))].sort(), [staff]);
   const rows = staff.filter((u) => {
     const userRoles = u.roles?.length ? u.roles : [u.role];

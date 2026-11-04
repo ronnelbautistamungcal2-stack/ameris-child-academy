@@ -1,3 +1,4 @@
+import ActivityPhotos, { activityPhotoUrls } from "@/components/reports/ActivityPhotos";
 import { characterHighlightLabel, courseCorrectionSummary, ippSummary } from "@/lib/dailyLogOptions";
 import { useState } from "react";
 
@@ -25,7 +26,8 @@ export const ACTIVITY_TYPE_LABELS = {
 
 const TOILETING_TYPE_LABELS = { SUCCESS: "Success", TRIED: "Tried", ACCIDENT: "Accident" };
 
-export default function ActivityLogEntry({ activity: a }) {
+/** inline: the note and photos show under the entry, with no arrow to open it. */
+export default function ActivityLogEntry({ activity: a, inline = false }) {
   const [open, setOpen] = useState(false);
   const typeLabel = ACTIVITY_TYPE_LABELS[a.type] || a.type;
   const time = a.createdAt ? new Date(a.createdAt).toLocaleString() : "";
@@ -77,14 +79,43 @@ export default function ActivityLogEntry({ activity: a }) {
   }
 
   const detailText = renderDetails();
+  const photos = activityPhotoUrls(a);
+  const expandable = Boolean(detailText || photos.length);
+  // Some callers pass the child record, others a display name.
+  const childName = a.child && typeof a.child === "object" ? [a.child.firstName, a.child.lastName].filter(Boolean).join(" ") : a.child;
+
+  if (inline) {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-slate-800/80">
+        <div className="flex w-full items-center gap-3 px-3 py-2.5">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-100 dark:bg-slate-700">
+            <ActivityIcon type={a.type} />
+          </span>
+          <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-extrabold ${ACTIVITY_PILL[a.type] || ACTIVITY_PILL.DEFAULT}`}>
+            {typeLabel}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[13px] text-gray-600 dark:text-gray-300">
+            {childName ? <span className="mr-2 font-semibold text-gray-800 dark:text-gray-100">{childName}</span> : null}
+            {time}
+          </span>
+        </div>
+        {expandable ? (
+          <div className="border-t border-gray-100 px-3 py-2.5 pl-[3.25rem] text-[13px] text-gray-700 dark:border-gray-700 dark:text-gray-200">
+            {detailText}
+            <ActivityPhotos urls={photos} className={detailText ? "mt-2" : ""} />
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-slate-800/80">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        disabled={!detailText}
-        aria-expanded={detailText ? open : undefined}
+        disabled={!expandable}
+        aria-expanded={expandable ? open : undefined}
         className="flex w-full items-center gap-3 px-3 py-2.5 text-left disabled:cursor-default"
       >
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-100 dark:bg-slate-700">
@@ -94,10 +125,11 @@ export default function ActivityLogEntry({ activity: a }) {
           {typeLabel}
         </span>
         <span className="min-w-0 flex-1 truncate text-[13px] text-gray-600 dark:text-gray-300">
-          {a.child ? <span className="mr-2 font-semibold text-gray-800 dark:text-gray-100">{a.child}</span> : null}
+          {childName ? <span className="mr-2 font-semibold text-gray-800 dark:text-gray-100">{childName}</span> : null}
           {time}
+          {photos.length ? <span className="ml-2" title={`${photos.length} photo${photos.length === 1 ? "" : "s"}`} aria-label={`${photos.length} photo${photos.length === 1 ? "" : "s"}`}>📷</span> : null}
         </span>
-        {detailText ? (
+        {expandable ? (
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -110,9 +142,10 @@ export default function ActivityLogEntry({ activity: a }) {
           </svg>
         ) : null}
       </button>
-      {open && detailText ? (
+      {open && expandable ? (
         <div className="border-t border-gray-100 px-3 py-2.5 pl-[3.25rem] text-[13px] text-gray-700 dark:border-gray-700 dark:text-gray-200">
           {detailText}
+          <ActivityPhotos urls={photos} className={detailText ? "mt-2" : ""} />
         </div>
       ) : null}
     </div>

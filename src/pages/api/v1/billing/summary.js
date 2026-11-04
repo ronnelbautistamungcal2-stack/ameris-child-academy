@@ -58,7 +58,7 @@ export default createApiHandler(async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) throw unauthorized();
 
-  if (!["ADMIN", "PARENT", "TEACHER", "COACH", "SUBSCRIBER"].includes(session.user.role)) {
+  if (!["ADMIN", "PARENT", "TEACHER", "COACH"].includes(session.user.role)) {
     throw forbidden();
   }
 

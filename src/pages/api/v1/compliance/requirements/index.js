@@ -8,7 +8,6 @@ export function serializeRequirement(r) {
     ...r,
     nextDue: keyOf(new Date(r.nextDue)),
     status,
-    progress: { done: status === "COMPLETED" ? 1 : 0, total: 1 },
   };
 }
 

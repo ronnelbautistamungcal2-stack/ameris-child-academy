@@ -32,7 +32,7 @@ test.describe("Reports hub", () => {
     await waitForLoadingDone(page);
     await expect(page.getByRole("navigation", { name: "Report categories" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Meal Production Record" }).first()).toBeVisible();
-    await page.getByRole("link", { name: /Coaching Activity/ }).click();
-    await expect(page).toHaveURL(/report=coaching-activity/);
+    await page.getByRole("link", { name: /Carpool Report/ }).click();
+    await expect(page).toHaveURL(/report=carpool/);
   });
 });

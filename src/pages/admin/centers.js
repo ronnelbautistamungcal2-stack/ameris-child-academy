@@ -1,6 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import CenterFormModal from "@/components/admin/CenterFormModal";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { CENTER_STATUSES } from "@/lib/centerSettings";
@@ -87,15 +86,31 @@ export default function AdminCenters() {
     }
   }
 
+  // The admin types their password twice to delete a center (client request 2026-10-29).
+  const [deletePasswords, setDeletePasswords] = useState({ password: "", confirmPassword: "" });
+  const [deleteError, setDeleteError] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  function closeDelete() {
+    setDeleteTarget(null);
+    setDeletePasswords({ password: "", confirmPassword: "" });
+    setDeleteError("");
+  }
+
   async function deleteCenter() {
     const target = deleteTarget;
-    setDeleteTarget(null);
-    setError("");
+    if (!deletePasswords.password || !deletePasswords.confirmPassword) return setDeleteError("Enter your password in both boxes.");
+    if (deletePasswords.password !== deletePasswords.confirmPassword) return setDeleteError("The two passwords don't match.");
+    setDeleting(true);
+    setDeleteError("");
     try {
-      await apiJson(`/api/v1/centers/${target.id}`, { method: "DELETE" });
+      await apiJson(`/api/v1/centers/${target.id}`, { method: "DELETE", body: JSON.stringify(deletePasswords) });
+      closeDelete();
       await refresh();
     } catch (e) {
-      setError(e.message || "Failed to delete center");
+      setDeleteError(e.message || "Failed to delete center");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -246,15 +261,41 @@ export default function AdminCenters() {
         />
       ) : null}
 
-      <ConfirmDialog
-        open={Boolean(deleteTarget)}
-        title="Delete center?"
-        message={deleteTarget ? `Delete ${deleteTarget.name} and everything in it? This cannot be undone.` : ""}
-        confirmLabel="Delete"
-        variant="danger"
-        onConfirm={deleteCenter}
-        onCancel={() => setDeleteTarget(null)}
-      />
+      {deleteTarget ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="delete-center-title">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              deleteCenter();
+            }}
+            className="w-full max-w-md space-y-3 rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-900"
+          >
+            <h2 id="delete-center-title" className="text-xl font-black text-red-700">Delete center?</h2>
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              Delete <b>{deleteTarget.name}</b> and everything in it? This cannot be undone. Enter your password twice to confirm.
+            </p>
+            {deleteError ? <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{deleteError}</div> : null}
+            {[["password", "Password"], ["confirmPassword", "Re-enter Password"]].map(([key, label]) => (
+              <label key={key} className="block text-sm font-semibold text-gray-800 dark:text-gray-200">
+                {label}
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={deletePasswords[key]}
+                  onChange={(e) => setDeletePasswords((p) => ({ ...p, [key]: e.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800"
+                />
+              </label>
+            ))}
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={closeDelete} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold">Cancel</button>
+              <button type="submit" disabled={deleting} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60">
+                {deleting ? "Deleting..." : "Delete Center"}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </AdminLayout>
   );
 }

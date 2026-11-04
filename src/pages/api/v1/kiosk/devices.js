@@ -60,6 +60,23 @@ export default async function handler(req, res) {
     return res.status(201).json({ id: device.id, name: device.name, center: { id: center.id, name: center.name } });
   }
 
+  // PATCH ?id=: open an enrolled kiosk on this browser (client request
+  // 2026-10-29). The kiosk gets a fresh device key here, so the tablet that
+  // held it before stops working as that kiosk.
+  if (req.method === "PATCH") {
+    const id = String(req.query.id || "");
+    const device = id ? await prisma.kioskDevice.findUnique({ where: { id }, include: { center: { select: { id: true, name: true } } } }) : null;
+    if (!device || device.revokedAt) return res.status(404).json({ error: "Kiosk not found" });
+    const previous = req.cookies?.[DEVICE_COOKIE];
+    if (previous && hashDeviceToken(previous) !== device.tokenHash) {
+      await prisma.kioskDevice.updateMany({ where: { tokenHash: hashDeviceToken(previous), revokedAt: null }, data: { revokedAt: new Date() } });
+    }
+    const token = newDeviceToken();
+    await prisma.kioskDevice.update({ where: { id }, data: { tokenHash: hashDeviceToken(token) } });
+    res.setHeader("Set-Cookie", deviceCookieHeader(token));
+    return res.status(200).json({ id: device.id, name: device.name, center: device.center });
+  }
+
   if (req.method === "DELETE") {
     const id = String(req.query.id || "");
     const device = id ? await prisma.kioskDevice.findUnique({ where: { id } }) : null;
@@ -72,6 +89,6 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
 
-  res.setHeader("Allow", ["GET", "POST", "DELETE"]);
+  res.setHeader("Allow", ["GET", "POST", "PATCH", "DELETE"]);
   return res.status(405).end();
 }

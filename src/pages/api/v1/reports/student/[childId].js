@@ -84,7 +84,7 @@ export default async function handler(req, res) {
           createdAt: { gte: since },
           OR: [{ type: { in: ["BEHAVIOR", "CHARACTER_HIGHLIGHT"] } }, { details: { path: ["kind"], equals: "DAILY_GRADE" } }],
         },
-        select: { id: true, type: true, details: true, notes: true, createdAt: true },
+        select: { id: true, type: true, details: true, notes: true, createdAt: true, recordedBy: { select: { name: true, email: true } } },
         orderBy: { createdAt: "desc" },
       }),
       prisma.behaviorPlan.findMany({
@@ -145,7 +145,7 @@ export default async function handler(req, res) {
       canTrack,
       characterHighlights: logs
         .filter((l) => l.type === "CHARACTER_HIGHLIGHT")
-        .map((l) => ({ id: l.id, label: characterHighlightLabel(l.details?.characterHighlightType), date: dayKey(l.createdAt), notes: l.notes || "" })),
+        .map((l) => ({ id: l.id, label: characterHighlightLabel(l.details?.characterHighlightType), date: dayKey(l.createdAt), notes: l.notes || "", loggedBy: l.recordedBy?.name || l.recordedBy?.email || "" })),
       courseCorrections: logs
         .filter((l) => l.type === "BEHAVIOR" && l.details?.kind !== "DAILY_GRADE")
         .map((l) => ({
@@ -154,6 +154,7 @@ export default async function handler(req, res) {
           level: Number(l.details?.behaviorLevel) || null,
           date: dayKey(l.createdAt),
           notes: l.notes || "",
+          loggedBy: l.recordedBy?.name || l.recordedBy?.email || "",
         })),
       ipps: plans.map((p) => ({ id: p.id, title: p.focusArea || p.title, date: dayKey(p.startDate) })),
       activity: activity.map((a) => ({

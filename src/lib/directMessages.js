@@ -5,18 +5,25 @@ import prisma from "@/lib/prisma";
 import { notifyMessageRecipients } from "@/lib/messaging";
 import { emitNewMessage } from "@/lib/socket";
 
-export async function sendDirectMessage({ sender, recipientIds, centerId = null, title, body }) {
+/**
+ * `senderRole` / `recipientRole` file the thread under those roles' inboxes;
+ * `type` is MESSAGE, OPEN_POINT or REQUEST.
+ */
+export async function sendDirectMessage({ sender, recipientIds, centerId = null, title, body, type = "MESSAGE", senderRole = null, recipientRole = null }) {
   const threads = [];
   for (const recipientId of [...new Set(recipientIds)].filter((id) => id && id !== sender.id)) {
     const thread = await prisma.messageThread.create({
       data: {
         centerId,
         title: title || null,
-        type: "MESSAGE",
+        type,
         status: "OPEN",
         createdById: sender.id,
         participants: {
-          create: [{ userId: sender.id, lastReadAt: new Date() }, { userId: recipientId }],
+          create: [
+            { userId: sender.id, lastReadAt: new Date(), ...(senderRole ? { asRole: senderRole } : {}) },
+            { userId: recipientId, ...(recipientRole ? { asRole: recipientRole } : {}) },
+          ],
         },
         messages: { create: { senderId: sender.id, body: String(body || "").slice(0, 5000) } },
       },

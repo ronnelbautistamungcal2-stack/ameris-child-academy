@@ -10,7 +10,7 @@ const CHARGE_INCLUDE = {
 /**
  * GET  /api/v1/billing/charges?centerId=[&from=&to=&classRoomId=&q=]
  *      Parent Fees list (client mockup 09-03). Admins and the center's coaches.
- * POST /api/v1/billing/charges { centerId, parentId, date, rows: [{ childId, description, amount }] }
+ * POST /api/v1/billing/charges { centerId, parentId, date, rows: [{ childId, description, amount, chargeType }] }
  *      Add Charge (09-04): goes on the parent's invoice for that month and
  *      the parent is notified.
  */
@@ -24,6 +24,8 @@ export default async function handler(req, res) {
 
   if (req.method === "GET") {
     const { from, to, classRoomId, q } = req.query;
+    // The coach's Billing / Parent Fees list shows Supplies charges only (client request 2026-10-29).
+    const chargeType = session.user.role === "ADMIN" ? String(req.query.chargeType || "").toUpperCase() : "SUPPLIES";
     const date = {};
     if (/^\d{4}-\d{2}-\d{2}$/.test(String(from || ""))) date.gte = dbDate(from);
     if (/^\d{4}-\d{2}-\d{2}$/.test(String(to || ""))) date.lte = dbDate(to);
@@ -31,6 +33,7 @@ export default async function handler(req, res) {
     const charges = await prisma.billingCharge.findMany({
       where: {
         centerId,
+        ...(chargeType ? { chargeType } : {}),
         ...(Object.keys(date).length ? { date } : {}),
         ...(classRoomId ? { child: { classRoomId: String(classRoomId) } } : {}),
         ...(search

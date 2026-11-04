@@ -5,7 +5,6 @@ import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { AGE_GROUPS } from "@/lib/ageUtils";
 import { apiJson } from "@/lib/api";
 import { COMPLIANCE_CATEGORIES, FREQUENCIES, STATUS_META } from "@/lib/complianceRequirements";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // Admin Compliance Alerts (client mockups 37-01/02): requirements grouped by
@@ -95,8 +94,14 @@ export default function ComplianceAlertsPage() {
         await apiJson(`/api/v1/compliance/requirements/${row.id}`, { method: "DELETE" });
         setRows((list) => list.filter((r) => r.id !== row.id));
       } else {
-        const updated = await apiJson(`/api/v1/compliance/requirements/${row.id}`, { method, body: JSON.stringify(body) });
-        setRows((list) => list.map((r) => (r.id === row.id ? updated : r)));
+        const result = await apiJson(`/api/v1/compliance/requirements/${row.id}`, { method, body: JSON.stringify(body) });
+        // Checking off returns { requirement, next }: the completed row stays and
+        // the next due date is a row of its own. Undo returns the row it dropped.
+        const updated = result?.requirement || result;
+        setRows((list) => {
+          const kept = list.filter((r) => r.id !== result?.removedId).map((r) => (r.id === row.id ? updated : r));
+          return result?.next ? [...kept, result.next] : kept;
+        });
       }
       setError("");
     } catch (e) {
@@ -117,10 +122,6 @@ export default function ComplianceAlertsPage() {
             <option value="">All Centers</option>
             {centers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-        </div>
-        <div className="flex gap-6 border-b border-gray-200 text-sm font-semibold dark:border-gray-700">
-          <span className="border-b-2 border-[#0b2a5b] pb-2 text-[#0b2a5b] dark:border-blue-200 dark:text-blue-100">Requirements</span>
-          <Link href="/admin/teacher-logging-alerts" className="pb-2 text-gray-500 hover:text-gray-800 dark:text-gray-400">Teacher Logging Alerts</Link>
         </div>
         {error ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
 
@@ -170,13 +171,12 @@ export default function ComplianceAlertsPage() {
                   <th className="px-2 py-2">Frequency</th>
                   <th className="px-2 py-2">Next Due</th>
                   <th className="px-2 py-2">Status</th>
-                  <th className="px-2 py-2">Progress</th>
                   <th className="px-2 py-2">Notes</th>
                   <th className="px-3 py-2 text-right">Actions</th>
                 </tr>
               </thead>
               {groups.length === 0 ? (
-                <tbody><tr><td colSpan={8} className="px-4 py-8 text-center text-gray-500">{rows.length ? "No requirements match these filters." : "No compliance requirements yet. Use Add Requirement to start the list."}</td></tr></tbody>
+                <tbody><tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">{rows.length ? "No requirements match these filters." : "No compliance requirements yet. Use Add Requirement to start the list."}</td></tr></tbody>
               ) : (
                 groups.map(([category, items]) => {
                   const overdue = items.filter((r) => r.status === "OVERDUE").length;
@@ -185,7 +185,7 @@ export default function ComplianceAlertsPage() {
                   return (
                     <tbody key={category} className="border-b border-blue-200 dark:border-gray-700">
                       <tr>
-                        <td colSpan={8} className="px-3 py-2">
+                        <td colSpan={7} className="px-3 py-2">
                           <button type="button" onClick={() => setCollapsed((c) => ({ ...c, [category]: open }))} aria-expanded={open} className="flex w-full items-center gap-2 text-left">
                             <span aria-hidden="true">{categoryIcon(category)}</span>
                             <span className={`font-bold ${NAVY}`}>{category}</span>
@@ -214,12 +214,6 @@ export default function ComplianceAlertsPage() {
                               <td className="px-2 py-1.5">{frequencyLabel(r.frequency)}</td>
                               <td className="px-2 py-1.5 text-[#0b2a5b] dark:text-blue-100">{fmt(r.nextDue)}</td>
                               <td className={`px-2 py-1.5 ${meta.text}`}><span className={`mr-1.5 inline-block h-2 w-2 rounded-full ${meta.dot}`} aria-hidden="true" />{meta.label}</td>
-                              <td className="px-2 py-1.5">
-                                <span className="mr-2">{r.progress.done}/{r.progress.total}</span>
-                                <span className="inline-block h-1.5 w-24 rounded bg-gray-200 align-middle dark:bg-gray-700">
-                                  <span className="block h-1.5 rounded bg-[#1d5fd1]" style={{ width: `${(r.progress.done / r.progress.total) * 100}%` }} />
-                                </span>
-                              </td>
                               <td className="max-w-[16rem] truncate px-2 py-1.5 text-gray-600 dark:text-gray-300" title={r.notes || undefined}>{r.notes || ""}</td>
                               <td className="whitespace-nowrap px-3 py-1.5 text-right">
                                 <button type="button" onClick={() => setEditing(r)} aria-label={`Edit ${r.name}`} className="px-1 text-[#1d5fd1]">✎</button>
@@ -322,7 +316,16 @@ function RequirementDialog({ requirement, centerId, onClose, onSaved }) {
             </select>
           </label>
           <label className={label}>Repeat On
-            <select value={form.repeatOn} onChange={set("repeatOn")} disabled={once} className={`${control} mt-1 disabled:opacity-50`}>
+            <select
+              value={once ? "NO_REPEAT" : form.repeatOn}
+              onChange={(e) =>
+                e.target.value === "NO_REPEAT"
+                  ? setForm((f) => ({ ...f, frequency: "ONCE", repeatOn: "" }))
+                  : setForm((f) => ({ ...f, frequency: f.frequency === "ONCE" ? "MONTHLY" : f.frequency, repeatOn: e.target.value }))
+              }
+              className={`${control} mt-1`}
+            >
+              <option value="NO_REPEAT">Don&apos;t repeat</option>
               <option value="">{weekly ? "Same weekday" : "Same day of month"}</option>
               {weekly
                 ? WEEKDAYS.map((d, i) => <option key={d} value={i}>{d}</option>)
@@ -331,7 +334,7 @@ function RequirementDialog({ requirement, centerId, onClose, onSaved }) {
           </label>
         </div>
         <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-[#0b2a5b] dark:bg-gray-800 dark:text-blue-100">
-          {once ? "A one-time requirement stays completed once it is checked off." : "After this requirement is marked as completed, the next due date will automatically be set based on this repeat schedule."}
+          {once ? "This requirement doesn't repeat; it stays completed once it is checked off." : "When this requirement is checked off it stays on the list as completed, and a new row is added for the next due date on this repeat schedule."}
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <ChecklistSelect label="Applies To (Roles)" all="All Roles" options={ROLES} value={form.appliesToRoles} onChange={(v) => setForm((f) => ({ ...f, appliesToRoles: v }))} />

@@ -16,7 +16,7 @@ function dayKey(d) {
   return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0")].join("-");
 }
 
-export default function StaffPerformanceOverview({ Layout, layoutProps = {}, basePath }) {
+export default function StaffPerformanceOverview({ Layout, layoutProps = {}, basePath, viewHref }) {
   const { staff: staffFilter } = useReportFilters();
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
@@ -56,7 +56,6 @@ export default function StaffPerformanceOverview({ Layout, layoutProps = {}, bas
       <div className="space-y-4">
         <div>
           <h1 className={`text-3xl font-black ${NAVY}`}>Staff Performance</h1>
-          <p className={`text-sm ${NAVY}`}>View and compare staff performance across key areas.</p>
         </div>
         {error ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
@@ -68,7 +67,7 @@ export default function StaffPerformanceOverview({ Layout, layoutProps = {}, bas
           ) : !data ? (
             <Skeleton count={8} />
           ) : (
-            <StaffPerformanceTable staff={data.staff} viewHref={(row) => `${basePath}/${row.id}?${new URLSearchParams({ centerId, from: range.from, to: range.to })}`}>
+            <StaffPerformanceTable staff={data.staff} viewHref={viewHref || ((row) => `${basePath}/${row.id}?${new URLSearchParams({ centerId, from: range.from, to: range.to })}`)}>
               {centers.length > 1 ? (
                 <label className={`text-sm font-semibold ${NAVY}`}>
                   Center

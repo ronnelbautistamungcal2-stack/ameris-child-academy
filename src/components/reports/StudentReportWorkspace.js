@@ -32,6 +32,9 @@ export default function StudentReportWorkspace({ profileHref }) {
   const [search, setSearch] = useState("");
   const [desc, setDesc] = useState(false);
   const [childId, setChildId] = useState("");
+  // Class and age group filters narrow the student list (client request 2026-10-29).
+  const [room, setRoom] = useState("");
+  const [ageGroup, setAgeGroup] = useState("");
 
   useEffect(() => {
     apiJson("/api/v1/sop/tracking")
@@ -46,12 +49,21 @@ export default function StudentReportWorkspace({ profileHref }) {
     setChildId(children.find((c) => c.id === wanted)?.id || children[0].id);
   }, [router.isReady, router.query.childId, children, childId]);
 
+  const rooms = useMemo(() => [...new Set(children.map((c) => c.classroom).filter(Boolean))].sort(), [children]);
+  const ageOf = (c) => {
+    if (!c.birthDate) return null;
+    const b = new Date(c.birthDate);
+    const now = new Date();
+    const months = (now.getFullYear() - b.getFullYear()) * 12 + now.getMonth() - b.getMonth() - (now.getDate() < b.getDate() ? 1 : 0);
+    return months < 12 ? "infant" : String(Math.floor(months / 12));
+  };
+  const ages = useMemo(() => [...new Set(children.map(ageOf).filter(Boolean))].sort((a, b) => (a === "infant" ? -1 : b === "infant" ? 1 : Number(a) - Number(b))), [children]);
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const list = children.filter((c) => !q || c.name.toLowerCase().includes(q));
+    const list = children.filter((c) => (!q || c.name.toLowerCase().includes(q)) && (!room || c.classroom === room) && (!ageGroup || ageOf(c) === ageGroup));
     list.sort((a, b) => a.name.localeCompare(b.name) * (desc ? -1 : 1));
     return list;
-  }, [children, search, desc]);
+  }, [children, search, desc, room, ageGroup]);
 
   function choose(id) {
     setChildId(id);
@@ -60,9 +72,21 @@ export default function StudentReportWorkspace({ profileHref }) {
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-      <aside className="rounded-2xl border border-gray-200 bg-white p-4 lg:sticky lg:top-20 lg:w-72 lg:shrink-0 dark:border-gray-700 dark:bg-gray-900">
+      <aside className="no-print rounded-2xl border border-gray-200 bg-white p-4 lg:sticky lg:top-20 lg:w-72 lg:shrink-0 dark:border-gray-700 dark:bg-gray-900">
         <h1 className={`text-3xl font-black ${NAVY}`}>Students</h1>
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name..." aria-label="Search students" className="mt-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800" />
+        {rooms.length > 1 || ages.length > 1 ? (
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <select value={room} onChange={(e) => setRoom(e.target.value)} aria-label="Class" className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800">
+              <option value="">All classes</option>
+              {rooms.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <select value={ageGroup} onChange={(e) => setAgeGroup(e.target.value)} aria-label="Age group" className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800">
+              <option value="">All ages</option>
+              {ages.map((a) => <option key={a} value={a}>{a === "infant" ? "Under 1" : `${a} yr${a === "1" ? "" : "s"}`}</option>)}
+            </select>
+          </div>
+        ) : null}
         <p className={`mt-3 text-sm ${NAVY}`}>{visible.length} students</p>
         <button type="button" onClick={() => setDesc((d) => !d)} className={`mt-1 flex w-full items-center gap-1 rounded-t-lg bg-blue-50 px-3 py-2 text-sm font-bold dark:bg-gray-800 ${NAVY}`}>
           Student Name <span aria-hidden>{desc ? "↓" : "↑"}</span>

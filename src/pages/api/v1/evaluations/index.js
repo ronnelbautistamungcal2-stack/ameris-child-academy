@@ -192,5 +192,23 @@ export default createApiHandler(async function handler(req, res) {
     },
   });
 
-  return res.status(201).json(evaluation);
+  // Citations and Commendations typed on the evaluation (one per line) become
+  // the staff member's citation / commendation records, which the staff
+  // performance reports count (client request 2026-10-29).
+  const lines = (value) =>
+    (Array.isArray(value) ? value : String(value || "").split("\n"))
+      .map((line) => String(line || "").trim().slice(0, 1000))
+      .filter(Boolean)
+      .slice(0, 50);
+  const recordDate = periodEnd || new Date();
+  const citations = lines(body.citations);
+  const commendations = lines(body.commendations);
+  if (citations.length || commendations.length) {
+    await prisma.$transaction([
+      ...citations.map((text) => prisma.teacherCitation.create({ data: { teacherId, centerId, text, date: recordDate, createdById: session.user.id } })),
+      ...commendations.map((text) => prisma.teacherCommendation.create({ data: { teacherId, centerId, text, date: recordDate, createdById: session.user.id } })),
+    ]);
+  }
+
+  return res.status(201).json({ ...evaluation, citationsAdded: citations.length, commendationsAdded: commendations.length });
 }, { methods: ["GET", "POST"], logLabel: "evaluations error:" });

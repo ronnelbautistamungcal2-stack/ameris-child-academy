@@ -2,6 +2,7 @@ import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { startOfDay } from "@/lib/attendance-classroom";
 import { teacherCanAccessChild } from "@/lib/teacherScope";
+import { isChildLinkedToParent } from "@/lib/child-parent-links";
 import { editorInitials } from "@/lib/timeSheets";
 
 export default async function handler(req, res) {
@@ -9,7 +10,8 @@ export default async function handler(req, res) {
   if (!session) return res.status(401).json({ error: "Unauthorized" });
 
   const role = session.user.role;
-  if (!["ADMIN", "TEACHER"].includes(role)) {
+  // Parents sign their own children in and out from the dashboard.
+  if (!["ADMIN", "TEACHER", "PARENT"].includes(role)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -23,11 +25,13 @@ export default async function handler(req, res) {
 
   const child = await prisma.child.findUnique({
     where: { id: childId },
-    select: { id: true, centerId: true, classRoomId: true },
+    select: { id: true, centerId: true, classRoomId: true, parentId: true, guardians: { select: { guardianId: true } } },
   });
   if (!child) return res.status(404).json({ error: "Child not found" });
 
-  if (role !== "ADMIN") {
+  if (role === "PARENT") {
+    if (!isChildLinkedToParent(child, session.user.id)) return res.status(403).json({ error: "Forbidden" });
+  } else if (role !== "ADMIN") {
     const ok = await hasAccessToCenter(session.user.id, child.centerId);
     if (!ok) return res.status(403).json({ error: "Forbidden" });
     if (role === "TEACHER") {

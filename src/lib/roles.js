@@ -7,7 +7,6 @@ export const ROLE_OPTIONS = [
   "STUDENT_SUPPORT",
   "PARENT",
   "COACH",
-  "SUBSCRIBER",
 ];
 
 /**
@@ -65,6 +64,16 @@ export function userRoles(user) {
   return normalizeRoles(user?.roles, user?.role || "PARENT");
 }
 
+/**
+ * The user as the role they are signed in as (session.user.role), so access
+ * checks don't mix in their other roles: a teacher who is also a coach sees
+ * only their own class on the teacher pages (client requests 2026-10-29).
+ */
+export function signedInAs(user) {
+  if (!user?.role) return user;
+  return { ...user, roles: [String(user.role).toUpperCase()] };
+}
+
 export function hasAnyRole(user, roles) {
   const allowed = new Set(normalizeRoles(roles, ""));
   return userRoles(user).some((role) => allowed.has(role));
@@ -116,8 +125,6 @@ export function roleHomePath(role) {
       return "/coach/dashboard";
     case "PARENT":
       return "/dashboard";
-    case "SUBSCRIBER":
-      return "/subscriber";
     default:
       return "/dashboard";
   }

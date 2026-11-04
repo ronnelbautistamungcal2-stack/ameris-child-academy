@@ -1,5 +1,5 @@
 import { getSession } from "@/lib/auth";
-import { parseEventDateInput } from "@/lib/calendar";
+import { eventRoleWhere, parseEventDateInput, parseEventRoles } from "@/lib/calendar";
 import prisma from "@/lib/prisma";
 
 export default async function handler(req, res) {
@@ -31,6 +31,9 @@ async function handleGet(req, res, session) {
   }
 
   if (type) where.type = type;
+  // Events applied to other roles stay off this viewer's calendar.
+  const roleWhere = eventRoleWhere(session.user.role);
+  if (roleWhere.OR) where.AND = [roleWhere];
 
   const events = await prisma.event.findMany({
     where,
@@ -48,6 +51,7 @@ async function handlePost(req, res, session) {
   }
 
   const { centerId, title, description, startDate, endDate, allDay, type, color } = req.body;
+  const roles = parseEventRoles(req.body?.roles) || [];
 
   if (!centerId || !title || !startDate || !endDate) {
     return res.status(400).json({ error: "centerId, title, startDate, and endDate are required" });
@@ -73,6 +77,7 @@ async function handlePost(req, res, session) {
       allDay: isAllDay,
       type: type || "OTHER",
       color: color || null,
+      roles,
       createdById: session.user.id,
     },
     include: { createdBy: { select: { id: true, name: true } } },

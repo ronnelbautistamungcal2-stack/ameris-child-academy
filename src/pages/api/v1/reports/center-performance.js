@@ -1,4 +1,5 @@
 import { accessibleCenterIds, getSession } from "@/lib/auth";
+import { coachTeamUserIds, onCoachTeam } from "@/lib/coachTeam";
 import { EMPLOYED_WHERE } from "@/lib/employment";
 import { CURRENT_IPP_STATUSES, ippNeedsReview } from "@/lib/ipp";
 import prisma from "@/lib/prisma";
@@ -35,6 +36,17 @@ function shiftHours(shift) {
 const round1 = (n) => (n == null ? null : Math.round(n * 10) / 10);
 
 /** GET /api/v1/reports/center-performance?centerId=&from=YYYY-MM-DD&to=YYYY-MM-DD */
+function drillEntry(l, names) {
+  return {
+    id: l.id,
+    date: dayKey(l.createdAt),
+    childId: l.childId,
+    name: names.get(l.childId) || "",
+    notes: l.notes || "",
+    loggedBy: l.recordedBy?.name || l.recordedBy?.email || "",
+  };
+}
+
 export default async function handler(req, res) {
   try {
     const session = await getSession(req, res);
@@ -46,7 +58,10 @@ export default async function handler(req, res) {
     // Admins see every center; coaches and HR see the Staff Performance
     // Overview (staffOnly) for their own centers.
     const isAdmin = hasAnyRole(session.user, ["ADMIN"]);
-    if (!isAdmin && !hasAnyRole(session.user, ["COACH", "HR_STAFF"])) return res.status(403).json({ error: "Forbidden" });
+    // view=students: the Student Performance part only, for a coach's or
+    // Student Support's My Performance (client request 2026-10-29).
+    const studentsView = req.query.view === "students" && ["ADMIN", "COACH", "STUDENT_SUPPORT"].includes(session.user.role);
+    if (!isAdmin && !studentsView && !hasAnyRole(session.user, ["COACH", "HR_STAFF"])) return res.status(403).json({ error: "Forbidden" });
     const staffOnly = !isAdmin || req.query.staffOnly === "1";
     const scope = isAdmin ? null : (await accessibleCenterIds(session.user.id)) || [];
 
@@ -160,10 +175,11 @@ export default async function handler(req, res) {
       }),
       prisma.activityLog.findMany({
         where: { childId: { in: childIds }, createdAt: { gte: since }, type: { in: ["BEHAVIOR", "CHARACTER_HIGHLIGHT"] } },
-        select: { type: true, details: true, createdAt: true },
+        select: { id: true, childId: true, type: true, details: true, notes: true, createdAt: true, recordedBy: { select: { name: true, email: true } } },
       }),
     ]);
 
+    const childNameById = new Map(children.map((c) => [c.id, `${c.firstName || ""} ${c.lastName || ""}`.trim()]));
     const students = children.map((c) => {
       const mine = progress.filter((p) => p.childId === c.id);
       const active = mine.filter((p) => p.active).map((p) => ({ step: p.lesson, level: levelForStatus(p.status) }));
@@ -211,8 +227,16 @@ export default async function handler(req, res) {
       member.sopPct = averagePercent(students.filter((st) => st.teacherIds.includes(member.id)).map((st) => sopByChild[st.id]));
     }
 
+    if (studentsView) {
+      // A coach sees the students of the teachers on their team.
+      const team = await coachTeamUserIds(prisma, session);
+      const mine = team ? students.filter((st) => st.teacherIds.some((id) => team.has(id))) : students;
+      return res.status(200).json({ centers, center, range: { from: dayKey(dateFrom), to: dayKey(dateTo) }, students: mine });
+    }
+
     if (staffOnly) {
-      return res.status(200).json({ centers, center, range: { from: dayKey(dateFrom), to: dayKey(dateTo) }, staff });
+      const team = await coachTeamUserIds(prisma, session);
+      return res.status(200).json({ centers, center, range: { from: dayKey(dateFrom), to: dayKey(dateTo) }, staff: onCoachTeam(staff, team) });
     }
     return res.status(200).json({
       centers,
@@ -220,8 +244,13 @@ export default async function handler(req, res) {
       range: { from: dayKey(dateFrom), to: dayKey(dateTo) },
       staff,
       students,
-      courseCorrections: logs.filter((l) => l.type === "BEHAVIOR" && l.details?.kind !== "DAILY_GRADE").map((l) => ({ type: l.details?.behaviorType || "OTHER", date: dayKey(l.createdAt) })),
-      characterHighlights: logs.filter((l) => l.type === "CHARACTER_HIGHLIGHT").map((l) => ({ type: l.details?.characterHighlightType || "OTHER", date: dayKey(l.createdAt) })),
+      // Who each bar is made of and what the teacher logged (client request 2026-10-29).
+      courseCorrections: logs
+        .filter((l) => l.type === "BEHAVIOR" && l.details?.kind !== "DAILY_GRADE")
+        .map((l) => ({ ...drillEntry(l, childNameById), type: l.details?.behaviorType || "OTHER", label: l.details?.behaviorName || "", level: Number(l.details?.behaviorLevel) || null })),
+      characterHighlights: logs
+        .filter((l) => l.type === "CHARACTER_HIGHLIGHT")
+        .map((l) => ({ ...drillEntry(l, childNameById), type: l.details?.characterHighlightType || "OTHER" })),
     });
   } catch (e) {
     console.error("center performance error:", e);

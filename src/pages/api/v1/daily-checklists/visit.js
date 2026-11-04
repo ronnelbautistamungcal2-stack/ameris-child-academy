@@ -1,5 +1,5 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
-import { isLogActivityLink } from "@/lib/checklistLinks";
+import { requiresLinkVisit } from "@/lib/checklistLinks";
 import prisma from "@/lib/prisma";
 
 function todayDate() {
@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     select: { id: true, directLink: true, checklist: { select: { centerId: true } } },
   });
   if (!item) return res.status(404).json({ error: "Item not found" });
-  if (!isLogActivityLink(item.directLink)) {
+  if (!requiresLinkVisit(item.directLink)) {
     return res.status(400).json({ error: "This item does not link to Log Activity" });
   }
   if (session.user.role !== "ADMIN" && !(await hasAccessToCenter(session.user.id, item.checklist.centerId))) {

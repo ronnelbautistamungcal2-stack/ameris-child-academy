@@ -4,7 +4,7 @@ import {
   ParentPageHeader,
   ParentSection,
 } from "@/components/parent/ParentUI";
-import { PUBLIC_CONTACT, SITE_NAME } from "@/components/public/siteData";
+import { PUBLIC_CONTACT } from "@/components/public/siteData";
 
 function ContactRow({ label, children }) {
   return (
@@ -23,20 +23,9 @@ export default function ParentContact() {
   return (
     <ParentLayout title="Contact Us">
       <div className="space-y-4">
-        <ParentPageHeader
-          eyebrow="Family overview"
-          title="Contact Us"
-          description={`Reach ${SITE_NAME} directly, or send a message that lands in your parent inbox.`}
-          accent="sky"
-          actions={
-            <ParentButton href="/parent/messages">Message the center</ParentButton>
-          }
-        />
+        <ParentPageHeader eyebrow="" title="Contact Us" accent="sky" />
 
-        <ParentSection
-          title="Center details"
-          description="For anything urgent, calling the center is the fastest way to reach staff."
-        >
+        <ParentSection title="Center details">
           <ContactRow label="Phone">
             <a
               href={PUBLIC_CONTACT.phoneHref}
@@ -61,10 +50,7 @@ export default function ParentContact() {
           <ContactRow label="Office hours">{PUBLIC_CONTACT.visitHours}</ContactRow>
         </ParentSection>
 
-        <ParentSection
-          title="Send a message instead"
-          description="Messages go to the center team and keep a record on your account, which is handy for anything you may need to refer back to."
-        >
+        <ParentSection title="Send a message instead">
           <ParentButton href="/parent/messages" variant="soft">
             Open Messages
           </ParentButton>

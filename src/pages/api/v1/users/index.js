@@ -1,4 +1,5 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { coachTeamUserIds, onCoachTeam } from "@/lib/coachTeam";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { pinStatusOf } from "@/lib/kioskPins";
@@ -117,7 +118,9 @@ export default async function handler(req, res) {
       include: { centers: true, children: true, weeklySchedules: true, kioskCredential: true },
       orderBy: [{ name: "asc" }, { email: "asc" }],
     });
-    return res.status(200).json(users.map(sanitizeUser));
+    // Coaches pick only from their own team for staff lists (evaluations, training).
+    const team = staffOnly === "true" ? await coachTeamUserIds(prisma, session) : null;
+    return res.status(200).json(onCoachTeam(users, team).map(sanitizeUser));
   }
 
   if (req.method === "POST") {

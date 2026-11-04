@@ -27,10 +27,12 @@ export function ParentPageHeader({
 
       <div className={`relative ${layoutClass}`}>
         <div className="max-w-3xl">
-          <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.24em] text-sky-700 dark:border-sky-800 dark:bg-sky-900/30 dark:text-sky-300">
-            {eyebrow}
-          </div>
-          <h1 className="mt-3 text-2xl font-black tracking-tight text-gray-900 dark:text-gray-100 sm:text-3xl">
+          {eyebrow ? (
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.24em] text-sky-700 dark:border-sky-800 dark:bg-sky-900/30 dark:text-sky-300">
+              {eyebrow}
+            </div>
+          ) : null}
+          <h1 className=" text-2xl font-black tracking-tight text-gray-900 dark:text-gray-100 sm:text-3xl">
             {title}
           </h1>
           {description ? (

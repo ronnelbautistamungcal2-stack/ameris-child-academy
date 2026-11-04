@@ -44,12 +44,6 @@ test.describe("Teacher Workflows", () => {
     }
   });
 
-  test("can navigate to calendar page", async ({ page }) => {
-    await page.goto("/teacher/calendar");
-    await waitForLoadingDone(page);
-    // Calendar page should load without errors
-    await expect(page.locator("main")).toBeVisible();
-  });
 
   test("notification bell is visible", async ({ page }) => {
     await expect(page.locator('[aria-label="Notifications"]')).toBeVisible();

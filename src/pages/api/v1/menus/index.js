@@ -1,7 +1,7 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { hasAnyRole } from "@/lib/roles";
-import { MAX_ITEM_LENGTH, MENU_KINDS, ageGroupsFor, isDateKey, isValidLine, mealKeysFor } from "@/lib/menuPlan";
+import { COMPONENTS, MAX_ITEM_LENGTH, MENU_KINDS, ageGroupsFor, isDateKey, isValidLine, mealKeysFor } from "@/lib/menuPlan";
 import { canEditMenuKind, dbDate, menuCenterIds } from "@/lib/menuAccess";
 
 const MAX_DAYS = 31;
@@ -18,13 +18,25 @@ function serialize(row) {
   };
 }
 
-const CENTER_SELECT = { id: true, name: true, meals: true, mealAgeGroups: true };
+const CENTER_SELECT = { id: true, name: true, meals: true, mealAgeGroups: true, menuComponentLabels: true };
+
+/** The center's renamed component titles, known components only. */
+function componentLabelsOf(center) {
+  const raw = center?.menuComponentLabels && typeof center.menuComponentLabels === "object" ? center.menuComponentLabels : {};
+  return Object.fromEntries(
+    Object.entries(raw)
+      .filter(([key, value]) => key in COMPONENTS && typeof value === "string" && value.trim())
+      .map(([key, value]) => [key, value.trim().slice(0, 60)]),
+  );
+}
 
 /**
  * GET  /api/v1/menus?centerId=&start=YYYY-MM-DD&days=5
  *      Menu lines for `days` days from `start` at one center (the first one
  *      the user can see when centerId is left out), with the center's meals
  *      and age group rows. Parents get the planned menu only.
+ * PUT  /api/v1/menus  { centerId, componentLabels: { [component]: title } }  admins rename
+ *      the component titles (blank = the standard title).
  * PUT  /api/v1/menus  { centerId, kind, items: [{ date, meal, ageGroup, component, item }] }
  *      PLANNED: admins. SERVED: admins and the center's kitchen staff.
  *      A blank `item` clears that line.
@@ -72,8 +84,18 @@ export default async function handler(req, res) {
         centers: centers.map((c) => ({ id: c.id, name: c.name })),
         meals: mealKeysFor(center),
         ageGroups: ageGroupsFor(center),
+        componentLabels: componentLabelsOf(center),
         items: rows.map(serialize),
       });
+    }
+
+    if (req.method === "PUT" && req.body?.componentLabels && typeof req.body.componentLabels === "object") {
+      const centerId = req.body?.centerId ? String(req.body.centerId) : "";
+      if (!centerId) return res.status(400).json({ error: "centerId is required" });
+      if (!(await canEditMenuKind(user, centerId, "PLANNED"))) return res.status(403).json({ error: "Only admins can rename menu components" });
+      const labels = componentLabelsOf({ menuComponentLabels: req.body.componentLabels });
+      await prisma.center.update({ where: { id: centerId }, data: { menuComponentLabels: labels } });
+      return res.status(200).json({ componentLabels: labels });
     }
 
     if (req.method === "PUT") {

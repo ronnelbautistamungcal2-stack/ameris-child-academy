@@ -284,6 +284,8 @@ function EvaluationDialog({ evaluation, staff, categories, centerId, onClose, on
       areasForImprovement: evaluation.areasForImprovement || "",
       goals: evaluation.goals || "",
       notes: evaluation.notes || "",
+      citations: "",
+      commendations: "",
     };
   });
   const [error, setError] = useState("");
@@ -315,6 +317,7 @@ function EvaluationDialog({ evaluation, staff, categories, centerId, onClose, on
       goals: form.goals || null,
       notes: form.notes || null,
       status,
+      ...(isEdit ? {} : { citations: form.citations, commendations: form.commendations }),
     };
     try {
       if (isEdit) {
@@ -405,6 +408,18 @@ function EvaluationDialog({ evaluation, staff, categories, centerId, onClose, on
               </label>
             ))}
           </div>
+          {/* Citations / Commendations go to the staff performance reports (client request 2026-10-29). */}
+          {isEdit ? null : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[["citations", "Citations", "One citation per line..."], ["commendations", "Commendations", "One commendation per line..."]].map(([key, label, placeholder]) => (
+                <label key={key} className="text-xs font-bold uppercase text-gray-600">
+                  {label}
+                  <textarea rows={3} value={form[key]} onChange={(e) => set({ [key]: e.target.value })} placeholder={placeholder} className={`${control} font-normal normal-case`} />
+                  <span className="mt-1 block text-[11px] font-normal normal-case text-gray-500">Each line is added to the staff member&apos;s performance report.</span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 px-6 py-4 dark:border-gray-700">
           <div className={`text-lg font-black ${NAVY}`}>Overall Score: <span className="text-blue-700 dark:text-blue-300">{score != null ? `${score}%` : "—"}</span></div>

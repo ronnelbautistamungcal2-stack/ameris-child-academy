@@ -1,4 +1,3 @@
-import CoachLayout from "@/components/coach/CoachLayout";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -8,6 +7,7 @@ function childFullName(child) {
   return `${child?.firstName || ""} ${child?.lastName || ""}`.trim() || "Unnamed child";
 }
 
+/** Children grouped by carpool, printable (moved into Reports, client request 2026-10-29). */
 export default function CarpoolReport() {
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
@@ -84,16 +84,11 @@ export default function CarpoolReport() {
   });
 
   return (
-    <CoachLayout title="Carpool Report">
+    <>
       <div className="space-y-4">
         <div className="no-print rounded-2xl border border-gray-200 bg-white p-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-extrabold text-gray-900">Carpool Report</h2>
-              <p className="mt-1 text-sm text-gray-600">
-                A printable sheet grouping every child by carpool so pickup can be verified at a glance.
-              </p>
-            </div>
+            <h2 className="text-lg font-extrabold text-gray-900">Carpool Report</h2>
             <button
               type="button"
               onClick={() => window.print()}
@@ -200,6 +195,6 @@ export default function CarpoolReport() {
           }
         }
       `}</style>
-    </CoachLayout>
+    </>
   );
 }

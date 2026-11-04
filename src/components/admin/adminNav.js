@@ -1,5 +1,3 @@
-import { otherPagesGroup } from "@/components/shell/navExtras";
-
 const icons = {
   dashboard: (
     <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
@@ -96,6 +94,7 @@ export const ADMIN_NAV_ITEMS = [
       { href: "/admin/users", label: "Users" },
       { href: "/admin/children", label: "Student List" },
       { href: "/admin/staff-list", label: "Staff List" },
+      { href: "/admin/staff-positions", label: "Staff Positions" },
     ],
   },
   {
@@ -130,19 +129,16 @@ export const ADMIN_NAV_ITEMS = [
     icon: icons.reports,
   },
   {
-    href: "/admin/centers",
     label: "Center Management",
     icon: icons.centers,
+    children: [
+      { href: "/admin/centers", label: "Centers" },
+      { href: "/kiosk/setup", label: "Kiosk Setup" },
+    ],
   },
   {
     href: "/admin/messages",
     label: "Messages",
     icon: icons.messages,
   },
-  otherPagesGroup([
-    { href: "/admin/affiliates", label: "Affiliates & Partners" },
-    { href: "/admin/subscriptions", label: "Subscriptions" },
-    // Not in the client's list yet; where kiosk setup lives is still open.
-    { href: "/kiosk/setup", label: "Kiosk Setup" },
-  ]),
 ];

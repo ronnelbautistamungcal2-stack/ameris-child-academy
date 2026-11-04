@@ -42,6 +42,21 @@ export default function CategoryListsTab({ centerId }) {
     }
   }
 
+  async function rename(kind, row, name) {
+    setError("");
+    try {
+      const saved = await apiJson(`/api/v1/curriculum-options?id=${encodeURIComponent(row.id)}`, { method: "PATCH", body: JSON.stringify({ name }) });
+      setLists((prev) => ({
+        ...prev,
+        [kind]: prev[kind].map((r) => (r.id === row.id ? { id: saved.id, name: saved.name } : r)).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })),
+      }));
+      return true;
+    } catch (e) {
+      setError(e.message || "Could not rename it");
+      return false;
+    }
+  }
+
   async function remove(row) {
     setRemoving(null);
     setError("");
@@ -64,12 +79,13 @@ export default function CategoryListsTab({ centerId }) {
             rows={lists?.[list.kind] || []}
             loading={!lists}
             onAdd={(name) => add(list.kind, name)}
+            onRename={(row, name) => rename(list.kind, row, name)}
             onRemove={(row) => setRemoving({ ...row, kind: list.kind, listTitle: list.title })}
           />
         ))}
       </div>
       <p className="text-xs text-gray-500">
-        These lists fill the dropdowns on the New Lesson and Add Step forms. Removing an entry takes it off the dropdowns; lessons that already use it keep it.
+        These lists fill the dropdowns on the New Lesson and Add Step forms. Renaming an entry renames it on the lessons and categories that use it. Removing an entry takes it off the dropdowns; lessons that already use it keep it.
       </p>
       <ConfirmDialog
         open={Boolean(removing)}
@@ -84,7 +100,8 @@ export default function CategoryListsTab({ centerId }) {
   );
 }
 
-function OptionList({ list, rows, loading, onAdd, onRemove }) {
+function OptionList({ list, rows, loading, onAdd, onRename, onRemove }) {
+  const [editing, setEditing] = useState(null); // { id, name }
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
@@ -115,7 +132,7 @@ function OptionList({ list, rows, loading, onAdd, onRemove }) {
         <thead className="sticky top-0">
           <tr className={`bg-blue-50 text-left font-bold dark:bg-gray-800 ${NAVY}`}>
             <th className="px-2 py-1.5">{list.column}</th>
-            <th className="w-16 px-2 py-1.5 text-center">Actions</th>
+            <th className="w-20 px-2 py-1.5 text-center">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -126,11 +143,40 @@ function OptionList({ list, rows, loading, onAdd, onRemove }) {
           )}
           {shown.map((row) => (
             <tr key={row.id} className="border-b border-gray-100 dark:border-gray-800">
-              <td className="px-2 py-1.5 text-[#0b2a5b] dark:text-blue-100">{row.name}</td>
-              <td className="px-2 py-1.5 text-center">
-                <button type="button" onClick={() => onRemove(row)} aria-label={`Remove ${row.name}`} title="Remove" className="rounded px-1.5 text-red-600 hover:bg-red-50">
-                  {"\u{1F5D1}"}
-                </button>
+              <td className="px-2 py-1.5 text-[#0b2a5b] dark:text-blue-100">
+                {editing?.id === row.id ? (
+                  <input
+                    autoFocus
+                    value={editing.name}
+                    onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                    onKeyDown={async (e) => {
+                      if (e.key === "Escape") setEditing(null);
+                      if (e.key === "Enter" && (await onRename(row, editing.name))) setEditing(null);
+                    }}
+                    maxLength={120}
+                    aria-label={`Rename ${row.name}`}
+                    className="w-full rounded border border-blue-300 bg-white px-2 py-1 text-sm dark:bg-gray-800"
+                  />
+                ) : (
+                  row.name
+                )}
+              </td>
+              <td className="whitespace-nowrap px-2 py-1.5 text-center">
+                {editing?.id === row.id ? (
+                  <>
+                    <button type="button" onClick={async () => (await onRename(row, editing.name)) && setEditing(null)} className="rounded px-1.5 text-xs font-bold text-blue-700">Save</button>
+                    <button type="button" onClick={() => setEditing(null)} className="rounded px-1.5 text-xs text-gray-500">Cancel</button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" onClick={() => setEditing({ id: row.id, name: row.name })} aria-label={`Rename ${row.name}`} title="Rename" className="rounded px-1.5 text-blue-700 hover:bg-blue-50">
+                      {"\u270E"}
+                    </button>
+                    <button type="button" onClick={() => onRemove(row)} aria-label={`Remove ${row.name}`} title="Remove" className="rounded px-1.5 text-red-600 hover:bg-red-50">
+                      {"\u{1F5D1}"}
+                    </button>
+                  </>
+                )}
               </td>
             </tr>
           ))}

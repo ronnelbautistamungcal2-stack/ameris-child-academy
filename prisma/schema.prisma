@@ -327,6 +327,8 @@ model Center {
   notes                       String?
   // Care & Schedule, Ages & Rates and Roles, validated by src/lib/centerSettings.js:
   careSchedule                Json? // { monday: { open, start, end }, ... }
+  // Menu component titles the admin renamed, e.g. { grains: "Whole Grains" } (client 2026-10-29).
+  menuComponentLabels         Json?
   mealAgeGroups               Json? // [{ fromMonths, toMonths }] served the same foods
   meals                       Json? // { breakfast: { provided, catered }, ... }
   ageRates                    Json? // [{ label, monthly, weekly, daily, hourly }]
@@ -1243,6 +1245,8 @@ model BillingCharge {
   date        DateTime       @db.Date
   description String
   amountCents Int
+  // TUITION | SUPPLIES | OTHER (client request 2026-10-29). Coaches see Supplies only.
+  chargeType  String         @default("OTHER")
   createdById String?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
@@ -1282,6 +1286,10 @@ model ComplianceRequirement {
   notes           String?
   nextDue         DateTime               @db.Date
   lastCompletedAt DateTime?
+  // Checking a row off keeps it as a completed row and adds a new row for the
+  // next due date, linked back through previousId (client request 2026-10-29).
+  done            Boolean                @default(false)
+  previousId      String?
   createdById     String?
   completions     ComplianceCompletion[]
   createdAt       DateTime               @default(now())
@@ -1928,6 +1936,8 @@ model Event {
   allDay      Boolean   @default(true)
   type        EventType @default(OTHER)
   color       String?
+  // Apply to Roles; empty means everyone (client request 2026-10-29).
+  roles       String[]  @default([])
   createdBy   User?     @relation("EventsCreated", fields: [createdById], references: [id], onDelete: SetNull)
   createdById String?
   createdAt   DateTime  @default(now())
@@ -2091,6 +2101,9 @@ model DailyChecklist {
   assignees      DailyChecklistAssignee[]
   // "No Classroom": not a classroom checklist (custodial, kitchen, coach...).
   noClassroom    Boolean                   @default(false)
+  // Roles the checklist is for; empty = every role that could see it before
+  // (client request 2026-10-29).
+  roles          String[]                  @default([])
   choices        DailyChecklistChoice[]
   title          String
   description    String?

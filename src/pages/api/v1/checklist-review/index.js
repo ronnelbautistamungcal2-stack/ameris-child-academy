@@ -1,4 +1,5 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { coachTeamUserIds, onCoachTeam } from "@/lib/coachTeam";
 import { checklistReview } from "@/lib/checklistReview";
 import prisma from "@/lib/prisma";
 
@@ -23,5 +24,7 @@ export default async function handler(req, res) {
   if (session.user.role !== "ADMIN" && !(await hasAccessToCenter(session.user.id, centerId))) {
     return res.status(403).json({ error: "Forbidden" });
   }
-  return res.status(200).json(await checklistReview(prisma, { centerId, date }));
+  const review = await checklistReview(prisma, { centerId, date });
+  const team = await coachTeamUserIds(prisma, session);
+  return res.status(200).json({ ...review, rows: onCoachTeam(review.rows, team) });
 }

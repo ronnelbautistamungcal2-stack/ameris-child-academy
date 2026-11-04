@@ -7,7 +7,7 @@ import { trainingAccess } from "@/lib/trainingServer";
  * PUT /api/v1/training/items/:id/progress { action, materialIndex?, userId? }
  * The signed-in staff member working through a training:
  *   start | viewMaterial (materialIndex) | complete (acknowledges it) |
- *   requestObservation | requestHandsOn (messages the center's coaches)
+ *   requestObservation | requestHandsOn (a Request to the staff member's coach)
  * Admins and coaches signing off for a staff member (userId):
  *   observationDone | handsOnDone
  * A training is Completed once acknowledged and any required observation /
@@ -60,10 +60,16 @@ export default async function handler(req, res) {
     if (current[field] === "COMPLETED") return res.status(400).json({ error: "That is already done" });
     startIfNeeded();
     next[field] = "REQUESTED";
-    const coaches = await prisma.user.findMany({
-      where: { centers: { some: { centerId: item.centerId } }, OR: [{ role: "COACH" }, { roles: { has: "COACH" } }] },
-      select: { id: true },
-    });
+    // Only the staff member's own coach (Staff Positions > Coaching Team) gets
+    // it, as a Request in their coach inbox, never admins (client 2026-10-29).
+    // Without an assigned coach it falls back to the center's coaches.
+    const assigned = await prisma.coachTeamMember.findMany({ where: { staffId: session.user.id }, select: { coachId: true } });
+    const coaches = assigned.length
+      ? assigned.map((a) => ({ id: a.coachId }))
+      : await prisma.user.findMany({
+          where: { centers: { some: { centerId: item.centerId } }, OR: [{ role: "COACH" }, { roles: { has: "COACH" } }] },
+          select: { id: true },
+        });
     const sender = await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, name: true, email: true, role: true } });
     const what = action === "requestObservation" ? "an observation" : "hands-on experience";
     await sendDirectMessage({
@@ -71,6 +77,9 @@ export default async function handler(req, res) {
       recipientIds: coaches.map((c) => c.id),
       centerId: item.centerId,
       title: `Training request: ${item.title}`,
+      type: "REQUEST",
+      senderRole: session.user.role,
+      recipientRole: "COACH",
       body: `${sender.name || sender.email} is requesting ${what} for the training "${item.title}". Please reply to schedule a time.`,
     });
   } else if (signOff) {

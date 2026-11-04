@@ -1,4 +1,5 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { coachTeamUserIds, onCoachTeam } from "@/lib/coachTeam";
 import { EMPLOYED_WHERE } from "@/lib/employment";
 import prisma from "@/lib/prisma";
 import { EMPLOYEE_ROLES, roleLabel, userRoles } from "@/lib/roles";
@@ -88,7 +89,7 @@ export default async function handler(req, res) {
       name: m.name || m.email,
       pictureUrl: m.pictureUrl || null,
       role,
-      department: m.staffDepartment || "",
+      roles: userRoles(m).filter((r) => STAFF_ROLES.includes(r)),
       position: shift?.position || m.staffDepartment || roleLabel(role),
       totalHours: Math.round(hours * 100) / 100,
       clockIn: att?.clockIn || null,
@@ -101,5 +102,5 @@ export default async function handler(req, res) {
   });
 
   staff.sort((a, b) => b.totalHours - a.totalHours || a.name.localeCompare(b.name));
-  return res.status(200).json({ staff, classrooms });
+  return res.status(200).json({ staff: onCoachTeam(staff, await coachTeamUserIds(prisma, session)), classrooms });
 }

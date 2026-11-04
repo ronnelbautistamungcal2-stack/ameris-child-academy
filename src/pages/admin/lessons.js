@@ -422,22 +422,7 @@ function IconBook(props) {
   );
 }
 
-function IconCalendar(props) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" />
-      <path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
 
-function IconLayers(props) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
 
 function IconTrash(props) {
   return (
@@ -499,14 +484,6 @@ function IconAlertCircle(props) {
   );
 }
 
-function IconClipboard(props) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <rect x="8" y="2" width="8" height="4" rx="1" stroke="currentColor" strokeWidth="2" />
-    </svg>
-  );
-}
 
 function IconCopy(props) {
   return (
@@ -657,36 +634,6 @@ function IconRefresh(props) {
   );
 }
 
-function StatCard({ label, value, sublabel, icon: Icon, color = "blue" }) {
-  const colorMap = {
-    blue: "bg-blue-50 text-blue-600 border-blue-100",
-    emerald: "bg-emerald-50 text-emerald-600 border-emerald-100",
-    amber: "bg-amber-50 text-amber-600 border-amber-100",
-    purple: "bg-purple-50 text-purple-600 border-purple-100",
-  };
-  const accent = colorMap[color] || colorMap.blue;
-
-  return (
-    <div className="group rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all duration-200 hover:shadow-md hover:border-gray-300">
-      <div className="flex items-start justify-between">
-        <div className="min-w-0">
-          <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            {label}
-          </div>
-          <div className="mt-2 text-2xl font-extrabold text-gray-900">{value}</div>
-          {sublabel ? (
-            <div className="mt-1 text-xs text-gray-500">{sublabel}</div>
-          ) : null}
-        </div>
-        {Icon ? (
-          <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border ${accent}`}>
-            <Icon className="h-5 w-5" />
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
 
 function Modal({ title, children, onClose }) {
   useEffect(() => {
@@ -1193,48 +1140,6 @@ export default function AdminLessons() {
     return sorted.slice(start, start + pageSize);
   }, [sorted, page, pageSize]);
 
-  const stats = useMemo(() => {
-    const termSet = new Set();
-    const catCounts = new Map();
-
-    for (const r of records) {
-      if (r.term) termSet.add(normalizeKey(r.term));
-      if (r.category) {
-        const label = normalizeSpaces(r.category);
-        catCounts.set(label, (catCounts.get(label) || 0) + 1);
-      }
-    }
-
-    const sortedCats = [...catCounts.entries()].sort((a, b) => b[1] - a[1]);
-    const findBy = (needle) =>
-      sortedCats.find(([k]) => normalizeKey(k).includes(needle)) || null;
-
-    const spiritual = findBy("spiritual");
-    const cognitive = findBy("cognitive");
-    const fallbacks = sortedCats
-      .filter(
-        ([k]) =>
-          !normalizeKey(k).includes("spiritual") &&
-          !normalizeKey(k).includes("cognitive"),
-      )
-      .slice(0, 2);
-
-    return {
-      totalLessons: Array.isArray(lessons) ? lessons.length : 0,
-      totalRecords: records.length,
-      activeTerms: termSet.size,
-      secondary: spiritual
-        ? { label: spiritual[0], count: spiritual[1] }
-        : fallbacks[0]
-          ? { label: fallbacks[0][0], count: fallbacks[0][1] }
-          : { label: "Modules", count: 0 },
-      tertiary: cognitive
-        ? { label: cognitive[0], count: cognitive[1] }
-        : fallbacks[1]
-          ? { label: fallbacks[1][0], count: fallbacks[1][1] }
-          : { label: "Modules", count: 0 },
-    };
-  }, [lessons, records]);
 
   const openDetails = useCallback((rec) => {
     setDetailsRecord(rec || null);
@@ -1532,12 +1437,9 @@ export default function AdminLessons() {
                 <h1 className="text-3xl font-black text-[#0b2a5b] dark:text-blue-100">
                   Lesson Bank
                 </h1>
-                <p className="text-sm text-gray-500">
-                  Manage early childhood development modules and tracking
-                  {mainCenter?.name ? (
-                    <> &middot; <span className="font-medium text-gray-700">{mainCenter.name}</span></>
-                  ) : null}
-                </p>
+                {mainCenter?.name ? (
+                  <p className="text-sm font-medium text-gray-700">{mainCenter.name}</p>
+                ) : null}
               </div>
             </div>
           </div>
@@ -1640,36 +1542,6 @@ export default function AdminLessons() {
           </div>
         ) : null}
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label="Total Lessons"
-            value={stats.totalLessons.toLocaleString()}
-            sublabel={`${stats.totalRecords.toLocaleString()} progression steps`}
-            icon={IconBook}
-            color="blue"
-          />
-          <StatCard
-            label="Active Terms"
-            value={stats.activeTerms.toLocaleString()}
-            sublabel="Distinct terms found"
-            icon={IconCalendar}
-            color="emerald"
-          />
-          <StatCard
-            label={`${stats.secondary.label}`}
-            value={Number(stats.secondary.count || 0).toLocaleString()}
-            sublabel="Modules"
-            icon={IconLayers}
-            color="amber"
-          />
-          <StatCard
-            label={`${stats.tertiary.label}`}
-            value={Number(stats.tertiary.count || 0).toLocaleString()}
-            sublabel="Modules"
-            icon={IconClipboard}
-            color="purple"
-          />
-        </div>
 
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-4">
@@ -1916,34 +1788,17 @@ export default function AdminLessons() {
                           {r.lessonTitle || "—"}
                         </div>
                       </td>
-                      <td className="border-t border-gray-100 px-4 py-3.5 align-top">
-                        <span
-                          className={[
-                            "inline-flex max-w-[160px] items-center truncate whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold leading-tight ring-1 ring-inset",
-                            categoryBadgeClass(r.category),
-                          ].join(" ")}
-                        >
-                          {displayCategory(r.category) || "—"}
-                        </span>
+                      <td className="border-t border-gray-100 px-4 py-3.5 align-top text-sm text-gray-600">
+                        {displayCategory(r.category) || "—"}
                       </td>
                       <td className="border-t border-gray-100 px-4 py-3.5 align-top text-sm text-gray-600">
                         {r.subject || "—"}
                       </td>
-                      <td className="border-t border-gray-100 px-4 py-3.5 align-top">
-                        <span
-                          className={[
-                            "inline-flex max-w-[140px] items-center truncate whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold leading-tight ring-1 ring-inset",
-                            ageBadgeClass(r.childAge),
-                          ].join(" ")}
-                          title={r.childAge || ""}
-                        >
-                          {r.childAge || "—"}
-                        </span>
+                      <td className="border-t border-gray-100 px-4 py-3.5 align-top text-sm text-gray-600">
+                        {r.childAge || "—"}
                       </td>
-                      <td className="border-t border-gray-100 px-4 py-3.5 align-top">
-                        <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-700 ring-1 ring-inset ring-gray-200">
-                          {r.term || "—"}
-                        </span>
+                      <td className="border-t border-gray-100 px-4 py-3.5 align-top text-sm text-gray-600">
+                        {r.term || "—"}
                       </td>
                       <td className="border-t border-gray-100 px-4 py-3.5 align-top text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1 transition-opacity">

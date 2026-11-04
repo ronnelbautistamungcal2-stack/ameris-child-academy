@@ -96,7 +96,8 @@ export default async function handler(req, res) {
         checkedInAt: r.checkedInAt,
       });
     } else {
-      missingChildren.push({ child });
+      // Signed-out children keep their times for the roster's Check In / Check Out columns.
+      missingChildren.push({ child, checkedInAt: r?.checkedInAt || null, checkedOutAt: r?.checkedOutAt || null });
     }
   }
 

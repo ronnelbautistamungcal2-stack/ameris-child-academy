@@ -1,4 +1,5 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { eventRoleWhere } from "@/lib/calendar";
 import prisma from "@/lib/prisma";
 import { EMPLOYEE_ROLES, isEmployeeRole, isSelfServiceEmployeeRole } from "@/lib/roles";
 
@@ -112,7 +113,7 @@ async function handleGet(req, res, session) {
     prisma.event.findMany({
       where: {
         centerId,
-        ...eventRangeFilter,
+        AND: [eventRangeFilter, eventRoleWhere(session.user.role)],
       },
       include: { createdBy: { select: { id: true, name: true } } },
       orderBy: { startDate: "asc" },

@@ -15,7 +15,7 @@ function schoolYear(now = new Date()) {
 }
 
 /** classHref(classRoomId) adds a View Class Details button; omit to hide it. */
-export default function ClassReportWorkspace({ classHref }) {
+export default function ClassReportWorkspace({ classHref, showClassList = true }) {
   const router = useRouter();
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -46,12 +46,13 @@ export default function ClassReportWorkspace({ classHref }) {
     router.replace({ pathname: router.pathname, query: { ...router.query, classRoomId: id } }, undefined, { shallow: true });
   }
 
-  const showList = classes.length > 1;
+  // Teachers only see their own class, with no class list (client request 2026-10-29).
+  const showList = showClassList && classes.length > 1;
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
       {showList && (
-        <aside className="rounded-2xl border border-gray-200 bg-white p-4 lg:sticky lg:top-20 lg:w-64 lg:shrink-0 dark:border-gray-700 dark:bg-gray-900">
+        <aside className="no-print rounded-2xl border border-gray-200 bg-white p-4 lg:sticky lg:top-20 lg:w-64 lg:shrink-0 dark:border-gray-700 dark:bg-gray-900">
           <h1 className={`text-3xl font-black ${NAVY}`}>Classes</h1>
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search classes..." aria-label="Search classes" className="mt-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800" />
           <ul className="mt-3 max-h-[70vh] space-y-1.5 overflow-y-auto">

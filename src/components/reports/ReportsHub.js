@@ -1,5 +1,8 @@
 import { DEFAULT_REPORT_FILTERS, ReportFiltersContext } from "@/components/reports/ReportFilters";
+import { apiJson } from "@/lib/api";
+import { exportElementTables } from "@/lib/exportTable";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 // Reports page for admins and coaches (client mockup 15-01): report
@@ -30,8 +33,30 @@ export default function ReportsHub({ categories, selectedKey, hrefFor, children 
   const [filters, setFilters] = useState(DEFAULT_REPORT_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
   const filterRef = useRef(null);
+  const printRef = useRef(null);
+  const router = useRouter();
+  const [centers, setCenters] = useState([]);
+  const [exportError, setExportError] = useState("");
 
   useEffect(() => setFilters(readSavedFilters()), []);
+
+  // The center name heads the printed report.
+  useEffect(() => {
+    apiJson("/api/v1/centers")
+      .then((rows) => setCenters(Array.isArray(rows) ? rows : []))
+      .catch(() => setCenters([]));
+  }, []);
+  const centerName = useMemo(() => {
+    if (centers.length === 1) return centers[0].name;
+    const segment = String(router.pathname || "/").split("/").filter(Boolean)[0] || "global";
+    let stored = "";
+    try {
+      stored = typeof window !== "undefined" ? window.localStorage.getItem(`aca:selectedCenter:${segment}`) || "" : "";
+    } catch {
+      stored = "";
+    }
+    return centers.find((c) => c.id === stored)?.name || centers[0]?.name || "";
+  }, [centers, router.pathname]);
 
   function changeFilters(patch) {
     const next = { ...filters, ...patch };
@@ -61,6 +86,16 @@ export default function ReportsHub({ categories, selectedKey, hrefFor, children 
     [categories, q],
   );
   const selected = categories.flatMap((c) => c.reports).find((r) => r.key === selectedKey);
+
+  async function exportExcel() {
+    setExportError("");
+    try {
+      const name = selected?.label || "Report";
+      await exportElementTables(printRef.current, `${name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${new Date().toISOString().slice(0, 10)}`, name);
+    } catch (e) {
+      setExportError(e.message || "Export failed");
+    }
+  }
   const activeFilters = (filters.children === "ALL" ? 1 : 0) + (filters.staff === "ALL" ? 1 : 0);
 
   return (
@@ -154,9 +189,64 @@ export default function ReportsHub({ categories, selectedKey, hrefFor, children 
         </nav>
 
         <section aria-label={selected?.label || "Report"} className="min-w-0">
-          <ReportFiltersContext.Provider value={filters}>
-            {selected ? children : <p className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-600">Choose a report on the left.</p>}
-          </ReportFiltersContext.Provider>
+          {/* Every report can be printed on its own (with the center name on top)
+              or exported to Excel; Print > Save as PDF gives the PDF
+              (client requests 2026-10-29). */}
+          {selected ? (
+            <div className="no-print mb-3 flex flex-wrap items-center justify-end gap-2">
+              {exportError ? <span role="alert" className="mr-auto text-sm text-red-700">{exportError}</span> : null}
+              <button type="button" onClick={() => window.print()} className="rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 dark:bg-gray-900">
+                🖨 Print / PDF
+              </button>
+              <button type="button" onClick={exportExcel} className="rounded-lg border border-emerald-600 bg-white px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50 dark:bg-gray-900">
+                ⬇ Export to Excel
+              </button>
+            </div>
+          ) : null}
+          <div id="reports-print-area" ref={printRef}>
+            <div className="reports-print-head hidden text-center print:block">
+              {centerName ? <div className="text-2xl font-black text-[#0b2a5b]" style={{ fontFamily: "Georgia, serif" }}>{centerName}</div> : null}
+              {selected ? <div className="text-lg font-bold text-[#0b2a5b]">{selected.label}</div> : null}
+            </div>
+            <ReportFiltersContext.Provider value={filters}>
+              {selected ? children : <p className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-600">Choose a report on the left.</p>}
+            </ReportFiltersContext.Provider>
+          </div>
+          <style jsx global>{`
+            @media print {
+              @page {
+                size: portrait;
+                margin: 10mm;
+              }
+              body * {
+                visibility: hidden;
+              }
+              #reports-print-area,
+              #reports-print-area * {
+                visibility: visible;
+              }
+              #reports-print-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+              }
+              #reports-print-area button,
+              #reports-print-area select,
+              #reports-print-area input[type="search"],
+              #reports-print-area .no-print {
+                display: none !important;
+              }
+              #reports-print-area:has(#report-print-sheet) .reports-print-head {
+                display: none !important;
+              }
+              #reports-print-area .overflow-x-auto,
+              #reports-print-area .overflow-auto {
+                overflow: visible !important;
+                max-height: none !important;
+              }
+            }
+          `}</style>
         </section>
       </div>
     </div>

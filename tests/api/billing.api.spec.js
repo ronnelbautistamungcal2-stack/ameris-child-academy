@@ -47,14 +47,19 @@ test.describe("Billing: parent fees, invoices and payments (Phase 7b) @api", () 
       parentId: parent.id,
       date: "2026-09-22",
       rows: [
-        { childId: child.id, description: "QA Extra Clothing", amount: "5.00" },
-        { childId: child.id, description: "QA Field Trip Fee", amount: 15 },
+        { childId: child.id, chargeType: "SUPPLIES", description: "QA Extra Clothing", amount: "5.00" },
+        { childId: child.id, chargeType: "OTHER", description: "QA Field Trip Fee", amount: 15 },
       ],
     }, coachCookies);
     expect(res.status(), await res.text()).toBe(201);
 
     const fees = await (await apiGet(request, `/api/v1/billing/charges?centerId=${center.id}`, coachCookies)).json();
     expect(fees.map((f) => [f.description, f.amountCents, f.parent.name])).toEqual(expect.arrayContaining([["QA Extra Clothing", 500, parent.name]]));
+    // Coaches see Supplies charges only and can't edit or delete them (client request 2026-10-29).
+    expect(fees.map((f) => f.description)).not.toContain("QA Field Trip Fee");
+    const supply = fees.find((f) => f.description === "QA Extra Clothing");
+    expect(supply.chargeType).toBe("SUPPLIES");
+    expect((await apiPut(request, `/api/v1/billing/charges/${supply.id}`, { amount: 6 }, coachCookies)).status()).toBe(403);
     const notification = await prisma.notification.findFirst({ where: { recipientId: parent.id, title: "New charge on your account", body: { contains: "QA Extra Clothing" } } });
     expect(notification?.link).toBe("/parent/billing");
 

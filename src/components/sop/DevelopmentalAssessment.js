@@ -32,6 +32,40 @@ function age(birthDate) {
   return y ? `${y} year${y === 1 ? "" : "s"} ${m % 12} month${m % 12 === 1 ? "" : "s"}` : `${m} month${m === 1 ? "" : "s"}`;
 }
 
+function monthsOld(birthDate) {
+  if (!birthDate) return null;
+  const b = new Date(birthDate);
+  const now = new Date();
+  let m = (now.getFullYear() - b.getFullYear()) * 12 + now.getMonth() - b.getMonth();
+  if (now.getDate() < b.getDate()) m -= 1;
+  return m;
+}
+
+const stepMin = (s) => (s.ageYears == null && s.ageMonths == null ? null : (s.ageYears || 0) * 12 + (s.ageMonths || 0));
+const stepMax = (s) => (s.maxAgeYears == null && s.maxAgeMonths == null ? stepMin(s) : (s.maxAgeYears || 0) * 12 + (s.maxAgeMonths || 0));
+
+/**
+ * The steps a group starts with: those for the child's current age, not the
+ * first infant steps (client request 2026-10-29). Steps already assessed stay;
+ * earlier or later steps come in through Not Started / Competency as before.
+ * Without an age match it starts at the closest step below the child's age.
+ */
+function stepsForAge(list, ageMonths, isTouched) {
+  if (ageMonths == null) return list;
+  const inRange = list.filter((s) => {
+    const min = stepMin(s);
+    const max = stepMax(s);
+    return min == null || (min <= ageMonths && ageMonths <= (max ?? min));
+  });
+  let start = inRange;
+  if (!start.length) {
+    const below = list.filter((s) => stepMin(s) != null && stepMin(s) <= ageMonths).sort((a, b) => stepMin(b) - stepMin(a));
+    start = below.length ? [below[0]] : list.slice(0, 1);
+  }
+  const ids = new Set(start.map((s) => s.id));
+  return list.filter((s) => ids.has(s.id) || isTouched(s));
+}
+
 export default function DevelopmentalAssessment() {
   const router = useRouter();
   const [children, setChildren] = useState([]);
@@ -42,6 +76,7 @@ export default function DevelopmentalAssessment() {
   const [open, setOpen] = useState({});
   const [dismissed, setDismissed] = useState({});
   const [search, setSearch] = useState("");
+  const [allAges, setAllAges] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -97,6 +132,7 @@ export default function DevelopmentalAssessment() {
   }, [steps]);
   const currentTab = categories.includes(tab) ? tab : categories[0];
 
+  const childMonths = monthsOld(data?.child?.birthDate);
   const groups = useMemo(() => {
     const q = search.trim().toLowerCase();
     const map = new Map();
@@ -106,9 +142,11 @@ export default function DevelopmentalAssessment() {
       if (!map.has(s.subCategory)) map.set(s.subCategory, []);
       map.get(s.subCategory).push(s);
     }
-    return [...map.entries()];
+    const entries = [...map.entries()];
+    if (allAges || q) return entries;
+    return entries.map(([sub, list]) => [sub, stepsForAge(list, childMonths, (s) => Boolean(s.level || edits[s.id]))]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [steps, currentTab, search, edits]);
+  }, [steps, currentTab, search, edits, allAges, childMonths]);
 
   function setLevel(step, level) {
     setNotice("");
@@ -215,6 +253,10 @@ export default function DevelopmentalAssessment() {
               ))}
             </select>
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search goals, questions or notes..." aria-label="Search the assessment" className="w-64 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800" />
+            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <input type="checkbox" checked={allAges} onChange={(e) => setAllAges(e.target.checked)} />
+              Show steps for every age
+            </label>
           </div>
         </div>
         <div className="flex gap-2">

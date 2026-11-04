@@ -52,7 +52,7 @@ test.describe("Compliance requirements and form renewals (Phase 7b) @api", () =>
     expect(noDate.status()).toBe(400);
   });
 
-  test("status follows the due date, and completing moves it to the next repeat", async ({ request }) => {
+  test("status follows the due date, and checking off adds a row for the next repeat", async ({ request }) => {
     const admin = await loginAsAdmin(request);
     const make = async (body) => {
       const res = await apiPost(request, "/api/v1/compliance/requirements", { centerId: center.id, category: "Safety", ...body }, admin);
@@ -67,30 +67,36 @@ test.describe("Compliance requirements and form renewals (Phase 7b) @api", () =>
     const once = await make({ name: "QA Emergency Plan Signed", category: "Policy", frequency: "ONCE", nextDue: addDays(5) });
     expect([overdue.status, soon.status, later.status, once.status]).toEqual(["OVERDUE", "DUE_SOON", "UPCOMING", "DUE_SOON"]);
     expect(later.appliesToRoles).toEqual(["COACH"]);
-    expect(overdue.progress).toEqual({ done: 0, total: 1 });
 
-    // Monthly: the same day next month (or that month's last day).
-    const done = await (await apiPut(request, `/api/v1/compliance/requirements/${soon.id}`, { action: "complete" }, admin)).json();
+    // The checked-off row stays, completed, with its own due date; a new row
+    // is due the same day next month (or that month's last day).
+    const { requirement: done, next } = await (await apiPut(request, `/api/v1/compliance/requirements/${soon.id}`, { action: "complete" }, admin)).json();
+    requirementIds.push(next.id);
     const expected = new Date(`${soon.nextDue}T00:00:00Z`);
     const day = expected.getUTCDate();
     expected.setUTCDate(1);
     expected.setUTCMonth(expected.getUTCMonth() + 1);
     const lastDay = new Date(Date.UTC(expected.getUTCFullYear(), expected.getUTCMonth() + 1, 0)).getUTCDate();
     expected.setUTCDate(Math.min(day, lastDay));
-    expect(done.nextDue).toBe(expected.toISOString().slice(0, 10));
+    expect(done.nextDue).toBe(soon.nextDue);
     expect(done.status).toBe("COMPLETED");
-    expect(done.progress).toEqual({ done: 1, total: 1 });
+    expect(next.nextDue).toBe(expected.toISOString().slice(0, 10));
+    expect(next.status).not.toBe("COMPLETED");
+    expect(next.name).toBe(soon.name);
     expect(await prisma.complianceCompletion.count({ where: { requirementId: soon.id } })).toBe(1);
 
-    // Undo puts the due date back.
+    // Undo reopens the row and drops the row it added.
     const undone = await (await apiPut(request, `/api/v1/compliance/requirements/${soon.id}`, { action: "undo" }, admin)).json();
-    expect(undone.nextDue).toBe(soon.nextDue);
-    expect(undone.status).toBe("DUE_SOON");
+    expect(undone.removedId).toBe(next.id);
+    expect(undone.requirement.nextDue).toBe(soon.nextDue);
+    expect(undone.requirement.status).toBe("DUE_SOON");
+    expect(await prisma.complianceRequirement.count({ where: { id: next.id } })).toBe(0);
 
-    // A one-time requirement stays done and keeps its date.
+    // A requirement that doesn't repeat stays done, keeps its date and adds no row.
     const onceDone = await (await apiPut(request, `/api/v1/compliance/requirements/${once.id}`, { action: "complete" }, admin)).json();
-    expect(onceDone.status).toBe("COMPLETED");
-    expect(onceDone.nextDue).toBe(once.nextDue);
+    expect(onceDone.requirement.status).toBe("COMPLETED");
+    expect(onceDone.requirement.nextDue).toBe(once.nextDue);
+    expect(onceDone.next).toBeNull();
 
     // Editing keeps fields that are not sent.
     const edited = await (await apiPut(request, `/api/v1/compliance/requirements/${overdue.id}`, { name: "QA Fire Drill Log", repeatOn: 15 }, admin)).json();

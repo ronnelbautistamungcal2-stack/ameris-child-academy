@@ -1,3 +1,4 @@
+import DocumentsPage from "@/components/documents/DocumentsPage";
 import ParentLayout from "@/components/parent/ParentLayout";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
@@ -6,11 +7,9 @@ import { useEffect, useMemo, useState } from "react";
 const NAVY = "text-[#12386a] dark:text-slate-100";
 
 export default function ParentPolicies() {
-  const [docs, setDocs] = useState([]);
   const [faqs, setFaqs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [docQuery, setDocQuery] = useState("");
   const [faqQuery, setFaqQuery] = useState("");
   const [openFaqId, setOpenFaqId] = useState(null);
 
@@ -19,11 +18,7 @@ export default function ParentPolicies() {
       setLoading(true);
       setError("");
       try {
-        const [policyResult, faqResult] = await Promise.all([
-          apiJson("/api/v1/policies?category=POLICY"),
-          apiJson("/api/v1/parent-faqs"),
-        ]);
-        setDocs(sortByCreated(Array.isArray(policyResult) ? policyResult : []));
+        const faqResult = await apiJson("/api/v1/parent-faqs");
         setFaqs(Array.isArray(faqResult) ? faqResult : []);
       } catch (e) {
         setError(e.message || "Failed to load policies");
@@ -33,13 +28,6 @@ export default function ParentPolicies() {
     })();
   }, []);
 
-  const filteredDocs = useMemo(() => {
-    const q = docQuery.trim().toLowerCase();
-    if (!q) return docs;
-    return docs.filter((doc) =>
-      `${doc.title || ""} ${doc.description || ""}`.toLowerCase().includes(q),
-    );
-  }, [docs, docQuery]);
 
   const filteredFaqs = useMemo(() => {
     const q = faqQuery.trim().toLowerCase();
@@ -52,43 +40,8 @@ export default function ParentPolicies() {
   return (
     <ParentLayout title="Policies and Procedures">
       <div className="space-y-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className={`text-2xl font-black tracking-tight sm:text-3xl ${NAVY}`}>
-            Policies and Procedures
-          </h1>
-          <SearchBox
-            value={docQuery}
-            onChange={setDocQuery}
-            placeholder="Search documents..."
-            label="Search policy documents"
-          />
-        </div>
-
-        {error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-500/30 dark:bg-red-950/25 dark:text-red-200">
-            {error}
-          </div>
-        ) : null}
-
-        <section className="rounded-2xl border border-gray-200 bg-white px-3 py-1 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:px-4">
-          {loading ? (
-            <div className="py-3">
-              <Skeleton count={6} />
-            </div>
-          ) : filteredDocs.length ? (
-            <ul className="divide-y divide-gray-100 dark:divide-gray-700">
-              {filteredDocs.map((doc) => (
-                <DocRow key={doc.id} doc={doc} />
-              ))}
-            </ul>
-          ) : (
-            <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-              {docQuery
-                ? "No documents match your search."
-                : "No policy documents have been published yet."}
-            </p>
-          )}
-        </section>
+        {/* Opens a policy on the right, like Additional Resources (client request 2026-10-29). */}
+        <DocumentsPage category="POLICY" />
 
         <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -133,61 +86,9 @@ export default function ParentPolicies() {
   );
 }
 
-function DocRow({ doc }) {
-  return (
-    <li className="flex items-center gap-3 py-2.5 sm:gap-4">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-900">
-        <PdfIcon />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className={`truncate text-sm font-bold ${NAVY}`}>{doc.title}</p>
-        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-          Updated {formatShortDate(doc.updatedAt || doc.createdAt)}
-        </p>
-      </div>
-      <a
-        href={doc.url}
-        target="_blank"
-        rel="noreferrer"
-        aria-label={`View ${doc.title}`}
-        className="shrink-0 rounded-lg border-2 border-[#1c7ed6] bg-white px-6 py-1.5 text-sm font-bold text-[#1c5fa8] transition hover:bg-sky-50 dark:border-sky-500 dark:bg-transparent dark:text-sky-300 dark:hover:bg-sky-950/40 sm:px-9"
-      >
-        View
-      </a>
-    </li>
-  );
-}
 
 // Red Acrobat-style document mark, matching the mockup's policy list.
-function PdfIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden="true">
-      <path
-        fill="#E11D24"
-        d="M5.5 1.5h9l5 5v15a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-19a1 1 0 0 1 1-1Z"
-      />
-      <path fill="#F87171" d="M14.5 1.5 19.5 6.5h-4a1 1 0 0 1-1-1Z" />
-      <path
-        fill="none"
-        stroke="#fff"
-        strokeWidth={1.3}
-        strokeLinejoin="round"
-        d="M11.2 8.2c-.9 0-.6 2.2.9 4.8 1.3 2.3 2.9 3.9 3.9 3.5.9-.4-.5-1.6-3.2-1.3-2.9.3-5.4 1.6-5.2 2.4.2.9 1.8-.3 3-2.8 1.1-2.4 1.5-6.6.6-6.6Z"
-      />
-    </svg>
-  );
-}
 
-function formatShortDate(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString("en-US", {
-    month: "2-digit",
-    day: "2-digit",
-    year: "numeric",
-  });
-}
 
 function FaqRow({ faq, open, onToggle }) {
   return (
@@ -252,10 +153,3 @@ function SearchBox({ value, onChange, placeholder, label }) {
 }
 
 // Oldest first, so the list follows the order the center added documents in.
-function sortByCreated(docs) {
-  return [...docs].sort(
-    (a, b) =>
-      new Date(a.createdAt || 0) - new Date(b.createdAt || 0) ||
-      String(a.title || "").localeCompare(String(b.title || "")),
-  );
-}

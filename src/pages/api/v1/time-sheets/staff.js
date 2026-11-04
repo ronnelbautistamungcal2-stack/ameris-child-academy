@@ -1,4 +1,5 @@
 import { accessibleCenterIds, getSession } from "@/lib/auth";
+import { coachTeamUserIds, onCoachTeam } from "@/lib/coachTeam";
 import prisma from "@/lib/prisma";
 import { EMPLOYEE_ROLES, roleLabel, userRoles } from "@/lib/roles";
 import { startOfLocalDay, TIME_SHEET_KINDS } from "@/lib/timeSheets";
@@ -33,6 +34,8 @@ export default async function handler(req, res) {
       role: true,
       roles: true,
       employmentStatus: true,
+      dob: true,
+      hireDate: true,
       staffAttendances: {
         where: { date: startOfLocalDay(new Date()) },
         select: { clockIn: true, clockOut: true },
@@ -41,14 +44,17 @@ export default async function handler(req, res) {
     orderBy: [{ name: "asc" }, { email: "asc" }],
   });
 
+  const team = await coachTeamUserIds(prisma, session);
   return res.status(200).json(
-    users.map((user) => {
+    onCoachTeam(users, team).map((user) => {
       const today = user.staffAttendances[0];
       return {
         id: user.id,
         name: user.name || user.email,
         role: userRoles(user).map(roleLabel).join(", "),
         employmentStatus: user.employmentStatus,
+        dob: user.dob,
+        hireDate: user.hireDate,
         clockedIn: Boolean(today?.clockIn && !today?.clockOut),
         clockIn: today?.clockIn || null,
         clockOut: today?.clockOut || null,

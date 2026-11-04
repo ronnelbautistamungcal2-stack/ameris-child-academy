@@ -191,6 +191,7 @@ export function MilestoneProgressReport() {
         <ReportSheet
           title="Milestone Progress Report"
           subtitle="Center Average vs. World Standard"
+          orientation="portrait"
           copyright
           meta={[
             ["Report Date", longDate(data.date)],

@@ -3,7 +3,7 @@
 
 import { accessibleCenterIds } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { hasAnyRole } from "@/lib/roles";
+import { hasAnyRole, signedInAs } from "@/lib/roles";
 import { activeGoalIds, levelForStatus, statusForLevel } from "@/lib/sop";
 import { buildTeacherChildWhere, teacherCanAccessChild } from "@/lib/teacherScope";
 
@@ -11,7 +11,8 @@ export const SOP_ROLES = ["ADMIN", "COACH", "STUDENT_SUPPORT", "TEACHER"];
 const GOAL_INDEX = 1;
 
 /** Prisma `where` for the children the user may assess and track, or null. */
-export async function sopChildScope(user, centerId) {
+export async function sopChildScope(sessionUser, centerId) {
+  const user = signedInAs(sessionUser);
   if (hasAnyRole(user, ["ADMIN"])) return centerId ? { centerId } : {};
   if (hasAnyRole(user, ["COACH", "STUDENT_SUPPORT"])) {
     const ids = (await accessibleCenterIds(user.id)) || [];
@@ -21,8 +22,9 @@ export async function sopChildScope(user, centerId) {
   return null;
 }
 
-export async function canUseChild(user, child) {
+export async function canUseChild(sessionUser, child) {
   if (!child) return false;
+  const user = signedInAs(sessionUser);
   if (hasAnyRole(user, ["ADMIN"])) return true;
   if (hasAnyRole(user, ["COACH", "STUDENT_SUPPORT"])) {
     return ((await accessibleCenterIds(user.id)) || []).includes(child.centerId);

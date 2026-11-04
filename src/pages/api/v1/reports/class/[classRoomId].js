@@ -1,6 +1,6 @@
 import { getSession } from "@/lib/auth";
 import { findReportableClass } from "@/lib/classReportAccess";
-import { CHARACTER_HIGHLIGHT_TYPE_OPTIONS, behaviorTypeLabel, courseCorrectionTypeOptions } from "@/lib/dailyLogOptions";
+import { CHARACTER_HIGHLIGHT_TYPE_OPTIONS, behaviorTypeLabel, characterHighlightLabel, courseCorrectionTypeOptions } from "@/lib/dailyLogOptions";
 import { CURRENT_IPP_STATUSES } from "@/lib/ipp";
 import prisma from "@/lib/prisma";
 import { averagePercent, goalStatus, levelForStatus, sopPercent } from "@/lib/sop";
@@ -29,6 +29,41 @@ function shortName(child) {
  * Plan, Students on Red Flag (an allergy, or a course correction of level 3
  * or higher) and the class's Student Activity Log.
  */
+/** A course correction / character highlight with who it was for and what was logged. */
+function logEntry(l, type, label, byId) {
+  return {
+    id: l.id,
+    type,
+    label,
+    level: Number(l.details?.behaviorLevel) || null,
+    date: dayKey(l.createdAt),
+    childId: l.childId,
+    name: shortName(byId[l.childId] || {}),
+    notes: l.notes || "",
+    loggedBy: l.recordedBy?.name || l.recordedBy?.email || "",
+  };
+}
+
+/** Student Activity Log grid: each child's count of logs by type and the latest (client mockup r176). */
+async function activityCounts(ids, byId) {
+  if (!ids.length) return [];
+  const rows = await prisma.activityLog.groupBy({
+    by: ["childId", "type"],
+    where: { childId: { in: ids } },
+    _count: { _all: true },
+    _max: { createdAt: true },
+  });
+  const out = new Map(ids.map((id) => [id, { childId: id, name: shortName(byId[id] || {}), counts: {}, total: 0, lastAt: null }]));
+  for (const r of rows) {
+    const entry = out.get(r.childId);
+    if (!entry) continue;
+    entry.counts[r.type] = r._count._all;
+    entry.total += r._count._all;
+    if (!entry.lastAt || r._max.createdAt > entry.lastAt) entry.lastAt = r._max.createdAt;
+  }
+  return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export default async function handler(req, res) {
   try {
     const session = await getSession(req, res);
@@ -64,7 +99,7 @@ export default async function handler(req, res) {
           createdAt: { gte: since },
           OR: [{ type: { in: ["BEHAVIOR", "CHARACTER_HIGHLIGHT"] } }, { details: { path: ["kind"], equals: "DAILY_GRADE" } }],
         },
-        select: { childId: true, type: true, details: true, createdAt: true },
+        select: { id: true, childId: true, type: true, details: true, notes: true, createdAt: true, recordedBy: { select: { name: true, email: true } } },
         orderBy: { createdAt: "desc" },
       }),
       prisma.behaviorPlan.findMany({
@@ -81,6 +116,8 @@ export default async function handler(req, res) {
 
     // Milestones
     const categories = new Map();
+    // Which students make up each colour, per category (client request 2026-10-29).
+    const studentsByStatus = new Map();
     for (const p of progress) {
       const level = levelForStatus(p.status);
       const status = goalStatus(p.lesson, level, byId[p.childId]?.birthDate);
@@ -89,12 +126,19 @@ export default async function handler(req, res) {
       const c = categories.get(cat);
       c[status] += 1;
       c.n += 1;
+      if (!studentsByStatus.has(cat)) studentsByStatus.set(cat, {});
+      const byStatus = studentsByStatus.get(cat);
+      const list = (byStatus[status] ||= []);
+      const existing = list.find((s) => s.childId === p.childId);
+      if (existing) existing.goals.push(p.lesson.title);
+      else list.push({ childId: p.childId, name: shortName(byId[p.childId] || {}), goals: [p.lesson.title] });
     }
     const milestones = [...categories.entries()]
       .sort(([a], [b]) => (a === "General" ? -1 : b === "General" ? 1 : a.localeCompare(b)))
       .map(([name, { n, ...mix }]) => ({
         name,
         distribution: Object.fromEntries(Object.entries(mix).map(([k, v]) => [k, Math.round((v * 100) / n)])),
+        students: studentsByStatus.get(name) || {},
       }));
 
     // Milestones % (the teacher's SOP %, client 2026-10-23): each student's
@@ -157,10 +201,11 @@ export default async function handler(req, res) {
         corrections.map((l) => ({ type: l.details?.behaviorType || "OTHER" })),
       ),
       characterHighlightTypes: CHARACTER_HIGHLIGHT_TYPE_OPTIONS,
-      courseCorrections: corrections.map((l) => ({ type: l.details?.behaviorType || "OTHER", date: dayKey(l.createdAt) })),
+      courseCorrections: corrections.map((l) => logEntry(l, l.details?.behaviorType || "OTHER", l.details?.behaviorName || behaviorTypeLabel(l.details?.behaviorType), byId)),
       characterHighlights: logs
         .filter((l) => l.type === "CHARACTER_HIGHLIGHT")
-        .map((l) => ({ type: l.details?.characterHighlightType || "OTHER", date: dayKey(l.createdAt) })),
+        .map((l) => logEntry(l, l.details?.characterHighlightType || "OTHER", characterHighlightLabel(l.details?.characterHighlightType), byId)),
+      activityCounts: await activityCounts(ids, byId),
       ipps: plans.map((p) => ({ id: p.id, childId: p.childId, name: shortName(byId[p.childId]), focusArea: p.focusArea || p.title })),
       redFlags,
       activity: activity.map((a) => ({
@@ -170,6 +215,7 @@ export default async function handler(req, res) {
         notes: a.notes,
         createdAt: a.createdAt,
         recordedBy: a.recordedBy?.name || "",
+        childId: a.childId,
         child: shortName(byId[a.childId] || {}),
       })),
     });

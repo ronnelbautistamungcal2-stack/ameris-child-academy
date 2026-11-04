@@ -63,6 +63,8 @@ async function seedIfNeeded(centerId) {
 /**
  * GET    /api/v1/curriculum-options?centerId=   { CATEGORY: [{id,name}], SUBJECT: [...], ... }
  * POST   /api/v1/curriculum-options  { centerId, kind, name }   (admin)
+ * PATCH  /api/v1/curriculum-options?id=  { name }               (admin) rename; lessons
+ *        and categories using the old name follow (client request 2026-10-29)
  * DELETE /api/v1/curriculum-options?id=                          (admin)
  */
 export default async function handler(req, res) {
@@ -107,6 +109,30 @@ export default async function handler(req, res) {
       return res.status(201).json({ id: row.id, kind: row.kind, name: row.name });
     }
 
+    if (req.method === "PATCH") {
+      const id = String(req.query.id || "");
+      const row = await prisma.curriculumOption.findUnique({ where: { id } });
+      if (!row || !OPTION_KINDS.includes(row.kind)) return res.status(404).json({ error: "Not found" });
+      const [name] = clean([req.body?.name]);
+      if (!name) return res.status(400).json({ error: "Enter a name" });
+      if (name === row.name) return res.status(200).json({ id: row.id, kind: row.kind, name: row.name });
+      const clash = await prisma.curriculumOption.findFirst({
+        where: { centerId: row.centerId, kind: row.kind, id: { not: row.id }, name: { equals: name, mode: "insensitive" } },
+      });
+      if (clash) return res.status(409).json({ error: `"${name}" is already on the list` });
+      const updated = await prisma.$transaction(async (tx) => {
+        if (row.kind === "CATEGORY") {
+          await tx.lessonCategory.updateMany({ where: { centerId: row.centerId, name: row.name }, data: { name } });
+        } else if (row.kind === "SUBJECT") {
+          await tx.lesson.updateMany({ where: { centerId: row.centerId, subCategory: row.name }, data: { subCategory: name } });
+        } else if (row.kind === "AGE_RANGE") {
+          await tx.lessonCategory.updateMany({ where: { centerId: row.centerId, ageRange: row.name }, data: { ageRange: name } });
+        }
+        return tx.curriculumOption.update({ where: { id: row.id }, data: { name } });
+      });
+      return res.status(200).json({ id: updated.id, kind: updated.kind, name: updated.name });
+    }
+
     if (req.method === "DELETE") {
       const id = String(req.query.id || "");
       const row = await prisma.curriculumOption.findUnique({ where: { id } });
@@ -115,7 +141,7 @@ export default async function handler(req, res) {
       return res.status(204).end();
     }
 
-    res.setHeader("Allow", ["GET", "POST", "DELETE"]);
+    res.setHeader("Allow", ["GET", "POST", "PATCH", "DELETE"]);
     return res.status(405).end();
   } catch (e) {
     console.error("curriculum options error:", e);

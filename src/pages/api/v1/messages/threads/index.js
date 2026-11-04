@@ -42,6 +42,18 @@ const THREAD_INCLUDE = {
   },
 };
 
+const ROLE_VALUES = new Set(["ADMIN", "TEACHER", "OTHER_STAFF", "KITCHEN_STAFF", "HR_STAFF", "STUDENT_SUPPORT", "PARENT", "COACH"]);
+
+function senderRole(role) {
+  const value = String(role || "").toUpperCase();
+  return ROLE_VALUES.has(value) ? value : undefined;
+}
+
+function participantRoleWhere(role) {
+  const value = senderRole(role);
+  return value ? { OR: [{ asRole: null }, { asRole: value }] } : {};
+}
+
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
@@ -54,11 +66,14 @@ export default async function handler(req, res) {
     const normalizedType = String(type || "").trim().toUpperCase();
     const normalizedStatus = String(status || "").trim().toUpperCase();
 
+    // A conversation belongs to the role it was sent to or from: someone who
+    // is an admin and a parent no longer sees admin mail in the parent inbox
+    // (client request 2026-10-29). Older threads with no role show in every role.
     const threads = await prisma.messageThread.findMany({
       where: {
         ...(adminAll
           ? { ...(centerId ? { centerId } : {}) }
-          : { participants: { some: { userId: user.id, deletedAt: null } } }),
+          : { participants: { some: { userId: user.id, deletedAt: null, ...participantRoleWhere(user.role) } } }),
         ...(normalizedType ? { type: normalizedType } : {}),
         ...(normalizedStatus ? { status: normalizedStatus } : {}),
       },
@@ -244,7 +259,7 @@ export default async function handler(req, res) {
             createdById: user.id,
             participants: {
               create: [
-                { userId: user.id, lastReadAt: new Date() },
+                { userId: user.id, lastReadAt: new Date(), asRole: senderRole(user.role) },
                 { userId: recipient.id, asRole: recipient.asRole || undefined },
               ],
             },

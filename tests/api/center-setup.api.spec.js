@@ -104,7 +104,7 @@ test.describe("Add/Edit Center settings @api", () => {
       { ageRates: [{ label: "", monthly: 10 }] },
       { ageRates: [{ label: "Toddlers", monthly: -5 }] },
       { status: "OPEN" },
-      { roleAccess: ["SUBSCRIBER"] },
+      { roleAccess: ["NOT_A_ROLE"] },
       { contactEmail: "not-an-email" },
       { directorId: parent.id },
       { name: "" },

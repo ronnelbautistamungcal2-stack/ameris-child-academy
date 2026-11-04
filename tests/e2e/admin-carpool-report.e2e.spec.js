@@ -66,7 +66,7 @@ test.describe("Admin carpool report", () => {
   });
 
   test("groups children by carpool and separates unassigned children", async ({ page }) => {
-    await page.goto("/coach/carpool-report");
+    await page.goto("/coach/reports?report=carpool");
     await waitForLoadingDone(page);
 
     const centerSelect = page.getByLabel("Center");

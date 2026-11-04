@@ -26,7 +26,7 @@ const WARMUP_ROUTES = [
       "/admin/children",
       "/admin/curriculum",
       "/coach/activity-overrides",
-      "/coach/carpool-report",
+      "/coach/reports",
       "/coach/progress",
       "/coach/shifts",
       "/coach/staff-management",
@@ -37,7 +37,6 @@ const WARMUP_ROUTES = [
     loginAsTeacher,
     [
       "/dashboard",
-      "/teacher/calendar",
       "/teacher/lessons",
       "/teacher/progress",
       "/teacher/training",

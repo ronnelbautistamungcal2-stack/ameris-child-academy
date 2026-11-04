@@ -74,6 +74,7 @@ export default async function handler(req, res) {
       title: nextTitle,
       description: source.description,
       noClassroom: source.noClassroom,
+      roles: source.roles,
       category: source.category,
       frequency: source.frequency,
       repeatDays: source.repeatDays,

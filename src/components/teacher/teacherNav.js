@@ -1,5 +1,3 @@
-import { otherPagesGroup } from "@/components/shell/navExtras";
-
 // Follows the client's Teacher Navigation list (2026-10-02 requests).
 export const TEACHER_NAV_ITEMS = [
   {
@@ -70,5 +68,4 @@ export const TEACHER_NAV_ITEMS = [
       </svg>
     ),
   },
-  otherPagesGroup([{ href: "/teacher/calendar", label: "Calendar" }]),
 ];

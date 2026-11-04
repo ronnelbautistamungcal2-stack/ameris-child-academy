@@ -100,6 +100,8 @@ const TYPE_COLORS = {
   FORM_RENEWAL: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
 };
 
+const POLL_MS = 30 * 1000;
+
 export default function NotificationBell({ userId }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -126,8 +128,18 @@ export default function NotificationBell({ userId }) {
     }
   }, []);
 
+  // The socket pushes new notifications, but where it can't connect the red
+  // dot only appeared after opening the bell (client request 2026-10-29), so
+  // also poll and refresh whenever the window regains focus.
   useEffect(() => {
-    if (userId) fetchNotifications();
+    if (!userId) return undefined;
+    fetchNotifications();
+    const timer = window.setInterval(fetchNotifications, POLL_MS);
+    window.addEventListener("focus", fetchNotifications);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", fetchNotifications);
+    };
   }, [userId, fetchNotifications]);
 
   useEffect(() => {

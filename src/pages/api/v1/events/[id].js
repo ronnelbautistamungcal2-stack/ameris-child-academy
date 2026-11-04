@@ -1,5 +1,5 @@
 import { getSession } from "@/lib/auth";
-import { parseEventDateInput } from "@/lib/calendar";
+import { parseEventDateInput, parseEventRoles } from "@/lib/calendar";
 import prisma from "@/lib/prisma";
 
 export default async function handler(req, res) {
@@ -60,6 +60,8 @@ async function handlePut(req, res, session) {
   if (allDay !== undefined) data.allDay = nextAllDay;
   if (type !== undefined) data.type = type;
   if (color !== undefined) data.color = color;
+  const roles = parseEventRoles(req.body?.roles);
+  if (roles) data.roles = roles;
 
   const finalStart = data.startDate || existing.startDate;
   const finalEnd = data.endDate || existing.endDate;

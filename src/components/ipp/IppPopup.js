@@ -24,7 +24,10 @@ export default function IppPopup({ planId, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="ipp-popup-title">
-      <div className="my-6 w-full max-w-5xl space-y-4 rounded-2xl bg-[#eef4fb] p-5 shadow-xl dark:bg-gray-950">
+      <div id="ipp-print-sheet" className="my-6 w-full max-w-5xl space-y-4 rounded-2xl bg-[#eef4fb] p-5 shadow-xl dark:bg-gray-950">
+        {plan?.child?.centerName ? (
+          <div className={`hidden text-center text-2xl font-black print:block ${NAVY}`} style={{ fontFamily: "Georgia, serif" }}>{plan.child.centerName}</div>
+        ) : null}
         <div className="flex items-center justify-between">
           <h2 id="ipp-popup-title" className={`text-2xl font-black ${NAVY}`}>Individual Progress Plan</h2>
           <div className="flex gap-2">
@@ -45,6 +48,37 @@ export default function IppPopup({ planId, onClose }) {
           </>
         )}
       </div>
+      {/* Print only the plan, once, portrait, with the center name on top
+          (client request 2026-10-29); the page behind the pop-up used to print too. */}
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: portrait;
+            margin: 10mm;
+          }
+          body * {
+            visibility: hidden;
+          }
+          #ipp-print-sheet,
+          #ipp-print-sheet * {
+            visibility: visible;
+          }
+          #ipp-print-sheet {
+            position: absolute;
+            left: 0;
+            top: 0;
+            margin: 0 !important;
+            max-width: none !important;
+            box-shadow: none !important;
+            background: #fff !important;
+          }
+          [role="dialog"] {
+            position: static !important;
+            overflow: visible !important;
+            background: transparent !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

@@ -689,6 +689,8 @@ async function downloadStepTemplate() {
   XLSX.writeFile(book, "steps-of-progression-template.xlsx");
 }
 
+const IMPORT_MAX_BYTES = 15 * 1024 * 1024;
+
 function ImportStepsDialog({ centerId, onClose, onImported }) {
   const [file, setFile] = useState(null); // { name, rows, missing }
   const [busy, setBusy] = useState(false);
@@ -701,6 +703,11 @@ function ImportStepsDialog({ centerId, onClose, onImported }) {
     if (!picked) return;
     setError("");
     setResult(null);
+    if (picked.size > IMPORT_MAX_BYTES) {
+      setFile(null);
+      setError("The import file can be up to 15 MB.");
+      return;
+    }
     try {
       const XLSX = await loadXlsx();
       const book = XLSX.read(await picked.arrayBuffer(), { type: "array" });
@@ -750,7 +757,7 @@ function ImportStepsDialog({ centerId, onClose, onImported }) {
 
         <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 px-3 py-5 text-center text-sm text-[#0b2a5b] hover:bg-blue-50 dark:border-gray-600 dark:text-blue-100 dark:hover:bg-gray-800">
           <span className="font-semibold">{file ? file.name : "Click to choose a file"}</span>
-          <span className="text-xs text-gray-500">.xlsx, .xls or .csv</span>
+          <span className="text-xs text-gray-500">.xlsx, .xls or .csv, up to 15 MB</span>
           <input type="file" accept=".xlsx,.xls,.csv" className="sr-only" onChange={choose} disabled={busy} aria-label="Steps file" />
         </label>
 

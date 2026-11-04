@@ -1,9 +1,10 @@
 import { getSession } from "@/lib/auth";
+import { normalizeChargeType } from "@/lib/chargeTypes";
 import { billingAccess, dbDate, invoiceFor, parseAmountCents, periodOf } from "@/lib/familyBilling";
 import prisma from "@/lib/prisma";
 
 /**
- * PUT    /api/v1/billing/charges/:id { date?, description?, amount? }
+ * PUT    /api/v1/billing/charges/:id { date?, description?, amount?, chargeType? }
  * DELETE /api/v1/billing/charges/:id
  * Admins and the center's coaches. A new date in another month moves the
  * charge to that month's invoice.
@@ -16,6 +17,11 @@ export default async function handler(req, res) {
   const access = await billingAccess(session.user, charge.centerId);
   if (!access.ok) return res.status(access.status).json({ error: access.error });
 
+  // Coaches only view their Supplies list now; admins edit and delete (client request 2026-10-29).
+  if (["PUT", "DELETE"].includes(req.method) && session.user.role !== "ADMIN") {
+    return res.status(403).json({ error: "Only admins can change charges" });
+  }
+
   if (req.method === "PUT") {
     const data = {};
     const body = req.body || {};
@@ -27,6 +33,7 @@ export default async function handler(req, res) {
       data.amountCents = parseAmountCents(body.amount);
       if (!data.amountCents) return res.status(400).json({ error: "Enter an amount" });
     }
+    if (body.chargeType !== undefined) data.chargeType = normalizeChargeType(body.chargeType);
     if (body.date !== undefined) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(String(body.date))) return res.status(400).json({ error: "Choose the date" });
       data.date = dbDate(body.date);

@@ -20,10 +20,6 @@ const STATUS = {
   DUE_SOON: ["Due Soon", "bg-amber-100 text-amber-800"],
   OVERDUE: ["Overdue", "bg-red-100 text-red-700"],
 };
-const thisMonth = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-};
 const initials = (name) => String(name || "?").split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("");
 
 function Pill({ status }) {
@@ -34,10 +30,8 @@ function Pill({ status }) {
 export default function AdminBillingWorkspace() {
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
-  const [classes, setClasses] = useState([]);
-  const [month, setMonth] = useState(thisMonth);
+  const [month, setMonth] = useState("");
   const [status, setStatus] = useState("");
-  const [classRoomId, setClassRoomId] = useState("");
   const [search, setSearch] = useState("");
   const [data, setData] = useState(null);
   const [open, setOpen] = useState({});
@@ -45,6 +39,7 @@ export default function AdminBillingWorkspace() {
   const [adding, setAdding] = useState(false);
   const [viewing, setViewing] = useState("");
   const [paying, setPaying] = useState(null);
+  const [viewingPayments, setViewingPayments] = useState(null);
 
   useSyncedCenterId(centerId, setCenterId, centers);
 
@@ -58,23 +53,17 @@ export default function AdminBillingWorkspace() {
       .catch((e) => setError(e.message || "Failed to load centers"));
   }, []);
 
-  useEffect(() => {
-    if (!centerId) return;
-    apiJson(`/api/v1/classes?centerId=${encodeURIComponent(centerId)}`)
-      .then((rows) => setClasses(Array.isArray(rows) ? rows : []))
-      .catch(() => setClasses([]));
-  }, [centerId]);
 
   const load = useCallback(async () => {
     if (!centerId) return;
     try {
-      const qs = new URLSearchParams({ centerId, month, ...(status ? { status } : {}), ...(classRoomId ? { classRoomId } : {}), ...(search.trim() ? { q: search.trim() } : {}) });
+      const qs = new URLSearchParams({ centerId, ...(month ? { month } : {}), ...(status ? { status } : {}), ...(search.trim() ? { q: search.trim() } : {}) });
       setData(await apiJson(`/api/v1/billing/invoices?${qs}`));
       setError("");
     } catch (e) {
       setError(e.message || "Failed to load billing");
     }
-  }, [centerId, month, status, classRoomId, search]);
+  }, [centerId, month, status, search]);
 
   useEffect(() => {
     const timer = setTimeout(load, 250);
@@ -124,8 +113,11 @@ export default function AdminBillingWorkspace() {
         ))}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1.4fr_auto] lg:items-end">
-        <label className="text-sm font-bold">Month<input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className={`${control} mt-1`} /></label>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.4fr_auto] lg:items-end">
+        <label className="text-sm font-bold">
+          Month <span className="font-normal text-gray-500">(blank = all)</span>
+          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className={`${control} mt-1`} />
+        </label>
         <label className="text-sm font-bold">
           Status
           <select value={status} onChange={(e) => setStatus(e.target.value)} className={`${control} mt-1`}>
@@ -133,15 +125,8 @@ export default function AdminBillingWorkspace() {
             {Object.entries(STATUS).map(([value, [label]]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </label>
-        <label className="text-sm font-bold">
-          Room/Class
-          <select value={classRoomId} onChange={(e) => setClassRoomId(e.target.value)} className={`${control} mt-1`}>
-            <option value="">All Rooms</option>
-            {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        </label>
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search parent or client..." aria-label="Search parent or client" className={control} />
-        <button type="button" onClick={() => { setStatus(""); setClassRoomId(""); setSearch(""); setMonth(thisMonth()); }} className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-bold text-blue-700">Clear Filters</button>
+        <button type="button" onClick={() => { setStatus(""); setSearch(""); setMonth(""); }} className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-bold text-blue-700">Clear Filters</button>
       </div>
 
       {!centerId ? (
@@ -181,7 +166,7 @@ export default function AdminBillingWorkspace() {
                           <div className={`mb-2 font-bold ${NAVY}`}>Invoices for {p.parent.name}</div>
                           <table className="min-w-full text-xs">
                             <thead className="text-left text-[#0b2a5b] dark:text-blue-100">
-                              <tr>{["Invoice #", "Invoice Date", "Due Date", "Description", "Client(s)", "Amount", "Balance", "Status", "Verified", ""].map((h) => <th key={h} className="px-2 py-1.5 font-bold">{h}</th>)}</tr>
+                              <tr>{["Invoice #", "Invoice Date", "Due Date", "Description", "Client(s)", "Amount", "Paid", "Balance", "Status", "Verified", ""].map((h) => <th key={h} className="px-2 py-1.5 font-bold">{h}</th>)}</tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                               {p.invoices.map((inv) => {
@@ -197,6 +182,14 @@ export default function AdminBillingWorkspace() {
                                     <td className="px-2 py-1.5">{descriptions.length > 1 ? `${descriptions[0]} + ${descriptions.length - 1} more` : descriptions[0]}</td>
                                     <td className="px-2 py-1.5">{names.join(", ") || "All Children"}</td>
                                     <td className="px-2 py-1.5">{money(inv.totalCents)}</td>
+                                    <td className="px-2 py-1.5">
+                                      {/* Recorded payments (client request 2026-10-29). */}
+                                      {inv.payments?.length ? (
+                                        <button type="button" onClick={() => setViewingPayments(inv)} className="font-semibold text-blue-700 underline">{money(inv.paidCents)}</button>
+                                      ) : (
+                                        money(inv.paidCents)
+                                      )}
+                                    </td>
                                     <td className="px-2 py-1.5">{money(inv.balanceCents)}</td>
                                     <td className="px-2 py-1.5"><Pill status={inv.status} /></td>
                                     <td className="px-2 py-1.5">
@@ -234,7 +227,26 @@ export default function AdminBillingWorkspace() {
           }}
         />
       ) : null}
-      {viewing ? <InvoiceView invoiceId={viewing} onClose={() => setViewing("")} /> : null}
+      {viewing ? <InvoiceView invoiceId={viewing} canEdit onChanged={load} onClose={() => setViewing("")} /> : null}
+      {viewingPayments ? (
+        <Modal title={`Payments for ${viewingPayments.number}`} onClose={() => setViewingPayments(null)} footer={<button type="button" onClick={() => setViewingPayments(null)} className="rounded-lg border border-gray-300 px-5 py-2 text-sm font-bold">Close</button>}>
+          <table className="min-w-full text-sm">
+            <thead className="bg-blue-50 text-left text-[#0b2a5b] dark:bg-gray-800 dark:text-blue-100">
+              <tr>{["Date", "Amount", "Method", "Note"].map((h) => <th key={h} className="px-3 py-2 font-bold">{h}</th>)}</tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              {viewingPayments.payments.map((pay) => (
+                <tr key={pay.id}>
+                  <td className="px-3 py-2">{new Date(pay.paidAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
+                  <td className="px-3 py-2 font-semibold">{money(pay.amountCents)}</td>
+                  <td className="px-3 py-2">{pay.method || "—"}</td>
+                  <td className="px-3 py-2">{pay.note || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Modal>
+      ) : null}
       {paying ? (
         <PaymentDialog
           invoice={paying}

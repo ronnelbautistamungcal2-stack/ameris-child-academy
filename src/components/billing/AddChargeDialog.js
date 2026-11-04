@@ -1,5 +1,6 @@
 import { Modal } from "@/components/training/trainingUi";
 import { apiJson } from "@/lib/api";
+import { CHARGE_TYPES } from "@/lib/chargeTypes";
 import { useEffect, useState } from "react";
 
 // Add Charge (client mockup 09-04), on the coach's Parent Fees and the admin
@@ -10,11 +11,12 @@ const todayKey = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
-const blankRow = () => ({ childId: "", description: "", amount: "" });
+const blankRow = () => ({ childId: "", chargeType: "TUITION", description: "", amount: "" });
 
 export default function AddChargeDialog({ centerId, onClose, onSaved }) {
   const [parents, setParents] = useState(null);
   const [parentId, setParentId] = useState("");
+  const [parentSearch, setParentSearch] = useState("");
   const [date, setDate] = useState(todayKey);
   const [rows, setRows] = useState([blankRow()]);
   const [error, setError] = useState("");
@@ -27,6 +29,10 @@ export default function AddChargeDialog({ centerId, onClose, onSaved }) {
   }, [centerId]);
 
   const parent = (parents || []).find((p) => p.id === parentId);
+  const parentMatches = (parents || []).filter((p) => {
+    const q = parentSearch.trim().toLowerCase();
+    return !q || p.name.toLowerCase().includes(q) || p.id === parentId;
+  });
   const setRow = (i, patch) => setRows((r) => r.map((row, j) => (j === i ? { ...row, ...patch } : row)));
 
   async function save() {
@@ -58,10 +64,13 @@ export default function AddChargeDialog({ centerId, onClose, onSaved }) {
         {error ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
         <label className="grid items-center gap-2 text-sm font-semibold text-[#0b2a5b] sm:grid-cols-[10rem_1fr] dark:text-blue-100">
           <span>Parent Name <span className="text-red-500">*</span></span>
-          <select value={parentId} onChange={(e) => { setParentId(e.target.value); setRows([blankRow()]); }} className={control}>
-            <option value="">{parents ? "Select parent name..." : "Loading..."}</option>
-            {(parents || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          <span className="grid gap-2 sm:grid-cols-2">
+            <input value={parentSearch} onChange={(e) => setParentSearch(e.target.value)} placeholder="Search parent name..." aria-label="Search parent name" className={control} />
+            <select value={parentId} onChange={(e) => { setParentId(e.target.value); setRows([blankRow()]); }} aria-label="Parent Name" className={control}>
+              <option value="">{!parents ? "Loading..." : parentMatches.length ? "Select parent name..." : "No parent matches"}</option>
+              {parentMatches.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </span>
         </label>
         <label className="grid items-center gap-2 text-sm font-semibold text-[#0b2a5b] sm:grid-cols-[10rem_1fr] dark:text-blue-100">
           <span>Date <span className="text-red-500">*</span></span>
@@ -71,6 +80,7 @@ export default function AddChargeDialog({ centerId, onClose, onSaved }) {
           <thead className="bg-blue-50 text-left text-[#0b2a5b] dark:bg-gray-800 dark:text-blue-100">
             <tr>
               <th className="px-2 py-2 font-bold">Child Name <span className="text-red-500">*</span></th>
+              <th className="px-2 py-2 font-bold">Charge Type <span className="text-red-500">*</span></th>
               <th className="px-2 py-2 font-bold">Description <span className="text-red-500">*</span></th>
               <th className="px-2 py-2 font-bold">Amount <span className="text-red-500">*</span></th>
               <th />
@@ -83,6 +93,11 @@ export default function AddChargeDialog({ centerId, onClose, onSaved }) {
                   <select value={row.childId} onChange={(e) => setRow(i, { childId: e.target.value })} disabled={!parent} aria-label={`Child for charge ${i + 1}`} className={control}>
                     <option value="">Select child name...</option>
                     {(parent?.children || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </td>
+                <td className="px-2 py-1.5">
+                  <select value={row.chargeType} onChange={(e) => setRow(i, { chargeType: e.target.value })} aria-label={`Charge type for charge ${i + 1}`} className={control}>
+                    {CHARGE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </td>
                 <td className="px-2 py-1.5">

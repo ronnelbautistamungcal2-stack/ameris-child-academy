@@ -7,6 +7,7 @@ import Skeleton from "@/components/ui/Skeleton";
 import { useToast } from "@/contexts/ToastContext";
 import { useNewMessages, useUserSocket } from "@/hooks/useSocket";
 import { apiJson } from "@/lib/api";
+import { roleLabel } from "@/lib/roles";
 import {
   MESSAGE_PRIORITY_LEVELS,
   canCompleteWorkflow,
@@ -66,7 +67,7 @@ const READ_FILTERS = [
 
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 // Parents write to the center, never to other families.
-const FAMILY_ROLES = new Set(["PARENT", "SUBSCRIBER"]);
+const FAMILY_ROLES = new Set(["PARENT"]);
 const WORKFLOW_ROLES = new Set(["ADMIN", "COACH"]);
 
 function queryValue(value) {
@@ -587,18 +588,29 @@ export default function MessagesWorkspace({ variant: variantProp } = {}) {
                 </select>
               </div>
             ) : (
-              <select
-                value={readFilter}
-                onChange={(e) => setReadFilter(e.target.value)}
-                aria-label="Filter messages"
-                className={FIELD}
-              >
-                {READ_FILTERS.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
+              <div className={FAMILY_ROLES.has(role) ? "" : "grid grid-cols-2 gap-2"}>
+                <select
+                  value={readFilter}
+                  onChange={(e) => setReadFilter(e.target.value)}
+                  aria-label="Filter messages"
+                  className={FIELD}
+                >
+                  {READ_FILTERS.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                {/* Staff can narrow the list to one message type (client request 2026-10-29). */}
+                {FAMILY_ROLES.has(role) ? null : (
+                  <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Type" className={FIELD}>
+                    <option value="">All types</option>
+                    <option value="MESSAGE">Messages</option>
+                    <option value="OPEN_POINT">Open Points</option>
+                    <option value="REQUEST">Requests</option>
+                  </select>
+                )}
+              </div>
             )}
           </div>
 
@@ -1113,6 +1125,11 @@ function ComposeDialog({ seed, userId, role, workflowView, suggestedContacts, on
       return;
     }
     if (!body.trim() && !attachment) return;
+    const unpicked = recipients.find((r) => Array.isArray(r.roles) && r.roles.length > 1 && !r.roles.includes(r.role));
+    if (unpicked) {
+      toast.error(`Choose which role ${personName(unpicked)} should get this message as.`);
+      return;
+    }
     setSending(true);
     try {
       const response = await apiJson("/api/v1/messages/threads", {
@@ -1172,6 +1189,17 @@ function ComposeDialog({ seed, userId, role, workflowView, suggestedContacts, on
                 <span key={person.id} className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 py-1 pl-1 pr-2 text-sm dark:border-sky-800 dark:bg-sky-900/30">
                   <Avatar label={personName(person)} small />
                   <span className={`font-semibold ${NAVY}`}>{personName(person)}</span>
+                  {Array.isArray(person.roles) && person.roles.length > 1 ? (
+                    <select
+                      value={person.role && person.roles.includes(person.role) ? person.role : ""}
+                      onChange={(e) => setRecipients(recipients.map((r) => (r.id === person.id ? { ...r, role: e.target.value } : r)))}
+                      aria-label={`Send to ${personName(person)} as`}
+                      className="rounded border border-sky-200 bg-white px-1 py-0.5 text-xs dark:border-sky-800 dark:bg-gray-800"
+                    >
+                      <option value="">Choose role...</option>
+                      {person.roles.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
+                    </select>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => setRecipients(recipients.filter((r) => r.id !== person.id))}

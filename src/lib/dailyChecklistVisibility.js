@@ -7,6 +7,14 @@ import { isStaffPortalRole, STAFF_PORTAL_ROLES } from "@/lib/roles";
 
 const STAFF_CHECKLIST_ROLES = ["TEACHER", ...STAFF_PORTAL_ROLES, "COACH"];
 
+/** The Role field on Create Checklist. */
+export const CHECKLIST_ROLE_VALUES = [...STAFF_CHECKLIST_ROLES, "ADMIN"];
+
+function roleAllowed(checklist, role) {
+  const roles = Array.isArray(checklist?.roles) ? checklist.roles : [];
+  return !roles.length || roles.includes(role);
+}
+
 export function getUserChecklistRoles(user) {
   const roles = [user?.role, ...(Array.isArray(user?.roles) ? user.roles : [])]
     .map((role) => String(role || "").trim())
@@ -20,6 +28,7 @@ export function getUserChecklistRoles(user) {
  * admins can preview a checklist exactly as that employee sees it.
  */
 export function checklistVisibleToRole(checklist, { role, userId, teacherClassIds = [] }) {
+  if (!roleAllowed(checklist, role)) return false;
   if (isStaffPortalRole(role)) {
     if (hasChecklistClassroomScope(checklist) || checklist.category === "CLASSROOM") {
       return false;
@@ -45,7 +54,7 @@ export function checklistVisibleToStaff(checklist, { roles = [], userId, teacher
   const effectiveRoles = roles.length ? roles : ["ADMIN"];
   return effectiveRoles.some((role) =>
     PERSONAL_ROLES.includes(role)
-      ? getChecklistAssignedUserIds(checklist).includes(userId)
+      ? roleAllowed(checklist, role) && getChecklistAssignedUserIds(checklist).includes(userId)
       : checklistVisibleToRole(checklist, { role, userId, teacherClassIds }),
   );
 }

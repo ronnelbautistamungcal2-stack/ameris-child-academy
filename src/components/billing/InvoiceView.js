@@ -1,5 +1,6 @@
 import { apiJson } from "@/lib/api";
-import { useEffect, useState } from "react";
+import { CHARGE_TYPES, chargeTypeLabel } from "@/lib/chargeTypes";
+import { useCallback, useEffect, useState } from "react";
 
 // Invoice (client mockup 09-06), opened from the parent's Billing page and the
 // admin Billing list, with a Print button.
@@ -10,15 +11,47 @@ const shortDate = (key) => (key ? new Date(`${String(key).slice(0, 10)}T00:00:00
 const cell = "border border-[#9cb8dc] px-4 py-2";
 const head = "border border-[#9cb8dc] bg-[#dbe8f7] px-4 py-2 font-bold text-[#0b2a5b]";
 
-export default function InvoiceView({ invoiceId, onClose }) {
+/** canEdit (admin Billing): edit or delete each charge (client request 2026-10-29). */
+export default function InvoiceView({ invoiceId, onClose, canEdit = false, onChanged }) {
   const [invoice, setInvoice] = useState(null);
   const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState("");
+  const [draft, setDraft] = useState(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     apiJson(`/api/v1/billing/invoices/${invoiceId}`)
       .then(setInvoice)
       .catch((e) => setError(e.message || "Failed to load the invoice"));
   }, [invoiceId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function saveCharge() {
+    try {
+      await apiJson(`/api/v1/billing/charges/${editingId}`, {
+        method: "PUT",
+        body: JSON.stringify({ description: draft.description, amount: draft.amount, date: draft.date, chargeType: draft.chargeType }),
+      });
+      setEditingId("");
+      load();
+      onChanged?.();
+    } catch (e) {
+      setError(e.message || "Failed to save the charge");
+    }
+  }
+
+  async function deleteCharge(charge) {
+    if (!window.confirm(`Delete "${charge.description}" (${money(charge.amountCents)}) from this invoice?`)) return;
+    try {
+      await apiJson(`/api/v1/billing/charges/${charge.id}`, { method: "DELETE" });
+      load();
+      onChanged?.();
+    } catch (e) {
+      setError(e.message || "Failed to delete the charge");
+    }
+  }
 
   const center = invoice?.center || {};
   const cityLine = [center.city, [center.state, center.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
@@ -61,17 +94,45 @@ export default function InvoiceView({ invoiceId, onClose }) {
 
             <table className="w-full border-collapse">
               <thead>
-                <tr>{["Date", "Child Name", "Description", "Amount"].map((h) => <th key={h} className={head}>{h}</th>)}</tr>
+                <tr>
+                  {["Date", "Child Name", "Charge Type", "Description", "Amount"].map((h) => <th key={h} className={head}>{h}</th>)}
+                  {canEdit ? <th className={`${head} no-print`}>Actions</th> : null}
+                </tr>
               </thead>
               <tbody>
-                {invoice.charges.map((c) => (
-                  <tr key={c.id}>
-                    <td className={`${cell} text-center`}>{shortDate(c.date)}</td>
-                    <td className={cell}>{c.childName}</td>
-                    <td className={cell}>{c.description}</td>
-                    <td className={`${cell} text-right`}>{money(c.amountCents)}</td>
-                  </tr>
-                ))}
+                {invoice.charges.map((c) =>
+                  editingId === c.id ? (
+                    <tr key={c.id} className="no-print">
+                      <td className={cell}><input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} aria-label="Charge date" className="w-full rounded border border-gray-300 px-2 py-1" /></td>
+                      <td className={cell}>{c.childName}</td>
+                      <td className={cell}>
+                        <select value={draft.chargeType} onChange={(e) => setDraft({ ...draft, chargeType: e.target.value })} aria-label="Charge type" className="w-full rounded border border-gray-300 px-2 py-1">
+                          {CHARGE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                        </select>
+                      </td>
+                      <td className={cell}><input value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} aria-label="Charge description" className="w-full rounded border border-gray-300 px-2 py-1" /></td>
+                      <td className={cell}><input type="number" min="0" step="0.01" value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} aria-label="Charge amount" className="w-24 rounded border border-gray-300 px-2 py-1 text-right" /></td>
+                      <td className={`${cell} whitespace-nowrap`}>
+                        <button type="button" onClick={saveCharge} className="mr-2 font-bold text-blue-700">Save</button>
+                        <button type="button" onClick={() => setEditingId("")} className="text-gray-600">Cancel</button>
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={c.id}>
+                      <td className={`${cell} text-center`}>{shortDate(c.date)}</td>
+                      <td className={cell}>{c.childName}</td>
+                      <td className={cell}>{chargeTypeLabel(c.chargeType)}</td>
+                      <td className={cell}>{c.description}</td>
+                      <td className={`${cell} text-right`}>{money(c.amountCents)}</td>
+                      {canEdit ? (
+                        <td className={`${cell} no-print whitespace-nowrap`}>
+                          <button type="button" onClick={() => { setEditingId(c.id); setDraft({ date: String(c.date).slice(0, 10), description: c.description, amount: (c.amountCents / 100).toFixed(2), chargeType: c.chargeType || "OTHER" }); }} className="mr-2 font-semibold text-blue-700">✎ Edit</button>
+                          <button type="button" onClick={() => deleteCharge(c)} aria-label={`Delete ${c.description}`} className="text-red-600">🗑</button>
+                        </td>
+                      ) : null}
+                    </tr>
+                  ),
+                )}
               </tbody>
             </table>
 
@@ -107,6 +168,10 @@ export default function InvoiceView({ invoiceId, onClose }) {
       </div>
       <style jsx global>{`
         @media print {
+          @page {
+            size: portrait;
+            margin: 10mm;
+          }
           body * {
             visibility: hidden;
           }

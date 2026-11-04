@@ -60,7 +60,7 @@ function CardHeader({ icon, title, onEdit }) {
   );
 }
 
-export default function StudentProfile({ childId, backHref, backLabel, title = "Student Profile", hrefFor }) {
+export default function StudentProfile({ childId, backHref, backLabel, title = "Student Profile", hrefFor, showSwitcher = true }) {
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(null); // "admin" | "parent"
@@ -126,7 +126,7 @@ export default function StudentProfile({ childId, backHref, backLabel, title = "
         </div>
       </div>
 
-      {profile.switcher.length > 1 ? (
+      {showSwitcher && profile.switcher.length > 1 ? (
         <nav aria-label="Children" className="flex gap-3 overflow-x-auto pb-1">
           {profile.switcher.map((c) => (
             <Link

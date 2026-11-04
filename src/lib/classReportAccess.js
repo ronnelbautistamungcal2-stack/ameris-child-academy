@@ -2,12 +2,13 @@
 
 import { accessibleCenterIds } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { hasAnyRole } from "@/lib/roles";
+import { hasAnyRole, signedInAs } from "@/lib/roles";
 
 export const CLASS_REPORT_ROLES = ["ADMIN", "COACH", "STUDENT_SUPPORT", "TEACHER"];
 
 /** Prisma `where` for the classrooms the user can report on, or null. */
-export async function classReportScope(user) {
+export async function classReportScope(sessionUser) {
+  const user = signedInAs(sessionUser);
   if (hasAnyRole(user, ["ADMIN"])) return {};
   if (hasAnyRole(user, ["COACH", "STUDENT_SUPPORT"])) {
     return { centerId: { in: (await accessibleCenterIds(user.id)) || [] } };

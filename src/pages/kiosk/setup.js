@@ -2,6 +2,7 @@ import { KioskButton, KioskFrame, NAVY } from "@/components/kiosk/KioskUI";
 import { apiJson } from "@/lib/api";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 
 // Admin turns the tablet they are using into a center's front-desk kiosk. The
@@ -17,6 +18,23 @@ export default function KioskSetupPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [enrolled, setEnrolled] = useState(null);
+  // An enrolled kiosk picked from the list shows at the top with Open (client request 2026-10-29).
+  const [picked, setPicked] = useState(null);
+  const router = useRouter();
+
+  async function openPicked() {
+    if (picked.isThisDevice) return router.push("/kiosk");
+    if (!confirm(`Open "${picked.name}" on this tablet? The tablet using it now will need to be set up again.`)) return;
+    setBusy(true);
+    setError("");
+    try {
+      await apiJson(`/api/v1/kiosk/devices?id=${encodeURIComponent(picked.id)}`, { method: "PATCH" });
+      router.push("/kiosk");
+    } catch (e) {
+      setError(e.message || "Could not open the kiosk");
+      setBusy(false);
+    }
+  }
 
   async function loadDevices() {
     setDevices(await apiJson("/api/v1/kiosk/devices"));
@@ -86,6 +104,18 @@ export default function KioskSetupPage() {
   return (
     <KioskFrame showClock={false}>
       <h1 className={`font-serif text-4xl font-black ${NAVY}`}>Kiosk setup</h1>
+      {picked ? (
+        <div className="mt-6 flex w-full max-w-xl flex-wrap items-center justify-between gap-3 rounded-2xl border-2 border-blue-300 bg-blue-50 p-5 shadow-sm">
+          <div>
+            <div className={`text-lg font-black ${NAVY}`}>{picked.name}</div>
+            <div className="text-sm text-gray-600">{picked.center?.name}{picked.isThisDevice ? " · this tablet" : ""}</div>
+          </div>
+          <div className="flex gap-2">
+            <KioskButton onClick={openPicked} disabled={busy}>Open kiosk</KioskButton>
+            <button type="button" onClick={() => setPicked(null)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold">Close</button>
+          </div>
+        </div>
+      ) : null}
       <div className="mt-6 w-full max-w-xl rounded-2xl border border-sky-200 bg-white p-6 shadow-sm">
         {enrolled || thisDevice ? (
           <div className="mb-5 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-green-800">
@@ -133,15 +163,15 @@ export default function KioskSetupPage() {
         ) : (
           <ul className="mt-3 space-y-2">
             {devices.map((d) => (
-              <li key={d.id} className="flex items-center justify-between rounded-xl border border-sky-100 bg-white px-4 py-3">
-                <div>
+              <li key={d.id} className={`flex items-center justify-between rounded-xl border bg-white px-4 py-3 ${picked?.id === d.id ? "border-blue-400 ring-2 ring-blue-200" : "border-sky-100"}`}>
+                <button type="button" onClick={() => { setPicked(d); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="min-w-0 flex-1 text-left" title="Show this kiosk at the top to open it">
                   <div className="font-semibold text-gray-900">
                     {d.name} {d.isThisDevice ? <span className="text-sm text-green-700">(this tablet)</span> : null}
                   </div>
                   <div className="text-sm text-gray-500">
                     {d.center?.name} · last used {d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : "never"}
                   </div>
-                </div>
+                </button>
                 <button type="button" onClick={() => revoke(d)} className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-50">
                   Revoke
                 </button>

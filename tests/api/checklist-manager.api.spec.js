@@ -53,7 +53,7 @@ test.describe("Checklist Manager, checklists and review @api", () => {
 
   test.afterAll(async ({ request }) => {
     if (center) {
-      await prisma.teacherClass.deleteMany({ where: { classId: room.id } });
+      if (room?.id) await prisma.teacherClass.deleteMany({ where: { classId: room.id } });
       const res = await apiDelete(request, `/api/v1/centers/${center.id}`, await loginAsAdmin(request));
       expect(res.status(), await res.text()).toBeLessThan(300);
     }

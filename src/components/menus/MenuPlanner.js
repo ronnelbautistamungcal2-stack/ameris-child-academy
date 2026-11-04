@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import InfantPortionsPanel from "@/components/menus/InfantPortionsPanel";
+import useChecklistLinkVisit from "@/hooks/useChecklistLinkVisit";
 import {
   AGE_GROUPS,
   COMPONENTS,
@@ -63,6 +64,8 @@ const TAB_ACTIVE = {
  * mode "view"    – the planned menu, read-only (parents).
  */
 export default function MenuPlanner({ editable = false, mode: modeProp, title = "Menu Planner", subtitle }) {
+  // Opened from a checklist item that links here: that item can now be checked off.
+  useChecklistLinkVisit();
   const mode = modeProp || (editable ? "admin" : "view");
   const editKind = mode === "admin" ? "PLANNED" : mode === "kitchen" ? "SERVED" : null;
   const canEdit = Boolean(editKind);
@@ -80,6 +83,9 @@ export default function MenuPlanner({ editable = false, mode: modeProp, title = 
   const [saving, setSaving] = useState(false);
   const [copying, setCopying] = useState(false);
   const [notice, setNotice] = useState("");
+  const [componentLabels, setComponentLabels] = useState({});
+  const [labelDraft, setLabelDraft] = useState(null);
+  const labelOf = (component) => componentLabels[component] || COMPONENTS[component];
 
   const days = useMemo(() => weekDays(weekStart), [weekStart]);
   const dayKeys = useMemo(() => days.map(toDateKey), [days]);
@@ -100,6 +106,7 @@ export default function MenuPlanner({ editable = false, mode: modeProp, title = 
       if (data.center && data.center.id !== center) setCenterId(data.center.id);
       setMealKeys(data.meals || []);
       setAgeGroups(data.ageGroups?.length ? data.ageGroups : AGE_GROUPS);
+      setComponentLabels(data.componentLabels || {});
       const weekKeys = new Set(weekDays(monday).map(toDateKey));
       setSaved((prev) => {
         const next = {};
@@ -261,6 +268,77 @@ export default function MenuPlanner({ editable = false, mode: modeProp, title = 
     }
   }
 
+  // Kitchen: one Copy per age group fills Actually Served from the plan (client request 2026-10-29).
+  function copyPlannedToServed(date, groupKey) {
+    for (const component of componentsFor(mealKey, groupKey)) {
+      const planned = saved[lineKey(date, mealKey, groupKey, component, "PLANNED")] || "";
+      if (planned) setValue(lineKey(date, mealKey, groupKey, component, "SERVED"), planned);
+    }
+  }
+
+  // Admin: copy a day's planned menu from another age group; matching components only.
+  function copyFromAgeGroup(date, toGroup, fromGroup) {
+    if (!fromGroup) return;
+    const targets = new Set(componentsFor(mealKey, toGroup));
+    for (const component of componentsFor(mealKey, fromGroup)) {
+      if (!targets.has(component)) continue;
+      const source = valueFor(lineKey(date, mealKey, fromGroup, component, "PLANNED"));
+      if (source) setValue(lineKey(date, mealKey, toGroup, component, "PLANNED"), source);
+    }
+  }
+
+  // Admin: empty every planned line of this week only, all meals and age groups.
+  async function clearWeek() {
+    const keys = Object.keys(saved).filter((key) => dayKeys.includes(key.slice(0, 10)) && key.endsWith("|PLANNED"));
+    if (!keys.length) {
+      setNotice("This week has no planned menu to clear.");
+      return;
+    }
+    if (!window.confirm(`Clear the planned menu for ${formatWeekRange(weekStart)}? Other weeks and months are not touched.`)) return;
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/v1/menus", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          centerId,
+          kind: "PLANNED",
+          items: keys.map((key) => {
+            const [date, lineMeal, ageGroup, component] = key.split("|");
+            return { date, meal: lineMeal, ageGroup, component, item: "" };
+          }),
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Clear failed");
+      setEdits((prev) => Object.fromEntries(Object.entries(prev).filter(([key]) => !keys.includes(key))));
+      await loadWeek(weekStart, centerId);
+      setNotice("This week's planned menu was cleared.");
+    } catch (e) {
+      setError(e.message || "Could not clear the week.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveLabels() {
+    setError("");
+    try {
+      const res = await fetch("/api/v1/menus", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ centerId, componentLabels: labelDraft }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Save failed");
+      setComponentLabels(data.componentLabels || {});
+      setLabelDraft(null);
+      setNotice("Component titles saved.");
+    } catch (e) {
+      setError(e.message || "Could not save the titles.");
+    }
+  }
+
   function changeCenter(next) {
     if (next === centerId) return;
     if (dirty && !window.confirm("You have unsaved menu changes. Switch centers without saving?")) return;
@@ -362,6 +440,22 @@ export default function MenuPlanner({ editable = false, mode: modeProp, title = 
               >
                 Copy Previous Month
               </button>
+              <button
+                type="button"
+                onClick={clearWeek}
+                disabled={dirty || saving || loading}
+                title={dirty ? "Save your changes first" : "Clear this week's planned menu only"}
+                className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-800"
+              >
+                Clear Week
+              </button>
+              <button
+                type="button"
+                onClick={() => setLabelDraft(labelDraft ? null : Object.fromEntries(Object.keys(COMPONENTS).map((k) => [k, componentLabels[k] || ""])))}
+                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+              >
+                Edit Component Titles
+              </button>
             </>
           )}
           {canEdit && (
@@ -396,6 +490,31 @@ export default function MenuPlanner({ editable = false, mode: modeProp, title = 
           {error || notice}
         </div>
       )}
+
+      {labelDraft ? (
+        <div className="menu-no-print rounded-xl border border-blue-200 bg-blue-50/50 p-3 dark:border-gray-700 dark:bg-gray-900/40">
+          <div className={`mb-2 text-sm font-black ${NAVY}`}>Component Titles</div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {Object.entries(COMPONENTS).map(([key, standard]) => (
+              <label key={key} className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+                {standard}
+                <input
+                  value={labelDraft[key]}
+                  onChange={(e) => setLabelDraft((d) => ({ ...d, [key]: e.target.value }))}
+                  placeholder={standard}
+                  maxLength={60}
+                  className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800"
+                />
+              </label>
+            ))}
+          </div>
+          <div className="mt-2 flex gap-2">
+            <button type="button" onClick={saveLabels} className="rounded-lg bg-[#0b2a5b] px-4 py-1.5 text-sm font-bold text-white">Save Titles</button>
+            <button type="button" onClick={() => setLabelDraft(null)} className="rounded-lg border border-gray-300 px-4 py-1.5 text-sm font-semibold">Cancel</button>
+            <span className="self-center text-xs text-gray-500">Leave a title blank to use the standard one.</span>
+          </div>
+        </div>
+      ) : null}
 
       {/* Meal tabs */}
       <div className="menu-no-print overflow-x-auto">
@@ -483,13 +602,36 @@ export default function MenuPlanner({ editable = false, mode: modeProp, title = 
                       <div className="space-y-1.5">
                         {(mode === "kitchen" ? ["PLANNED", "SERVED"] : ["PLANNED"]).map((kind) => (
                           <div key={kind} className={`overflow-hidden rounded-lg border ${tone.card}`}>
-                            <div className={`px-2 py-1.5 text-[10px] font-black uppercase tracking-wide ${tone.head}`}>
-                              {kind === "SERVED" ? "Actually Served" : "Planned Menu"}
+                            <div className={`flex items-center justify-between gap-1 px-2 py-1.5 text-[10px] font-black uppercase tracking-wide ${tone.head}`}>
+                              <span>{kind === "SERVED" ? "Actually Served" : "Planned Menu"}</span>
+                              {kind === "SERVED" && editKind === "SERVED" ? (
+                                <button
+                                  type="button"
+                                  onClick={() => copyPlannedToServed(date, group.key)}
+                                  title="Copy the planned menu into Actually Served"
+                                  aria-label={`Copy planned menu to Actually Served, ${group.label}, ${date}`}
+                                  className="menu-no-print inline-flex items-center gap-0.5 rounded bg-white/80 px-1.5 py-0.5 normal-case tracking-normal text-blue-700 hover:bg-white"
+                                >
+                                  <CopyIcon /> Copy
+                                </button>
+                              ) : null}
+                              {kind === "PLANNED" && editKind === "PLANNED" && ageGroups.length > 1 ? (
+                                <select
+                                  value=""
+                                  onChange={(e) => copyFromAgeGroup(date, group.key, e.target.value)}
+                                  aria-label={`Copy planned menu from another age group, ${group.label}, ${date}`}
+                                  title="Copy from another age group"
+                                  className="menu-no-print max-w-[90px] rounded border-0 bg-white/80 px-1 py-0 text-[10px] normal-case tracking-normal text-blue-700"
+                                >
+                                  <option value="">Copy from…</option>
+                                  {ageGroups.filter((g) => g.key !== group.key).map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
+                                </select>
+                              ) : null}
                             </div>
                             <div className="space-y-1.5 px-2 py-2">
                               {components.map((component) => {
                                 const key = lineKey(date, mealKey, group.key, component, kind);
-                                const label = COMPONENTS[component];
+                                const label = labelOf(component);
                                 const value = valueFor(key);
                                 const planned = saved[lineKey(date, mealKey, group.key, component, "PLANNED")] || "";
                                 const lineLabel = `${meal?.label}, ${group.label}, ${date}: ${label}${kind === "SERVED" ? " (served)" : ""}`;

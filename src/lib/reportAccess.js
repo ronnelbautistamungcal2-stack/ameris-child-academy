@@ -8,12 +8,12 @@
 import { hasAccessToCenter } from "@/lib/auth";
 import { isChildLinkedToParent } from "@/lib/child-parent-links";
 import prisma from "@/lib/prisma";
-import { hasAnyRole } from "@/lib/roles";
+import { hasAnyRole, signedInAs } from "@/lib/roles";
 import { canUseChild } from "@/lib/sopServer";
 
 /** child needs id, centerId, classRoomId, parentId and guardians.guardianId. */
 export async function canViewChildReport(user, child) {
-  if (hasAnyRole(user, ["PARENT"]) && isChildLinkedToParent(child, user.id)) return true;
+  if (hasAnyRole(signedInAs(user), ["PARENT"]) && isChildLinkedToParent(child, user.id)) return true;
   return canUseChild(user, child);
 }
 

@@ -6,7 +6,7 @@ import {
   getChecklistAssignedUserIds,
   getChecklistAssignedUsers,
 } from "@/lib/dailyChecklistAssignees";
-import { isLogActivityLink } from "@/lib/checklistLinks";
+import { isMenuLink, requiresLinkVisit } from "@/lib/checklistLinks";
 
 function buildCompletionInclude(date) {
   if (!date) return false;
@@ -121,7 +121,9 @@ export function serializeDailyChecklist(checklist) {
   const items = Array.isArray(checklist.items)
     ? checklist.items.map(({ linkVisits, ...item }) => ({
         ...item,
-        logActivityLink: isLogActivityLink(item.directLink),
+        // Any link that must be opened first (Log Activity or the menu).
+        logActivityLink: requiresLinkVisit(item.directLink),
+        menuLink: isMenuLink(item.directLink),
         logActivityVisited: Array.isArray(linkVisits) && linkVisits.length > 0,
       }))
     : checklist.items;

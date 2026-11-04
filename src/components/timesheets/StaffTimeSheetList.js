@@ -8,6 +8,8 @@ import { useEffect, useState } from "react";
 // admin and HR Staff List pages until the full Staff List from the client's
 // mockup (attendance dropdown, reset PIN, employment status) is built on it.
 
+// Birthdate and hire date are calendar dates saved at UTC midnight.
+const day = (v) => (v ? new Date(v).toLocaleDateString("en-US", { timeZone: "UTC" }) : "—");
 const time = (v) => (v ? new Date(v).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "");
 
 export default function StaffTimeSheetList() {
@@ -63,20 +65,22 @@ export default function StaffTimeSheetList() {
       </div>
       {error ? <div className="mt-3 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div> : null}
       <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[520px] text-left text-sm">
+        <table className="w-full min-w-[720px] text-left text-sm">
           <thead>
             <tr className="border-b border-gray-200 text-xs font-bold uppercase tracking-wide text-gray-500 dark:border-gray-700">
               <th className="px-3 py-2">Name</th>
               <th className="px-3 py-2">Role</th>
+              <th className="px-3 py-2">Birthdate</th>
+              <th className="px-3 py-2">Date of Hire</th>
               <th className="px-3 py-2">Today</th>
               <th className="px-3 py-2 text-right">Time Sheet</th>
             </tr>
           </thead>
           <tbody>
             {staff === null ? (
-              <tr><td colSpan={4} className="px-3 py-6 text-center text-gray-500">Loading...</td></tr>
+              <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-500">Loading...</td></tr>
             ) : visible.length === 0 ? (
-              <tr><td colSpan={4} className="px-3 py-6 text-center text-gray-500">No staff found.</td></tr>
+              <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-500">No staff found.</td></tr>
             ) : (
               visible.map((person) => (
                 <tr key={person.id} className="border-b border-gray-100 dark:border-gray-800">
@@ -87,6 +91,8 @@ export default function StaffTimeSheetList() {
                       <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">{employmentStatusLabel(person.employmentStatus)}</span>
                     ) : null}
                   </td>
+                  <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{day(person.dob)}</td>
+                  <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{day(person.hireDate)}</td>
                   <td className="px-3 py-2">
                     {person.clockedIn ? (
                       <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-bold text-green-700">In since {time(person.clockIn)}</span>

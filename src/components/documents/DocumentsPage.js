@@ -341,18 +341,6 @@ function DocumentDialog({ category, doc, centers, onClose, onSaved }) {
               ))}
             </div>
           </fieldset>
-          {isResource ? (
-            <div className="rounded-xl border border-gray-200 p-3 dark:border-gray-700">
-              <label className={label}>
-                Add to Home Page
-                <select value={form.showOnHomePage ? "yes" : "no"} onChange={(e) => set({ showOnHomePage: e.target.value === "yes" })} className={control}>
-                  <option value="no">No</option>
-                  <option value="yes">Yes</option>
-                </select>
-              </label>
-              <p className="mt-1 text-xs text-gray-500">Select if this resource should be listed on the website&apos;s Resources page.</p>
-            </div>
-          ) : null}
         </div>
 
         <label className="flex items-center gap-2 text-sm font-semibold">

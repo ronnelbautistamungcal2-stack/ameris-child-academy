@@ -77,7 +77,9 @@ export default function StepsOfProgressionBank({ centerId }) {
       const q = encodeURIComponent(centerId);
       const [l, bank, cats, opts] = await Promise.all([
         apiJson(`/api/v1/lessons?centerId=${q}&kind=step`),
-        apiJson(`/api/v1/lessons?centerId=${q}&kind=lesson`),
+        // Only feeds the Related Lesson picker, so it must never stop the
+        // steps from loading.
+        apiJson(`/api/v1/lessons?centerId=${q}&kind=lesson&fields=summary`).catch(() => []),
         apiJson(`/api/v1/lesson-categories?centerId=${q}`),
         apiJson(`/api/v1/curriculum-options?centerId=${q}`).catch(() => null),
       ]);
@@ -408,7 +410,7 @@ function StepDialog({ centerId, step, lessons, bankLessons, categories, options,
     const reader = new FileReader();
     reader.onload = async () => {
       try {
-        const result = await apiJson("/api/v1/upload", { method: "POST", body: JSON.stringify({ fileName: file.name, file: reader.result }) });
+        const result = await apiJson("/api/v1/upload", { method: "POST", body: JSON.stringify({ fileName: file.name, file: String(reader.result).split(",")[1] || "" }), timeoutMs: 120000 });
         set({ media: [...form.media, result.url] });
       } catch (err) {
         setError(err.message || "Upload failed");

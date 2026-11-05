@@ -21,6 +21,15 @@ const LESSON_INCLUDE = {
   nextStep: { select: { id: true, title: true, reference: true } },
 };
 
+const LESSON_SUMMARY_SELECT = {
+  id: true,
+  title: true,
+  reference: true,
+  subCategory: true,
+  categoryId: true,
+  category: { select: { name: true, ageRange: true } },
+};
+
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
@@ -47,11 +56,19 @@ export default async function handler(req, res) {
     const where = centerId ? { centerId } : {};
     if (kind === "step") where.isStep = true;
     if (kind === "lesson") where.isStep = false;
-    const lessons = await prisma.lesson.findMany({
-      where,
-      include: LESSON_INCLUDE,
-    });
-    return res.status(200).json(lessons);
+    try {
+      // fields=summary: just enough to pick a lesson from a list. The full
+      // include (goals, remediations) runs to several MB for a big bank.
+      const lessons = await prisma.lesson.findMany(
+        req.query.fields === "summary"
+          ? { where, select: LESSON_SUMMARY_SELECT, orderBy: { title: "asc" } }
+          : { where, include: LESSON_INCLUDE },
+      );
+      return res.status(200).json(lessons);
+    } catch (e) {
+      console.error("lessons list error:", e);
+      return res.status(500).json({ error: `Could not load the ${kind === "step" ? "steps" : "lessons"}: ${e.message?.split("\n").pop() || "server error"}` });
+    }
   }
 
   if (req.method === "POST") {

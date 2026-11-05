@@ -21,6 +21,14 @@ function safeBaseName(name) {
   return base || "file";
 }
 
+// The server could not save the file: usually the folder is missing or the
+// app's user cannot write to it. Name the folder so whoever runs the server
+// can fix it.
+function writeFailed(res, dir, e) {
+  console.error(`upload write failed in ${dir}:`, e);
+  return res.status(500).json({ error: `The server could not save the file (${e.code || "write error"} in ${dir}).` });
+}
+
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
@@ -69,8 +77,12 @@ export default async function handler(req, res) {
     if (!PROTECTED_EXTENSIONS.has(ext.toLowerCase())) {
       return res.status(400).json({ error: "Lesson files must be a PDF or an image (PNG, JPG, WEBP)" });
     }
-    await fs.mkdir(PROTECTED_DIR, { recursive: true });
-    await fs.writeFile(path.join(PROTECTED_DIR, outName.toLowerCase()), buffer);
+    try {
+      await fs.mkdir(PROTECTED_DIR, { recursive: true });
+      await fs.writeFile(path.join(PROTECTED_DIR, outName.toLowerCase()), buffer);
+    } catch (e) {
+      return writeFailed(res, PROTECTED_DIR, e);
+    }
     return res.status(200).json({
       url: `/api/v1/protected-files/${outName.toLowerCase()}`,
       originalName: base,
@@ -80,8 +92,12 @@ export default async function handler(req, res) {
   }
 
   const uploadsDir = path.join(process.cwd(), "public", "uploads");
-  await fs.mkdir(uploadsDir, { recursive: true });
-  await fs.writeFile(path.join(uploadsDir, outName), buffer);
+  try {
+    await fs.mkdir(uploadsDir, { recursive: true });
+    await fs.writeFile(path.join(uploadsDir, outName), buffer);
+  } catch (e) {
+    return writeFailed(res, uploadsDir, e);
+  }
 
   return res.status(200).json({
     url: `/uploads/${outName}`,

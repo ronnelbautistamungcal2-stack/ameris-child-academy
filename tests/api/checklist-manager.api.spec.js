@@ -1,6 +1,7 @@
 // @ts-check
 const { test, expect } = require("@playwright/test");
 const { PrismaClient } = require("@prisma/client");
+const { demoAccountId } = require("../helpers/accounts");
 const { loginAsAdmin, loginAsCoach, loginAsTeacher, loginAsKitchenStaff } = require("../helpers/auth");
 const { apiDelete, apiGet, apiPost, apiPut } = require("../helpers/api");
 
@@ -28,7 +29,7 @@ test.describe("Checklist Manager, checklists and review @api", () => {
       ["teacher@demo.com", "kitchen@demo.com", "coach@demo.com"].map((email) => prisma.user.findUnique({ where: { email } })),
     );
     center = await prisma.center.create({
-      data: {
+      data: { subscriberAccountId: await demoAccountId(prisma),
         name: `QA Checklist Phase6 ${Date.now()}`,
         meals: {
           breakfast: { provided: true, catered: false },
@@ -104,7 +105,7 @@ test.describe("Checklist Manager, checklists and review @api", () => {
   test("teachers cannot manage checklists and coaches only at their centers", async ({ request }) => {
     const teacherCookies = await loginAsTeacher(request);
     expect((await apiPost(request, "/api/v1/daily-checklists", { centerId: center.id, title: "Nope" }, teacherCookies)).status()).toBe(403);
-    const other = await prisma.center.create({ data: { name: `QA Other ${Date.now()}` } });
+    const other = await prisma.center.create({ data: { subscriberAccountId: await demoAccountId(prisma), name: `QA Other ${Date.now()}` } });
     try {
       const coachCookies = await loginAsCoach(request);
       expect((await apiPost(request, "/api/v1/daily-checklists", { centerId: other.id, title: "Nope" }, coachCookies)).status()).toBe(403);

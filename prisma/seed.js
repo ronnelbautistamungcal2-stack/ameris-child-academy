@@ -59,6 +59,27 @@ async function main() {
     });
   }
 
+  // Everything seeded belongs to Ameris Academy's subscriber account, with
+  // every add-on, the same as the 20261106120000_subscriber_accounts migration.
+  const account = await prisma.subscriberAccount.upsert({
+    where: { accountNumber: "C-1001" },
+    update: {},
+    create: {
+      accountNumber: "C-1001",
+      name: "Ameris Academy",
+      status: "ACTIVE",
+      addOns: ["STEPS_OF_PROGRESSION", "CURRICULUM", "TEACHER_TRAINING", "STAFF_MANAGEMENT"],
+      maxCenters: 50,
+      activatedAt: new Date(),
+    },
+  });
+  if (!center.subscriberAccountId) {
+    center = await prisma.center.update({
+      where: { id: center.id },
+      data: { subscriberAccountId: account.id },
+    });
+  }
+
   const admin = await prisma.user.upsert({
     where: { email: adminEmail },
     update: {
@@ -306,6 +327,15 @@ async function main() {
       });
     }
   }
+
+  await prisma.user.updateMany({
+    where: { subscriberAccountId: null, centers: { some: { centerId: center.id } } },
+    data: { subscriberAccountId: account.id },
+  });
+  await prisma.user.updateMany({
+    where: { subscriberAccountId: null, id: admin.id },
+    data: { subscriberAccountId: account.id },
+  });
 
   console.log("Seeded:", {
     centerId: center.id,

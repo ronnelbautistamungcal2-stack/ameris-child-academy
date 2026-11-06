@@ -59,7 +59,7 @@ export default async function handler(req, res) {
 
 async function handleGet(req, res, session) {
   const { centerId, userId, status, from, to, submittedFrom, submittedTo } = req.query;
-  if (centerId && session.user.role !== "ADMIN") {
+  if (centerId) {
     const allowed = await hasAccessToCenter(session.user.id, centerId);
     if (!allowed) return res.status(403).json({ error: "Forbidden" });
   }
@@ -102,10 +102,8 @@ async function handlePost(req, res, session) {
   if (!centerId || !startDate || !endDate) {
     return res.status(400).json({ error: "centerId, startDate, and endDate are required" });
   }
-  if (session.user.role !== "ADMIN") {
-    const allowed = await hasAccessToCenter(session.user.id, centerId);
-    if (!allowed) return res.status(403).json({ error: "Forbidden" });
-  }
+  const allowed = await hasAccessToCenter(session.user.id, centerId);
+  if (!allowed) return res.status(403).json({ error: "Forbidden" });
 
   const start = new Date(startDate);
   const end = new Date(endDate);

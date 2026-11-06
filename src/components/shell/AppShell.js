@@ -6,6 +6,18 @@ import NotificationBell from "@/components/notifications/NotificationBell";
 import { useTheme } from "@/contexts/ThemeContext";
 import AmerisLogo from "@/components/ui/AmerisLogo";
 import { roleHomePath, roleLabel } from "@/lib/roles";
+import { addOnsForPath, missingAddOns } from "@/lib/addOns";
+import { LockedPage, useAddOns } from "@/components/subscription/AddOnGate";
+
+// Greys out and locks the pages the subscriber's add-ons don't include.
+function withLocks(items, addOns) {
+  if (addOns == null) return items;
+  return (items || []).map((item) => {
+    if (item?.children) return { ...item, children: withLocks(item.children, addOns) };
+    if (!item?.href) return item;
+    return missingAddOns(addOnsForPath(item.href), addOns).length ? { ...item, locked: true } : item;
+  });
+}
 
 // Drop the real photo in at public/banner-blessings-to-pillars.png; the SVG
 // below is the stand-in that renders until that file exists.
@@ -18,8 +30,8 @@ export default function AppShell({
   userLabel,
   userImageUrl,
   userId,
-  navItems,
-  children,
+  navItems: navItemsProp,
+  children: pageChildren,
   right,
   shellMaxWidthClassName = "max-w-[1500px]",
   contentMaxWidthClassName = "max-w-6xl",
@@ -75,6 +87,20 @@ export default function AppShell({
   }, [showBack, backHref]);
 
   const activePath = (router.asPath || "/").split("?")[0] || "/";
+
+  // Subscription add-ons: lock nav items and, on a locked page, show the
+  // upgrade message instead of the page (data stays saved, just hidden).
+  const { addOns, loaded: addOnsLoaded } = useAddOns();
+  const navItems = useMemo(() => withLocks(navItemsProp, addOns), [navItemsProp, addOns]);
+  const pageNeeds = addOnsForPath(activePath);
+  const pageMissing = missingAddOns(pageNeeds, addOns);
+  const children = pageMissing.length ? (
+    <LockedPage missing={pageMissing} />
+  ) : pageNeeds.length && !addOnsLoaded ? (
+    <div className="p-6 text-sm text-gray-500">Loading...</div>
+  ) : (
+    pageChildren
+  );
   const userDisplay = userName || userLabel || "Account";
   const settingsLabel = useMemo(() => {
     function findInItems(items) {
@@ -606,9 +632,17 @@ function NavGroup({ label, icon, items, isActive, activePath, navy = false }) {
                     : active
                       ? "bg-gradient-to-r from-blue-100 to-sky-50 text-blue-900 dark:bg-blue-900/40 dark:from-blue-900/40 dark:to-sky-900/20 dark:text-blue-200"
                       : "text-gray-500 hover:bg-blue-50 hover:text-blue-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200",
+                  // Not in the subscriber's add-ons: still visible, greyed out with a lock.
+                  child.locked ? "opacity-50" : "",
                 ].join(" ")}
+                title={child.locked ? "Not included in your subscription" : undefined}
               >
                 <span className="truncate">{child.label}</span>
+                {child.locked ? (
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 shrink-0" aria-label="Locked">
+                    <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+                  </svg>
+                ) : null}
                 {child.badge > 0 && (
                   <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-r from-amber-500 to-amber-600 px-1 text-[10px] font-extrabold text-white shadow-sm">
                     {child.badge > 99 ? "99+" : child.badge}

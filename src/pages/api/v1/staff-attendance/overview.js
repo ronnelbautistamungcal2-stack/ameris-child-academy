@@ -29,7 +29,7 @@ export default async function handler(req, res) {
   if (!centerId || ![from, to, date].every((v) => DATE.test(String(v || "")))) {
     return res.status(400).json({ error: "centerId, from, to and date (YYYY-MM-DD) are required" });
   }
-  if (session.user.role !== "ADMIN" && !(await hasAccessToCenter(session.user.id, String(centerId)))) {
+  if (!(await hasAccessToCenter(session.user.id, String(centerId)))) {
     return res.status(403).json({ error: "Forbidden" });
   }
 

@@ -11,7 +11,7 @@ import { ensureObject, requiredString } from "@/lib/validation";
 import { assertActiveSubscription, assertSubscriptionFeature, normalizeSubscription } from "@/lib/subscriptions";
 
 async function userCanAccessCenter(session, centerId) {
-  if (session.user.role === "ADMIN") return true;
+  if (session.user.role === "ADMIN") return hasAccessToCenter(session.user.id, centerId);
   if (session.user.role === "PARENT") {
     const child = await prisma.child.findFirst({
       where: buildParentLinkedChildWhere(session.user.id, { centerId }),

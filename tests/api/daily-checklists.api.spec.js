@@ -1,6 +1,7 @@
 // @ts-check
 const { test, expect } = require("@playwright/test");
 const { PrismaClient } = require("@prisma/client");
+const { demoAccountId } = require("../helpers/accounts");
 const { loginAsAdmin, loginAsTeacher } = require("../helpers/auth");
 const { apiGet, apiPost } = require("../helpers/api");
 
@@ -29,7 +30,7 @@ test.describe("Daily Checklists API @api", () => {
 
     const today = dateKey(new Date());
     const center = await prisma.center.create({
-      data: { name: `QA Checklist Center ${suffix}`, address: "QA Street" },
+      data: { subscriberAccountId: await demoAccountId(prisma), name: `QA Checklist Center ${suffix}`, address: "QA Street" },
     });
 
     await prisma.centerUser.create({

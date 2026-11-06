@@ -41,6 +41,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (status !== "authenticated") return;
+    if (session?.user?.role === "GLOBAL_ADMIN") {
+      router.replace("/global/subscribers");
+    }
     if (session?.user?.role === "ADMIN") {
       router.replace("/admin/dashboard");
     }

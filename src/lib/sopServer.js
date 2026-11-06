@@ -1,7 +1,7 @@
 // SOP Tracking on the server: who may assess or track a child, the child's
 // steps with their levels, and saving levels (with history entries).
 
-import { accessibleCenterIds } from "@/lib/auth";
+import { accessibleCenterIds, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { hasAnyRole, signedInAs } from "@/lib/roles";
 import { activeGoalIds, levelForStatus, monthsOld, statusForLevel, stepsForAge } from "@/lib/sop";
@@ -13,7 +13,12 @@ const GOAL_INDEX = 1;
 /** Prisma `where` for the children the user may assess and track, or null. */
 export async function sopChildScope(sessionUser, centerId) {
   const user = signedInAs(sessionUser);
-  if (hasAnyRole(user, ["ADMIN"])) return centerId ? { centerId } : {};
+  if (hasAnyRole(user, ["ADMIN"])) {
+    // Only the admin's own subscriber account (null = no account, all).
+    const ids = await accessibleCenterIds(user.id);
+    if (!ids) return centerId ? { centerId } : {};
+    return { centerId: { in: centerId ? ids.filter((id) => id === centerId) : ids } };
+  }
   if (hasAnyRole(user, ["COACH", "STUDENT_SUPPORT"])) {
     const ids = (await accessibleCenterIds(user.id)) || [];
     return { centerId: { in: centerId ? ids.filter((id) => id === centerId) : ids } };
@@ -25,7 +30,7 @@ export async function sopChildScope(sessionUser, centerId) {
 export async function canUseChild(sessionUser, child) {
   if (!child) return false;
   const user = signedInAs(sessionUser);
-  if (hasAnyRole(user, ["ADMIN"])) return true;
+  if (hasAnyRole(user, ["ADMIN"])) return hasAccessToCenter(user.id, child.centerId);
   if (hasAnyRole(user, ["COACH", "STUDENT_SUPPORT"])) {
     return ((await accessibleCenterIds(user.id)) || []).includes(child.centerId);
   }

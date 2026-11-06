@@ -31,7 +31,7 @@ export default async function handler(req, res) {
 
   if (role === "PARENT") {
     if (!isChildLinkedToParent(child, session.user.id)) return res.status(403).json({ error: "Forbidden" });
-  } else if (role !== "ADMIN") {
+  } else {
     const ok = await hasAccessToCenter(session.user.id, child.centerId);
     if (!ok) return res.status(403).json({ error: "Forbidden" });
     if (role === "TEACHER") {

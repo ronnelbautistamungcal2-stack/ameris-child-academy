@@ -141,4 +141,10 @@ export const ADMIN_NAV_ITEMS = [
     label: "Messages",
     icon: icons.messages,
   },
+  // Bottom of the nav, regular admin only (client sheet 2026-11-06).
+  {
+    href: "/admin/subscription",
+    label: "Ameris Solutions Subscription",
+    icon: icons.finance,
+  },
 ];

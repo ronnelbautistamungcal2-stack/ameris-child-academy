@@ -222,7 +222,7 @@ export default async function handler(req, res) {
     if (!hasAnyRole(session.user, VIEW_ROLES[view])) return res.status(403).json({ error: "Forbidden" });
     const centerId = String(req.query.centerId || "");
     if (!centerId) return res.status(400).json({ error: "centerId is required" });
-    if (!hasAnyRole(session.user, ["ADMIN"]) && !(await hasAccessToCenter(session.user.id, centerId))) {
+    if (!(await hasAccessToCenter(session.user.id, centerId))) {
       return res.status(403).json({ error: "Forbidden" });
     }
 

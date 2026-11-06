@@ -15,7 +15,8 @@ export function dbDate(dateKey) {
  * parents also see the centers their children attend.
  */
 export async function menuCenterIds(user) {
-  if (hasAnyRole(user, ["ADMIN"])) return null;
+  // Admins: their own subscriber account's centers (null = no account, all).
+  if (hasAnyRole(user, ["ADMIN"])) return accessibleCenterIds(user.id);
   const ids = new Set((await accessibleCenterIds(user.id)) || []);
   if (hasAnyRole(user, ["PARENT"])) {
     const children = await prisma.child.findMany({
@@ -29,7 +30,7 @@ export async function menuCenterIds(user) {
 
 /** PLANNED is the admin's menu; SERVED is recorded by the center's kitchen staff. */
 export async function canEditMenuKind(user, centerId, kind) {
-  if (hasAnyRole(user, ["ADMIN"])) return true;
+  if (hasAnyRole(user, ["ADMIN"])) return hasAccessToCenter(user.id, centerId);
   if (kind !== "SERVED" || !hasAnyRole(user, ["KITCHEN_STAFF"])) return false;
   return hasAccessToCenter(user.id, centerId);
 }

@@ -42,7 +42,7 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    if (template.centerId && user.role !== "ADMIN" && user.role !== "PARENT") {
+    if (template.centerId && user.role !== "PARENT") {
       const ok = await hasAccessToCenter(user.id, template.centerId);
       if (!ok) return res.status(403).json({ error: "Forbidden" });
     }

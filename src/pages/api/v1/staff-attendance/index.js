@@ -44,7 +44,7 @@ function parseAttendanceTime(date, value) {
 
 async function handleGet(req, res, session) {
   const { centerId, userId, from, to, date } = req.query;
-  if (centerId && session.user.role !== "ADMIN") {
+  if (centerId) {
     const allowed = await hasAccessToCenter(session.user.id, centerId);
     if (!allowed) return res.status(403).json({ error: "Forbidden" });
   }

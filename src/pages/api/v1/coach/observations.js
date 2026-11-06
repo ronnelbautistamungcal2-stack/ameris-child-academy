@@ -22,7 +22,7 @@ export default createApiHandler(async function handler(req, res) {
     const centerId = optionalString(req.query, "centerId");
     const type = optionalString(req.query, "type");
     const teacherId = optionalString(req.query, "teacherId");
-    if (centerId && role !== "ADMIN") {
+    if (centerId) {
       const allowed = await hasAccessToCenter(session.user.id, centerId);
       if (!allowed) throw forbidden();
     }
@@ -72,10 +72,8 @@ export default createApiHandler(async function handler(req, res) {
       });
     }
 
-    if (role !== "ADMIN") {
-      const allowed = await hasAccessToCenter(session.user.id, centerId);
-      if (!allowed) throw forbidden();
-    }
+    const allowed = await hasAccessToCenter(session.user.id, centerId);
+    if (!allowed) throw forbidden();
 
     const observation = await prisma.coachObservation.create({
       data: {

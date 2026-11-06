@@ -13,7 +13,7 @@ export default async function handler(req, res) {
 
   if (req.method === "GET") {
     const centerScope =
-      session.user.role === "ADMIN" ? null : await accessibleCenterIds(session.user.id);
+      await accessibleCenterIds(session.user.id);
 
     const staff = await prisma.user.findMany({
       where: {

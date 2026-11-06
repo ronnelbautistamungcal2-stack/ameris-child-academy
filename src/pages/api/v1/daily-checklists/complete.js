@@ -63,10 +63,8 @@ async function completeScheduledLessonItem({ res, session, role, itemId, date, n
     return res.status(400).json({ error: "Scheduled lesson date does not match the lesson plan date" });
   }
 
-  if (role !== "ADMIN") {
-    const ok = await hasAccessToCenter(session.user.id, item.plan.centerId);
-    if (!ok) return res.status(403).json({ error: "Forbidden" });
-  }
+  const ok = await hasAccessToCenter(session.user.id, item.plan.centerId);
+  if (!ok) return res.status(403).json({ error: "Forbidden" });
 
   if (role === "TEACHER" && item.assignedToId && item.assignedToId !== session.user.id) {
     return res.status(403).json({ error: "This lesson is assigned to another staff member" });
@@ -177,10 +175,8 @@ export default async function handler(req, res) {
 
     if (!item) return res.status(404).json({ error: "Item not found" });
 
-    if (role !== "ADMIN") {
-      const ok = await hasAccessToCenter(session.user.id, item.checklist.centerId);
-      if (!ok) return res.status(403).json({ error: "Forbidden" });
-    }
+    const ok = await hasAccessToCenter(session.user.id, item.checklist.centerId);
+    if (!ok) return res.status(403).json({ error: "Forbidden" });
     if (
       isStaffPortalRole(role) &&
       (hasChecklistClassroomScope(item.checklist) || item.checklist.category === "CLASSROOM")

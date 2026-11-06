@@ -206,10 +206,8 @@ export default async function handler(req, res) {
     }
 
     if (centerId) {
-      if (user.role !== "ADMIN") {
-        const ok = await hasAccessToCenter(user.id, centerId);
-        if (!ok) return res.status(403).json({ error: "Forbidden" });
-      }
+      const ok = await hasAccessToCenter(user.id, centerId);
+      if (!ok) return res.status(403).json({ error: "Forbidden" });
     } else if (user.role !== "ADMIN") {
       // Non-admins must be able to infer a shared center; require that sender has at least one center.
       const allowedCenterIds = await getAllowedMessagingCenterIds(prisma, user);

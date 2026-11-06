@@ -25,10 +25,8 @@ async function handlePut(req, res, session) {
   const { id } = req.query;
   const existing = await prisma.shiftSchedule.findUnique({ where: { id } });
   if (!existing) return res.status(404).json({ error: "Shift not found" });
-  if (session.user.role !== "ADMIN") {
-    const allowed = await hasAccessToCenter(session.user.id, existing.centerId);
-    if (!allowed) return res.status(403).json({ error: "Forbidden" });
-  }
+  const allowed = await hasAccessToCenter(session.user.id, existing.centerId);
+  if (!allowed) return res.status(403).json({ error: "Forbidden" });
 
   const { userId, date, startTime, endTime, position, notes } = req.body;
 
@@ -63,10 +61,8 @@ async function handleDelete(req, res, session) {
   const { id } = req.query;
   const existing = await prisma.shiftSchedule.findUnique({ where: { id } });
   if (!existing) return res.status(404).json({ error: "Shift not found" });
-  if (session.user.role !== "ADMIN") {
-    const allowed = await hasAccessToCenter(session.user.id, existing.centerId);
-    if (!allowed) return res.status(403).json({ error: "Forbidden" });
-  }
+  const allowed = await hasAccessToCenter(session.user.id, existing.centerId);
+  if (!allowed) return res.status(403).json({ error: "Forbidden" });
 
   await prisma.shiftSchedule.delete({ where: { id } });
   return res.status(200).json({ success: true });

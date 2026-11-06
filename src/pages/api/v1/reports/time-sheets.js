@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "centerId, from and to (YYYY-MM-DD) are required" });
   }
   if (from > to) return res.status(400).json({ error: "The start date must be before the end date" });
-  if (session.user.role !== "ADMIN" && !(await hasAccessToCenter(session.user.id, String(centerId)))) {
+  if (!(await hasAccessToCenter(session.user.id, String(centerId)))) {
     return res.status(403).json({ error: "Forbidden" });
   }
   const overview = req.query.mode === "overview";

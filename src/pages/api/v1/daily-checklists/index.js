@@ -35,7 +35,7 @@ import { splitChecklistPerAssignee } from "@/lib/dailyChecklistSplit";
 const MANAGER_ROLES = ["ADMIN", "COACH"];
 
 async function canManageCenter(session, centerId) {
-  if (session.user.role === "ADMIN") return true;
+  if (session.user.role === "ADMIN") return !centerId || hasAccessToCenter(session.user.id, centerId);
   return session.user.role === "COACH" && !!centerId && (await hasAccessToCenter(session.user.id, centerId));
 }
 
@@ -492,7 +492,7 @@ export default async function handler(req, res) {
     const { centerId, category, classRoomId, date } = req.query;
     const staffUserId = String(req.query.staffUserId || "").trim();
 
-    if (centerId && role !== "ADMIN") {
+    if (centerId) {
       const ok = await hasAccessToCenter(session.user.id, centerId);
       if (!ok) return res.status(403).json({ error: "Forbidden" });
     }

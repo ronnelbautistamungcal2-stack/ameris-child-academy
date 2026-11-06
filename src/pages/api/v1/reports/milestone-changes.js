@@ -24,7 +24,7 @@ export default async function handler(req, res) {
   if (!centerId || !DATE.test(String(from || "")) || !DATE.test(String(to || ""))) {
     return res.status(400).json({ error: "centerId, from and to (YYYY-MM-DD) are required" });
   }
-  if (session.user.role !== "ADMIN" && !(await hasAccessToCenter(session.user.id, String(centerId)))) {
+  if (!(await hasAccessToCenter(session.user.id, String(centerId)))) {
     return res.status(403).json({ error: "Forbidden" });
   }
   const start = new Date(`${from}T00:00:00`);

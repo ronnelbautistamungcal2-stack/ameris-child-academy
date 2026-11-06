@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { adminCanReachUser, getSession } from "@/lib/auth";
 import { issueRegistrationCode } from "@/lib/kioskPins";
 import prisma from "@/lib/prisma";
 import { hasEmployeeRole } from "@/lib/roles";
@@ -19,6 +19,11 @@ export default async function handler(req, res) {
     select: { id: true, role: true, roles: true },
   });
   if (!user) return res.status(404).json({ error: "User not found" });
+
+  // Admins only reach people in their own subscriber account.
+  if (session.user.role === "ADMIN" && !(await adminCanReachUser(session.user.id, user.id))) {
+    return res.status(404).json({ error: "User not found" });
+  }
 
   const role = session.user.role;
   const isStaffMember = hasEmployeeRole(user.roles?.length ? user.roles : [user.role]);

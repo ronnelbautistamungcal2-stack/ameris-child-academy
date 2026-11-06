@@ -20,7 +20,7 @@ export default async function handler(req, res) {
   const centerId = String(req.query.centerId || "");
   const date = String(req.query.date || "");
   if (!centerId || !DATE.test(date)) return res.status(400).json({ error: "centerId and date (YYYY-MM-DD) are required" });
-  if (session.user.role !== "ADMIN" && !(await hasAccessToCenter(session.user.id, centerId))) {
+  if (!(await hasAccessToCenter(session.user.id, centerId))) {
     return res.status(403).json({ error: "Forbidden" });
   }
   const result = await checklistReview(prisma, { centerId, date, userId: String(req.query.userId) });

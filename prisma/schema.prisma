@@ -17,6 +17,8 @@ enum Role {
   PARENT
   COACH
   SUBSCRIBER
+  // Ameris Solutions staff: manages subscriber accounts from /global.
+  GLOBAL_ADMIN
 }
 
 enum ActivityType {
@@ -300,6 +302,13 @@ model User {
   coachTeamMembers                   CoachTeamMember[]                   @relation("CoachTeamMembers")
   coachTeamOf                        CoachTeamMember[]                   @relation("CoachTeamStaff")
   supplyRequests                     SupplyRequest[]                     @relation("SupplyRequestsRequestedBy")
+  // The subscriber account this person belongs to. Admins only see this
+  // account's centers (src/lib/subscriberAccounts.js).
+  subscriberAccount                  SubscriberAccount?                  @relation(fields: [subscriberAccountId], references: [id], onDelete: SetNull)
+  subscriberAccountId                String?
+  subscriberAccountNotes             SubscriberAccountNote[]
+
+  @@index([subscriberAccountId])
 }
 
 model Center {
@@ -347,6 +356,8 @@ model Center {
   lessons                     Lesson[]
   checklists                  TaskChecklist[]
   subscription                Subscription?
+  subscriberAccount           SubscriberAccount?           @relation(fields: [subscriberAccountId], references: [id], onDelete: SetNull)
+  subscriberAccountId         String?
   messageThreads              MessageThread[]
   formTemplates               FormTemplate[]
   policyDocuments             PolicyDocument[]
@@ -969,6 +980,44 @@ model Subscription {
   active      Boolean   @default(true)
   expiresAt   DateTime?
   paymentInfo Json?
+}
+
+// A customer of Ameris Solutions (client 2026-11-06). Owns one or more
+// centers; add-ons unlock pages, limits cap centers and children.
+model SubscriberAccount {
+  id            String                  @id @default(uuid())
+  accountNumber String                  @unique // "C-1001"
+  name          String
+  status        String                  @default("PENDING") // PENDING | ACTIVE | ON_HOLD | CANCELLED
+  // STEPS_OF_PROGRESSION | CURRICULUM | TEACHER_TRAINING | STAFF_MANAGEMENT
+  addOns        String[]                @default([])
+  maxCenters    Int                     @default(1)
+  maxChildren   Int?
+  startDate     DateTime?
+  renewalDate   DateTime?
+  autoRenew     Boolean                 @default(true)
+  contactName   String?
+  contactEmail  String?
+  phone         String?
+  address       String?
+  activatedAt   DateTime?
+  centers       Center[]
+  users         User[]
+  notes         SubscriberAccountNote[]
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+}
+
+model SubscriberAccountNote {
+  id          String            @id @default(uuid())
+  account     SubscriberAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId   String
+  author      User?             @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorId    String?
+  description String
+  createdAt   DateTime          @default(now())
+
+  @@index([accountId])
 }
 
 model CenterInvite {

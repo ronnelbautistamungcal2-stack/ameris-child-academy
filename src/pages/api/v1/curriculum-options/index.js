@@ -77,7 +77,7 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       const centerId = String(req.query.centerId || "");
       if (!centerId) return res.status(400).json({ error: "centerId is required" });
-      if (!hasAnyRole(user, ["ADMIN"]) && !(await hasAccessToCenter(user.id, centerId))) {
+      if (!(await hasAccessToCenter(user.id, centerId))) {
         return res.status(403).json({ error: "Forbidden" });
       }
       if (!(await prisma.center.findUnique({ where: { id: centerId }, select: { id: true } }))) {

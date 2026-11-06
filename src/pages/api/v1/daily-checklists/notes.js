@@ -57,11 +57,9 @@ async function assertChecklistAccess(session, checklist) {
     return { ok: false, status: 404, error: "Checklist not found" };
   }
 
-  if (role !== "ADMIN") {
-    const hasCenterScope = await hasAccessToCenter(session.user.id, checklist.centerId);
-    if (!hasCenterScope) {
-      return { ok: false, status: 403, error: "Forbidden" };
-    }
+  const hasCenterScope = await hasAccessToCenter(session.user.id, checklist.centerId);
+  if (!hasCenterScope) {
+    return { ok: false, status: 403, error: "Forbidden" };
   }
 
   if (

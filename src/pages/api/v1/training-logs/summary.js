@@ -15,7 +15,7 @@ export default createApiHandler(async function handler(req, res) {
   const userId = optionalString(req.query, "userId");
   const from = optionalDate(req.query, "from");
   const to = optionalDate(req.query, "to");
-  if (centerId && session.user.role !== "ADMIN") {
+  if (centerId) {
     const allowed = await hasAccessToCenter(session.user.id, centerId);
     if (!allowed) return res.status(403).json({ error: "Forbidden" });
   }

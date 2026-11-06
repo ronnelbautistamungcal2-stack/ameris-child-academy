@@ -20,11 +20,9 @@ export default async function handler(req, res) {
   if (req.method === "GET") {
     let where = user.role === "ADMIN" ? {} : { roles: { hasSome: userRoles(user) }, active: true };
     if (centerId) {
-      if (user.role !== "ADMIN") {
-        const ok = await hasAccessToCenter(user.id, centerId);
-        if (!ok && user.role !== "PARENT") {
-          return res.status(403).json({ error: "Forbidden" });
-        }
+      const ok = await hasAccessToCenter(user.id, centerId);
+      if (!ok && user.role !== "PARENT") {
+        return res.status(403).json({ error: "Forbidden" });
       }
       where = { ...where, centerId };
     }

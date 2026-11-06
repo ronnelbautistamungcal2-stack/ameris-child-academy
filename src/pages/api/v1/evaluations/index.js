@@ -97,7 +97,7 @@ export default createApiHandler(async function handler(req, res) {
     const to = endOfDay(optionalDate(req.query, "to"));
     validateRangeOrder(from, to, "Filter");
 
-    if (centerId && session.user.role !== "ADMIN") {
+    if (centerId) {
       const allowed = await hasAccessToCenter(session.user.id, centerId);
       if (!allowed) throw forbidden();
     }
@@ -140,10 +140,8 @@ export default createApiHandler(async function handler(req, res) {
 
   const body = ensureObject(req.body || {});
   const centerId = requiredString(body, "centerId");
-  if (session.user.role !== "ADMIN") {
-    const allowed = await hasAccessToCenter(session.user.id, centerId);
-    if (!allowed) throw forbidden();
-  }
+  const allowed = await hasAccessToCenter(session.user.id, centerId);
+  if (!allowed) throw forbidden();
   const teacherId = requiredString(body, "teacherId");
   const periodStart = optionalDate(body, "periodStart", { nullable: true });
   const periodEnd = optionalDate(body, "periodEnd", { nullable: true });

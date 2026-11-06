@@ -23,7 +23,7 @@ export default async function handler(req, res) {
   const isStaff = hasAnyRole(session.user, ["ADMIN", "COACH", "STUDENT_SUPPORT"]);
 
   async function canSee(child) {
-    if (session.user.role === "ADMIN") return true;
+    if (session.user.role === "ADMIN") return hasAccessToCenter(session.user.id, child.centerId);
     if (isStaff && (await hasAccessToCenter(session.user.id, child.centerId))) return true;
     const own = await prisma.child.findFirst({ where: { AND: [{ id: child.id }, buildParentLinkedChildWhere(session.user.id)] }, select: { id: true } });
     return Boolean(own);
@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     let where;
     if (isStaff) {
       if (!centerId) return res.status(400).json({ error: "centerId is required" });
-      if (session.user.role !== "ADMIN" && !(await hasAccessToCenter(session.user.id, centerId))) return res.status(403).json({ error: "Forbidden" });
+      if (!(await hasAccessToCenter(session.user.id, centerId))) return res.status(403).json({ error: "Forbidden" });
       where = { centerId };
     } else {
       where = buildParentLinkedChildWhere(session.user.id);

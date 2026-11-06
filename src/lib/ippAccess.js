@@ -18,7 +18,11 @@ export function canManageIpp(user) {
 
 /** Prisma `where` for the plans this user may read, or null for none. */
 export async function ippScope(user) {
-  if (hasAnyRole(user, ["ADMIN"])) return {};
+  if (hasAnyRole(user, ["ADMIN"])) {
+    // Only the admin's own subscriber account (null = no account, all).
+    const ids = await accessibleCenterIds(user.id);
+    return ids ? { centerId: { in: ids } } : {};
+  }
   if (canManageIpp(user)) {
     const ids = (await accessibleCenterIds(user.id)) || [];
     return { centerId: { in: ids } };
@@ -33,8 +37,9 @@ export async function canManageChild(user, childId) {
   if (!canManageIpp(user)) return false;
   const child = await prisma.child.findUnique({ where: { id: String(childId) }, select: { centerId: true } });
   if (!child) return false;
-  if (hasAnyRole(user, ["ADMIN"])) return true;
-  return ((await accessibleCenterIds(user.id)) || []).includes(child.centerId);
+  const ids = await accessibleCenterIds(user.id);
+  // null: an admin with no subscriber account, who reaches every center.
+  return ids === null || ids.includes(child.centerId);
 }
 
 /**

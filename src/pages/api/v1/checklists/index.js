@@ -1,4 +1,4 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
 export default async function handler(req, res) {
@@ -21,7 +21,10 @@ export default async function handler(req, res) {
     let where = {};
     if (centerId) {
       where = { centerId };
-    } else if (role !== "ADMIN") {
+    } else if (role === "ADMIN") {
+      const scope = await centerIdFilter(session.user.id, null);
+      if (scope) where = { centerId: scope };
+    } else {
       const memberships = await prisma.centerUser.findMany({
         where: { userId: session.user.id },
         select: { centerId: true },

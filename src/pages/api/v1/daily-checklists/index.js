@@ -1,4 +1,4 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { adminCanReachUser, centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import { CHECKLIST_ROLE_VALUES } from "@/lib/dailyChecklistVisibility";
 import { normalizeChecklistClassRoomIds } from "@/lib/dailyChecklistClassrooms";
 import { normalizeChecklistAssignedUserIds } from "@/lib/dailyChecklistAssignees";
@@ -502,6 +502,9 @@ export default async function handler(req, res) {
     if (staffUserId && role !== "ADMIN" && staffUserId !== session.user.id) {
       return res.status(403).json({ error: "Only admins can view another employee's checklist" });
     }
+    if (staffUserId && !(await adminCanReachUser(session.user.id, staffUserId))) {
+      return res.status(404).json({ error: "Employee not found" });
+    }
 
     let staffScope = null;
     if (staffUserId) {
@@ -539,7 +542,9 @@ export default async function handler(req, res) {
       ];
     }
 
-    if (!centerId && role !== "ADMIN") {
+    if (!centerId && role === "ADMIN") {
+      where.centerId = await centerIdFilter(session.user.id, null);
+    } else if (!centerId) {
       const memberships = await prisma.centerUser.findMany({
         where: { userId: session.user.id },
         select: { centerId: true },

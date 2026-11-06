@@ -1,4 +1,4 @@
-import { accessibleCenterIds, getSession, hasAccessToCenter } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import {
   badRequest,
@@ -116,9 +116,7 @@ export default createApiHandler(async function handler(req, res) {
       where.teacherId = session.user.id;
     } else {
       if (teacherId) where.teacherId = teacherId;
-      if (session.user.role === "COACH" && !centerId) {
-        where.centerId = { in: (await accessibleCenterIds(session.user.id)) || [] };
-      }
+      if (!centerId) where.centerId = await centerIdFilter(session.user.id, null);
     }
 
     const evaluations = await prisma.teacherEvaluation.findMany({

@@ -81,6 +81,17 @@ export async function accessibleCenterIds(userId) {
 }
 
 /**
+ * Prisma condition for a centerId column: the requested center (the caller has
+ * already checked access to it), else every center the user may reach.
+ * undefined means no limit (an admin with no account, legacy data).
+ */
+export async function centerIdFilter(userId, centerId) {
+  if (centerId) return centerId;
+  const ids = await accessibleCenterIds(userId);
+  return ids === null ? undefined : { in: ids };
+}
+
+/**
  * Prisma `where` limiting users to the signed-in admin's subscriber account,
  * or {} for an admin with no account (legacy data).
  */

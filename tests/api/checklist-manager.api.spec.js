@@ -31,6 +31,13 @@ test.describe("Checklist Manager, checklists and review @api", () => {
     center = await prisma.center.create({
       data: { subscriberAccountId: await demoAccountId(prisma),
         name: `QA Checklist Phase6 ${Date.now()}`,
+        // Open every day, so today is graded even on a weekend (closed days get no grade).
+        careSchedule: Object.fromEntries(
+          ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"].map((day) => [
+            day,
+            { open: true, start: "07:30", end: "16:45" },
+          ]),
+        ),
         meals: {
           breakfast: { provided: true, catered: false },
           amSnack: { provided: true, catered: false },

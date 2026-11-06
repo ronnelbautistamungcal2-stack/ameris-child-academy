@@ -1,4 +1,4 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { isEmployeeRole, isManagerRole, isSelfServiceEmployeeRole, STAFF_PORTAL_ROLES } from "@/lib/roles";
 
@@ -36,7 +36,7 @@ async function handleGet(req, res, session) {
   }
 
   const where = {};
-  if (centerId) where.centerId = centerId;
+  where.centerId = await centerIdFilter(session.user.id, centerId);
   if (classRoomId) where.classRoomId = classRoomId;
   if (status) where.status = status;
 

@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { centerIdFilter, getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import {
   createApiHandler,
@@ -41,6 +41,8 @@ export default createApiHandler(async function handler(req, res) {
   }
 
   const userId = session.user.id;
+  // Admin totals cover their own account's centers (undefined: no limit).
+  const adminCenters = role === "ADMIN" ? await centerIdFilter(userId, null) : undefined;
   const memberships = role === "ADMIN"
     ? []
     : await prisma.centerUser.findMany({
@@ -82,7 +84,7 @@ export default createApiHandler(async function handler(req, res) {
         select: { createdAt: true, type: true },
       }),
       prisma.teacherClass.findMany({
-        where: role === "ADMIN" ? undefined : { teacherId: userId },
+        where: role === "ADMIN" ? { classRoom: { centerId: adminCenters } } : { teacherId: userId },
         select: {
           classId: true,
           classRoom: { select: { id: true, centerId: true } },
@@ -123,13 +125,13 @@ export default createApiHandler(async function handler(req, res) {
 
   const [childrenCount, progressRows] = await Promise.all([
     role === "ADMIN"
-      ? prisma.child.count()
+      ? prisma.child.count({ where: { centerId: adminCenters } })
       : role === "TEACHER" && scopedClassIds.length
         ? prisma.child.count({ where: { classRoomId: { in: scopedClassIds } } })
         : 0,
     role === "ADMIN"
       ? prisma.progress.findMany({
-          where: { createdAt: { gte: daysAgo(90) } },
+          where: { createdAt: { gte: daysAgo(90) }, child: { centerId: adminCenters } },
           select: { status: true, updatedAt: true, childId: true },
           take: 500,
         })
@@ -223,8 +225,8 @@ export default createApiHandler(async function handler(req, res) {
       byType: activityTypeCounts,
     },
     access: {
-      centers: role === "ADMIN" ? await prisma.center.count() : centerIds.length,
-      classes: role === "ADMIN" ? await prisma.classRoom.count() : classIds.length,
+      centers: role === "ADMIN" ? await prisma.center.count({ where: { id: adminCenters } }) : centerIds.length,
+      classes: role === "ADMIN" ? await prisma.classRoom.count({ where: { centerId: adminCenters } }) : classIds.length,
       children: childrenCount,
     },
     progress: {

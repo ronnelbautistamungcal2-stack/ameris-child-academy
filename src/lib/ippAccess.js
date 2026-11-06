@@ -32,6 +32,13 @@ export async function ippScope(user) {
   return null;
 }
 
+/** Whether the plan is one the user may read (ippScope), for routes that load it themselves. */
+export async function canReachPlan(user, id) {
+  const scope = await ippScope(user);
+  if (!scope || !id) return false;
+  return (await prisma.behaviorPlan.count({ where: { id: String(id), ...scope } })) > 0;
+}
+
 /** Whether the user may create a plan for this child. */
 export async function canManageChild(user, childId) {
   if (!canManageIpp(user)) return false;

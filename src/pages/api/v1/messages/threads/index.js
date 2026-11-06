@@ -1,4 +1,4 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { adminUserScope, getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { emitNewMessage } from "@/lib/socket";
 import { normalizeMessageAttachment, notifyMessageRecipients } from "@/lib/messaging";
@@ -63,6 +63,11 @@ export default async function handler(req, res) {
   if (req.method === "GET") {
     const { centerId, all, type, status } = req.query;
     const adminAll = user.role === "ADMIN" && (all === "1" || all === "true");
+    if (adminAll && centerId && !(await hasAccessToCenter(user.id, centerId))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    // "All" means every conversation with someone in the admin's own account.
+    const accountScope = adminAll ? await adminUserScope(user.id) : {};
     const normalizedType = String(type || "").trim().toUpperCase();
     const normalizedStatus = String(status || "").trim().toUpperCase();
 
@@ -72,7 +77,10 @@ export default async function handler(req, res) {
     const threads = await prisma.messageThread.findMany({
       where: {
         ...(adminAll
-          ? { ...(centerId ? { centerId } : {}) }
+          ? {
+              ...(centerId ? { centerId } : {}),
+              ...(Object.keys(accountScope).length ? { participants: { some: { user: accountScope } } } : {}),
+            }
           : { participants: { some: { userId: user.id, deletedAt: null, ...participantRoleWhere(user.role) } } }),
         ...(normalizedType ? { type: normalizedType } : {}),
         ...(normalizedStatus ? { status: normalizedStatus } : {}),

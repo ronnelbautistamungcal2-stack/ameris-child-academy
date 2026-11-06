@@ -2,6 +2,7 @@ import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { isChildLinkedToParent } from "@/lib/child-parent-links";
 import { buildCertification } from "@/lib/formCertification";
+import { accountOwnedWhere, ownsAccountDocument } from "@/lib/subscriberAccounts";
 
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -10,9 +11,10 @@ export default async function handler(req, res) {
   const user = session.user;
 
   if (req.method === "GET") {
-    // Admin sees all; parent sees their own; others see own.
+    // Admins see every submission to their account's templates; everyone
+    // else their own.
     const where =
-      user.role === "ADMIN" ? {} : { submittedById: user.id };
+      user.role === "ADMIN" ? { template: await accountOwnedWhere(user.id) } : { submittedById: user.id };
 
     const subs = await prisma.formSubmission.findMany({
       where,
@@ -34,7 +36,7 @@ export default async function handler(req, res) {
     }
 
     const template = await prisma.formTemplate.findUnique({ where: { id: templateId } });
-    if (!template || !template.active) {
+    if (!template || !template.active || !(await ownsAccountDocument(user.id, template.subscriberAccountId))) {
       return res.status(404).json({ error: "Form template not found" });
     }
 
@@ -54,6 +56,9 @@ export default async function handler(req, res) {
       });
       if (!child) return res.status(404).json({ error: "Child not found" });
       if (user.role === "PARENT" && !isChildLinkedToParent(child, user.id)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      if (user.role !== "PARENT" && !(await hasAccessToCenter(user.id, child.centerId))) {
         return res.status(403).json({ error: "Forbidden" });
       }
       if (user.role !== "ADMIN" && template.centerId && child.centerId !== template.centerId) {

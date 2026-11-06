@@ -411,6 +411,8 @@ model Center {
   lessonPlanners              LessonPlanner[]
   lessonPlanCells             LessonPlanCell[]
   curriculumOptions           CurriculumOption[]
+
+  @@index([subscriberAccountId])
 }
 
 model CenterUser {
@@ -1004,6 +1006,9 @@ model SubscriberAccount {
   centers       Center[]
   users         User[]
   notes         SubscriberAccountNote[]
+  formTemplates FormTemplate[]
+  policies      PolicyDocument[]
+  parentFaqs    ParentFaq[]
   createdAt     DateTime                @default(now())
   updatedAt     DateTime                @updatedAt
 }
@@ -1115,10 +1120,16 @@ model FormTemplate {
   attachmentName    String?
   attachmentSize    Int?
   dueDate           DateTime?
+  // Owner. A template with no center is shared by every center of this
+  // account only.
+  subscriberAccount   SubscriberAccount? @relation(fields: [subscriberAccountId], references: [id], onDelete: SetNull)
+  subscriberAccountId String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
   submissions FormSubmission[]
+
+  @@index([subscriberAccountId])
 }
 
 model FormSubmission {
@@ -1173,12 +1184,17 @@ model PolicyDocument {
   logoUrl                 String?
   showOnHomePage          Boolean                  @default(false)
   active                  Boolean                  @default(true)
+  // Owner: a document with no center is shared by every center of this account only.
+  subscriberAccount       SubscriberAccount?       @relation(fields: [subscriberAccountId], references: [id], onDelete: SetNull)
+  subscriberAccountId     String?
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @default(now()) @updatedAt
   milestoneChecklistItems MilestoneChecklistItem[]
   lessons                 Lesson[]
   dailyChecklistItems     DailyChecklistItem[]
   permissionPolicyConfigs PermissionPolicyConfig[]
+
+  @@index([subscriberAccountId])
 }
 
 model ParentFaq {
@@ -1190,11 +1206,15 @@ model ParentFaq {
   topic     String   @default("general")
   sortOrder Int      @default(0)
   published Boolean  @default(true)
+  // Owner: a question with no center is shown at every center of this account only.
+  subscriberAccount   SubscriberAccount? @relation(fields: [subscriberAccountId], references: [id], onDelete: SetNull)
+  subscriberAccountId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
   @@index([centerId])
   @@index([topic])
+  @@index([subscriberAccountId])
 }
 
 // One filled-in line of the admin Menu Planner: the food item planned for a

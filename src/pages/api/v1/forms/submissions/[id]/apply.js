@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
 import { changeStamps } from "@/lib/childProfile";
 import prisma from "@/lib/prisma";
 
@@ -31,6 +31,9 @@ export default async function handler(req, res) {
   });
 
   if (!submission) return res.status(404).json({ error: "Submission not found" });
+  if (submission.child && !(await hasAccessToCenter(session.user.id, submission.child.centerId))) {
+    return res.status(404).json({ error: "Submission not found" });
+  }
   if (!submission.childId) {
     return res.status(400).json({ error: "No child linked to this submission" });
   }

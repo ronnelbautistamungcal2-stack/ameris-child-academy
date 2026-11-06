@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { normalizePolicyCategory } from "@/lib/policy-categories";
 import { parseDocument } from "@/lib/policyDocuments";
 import { userRoles } from "@/lib/roles";
+import { accountIdForUser, accountOwnedWhere } from "@/lib/subscriberAccounts";
 
 /**
  * GET  /api/v1/policies?category=POLICY|RESOURCE[&centerId=]
@@ -18,7 +19,10 @@ export default async function handler(req, res) {
   const { centerId, category } = req.query;
 
   if (req.method === "GET") {
-    let where = user.role === "ADMIN" ? {} : { roles: { hasSome: userRoles(user) }, active: true };
+    let where = {
+      ...(await accountOwnedWhere(user.id)),
+      ...(user.role === "ADMIN" ? {} : { roles: { hasSome: userRoles(user) }, active: true }),
+    };
     if (centerId) {
       const ok = await hasAccessToCenter(user.id, centerId);
       if (!ok && user.role !== "PARENT") {
@@ -45,7 +49,13 @@ export default async function handler(req, res) {
     }
     const parsed = parseDocument(req.body || {}, normalizePolicyCategory(req.body?.category));
     if (parsed.error) return res.status(400).json({ error: parsed.error });
-    const created = await prisma.policyDocument.create({ data: parsed.data });
+    if (parsed.data.centerId && !(await hasAccessToCenter(user.id, parsed.data.centerId))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const subscriberAccountId = await accountIdForUser(user.id);
+    const created = await prisma.policyDocument.create({
+      data: { ...parsed.data, ...(subscriberAccountId ? { subscriberAccountId } : {}) },
+    });
     return res.status(201).json(created);
   }
 

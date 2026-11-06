@@ -5,22 +5,49 @@ import { normalizeRoles } from "@/lib/roles";
 
 /**
  * The subscriber account a user belongs to: their own link, or else the
- * account of any center they are a member of. null for people with neither
- * (legacy data), who keep the old unlimited behavior.
+ * account of any center they are a member of, or (parents) of a child's
+ * center. null for people with none (legacy data), who keep the old unlimited
+ * behavior.
  */
 export async function accountIdForUser(userId) {
   if (!userId) return null;
+  const centerAccount = { center: { select: { subscriberAccountId: true } } };
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
       subscriberAccountId: true,
-      centers: { select: { center: { select: { subscriberAccountId: true } } } },
+      centers: { select: centerAccount },
+      children: { select: centerAccount, take: 5 },
+      guardianships: { select: { child: { select: centerAccount } }, take: 5 },
     },
   });
   if (!user) return null;
   if (user.subscriberAccountId) return user.subscriberAccountId;
-  const fromCenter = (user.centers || []).find((m) => m.center?.subscriberAccountId);
-  return fromCenter?.center.subscriberAccountId || null;
+  const centers = [
+    ...(user.centers || []).map((m) => m.center),
+    ...(user.children || []).map((c) => c.center),
+    ...(user.guardianships || []).map((g) => g.child?.center),
+  ];
+  return centers.find((c) => c?.subscriberAccountId)?.subscriberAccountId || null;
+}
+
+/**
+ * Prisma `where` for documents owned by the user's account (policies, form
+ * templates, parent FAQs). {} when the user has no account (legacy data).
+ */
+export async function accountOwnedWhere(userId) {
+  const accountId = await accountIdForUser(userId);
+  return accountId ? { subscriberAccountId: accountId } : {};
+}
+
+/**
+ * True when a document owned by `ownerAccountId` belongs to the user's
+ * account. Documents with no owner, and users with no account, pass (legacy).
+ */
+export async function ownsAccountDocument(userId, ownerAccountId) {
+  if (!ownerAccountId) return true;
+  const accountId = await accountIdForUser(userId);
+  return !accountId || accountId === ownerAccountId;
 }
 
 export async function accountCenterIds(accountId) {

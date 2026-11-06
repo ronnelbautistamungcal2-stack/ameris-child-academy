@@ -4,6 +4,7 @@ import {
   buildTeacherChildWhere,
   teacherCanAccessChild,
 } from "@/lib/teacherScope";
+import { canManageChild, ippScope } from "@/lib/ippAccess";
 import { emitNotification } from "@/lib/socket";
 
 export default async function handler(req, res) {
@@ -30,7 +31,9 @@ export default async function handler(req, res) {
 async function handleGet(req, res, session) {
   const { centerId, childId, status } = req.query;
 
-  const where = {};
+  const scope = await ippScope(session.user);
+  if (!scope) return res.status(403).json({ error: "Forbidden" });
+  const where = { AND: [scope] };
   if (centerId) where.centerId = centerId;
   if (childId) where.childId = childId;
   if (status) where.status = status;
@@ -83,6 +86,8 @@ async function handlePost(req, res, session) {
   if (session.user.role === "TEACHER") {
     const count = await teacherCanAccessChild(session.user.id, childId);
     if (!count) return res.status(403).json({ error: "You don't have access to this child" });
+  } else if (!(await canManageChild(session.user, childId))) {
+    return res.status(403).json({ error: "You don't have access to this child" });
   }
 
   // Find parent linked to child to notify them
@@ -90,11 +95,16 @@ async function handlePost(req, res, session) {
     where: { id: childId },
     select: {
       parentId: true,
+      centerId: true,
       guardians: { select: { guardianId: true } },
       firstName: true,
       lastName: true,
     },
   });
+  if (!child) return res.status(404).json({ error: "Child not found" });
+  if (child.centerId !== centerId) {
+    return res.status(400).json({ error: "The child is not enrolled at this center" });
+  }
 
   const plan = await prisma.behaviorPlan.create({
     data: {

@@ -34,7 +34,7 @@ Rows R4, R5, R6 and R7 are the client's priority. Status (2026-11-04): all four 
 
 ## Open questions for the client
 
-1. **R172 Average SOP**: "sent a screen shot in Chat" — we don't have that screenshot. Average SOP shipped in `fe2d8c1`; we need the picture to know what is still missing.
+1. **R172 Average SOP**: screenshot and both calculation sheets received 2026-11-07. The worked examples come out the same in the app (citizenship 6, milestones 82%, class citizenship 97%, teacher SOP 91%, weight table 5 = 100% … 1 = 20%), and the report layout matches. Still open: the sheet says a child's goals are the steps within "the child's age **or developmental age**". The app has no developmental age; how is it set (a field on the child, or worked out from the assessment)?
 2. **R185 / R186 / R190** "These have not been updated yet" (Student List pages, Account Settings, dashboards other than parent): which mockups do these refer to? We built Account Settings from R78/R79 in this round and the dashboards in `c559b70`.
 3. **R31** "only see the team that they are assigned to on any page": we read "team" as the staff whose coach is this coach and the classrooms those staff are assigned to. Confirm.
 4. **R109** Staff Performance Report: merged report replaces the separate Teacher/Coach/Staff reports. Confirm the old report links can go.

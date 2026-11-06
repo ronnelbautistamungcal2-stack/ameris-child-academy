@@ -7,7 +7,7 @@ import { normalizeCarePlan, normalizeHealthInfo, normalizeSchedule, redFlags, sc
 import prisma from "@/lib/prisma";
 import { hasAnyRole } from "@/lib/roles";
 import { childStatus } from "@/lib/sop";
-import { canUseChild, loadChildSteps } from "@/lib/sopServer";
+import { canUseChild, loadChildGoals } from "@/lib/sopServer";
 
 const OPEN_PLAN_STATUSES = ["ACTIVE", "UNDER_REVIEW", "NEEDS_UPDATE"];
 
@@ -66,7 +66,7 @@ async function switcherChildren(user, child) {
 }
 
 export async function buildProfile(user, child, access) {
-  const steps = await loadChildSteps(child).catch(() => []);
+  const steps = await loadChildGoals(child).catch(() => []);
   const goals = steps.filter((s) => s.active).map((s) => ({ step: s, level: s.level || "NOT_STARTED" }));
   const schedule = normalizeSchedule(child.schedule);
   const linkedParents = [

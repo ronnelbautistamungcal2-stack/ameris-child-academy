@@ -300,7 +300,9 @@ export default function StudentListWorkspace({ Layout, profileHref = (id) => `/a
         apiJson("/api/v1/children"),
         apiJson("/api/v1/centers"),
         apiJson("/api/v1/classes"),
-        apiJson("/api/v1/users"),
+        // Only admins can list users (to link parent accounts); coaches
+        // reuse this page without them.
+        apiJson("/api/v1/users").catch(() => []),
       ]);
       const nextChildren = Array.isArray(kids) ? kids : [];
       setChildren(nextChildren);

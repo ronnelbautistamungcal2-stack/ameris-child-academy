@@ -191,6 +191,31 @@ test.describe("Subscriber account scoping @api", () => {
     expect((await apiGet(request, `/api/v1/daily-checklists?staffUserId=${demoAdmin?.id}`, otherCookies)).status()).toBe(404);
   });
 
+  test("the public website shows and notifies only its own account", async ({ request }) => {
+    const resource = await apiPost(
+      request,
+      "/api/v1/policies",
+      { category: "RESOURCE", title: `Other resource ${stamp}`, websiteUrl: "https://example.org/other", roles: ["PARENT"], showOnHomePage: true },
+      otherCookies,
+    );
+    expect(resource.status(), await resource.text()).toBe(201);
+    const resourceId = (await resource.json()).id;
+    created.policies.push(resourceId);
+    const publicList = await (await request.get("/api/v1/public/resources")).json();
+    expect(publicList.map((r) => r.id)).not.toContain(resourceId);
+
+    const sent = await request.post("/api/v1/public/contact", {
+      data: { fullName: `Visitor ${stamp}`, email: "visitor@example.org", subject: "general", message: "A question about enrollment for next fall." },
+    });
+    expect(sent.status(), await sent.text()).toBe(201);
+    const title = `New website inquiry from Visitor ${stamp}`;
+    const demoAdmin = await prisma.user.findUnique({ where: { email: "admin@demo.com" }, select: { id: true } });
+    expect(await prisma.notification.count({ where: { title, recipientId: demoAdmin?.id } })).toBe(1);
+    expect(await prisma.notification.count({ where: { title, recipientId: otherAdminId } })).toBe(0);
+    await prisma.notification.deleteMany({ where: { title } });
+    await prisma.auditLog.deleteMany({ where: { entityType: "PUBLIC_CONTACT_REQUEST", metadata: { path: ["fullName"], equals: `Visitor ${stamp}` } } });
+  });
+
   test("metrics count only the admin's own centers", async ({ request }) => {
     const res = await apiGet(request, "/api/v1/metrics/me", otherCookies);
     expect(res.status()).toBe(200);

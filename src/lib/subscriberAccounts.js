@@ -32,6 +32,17 @@ export async function accountIdForUser(userId) {
 }
 
 /**
+ * The account whose public website this server runs (resources page, contact
+ * form): PUBLIC_SITE_ACCOUNT names its account number, Ameris Academy
+ * (C-1001) by default. null when that account doesn't exist (legacy data).
+ */
+export async function publicSiteAccountId() {
+  const accountNumber = String(process.env.PUBLIC_SITE_ACCOUNT || "C-1001").trim();
+  const account = await prisma.subscriberAccount.findUnique({ where: { accountNumber }, select: { id: true } });
+  return account?.id || null;
+}
+
+/**
  * Prisma `where` for documents owned by the user's account (policies, form
  * templates, parent FAQs). {} when the user has no account (legacy data).
  */

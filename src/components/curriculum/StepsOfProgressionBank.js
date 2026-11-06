@@ -53,9 +53,12 @@ function distinct(values) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
+const EMPTY_FACETS = { category: [], subject: [], age: [], term: [] };
+
 export default function StepsOfProgressionBank({ centerId }) {
-  const [lessons, setLessons] = useState([]); // steps
-  const [bankLessons, setBankLessons] = useState([]); // Lesson Bank, for Related Lesson
+  // One page of steps at a time: the server filters, sorts and pages, since a
+  // center can hold tens of thousands of steps.
+  const [result, setResult] = useState({ items: [], total: 0, page: 1, facets: EMPTY_FACETS });
   const [categories, setCategories] = useState([]);
   const [options, setOptions] = useState({ CATEGORY: [], SUBJECT: [], AGE_RANGE: [] });
   const [loading, setLoading] = useState(true);
@@ -70,64 +73,60 @@ export default function StepsOfProgressionBank({ centerId }) {
   const [deleting, setDeleting] = useState(null);
   const [importing, setImporting] = useState(false);
 
+  // The search box waits for a pause in typing before asking the server.
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    const q = encodeURIComponent(centerId);
+    Promise.all([
+      apiJson(`/api/v1/lesson-categories?centerId=${q}`).catch(() => []),
+      apiJson(`/api/v1/curriculum-options?centerId=${q}`).catch(() => null),
+    ]).then(([cats, opts]) => {
+      setCategories(Array.isArray(cats) ? cats : []);
+      if (opts) setOptions(opts);
+    });
+  }, [centerId]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const q = encodeURIComponent(centerId);
-      const [l, bank, cats, opts] = await Promise.all([
-        apiJson(`/api/v1/lessons?centerId=${q}&kind=step`),
-        // Only feeds the Related Lesson picker, so it must never stop the
-        // steps from loading.
-        apiJson(`/api/v1/lessons?centerId=${q}&kind=lesson&fields=summary`).catch(() => []),
-        apiJson(`/api/v1/lesson-categories?centerId=${q}`),
-        apiJson(`/api/v1/curriculum-options?centerId=${q}`).catch(() => null),
-      ]);
-      setLessons(Array.isArray(l) ? l : []);
-      setBankLessons(Array.isArray(bank) ? bank : []);
-      setCategories(Array.isArray(cats) ? cats : []);
-      if (opts) setOptions(opts);
+      const qs = new URLSearchParams({
+        centerId,
+        page: String(page),
+        pageSize: String(pageSize),
+        sort: sort.key,
+        dir: String(sort.dir),
+        q: debouncedQuery,
+        ...filters,
+      });
+      const data = await apiJson(`/api/v1/lessons/steps-page?${qs}`, { timeoutMs: 120000 });
+      setResult({
+        items: Array.isArray(data?.items) ? data.items : [],
+        total: data?.total || 0,
+        page: data?.page || 1,
+        facets: data?.facets || EMPTY_FACETS,
+      });
     } catch (e) {
       setError(e.message || "Failed to load the steps");
     } finally {
       setLoading(false);
     }
-  }, [centerId]);
+  }, [centerId, page, pageSize, sort, debouncedQuery, filters]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const rows = useMemo(() => lessons.map(stepRow), [lessons]);
-  const filterOptions = useMemo(
-    () => ({
-      category: distinct(rows.map((r) => r.category)),
-      subject: distinct(rows.map((r) => r.subject)),
-      age: distinct(rows.map((r) => r.age)),
-      term: distinct(rows.map((r) => r.term)),
-    }),
-    [rows],
-  );
-
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = rows.filter(
-      (r) =>
-        (!q || [r.reference, r.title, r.subject, r.category].some((v) => v.toLowerCase().includes(q))) &&
-        Object.entries(filters).every(([key, value]) => !value || r[key] === value),
-    );
-    const sortKey = sort.key === "age" ? "ageSort" : sort.key;
-    return list.sort((a, b) => {
-      const x = a[sortKey];
-      const y = b[sortKey];
-      const cmp = typeof x === "number" ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true });
-      return cmp * sort.dir;
-    });
-  }, [rows, query, filters, sort]);
-
-  const pages = Math.max(1, Math.ceil(visible.length / pageSize));
-  const current = Math.min(page, pages);
-  const shown = visible.slice((current - 1) * pageSize, current * pageSize);
+  const filterOptions = result.facets;
+  const total = result.total;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const current = result.page;
+  const shown = useMemo(() => result.items.map(stepRow), [result.items]);
   const filtered = query || Object.values(filters).some(Boolean);
 
   async function remove(lesson) {
@@ -181,6 +180,7 @@ export default function StepsOfProgressionBank({ centerId }) {
           onClick={() => {
             setQuery("");
             setFilters({ category: "", subject: "", age: "", term: "" });
+            setPage(1);
           }}
           className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800 disabled:opacity-40 dark:border-gray-600 dark:bg-gray-800 dark:text-blue-200"
         >
@@ -207,7 +207,10 @@ export default function StepsOfProgressionBank({ centerId }) {
                 <th key={c.key} className="px-3 py-2">
                   <button
                     type="button"
-                    onClick={() => setSort((s) => ({ key: c.key, dir: s.key === c.key ? -s.dir : 1 }))}
+                    onClick={() => {
+                      setSort((s) => ({ key: c.key, dir: s.key === c.key ? -s.dir : 1 }));
+                      setPage(1);
+                    }}
                     className="inline-flex items-center gap-1"
                     aria-label={`Sort by ${c.label}`}
                   >
@@ -273,7 +276,7 @@ export default function StepsOfProgressionBank({ centerId }) {
 
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[#0b2a5b] dark:text-blue-100">
         <span>
-          Showing {visible.length ? (current - 1) * pageSize + 1 : 0} to {Math.min(current * pageSize, visible.length)} of {visible.length} steps
+          Showing {total ? (current - 1) * pageSize + 1 : 0} to {Math.min(current * pageSize, total)} of {total} steps
         </span>
         <div className="flex items-center gap-2">
           <label className="flex items-center gap-2">
@@ -299,8 +302,6 @@ export default function StepsOfProgressionBank({ centerId }) {
         <StepDialog
           centerId={centerId}
           step={editing === "new" ? null : editing}
-          lessons={lessons}
-          bankLessons={bankLessons}
           categories={categories}
           options={options}
           onClose={() => setEditing(null)}
@@ -377,7 +378,7 @@ function withCurrent(list, value) {
   return value && !names.includes(value) ? [value, ...names] : names;
 }
 
-function StepDialog({ centerId, step, lessons, bankLessons, categories, options, onClose, onSaved }) {
+function StepDialog({ centerId, step, categories, options, onClose, onSaved }) {
   const [form, setForm] = useState(() => emptyForm(step));
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -388,7 +389,8 @@ function StepDialog({ centerId, step, lessons, bankLessons, categories, options,
   const subjectNames = withCurrent(options.SUBJECT || [], form.subject);
   const termNames = withCurrent(TERMS, form.term);
   const typeNames = withCurrent(options.TYPE || [], form.type);
-  const others = lessons.filter((l) => l.id !== step?.id);
+  const stepSearch = useMemo(() => ({ centerId, kind: "step" }), [centerId]);
+  const lessonSearch = useMemo(() => ({ centerId, kind: "lesson" }), [centerId]);
 
   // A step's category is a LessonCategory row; reuse the one with that name
   // (the step's own first), or create it.
@@ -549,7 +551,7 @@ function StepDialog({ centerId, step, lessons, bankLessons, categories, options,
             </select>
           </label>
           <div className="md:col-span-9">
-            <StepPicker label="Related Lesson (Optional)" lessons={bankLessons} value={form.linkedLessonId} onChange={(id) => set({ linkedLessonId: id || "" })} excludeIds={[]} />
+            <StepPicker label="Related Lesson (Optional)" search={lessonSearch} selectedLesson={step?.linkedLesson} value={form.linkedLessonId} onChange={(id) => set({ linkedLessonId: id || "" })} excludeIds={[]} />
             <p className="mt-1 text-xs text-gray-500">Linking a lesson helps teachers see which lesson supports this step.</p>
           </div>
         </div>
@@ -577,8 +579,8 @@ function StepDialog({ centerId, step, lessons, bankLessons, categories, options,
         <div className="mt-4 rounded-xl bg-blue-50/70 p-3 dark:bg-gray-800/60">
           <p className={`text-sm ${NAVY}`}>Link this step to other steps to show the typical order of development.</p>
           <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
-            <StepPicker label="Builds On (Previous Step)" lessons={others} value={form.priorStepId} onChange={(id) => set({ priorStepId: id || "" })} excludeIds={[form.nextStepId].filter(Boolean)} />
-            <StepPicker label="Leads To (Next Step)" lessons={others} value={form.nextStepId} onChange={(id) => set({ nextStepId: id || "" })} excludeIds={[form.priorStepId].filter(Boolean)} />
+            <StepPicker label="Builds On (Previous Step)" search={stepSearch} selectedLesson={step?.priorStep} value={form.priorStepId} onChange={(id) => set({ priorStepId: id || "" })} excludeIds={[step?.id, form.nextStepId].filter(Boolean)} />
+            <StepPicker label="Leads To (Next Step)" search={stepSearch} selectedLesson={step?.nextStep} value={form.nextStepId} onChange={(id) => set({ nextStepId: id || "" })} excludeIds={[step?.id, form.priorStepId].filter(Boolean)} />
           </div>
         </div>
 

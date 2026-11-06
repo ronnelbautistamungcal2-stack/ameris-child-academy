@@ -231,7 +231,7 @@ export default function AdminTaskChecklistManager({ centerId }) {
       const [lists, rooms, lessonRows, categoryRows, calendarRows, policyRows, userRows] = await Promise.all([
         apiJson(`/api/v1/daily-checklists?centerId=${encodeURIComponent(centerId)}`),
         apiJson(`/api/v1/classes?centerId=${encodeURIComponent(centerId)}`),
-        apiJson(`/api/v1/lessons?centerId=${encodeURIComponent(centerId)}`),
+        apiJson(`/api/v1/lessons?centerId=${encodeURIComponent(centerId)}&kind=lesson`),
         apiJson(`/api/v1/lesson-categories?centerId=${encodeURIComponent(centerId)}`).catch(() => []),
         apiJson(`/api/v1/lesson-term-calendars?centerId=${encodeURIComponent(centerId)}`).catch(() => []),
         apiJson(`/api/v1/policies?centerId=${encodeURIComponent(centerId)}`).catch(() => []),

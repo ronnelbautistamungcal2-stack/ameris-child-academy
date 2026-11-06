@@ -2,12 +2,11 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import CategoryListsTab from "@/components/curriculum/CategoryListsTab";
 import CurriculumTabs from "@/components/curriculum/CurriculumTabs";
 import StepsOfProgressionBank from "@/components/curriculum/StepsOfProgressionBank";
-import { FormField } from "@/components/curriculum/stepParts";
+import { FormField, StepPicker } from "@/components/curriculum/stepParts";
 import Skeleton from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
-import { lessonOptionLabel } from "@/lib/lessonScheduling";
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 // Categories and Steps of Progression are tabs of the Curriculum bar
 // (CurriculumTabs); Remediations sits beside Steps of Progression.
@@ -135,7 +134,10 @@ function TabIconRemediations({ active }) {
 
 function RemediationsTab({ centerId }) {
   const [remediations, setRemediations] = useState([]);
-  const [lessons, setLessons] = useState([]);
+  // Only the count: the pickers search the server, because a center can hold
+  // tens of thousands of lessons and steps.
+  const [lessonCount, setLessonCount] = useState(0);
+  const lessonSearch = useMemo(() => ({ centerId, kind: "all" }), [centerId]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [adding, setAdding] = useState(false);
@@ -153,10 +155,10 @@ function RemediationsTab({ centerId }) {
     try {
       const [r, l] = await Promise.all([
         apiJson(`/api/v1/remediations?centerId=${encodeURIComponent(centerId)}`),
-        apiJson(`/api/v1/lessons?centerId=${encodeURIComponent(centerId)}`),
+        apiJson(`/api/v1/lessons/search?centerId=${encodeURIComponent(centerId)}&limit=1`),
       ]);
       setRemediations(Array.isArray(r) ? r : []);
-      setLessons(Array.isArray(l) ? l : []);
+      setLessonCount(l?.total || 0);
     } catch (e) {
       setError(e.message || "Failed to load");
     } finally {
@@ -243,10 +245,10 @@ function RemediationsTab({ centerId }) {
         <StatCard label="Remediation Links" value={loading ? "..." : remediations.length} color="orange" icon={
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
         } />
-        <StatCard label="Lessons" value={loading ? "..." : lessons.length} color="indigo" icon={
+        <StatCard label="Lessons" value={loading ? "..." : lessonCount} color="indigo" icon={
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
         } />
-        <StatCard label="Coverage" value={loading ? "..." : lessons.length > 0 ? `${Math.round((new Set(remediations.map(r => r.fromLessonId)).size / lessons.length) * 100)}%` : "0%"} color="emerald" icon={
+        <StatCard label="Coverage" value={loading ? "..." : lessonCount > 0 ? `${Math.round((new Set(remediations.map(r => r.fromLessonId)).size / lessonCount) * 100)}%` : "0%"} color="emerald" icon={
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
         } />
       </div>
@@ -399,18 +401,8 @@ function RemediationsTab({ centerId }) {
                 New Remediation Link
               </h4>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <FormField label="When this lesson fails">
-                  <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={fromId} onChange={(e) => setFromId(e.target.value)}>
-                    <option value="">Select lesson...</option>
-                    {lessons.map((l) => <option key={l.id} value={l.id}>{lessonOptionLabel(l)}</option>)}
-                  </select>
-                </FormField>
-                <FormField label="Recommend this corrective lesson">
-                  <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={toId} onChange={(e) => setToId(e.target.value)}>
-                    <option value="">Select lesson...</option>
-                    {lessons.filter((l) => l.id !== fromId).map((l) => <option key={l.id} value={l.id}>{lessonOptionLabel(l)}</option>)}
-                  </select>
-                </FormField>
+                <StepPicker label="When this lesson fails" search={lessonSearch} value={fromId} onChange={(id) => setFromId(id || "")} excludeIds={[toId].filter(Boolean)} />
+                <StepPicker label="Recommend this corrective lesson" search={lessonSearch} value={toId} onChange={(id) => setToId(id || "")} excludeIds={[fromId].filter(Boolean)} />
               </div>
               <FormField label="Reason (optional)">
                 <input className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why this remediation is recommended..." />

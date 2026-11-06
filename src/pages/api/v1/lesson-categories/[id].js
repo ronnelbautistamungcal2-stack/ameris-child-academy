@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import { attachLessonCountsToCategories } from "@/lib/lessonCategoryCounts";
+import { lessonsForCategoryCounts } from "@/lib/lessonCategoryCountsServer";
 import prisma from "@/lib/prisma";
 
 export default async function handler(req, res) {
@@ -19,24 +20,7 @@ export default async function handler(req, res) {
   if (!category) return res.status(404).json({ error: "Category not found" });
 
   async function getCategoryWithLessonCount() {
-    const lessons = await prisma.lesson.findMany({
-      where: { centerId: category.centerId },
-      select: {
-        id: true,
-        categoryId: true,
-        category: {
-          select: {
-            id: true,
-          },
-        },
-        goals: {
-          orderBy: { goalIndex: "asc" },
-          select: {
-            passingCriteria: true,
-          },
-        },
-      },
-    });
+    const lessons = await lessonsForCategoryCounts({ centerId: category.centerId });
 
     return attachLessonCountsToCategories([category], lessons)[0];
   }

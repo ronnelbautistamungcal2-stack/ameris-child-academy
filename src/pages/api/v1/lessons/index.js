@@ -1,25 +1,8 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import { normalizeLessonSlot, normalizeTermDaySelections } from "@/lib/lessonScheduling";
+import { LESSON_INCLUDE } from "@/lib/lessonInclude";
 import prisma from "@/lib/prisma";
 import { parseStepAge, parseStepDetails, validateStepLinks } from "@/lib/progressionSteps";
-
-const LESSON_INCLUDE = {
-  category: true,
-  goals: { orderBy: { goalIndex: "asc" } },
-  remediationsFrom: { include: { toLesson: true } },
-  supplies: { orderBy: { name: "asc" } },
-  policyDocument: true,
-  linkedLesson: {
-    select: {
-      id: true,
-      title: true,
-      term: true,
-      reference: true,
-    },
-  },
-  priorStep: { select: { id: true, title: true, reference: true } },
-  nextStep: { select: { id: true, title: true, reference: true } },
-};
 
 const LESSON_SUMMARY_SELECT = {
   id: true,

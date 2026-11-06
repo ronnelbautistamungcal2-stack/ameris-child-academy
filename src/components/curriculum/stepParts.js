@@ -1,6 +1,6 @@
 import { apiJson } from "@/lib/api";
 import { lessonOptionLabel } from "@/lib/lessonScheduling";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 // Pieces of the Steps of Progression editor shared by the Curriculum pages.
 
@@ -187,13 +187,44 @@ export function FormField({ label, required, className, children }) {
 
 const STEP_PICKER_LIMIT = 30;
 
-export function StepPicker({ label, lessons, value, onChange, excludeIds, categoryId }) {
+/**
+ * Pick one lesson or step. With `lessons`, it filters that list in the
+ * browser. With `search` ({ centerId, kind }), it asks /api/v1/lessons/search
+ * as you type instead, for banks too big to load (tens of thousands of steps);
+ * `selectedLesson` then names the current value until it is changed.
+ */
+export function StepPicker({ label, lessons = [], value, onChange, excludeIds, categoryId, search, selectedLesson }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const selected = value ? lessons.find((lesson) => lesson.id === value) : null;
+  const [remote, setRemote] = useState({ items: [], total: 0, loading: false });
+  const [picked, setPicked] = useState(null);
+  const excludeKey = excludeIds.join(",");
+
+  useEffect(() => {
+    if (!search || !open) return undefined;
+    let alive = true;
+    setRemote((r) => ({ ...r, loading: true }));
+    const timer = setTimeout(async () => {
+      const qs = new URLSearchParams({ centerId: search.centerId, kind: search.kind, q: query.trim(), limit: String(STEP_PICKER_LIMIT), exclude: excludeKey });
+      const data = await apiJson(`/api/v1/lessons/search?${qs}`).catch(() => null);
+      if (alive) setRemote({ items: data?.items || [], total: data?.total || 0, loading: false });
+    }, 250);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [search?.centerId, search?.kind, open, query, excludeKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selected = value
+    ? lessons.find((lesson) => lesson.id === value) ||
+      (picked?.id === value ? picked : null) ||
+      (selectedLesson?.id === value ? selectedLesson : null) ||
+      (search ? { id: value, title: "Linked step" } : null)
+    : null;
 
   const { matches, total } = useMemo(() => {
     if (!open) return { matches: [], total: 0 };
+    if (search) return { matches: remote.items, total: remote.total };
     const q = query.trim().toLowerCase();
     const all = lessons
       .filter((lesson) => !excludeIds.includes(lesson.id))
@@ -207,9 +238,10 @@ export function StepPicker({ label, lessons, value, onChange, excludeIds, catego
         return rank(a) - rank(b) || (a.title || "").localeCompare(b.title || "");
       });
     return { matches: all.slice(0, STEP_PICKER_LIMIT), total: all.length };
-  }, [open, query, lessons, excludeIds, categoryId]);
+  }, [open, query, lessons, excludeIds, categoryId, search, remote]);
 
   function pick(id) {
+    setPicked(matches.find((lesson) => lesson.id === id) || null);
     onChange(id);
     setQuery("");
     setOpen(false);
@@ -238,7 +270,9 @@ export function StepPicker({ label, lessons, value, onChange, excludeIds, catego
           />
           {open && (
             <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
-              {matches.length === 0 ? (
+              {search && remote.loading && !matches.length ? (
+                <div className="px-4 py-2 text-xs text-gray-400">Searching...</div>
+              ) : matches.length === 0 ? (
                 <div className="px-4 py-2 text-xs text-gray-400">No matching steps</div>
               ) : (
                 matches.map((lesson) => (

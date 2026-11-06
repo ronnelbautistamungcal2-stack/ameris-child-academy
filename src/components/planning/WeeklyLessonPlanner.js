@@ -175,7 +175,7 @@ export default function WeeklyLessonPlanner({
     }
     (async () => {
       try {
-        const data = await apiJson(`/api/v1/lessons?centerId=${encodeURIComponent(centerId)}`);
+        const data = await apiJson(`/api/v1/lessons?centerId=${encodeURIComponent(centerId)}&kind=lesson`);
         if (abortRef.current.aborted) return;
         setLessons(Array.isArray(data) ? data : []);
       } catch {

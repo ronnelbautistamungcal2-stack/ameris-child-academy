@@ -97,7 +97,7 @@ export default function AdminMilestoneChecklists() {
           `/api/v1/policies?centerId=${encodeURIComponent(centerId)}`,
         ).catch(() => []),
         apiJson(
-          `/api/v1/lessons?centerId=${encodeURIComponent(centerId)}`,
+          `/api/v1/lessons?centerId=${encodeURIComponent(centerId)}&kind=lesson`,
         ).catch(() => []),
       ]);
       setPolicies(Array.isArray(p) ? p : []);

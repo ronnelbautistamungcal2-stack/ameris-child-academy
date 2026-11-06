@@ -175,7 +175,7 @@ export default function WeeklyLessonPlanner({
     }
     (async () => {
       try {
-        const data = await apiJson(`/api/v1/lessons?centerId=${encodeURIComponent(centerId)}`);
+        const data = await apiJson(`/api/v1/lessons?centerId=${encodeURIComponent(centerId)}&kind=lesson`);
         if (abortRef.current.aborted) return;
         setLessons(Array.isArray(data) ? data : []);
       } catch {
@@ -540,35 +540,40 @@ export default function WeeklyLessonPlanner({
   }
 
   function goToToday() {
-    setAnchorDate(startOfWeekMonday(new Date()));
+    const thisWeek = startOfWeekMonday(new Date());
     setSelectedDayIndex(currentWeekdayIndex());
+    setOpenComboKey("");
+    if (toDateKey(thisWeek) === toDateKey(weekStart)) return; // same week: keep loaded cells
+    setAnchorDate(thisWeek);
     setCellDrafts({});
     setCellLessonIds({});
-    setOpenComboKey("");
   }
 
+  // Moving within the same week keeps the week's loaded cells: the week's
+  // plans only reload when weekStart changes, so clearing them here left the
+  // other days blank. Only a week change clears them (and reloads).
   function goToPrevDay() {
+    setOpenComboKey("");
     if (selectedDayIndex > 0) {
       setSelectedDayIndex((i) => i - 1);
-    } else {
-      setAnchorDate((d) => addDays(d, -7));
-      setSelectedDayIndex(4);
+      return;
     }
+    setAnchorDate((d) => addDays(d, -7));
+    setSelectedDayIndex(4);
     setCellDrafts({});
     setCellLessonIds({});
-    setOpenComboKey("");
   }
 
   function goToNextDay() {
+    setOpenComboKey("");
     if (selectedDayIndex < 4) {
       setSelectedDayIndex((i) => i + 1);
-    } else {
-      setAnchorDate((d) => addDays(d, 7));
-      setSelectedDayIndex(0);
+      return;
     }
+    setAnchorDate((d) => addDays(d, 7));
+    setSelectedDayIndex(0);
     setCellDrafts({});
     setCellLessonIds({});
-    setOpenComboKey("");
   }
 
   const displayDays = singleDay ? [weekDays[selectedDayIndex]] : weekDays;

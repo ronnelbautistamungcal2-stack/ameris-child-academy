@@ -36,23 +36,38 @@ export async function generateRemediationProposals({
   skipExisting = true,
 }) {
   // 1. Fetch all lessons with goals for this centre
-  const lessons = await prisma.lesson.findMany({
-    where: { centerId },
-    include: {
-      goals: {
-        where: { active: true },
-        select: {
-          id: true,
-          lessonId: true,
-          goalIndex: true,
-          title: true,
-          passingCriteria: true,
-        },
-      },
-      category: { select: { id: true, name: true } },
-      remediationsFrom: { select: { id: true, toLessonId: true } },
-    },
-  });
+  //    Goals and existing links come from their own queries, not nested
+  //    under every lesson: with a big step bank (~46,000 steps) the nested
+  //    load crashes Prisma's query engine ("no entry found for key").
+  const [lessonRows, goalRows, linkRows] = await Promise.all([
+    prisma.lesson.findMany({
+      where: { centerId },
+      include: { category: { select: { id: true, name: true } } },
+    }),
+    prisma.lessonGoal.findMany({
+      where: { active: true, lesson: { centerId } },
+      select: { id: true, lessonId: true, goalIndex: true, title: true, passingCriteria: true },
+    }),
+    prisma.lessonRemediation.findMany({
+      where: { fromLesson: { centerId } },
+      select: { id: true, fromLessonId: true, toLessonId: true },
+    }),
+  ]);
+  const group = (rows, key) => {
+    const out = new Map();
+    for (const row of rows) {
+      if (!out.has(row[key])) out.set(row[key], []);
+      out.get(row[key]).push(row);
+    }
+    return out;
+  };
+  const goalsByLesson = group(goalRows, "lessonId");
+  const linksByLesson = group(linkRows, "fromLessonId");
+  const lessons = lessonRows.map((lesson) => ({
+    ...lesson,
+    goals: goalsByLesson.get(lesson.id) || [],
+    remediationsFrom: (linksByLesson.get(lesson.id) || []).map(({ id, toLessonId }) => ({ id, toLessonId })),
+  }));
 
   // 2. Build existing-link lookup
   const existingLinks = new Set();

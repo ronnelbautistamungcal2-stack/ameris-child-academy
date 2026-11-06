@@ -116,13 +116,10 @@ async function childrenInRange(centerId, reportDate, { minMonths, maxMonths, enr
   });
 }
 
-/**
- * When each child first reached Competency and Mastery on each step, up to the
- * report date: [{ childId, stepId, competency: { at, age }, mastery: { at, age } | null }].
- */
-async function completions(stepIds, childIds, reportDate) {
-  if (!stepIds.length || !childIds.length) return [];
-  const rows = await prisma.progress.findMany({
+const ID_BATCH = 10000;
+
+function completionRows(stepIds, childIds) {
+  return prisma.progress.findMany({
     where: { lessonId: { in: stepIds }, childId: { in: childIds }, status: { in: ["COMPLETED", "PASSED"] } },
     select: {
       childId: true,
@@ -135,6 +132,20 @@ async function completions(stepIds, childIds, reportDate) {
       entries: { where: { status: { in: ["COMPLETED", "PASSED"] } }, orderBy: { occurredAt: "asc" }, select: { status: true, occurredAt: true } },
     },
   });
+}
+
+/**
+ * When each child first reached Competency and Mastery on each step, up to the
+ * report date: [{ childId, stepId, competency: { at, age }, mastery: { at, age } | null }].
+ */
+async function completions(stepIds, childIds, reportDate) {
+  if (!stepIds.length || !childIds.length) return [];
+  // Batches of step ids: Postgres allows 32,767 bind parameters per query and
+  // a big step bank passes that on its own (P2035).
+  const rows = [];
+  for (let i = 0; i < stepIds.length; i += ID_BATCH) {
+    rows.push(...(await completionRows(stepIds.slice(i, i + ID_BATCH), childIds)));
+  }
   const out = [];
   for (const r of rows) {
     const fallback = r.achievedAt || r.assessedAt || r.updatedAt;

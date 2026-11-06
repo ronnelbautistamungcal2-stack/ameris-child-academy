@@ -54,7 +54,7 @@ export default async function handler(req, res) {
       });
     } catch (error) {
       console.error("Upload error:", error);
-      return res.status(500).json({ error: "File upload failed" });
+      return res.status(500).json({ error: `File upload failed (${error.code || "write error"} in ${UPLOAD_DIR}).` });
     }
   }
 

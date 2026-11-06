@@ -307,6 +307,7 @@ async function uploadFiles(files, { protected: isProtected = false } = {}) {
     const dataBase64 = await fileToBase64(f);
     const uploaded = await apiJson("/api/v1/uploads", {
       method: "POST",
+      timeoutMs: 120000, // big PDFs on a slow connection outlast the 30s default
       body: JSON.stringify({
         filename: f.name,
         mimeType: f.type,

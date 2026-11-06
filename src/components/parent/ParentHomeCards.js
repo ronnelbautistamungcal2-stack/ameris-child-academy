@@ -142,20 +142,6 @@ export function ImportantNoticesCard({ notices = [], loading, actionHref = "/par
                 </span>
                 <ChevronRight className="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
               </Link>
-              {onSign ? (
-                <button
-                  type="button"
-                  onClick={() => onSign(child)}
-                  disabled={signingId === child.id}
-                  aria-label={`${child.signedIn ? "Sign out" : "Sign in"} ${child.name}`}
-                  className={
-                    "shrink-0 rounded-lg px-3 py-1.5 text-xs font-extrabold text-white shadow-sm disabled:opacity-60 " +
-                    (child.signedIn ? "bg-slate-700 hover:bg-slate-800" : "bg-emerald-600 hover:bg-emerald-700")
-                  }
-                >
-                  {signingId === child.id ? "Saving..." : child.signedIn ? "Sign Out" : "Sign In"}
-                </button>
-              ) : null}
             </li>
           ))}
         </ul>
@@ -232,6 +218,20 @@ export function MyChildrenCard({
                 </span>
                 <ChevronRight className="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
               </Link>
+              {onSign ? (
+                <button
+                  type="button"
+                  onClick={() => onSign(child)}
+                  disabled={signingId === child.id}
+                  aria-label={`${child.signedIn ? "Sign out" : "Sign in"} ${child.name}`}
+                  className={
+                    "shrink-0 rounded-lg px-3 py-1.5 text-xs font-extrabold text-white shadow-sm disabled:opacity-60 " +
+                    (child.signedIn ? "bg-slate-700 hover:bg-slate-800" : "bg-emerald-600 hover:bg-emerald-700")
+                  }
+                >
+                  {signingId === child.id ? "Saving..." : child.signedIn ? "Sign Out" : "Sign In"}
+                </button>
+              ) : null}
             </li>
           ))}
         </ul>

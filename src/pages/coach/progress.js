@@ -171,7 +171,7 @@ export default function AdminProgress() {
       try {
         const [kids, l, cls] = await Promise.all([
           apiJson(`/api/v1/children?centerId=${encodeURIComponent(centerId)}`),
-          apiJson(`/api/v1/lessons?centerId=${encodeURIComponent(centerId)}`),
+          apiJson(`/api/v1/lessons?centerId=${encodeURIComponent(centerId)}&kind=lesson`),
           apiJson(`/api/v1/classes?centerId=${encodeURIComponent(centerId)}`),
         ]);
         setChildren(Array.isArray(kids) ? kids : []);

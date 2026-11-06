@@ -596,7 +596,9 @@ export default async function handler(req, res) {
             orderBy: [{ startDate: "asc" }, { term: "asc" }],
           }),
           prisma.lesson.findMany({
-            where: { centerId },
+            // Lesson Bank only: steps are their own bank (tens of thousands of
+            // rows) and are never scheduled into a checklist.
+            where: { centerId, isStep: false },
             select: LESSON_SELECT,
             orderBy: [{ title: "asc" }],
           }),

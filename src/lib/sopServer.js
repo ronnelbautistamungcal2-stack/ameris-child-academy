@@ -49,6 +49,8 @@ const STEP_SELECT = {
   category: { select: { name: true } },
 };
 
+const CENTER_STEPS = (child) => ({ centerId: child.centerId, isStep: true });
+
 /** The center's steps and the child's progress on them. */
 export async function loadChildSteps(child) {
   const steps = await prisma.lesson.findMany({
@@ -57,7 +59,9 @@ export async function loadChildSteps(child) {
     orderBy: [{ reference: "asc" }, { title: "asc" }],
   });
   const progress = await prisma.progress.findMany({
-    where: { childId: child.id, lessonId: { in: steps.map((s) => s.id) }, goalIndex: GOAL_INDEX },
+    // A relation filter, not lessonId IN (every step id): a big step bank
+    // passes Postgres's 32,767 bind-parameter limit (P2035).
+    where: { childId: child.id, goalIndex: GOAL_INDEX, lesson: CENTER_STEPS(child) },
     select: { lessonId: true, status: true, active: true, notes: true, assessedAt: true, updatedAt: true },
   });
   const byStep = Object.fromEntries(progress.map((p) => [p.lessonId, p]));
@@ -140,12 +144,12 @@ export async function saveLevels(child, items, user, { mode, generate = false })
 
     if (mode === "assessment" && generate) {
       const assessed = await tx.progress.findMany({
-        where: { childId: child.id, lessonId: { in: steps.map((s) => s.id) }, goalIndex: GOAL_INDEX, assessedAt: { not: null } },
+        where: { childId: child.id, goalIndex: GOAL_INDEX, assessedAt: { not: null }, lesson: CENTER_STEPS(child) },
         select: { lessonId: true, status: true },
       });
       const levels = Object.fromEntries(assessed.map((p) => [p.lessonId, levelForStatus(p.status)]));
       const active = activeGoalIds(levels, stepsById);
-      await tx.progress.updateMany({ where: { childId: child.id, lessonId: { in: steps.map((s) => s.id) }, goalIndex: GOAL_INDEX }, data: { active: false } });
+      await tx.progress.updateMany({ where: { childId: child.id, goalIndex: GOAL_INDEX, lesson: CENTER_STEPS(child) }, data: { active: false } });
       for (const stepId of active) {
         await ensure(stepId, { active: true, ...(levels[stepId] ? {} : { status: "NOT_STARTED" }) });
       }

@@ -14,6 +14,7 @@ import {
 import { ageInMonths } from "@/lib/ageUtils";
 import { toDateKey, todaysMenuRows } from "@/lib/menuPlan";
 import { buildParentNotices } from "@/lib/parentNotices";
+import SignInOutDialog from "@/components/parent/SignInOutDialog";
 import { useShellTitle } from "@/components/shell/PortalShell";
 import { isStaffPortalRole } from "@/lib/roles";
 
@@ -519,10 +520,10 @@ function ParentDashboard({ centers, children, loading, error, submissions }) {
   const [events, setEvents] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [menuRows, setMenuRows] = useState(null);
-  // Sign In / Sign Out from the dashboard and the new-messages bubble (client request 2026-10-29).
-  const [signedIn, setSignedIn] = useState({});
-  const [signingId, setSigningId] = useState("");
-  const [signError, setSignError] = useState("");
+  // Sign Children In / Out (PIN first, client sheet 2026-11-07) and the
+  // new-messages bubble. signed: changes made here, { [childId]: { in, at } }.
+  const [signed, setSigned] = useState({});
+  const [signOpen, setSignOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
 
   // Events drive both the calendar grid and the date-based notices.
@@ -616,15 +617,18 @@ function ParentDashboard({ centers, children, loading, error, submissions }) {
         const classLabel = classroomNames.get(child.classRoomId) || "";
 
         const att = child.todayAttendance;
+        const local = signed[child.id];
         return {
           id: child.id,
           name: [child.firstName, child.lastName].filter(Boolean).join(" "),
           initials: initials(child.firstName, child.lastName),
           meta: [ageLabel, classLabel].filter(Boolean).join("  |  ") || "View profile",
-          signedIn: child.id in signedIn ? signedIn[child.id] : Boolean(att?.checkedInAt && !att?.checkedOutAt),
+          signedIn: local ? local.in : Boolean(att?.checkedInAt && !att?.checkedOutAt),
+          signedInAt: local ? (local.in ? local.at : att?.checkedInAt) : att?.checkedInAt || null,
+          signedOutAt: local ? (local.in ? null : local.at) : att?.checkedOutAt || null,
         };
       }),
-    [childList, classroomNames, signedIn],
+    [childList, classroomNames, signed],
   );
 
   useEffect(() => {
@@ -645,21 +649,6 @@ function ParentDashboard({ centers, children, loading, error, submissions }) {
     };
   }, []);
 
-  async function toggleSignIn(row) {
-    setSigningId(row.id);
-    setSignError("");
-    try {
-      await apiJson(row.signedIn ? "/api/v1/attendance/check-out" : "/api/v1/attendance/check-in", {
-        method: "POST",
-        body: JSON.stringify({ childId: row.id }),
-      });
-      setSignedIn((cur) => ({ ...cur, [row.id]: !row.signedIn }));
-    } catch (e) {
-      setSignError(e.message || "Could not update sign in");
-    } finally {
-      setSigningId("");
-    }
-  }
 
   const notices = useMemo(
     () => buildParentNotices({ events, submissions, notifications }),
@@ -668,21 +657,41 @@ function ParentDashboard({ centers, children, loading, error, submissions }) {
 
   return (
     <div className="space-y-4">
-      <Link
-        href="/parent/messages"
-        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-5 py-4 shadow-sm transition hover:bg-sky-100 sm:w-72 dark:border-sky-800 dark:bg-sky-950/30"
-      >
-        <span>
-          <span className="block text-sm font-bold text-[#12386a] dark:text-sky-100">New Messages</span>
-          <span className="block text-3xl font-black text-[#12386a] dark:text-sky-100">{unreadMessages}</span>
-        </span>
-        <span aria-hidden="true" className="text-3xl">💬</span>
-      </Link>
-      {signError ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{signError}</div> : null}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <button
+          type="button"
+          onClick={() => setSignOpen(true)}
+          disabled={!childRows.length}
+          className="flex items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-white px-5 py-4 text-left shadow-sm transition hover:bg-sky-50 disabled:opacity-60 dark:border-sky-800 dark:bg-gray-900"
+        >
+          <span className="flex items-center gap-3">
+            <span aria-hidden="true" className="text-3xl">{"\u{1F46A}"}</span>
+            <span className="text-2xl font-black text-[#12386a] dark:text-sky-100">Sign Children In / Out</span>
+          </span>
+          <span aria-hidden="true" className="text-2xl text-[#12386a]">›</span>
+        </button>
+        <Link
+          href="/parent/messages"
+          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-5 py-4 shadow-sm transition hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/30"
+        >
+          <span>
+            <span className="block text-3xl font-black text-[#12386a] dark:text-sky-100">{unreadMessages}</span>
+            <span className="block text-sm font-bold text-[#12386a] dark:text-sky-100">New Messages</span>
+          </span>
+          <span aria-hidden="true" className="text-3xl">💬</span>
+        </Link>
+      </div>
+      {signOpen ? (
+        <SignInOutDialog
+          childList={childRows}
+          onChanged={(childId, isIn) => setSigned((cur) => ({ ...cur, [childId]: { in: isIn, at: new Date().toISOString() } }))}
+          onClose={() => setSignOpen(false)}
+        />
+      ) : null}
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         <div className="space-y-4">
           <ImportantNoticesCard notices={notices} loading={loading} />
-          <MyChildrenCard childRows={childRows} loading={loading} error={error} onSign={toggleSignIn} signingId={signingId} />
+          <MyChildrenCard childRows={childRows} loading={loading} error={error} />
         </div>
 
         <div className="space-y-4">

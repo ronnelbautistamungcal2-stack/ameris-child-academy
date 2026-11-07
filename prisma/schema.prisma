@@ -1353,7 +1353,7 @@ model ComplianceRequirement {
   appliesToRoles  String[]               @default([])
   ageGroups       String[]               @default([])
   notes           String?
-  nextDue         DateTime               @db.Date
+  nextDue         DateTime?              @db.Date // optional (client sheet 2026-11-07)
   lastCompletedAt DateTime?
   // Checking a row off keeps it as a completed row and adds a new row for the
   // next due date, linked back through previousId (client request 2026-10-29).

@@ -42,7 +42,7 @@ test.describe("Food and milestone reports @api", () => {
     });
     await prisma.menuItem.createMany({
       data: [
-        { centerId: center.id, date: new Date(`${day}T00:00:00Z`), meal: "breakfast", ageGroup: "olderInfants", component: "grain", item: "Oatmeal", kind: "SERVED" },
+        { centerId: center.id, date: new Date(`${day}T00:00:00Z`), meal: "breakfast", ageGroup: "olderInfants", component: "meatOrAlternate", item: "Oatmeal", kind: "SERVED" },
         { centerId: center.id, date: new Date(`${day}T00:00:00Z`), meal: "breakfast", ageGroup: "children", component: "grains", item: "Whole-grain oatmeal", kind: "SERVED" },
       ],
     });
@@ -62,7 +62,8 @@ test.describe("Food and milestone reports @api", () => {
     await prisma.progress.deleteMany({ where: { childId: { in: ids } } });
     await prisma.activityLog.deleteMany({ where: { childId: { in: ids } } });
     await prisma.infantPortion.deleteMany({ where: { childId: { in: ids } } });
-    await prisma.lesson.deleteMany({ where: { centerId: center?.id } });
+    // Only with a center: centerId undefined would match, and delete, every lesson.
+    if (center?.id) await prisma.lesson.deleteMany({ where: { centerId: center.id } });
     await prisma.child.deleteMany({ where: { id: { in: ids } } });
     if (center?.id) await apiDelete(request, `/api/v1/centers/${center.id}`, await loginAsAdmin(request));
     await prisma.$disconnect();
@@ -74,7 +75,7 @@ test.describe("Food and milestone reports @api", () => {
     const before = await (await apiGet(request, `/api/v1/menus/infant-portions?${qs}`, kitchenCookies)).json();
     // Mia is 6 months old on Sep 1, so she is in the Older Infants row.
     expect(before.infants.map((i) => i.name)).toEqual(["Mia Turner"]);
-    expect(before.components.find((c) => c.key === "grain").item).toBe("Oatmeal");
+    expect(before.components.find((c) => c.key === "meatOrAlternate").item).toBe("Oatmeal");
 
     const saved = await apiPut(request, "/api/v1/menus/infant-portions", {
       centerId: center.id,
@@ -83,7 +84,7 @@ test.describe("Food and milestone reports @api", () => {
       ageGroup: "olderInfants",
       portions: [
         { childId: baby.id, component: "breastMilkOrFormula", amount: "4 oz" },
-        { childId: baby.id, component: "grain", amount: "0.5 tbsp" },
+        { childId: baby.id, component: "meatOrAlternate", amount: "0.5 tbsp" },
       ],
     }, kitchenCookies);
     expect(saved.status(), await saved.text()).toBe(200);

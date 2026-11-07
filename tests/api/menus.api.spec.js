@@ -81,7 +81,7 @@ test.describe("Menus API @api", () => {
         centerId,
         items: [
           line(),
-          line({ date: "2099-06-03", meal: "breakfast", ageGroup: "olderInfants", component: "grain", item: "E2E Oat Cereal" }),
+          line({ date: "2099-06-03", meal: "breakfast", ageGroup: "olderInfants", component: "meatOrAlternate", item: "E2E Oat Cereal" }),
         ],
       },
       admin,
@@ -199,7 +199,7 @@ test.describe("Menus API @api", () => {
         items: [
           line({ item: "" }),
           line({ component: "fruit", item: "" }),
-          line({ date: "2099-06-03", meal: "breakfast", ageGroup: "olderInfants", component: "grain", item: "  " }),
+          line({ date: "2099-06-03", meal: "breakfast", ageGroup: "olderInfants", component: "meatOrAlternate", item: "  " }),
         ],
       },
       admin,

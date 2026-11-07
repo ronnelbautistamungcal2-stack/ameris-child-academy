@@ -491,9 +491,9 @@ export default function Dashboard() {
                   </h3>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                     <Shortcut href="/admin/users" label="RBAC" />
-                    <Shortcut href="/coach/teachers" label="Staff" />
+                    <Shortcut href="/admin/staff-positions" label="Staff" />
                     <Shortcut href="/admin/children" label="Students" />
-                    <Shortcut href="/coach/classes" label="Classrooms" />
+                    <Shortcut href="/admin/classes" label="Classrooms" />
                     <Shortcut href="/admin/lessons" label="Lessons" />
                   </div>
                 </div>

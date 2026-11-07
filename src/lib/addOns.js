@@ -38,7 +38,6 @@ const PAGE_ADD_ONS = {
   "/teacher/progress": ["STEPS_OF_PROGRESSION"],
   // Coach
   "/coach/my-time-off": ["STAFF_MANAGEMENT"],
-  "/coach/staff-management": ["STAFF_MANAGEMENT"],
   "/coach/checklist-review": ["STAFF_MANAGEMENT"],
   "/coach/staff-attendance": ["STAFF_MANAGEMENT"],
   "/coach/shifts": ["STAFF_MANAGEMENT"],

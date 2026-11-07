@@ -48,8 +48,27 @@ test.describe("Compliance requirements and form renewals (Phase 7b) @api", () =>
     const admin = await loginAsAdmin(request);
     const bad = await apiPost(request, "/api/v1/compliance/requirements", { name: "", category: "Safety", frequency: "MONTHLY", nextDue: addDays(3) }, admin);
     expect(bad.status()).toBe(400);
-    const noDate = await apiPost(request, "/api/v1/compliance/requirements", { name: "X", category: "Safety", frequency: "MONTHLY" }, admin);
-    expect(noDate.status()).toBe(400);
+    const badDate = await apiPost(request, "/api/v1/compliance/requirements", { name: "X", category: "Safety", frequency: "MONTHLY", nextDue: "soon" }, admin);
+    expect(badDate.status()).toBe(400);
+  });
+
+  test("the Next Due Date is optional; checking off starts the cycle from that day", async ({ request }) => {
+    // Client sheet 2026-11-07: "Make so the field Next Due Date is not required".
+    const admin = await loginAsAdmin(request);
+    const res = await apiPost(request, "/api/v1/compliance/requirements", { centerId: center.id, name: "QA No Date", category: "Safety", frequency: "MONTHLY" }, admin);
+    expect(res.status(), await res.text()).toBe(201);
+    const row = await res.json();
+    // Its own rows, removed here so the later tests' counts aren't affected.
+    const ids = [row.id];
+    try {
+      expect(row).toMatchObject({ nextDue: "", status: "UPCOMING" });
+      const done = await (await apiPut(request, `/api/v1/compliance/requirements/${row.id}`, { action: "complete" }, admin)).json();
+      if (done.next?.id) ids.push(done.next.id);
+      expect(done.requirement.status).toBe("COMPLETED");
+      expect(done.next.nextDue > addDays(20)).toBe(true);
+    } finally {
+      await prisma.complianceRequirement.deleteMany({ where: { id: { in: ids } } });
+    }
   });
 
   test("status follows the due date, and checking off adds a row for the next repeat", async ({ request }) => {

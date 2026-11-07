@@ -28,13 +28,6 @@ function metricCard(page, label) {
   return page.getByText(label, { exact: true }).first().locator("..");
 }
 
-async function expectReportRow(row, { name, entries, hours, average }) {
-  await expect(row.locator("td").nth(0)).toHaveText(name);
-  await expect(row.locator("td").nth(1)).toHaveText(String(entries));
-  await expect(row.locator("td").nth(2)).toHaveText(String(hours));
-  await expect(row.locator("td").nth(3)).toHaveText(average);
-}
-
 async function getDemoContext() {
   const [center, admin, teacher, coach] = await Promise.all([
     prisma.center.findFirst({ where: { name: "Demo Center" } }),
@@ -63,100 +56,8 @@ test.describe("Staff management browser QA", () => {
     await prisma.$disconnect();
   });
 
-  test("training reports respect filters and totals", async ({ page, request }) => {
-    await prisma.trainingLog.deleteMany({
-      where: {
-        centerId: demo.center.id,
-        topic: {
-          startsWith: "[QA Training Report]",
-        },
-      },
-    });
-
-    await prisma.trainingLog.createMany({
-      data: [
-        {
-          centerId: demo.center.id,
-          userId: demo.teacher.id,
-          recordedById: demo.admin.id,
-          topic: "[QA Training Report] Classroom safety",
-          description: "Teacher session",
-          performedBy: "Admin User",
-          hours: 2,
-          date: new Date("2031-07-05T10:00:00.000Z"),
-          category: "Safety",
-        },
-        {
-          centerId: demo.center.id,
-          userId: demo.teacher.id,
-          recordedById: demo.admin.id,
-          topic: "[QA Training Report] Curriculum deep dive",
-          description: "Teacher follow-up",
-          performedBy: "Admin User",
-          hours: 1.5,
-          date: new Date("2031-07-06T10:00:00.000Z"),
-          category: "Curriculum",
-        },
-        {
-          centerId: demo.center.id,
-          userId: demo.coach.id,
-          recordedById: demo.admin.id,
-          topic: "[QA Training Report] Coaching lab",
-          description: "Coach session",
-          performedBy: "Admin User",
-          hours: 3,
-          date: new Date("2031-07-07T10:00:00.000Z"),
-          category: "Professional Development",
-        },
-      ],
-    });
-
-    await loginAsAdmin(page, request);
-    await page.goto("/coach/staff-management");
-    await waitForLoadingDone(page);
-    await page.locator("select").first().selectOption({ label: demo.center.name });
-    await page.getByRole("button", { name: "Training" }).click();
-    await expect(page.getByText("Employee Training Report")).toBeVisible();
-
-    await page.getByLabel("From", { exact: true }).fill("2031-07-01");
-    await page.getByLabel("To", { exact: true }).fill("2031-07-31");
-    await page.getByRole("button", { name: "Run Report" }).click();
-
-    const reportTable = page.locator("table").filter({
-      has: page.getByRole("columnheader", { name: "Total Hours Completed" }),
-    }).first();
-
-    await expect(metricCard(page, "Total Hours")).toContainText("6.5");
-    await expect(metricCard(page, "Entries")).toContainText("3");
-    await expect(reportTable.locator("tbody tr")).toHaveCount(2);
-    await expectReportRow(reportTable.locator("tbody tr").filter({ hasText: demo.teacher.name }), {
-      name: demo.teacher.name,
-      entries: 2,
-      hours: 3.5,
-      average: "1.75h",
-    });
-    await expectReportRow(reportTable.locator("tbody tr").filter({ hasText: demo.coach.name }), {
-      name: demo.coach.name,
-      entries: 1,
-      hours: 3,
-      average: "3h",
-    });
-
-    await page.getByLabel("Employee").selectOption({ label: demo.teacher.name });
-    await page.getByRole("button", { name: "Run Report" }).click();
-
-    await expect(metricCard(page, "Total Hours")).toContainText("3.5");
-    await expect(metricCard(page, "Entries")).toContainText("2");
-    await expect(page.getByText("This report is currently filtered to one employee.")).toBeVisible();
-    await expect(reportTable.locator("tbody tr")).toHaveCount(1);
-    await expectReportRow(reportTable.locator("tbody tr").first(), {
-      name: demo.teacher.name,
-      entries: 2,
-      hours: 3.5,
-      average: "1.75h",
-    });
-    await expect(reportTable).not.toContainText(demo.coach.name);
-  });
+  // The training report test went with Staff Daily Management (removed,
+  // client sheet 2026-11-07); Reports > Staff Training Report covers it.
 
   test("selected-staff shift copy only copies the chosen staff", async ({ page, request }) => {
     // Shift dates are stored at UTC midnight of the local calendar day.

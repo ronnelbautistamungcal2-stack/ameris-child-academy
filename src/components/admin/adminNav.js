@@ -103,6 +103,7 @@ export const ADMIN_NAV_ITEMS = [
     children: [
       { href: "/admin/curriculum/calendar", label: "Curriculum", alsoActive: ["/admin/curriculum", "/admin/lessons"] },
       { href: "/admin/parent-involvement", label: "Parent Involvement" },
+      { href: "/admin/classes", label: "Classroom List" },
       { href: "/admin/checklists", label: "Checklist Manager" },
       { href: "/admin/checklist-review", label: "Checklist Review" },
       {

@@ -1,6 +1,7 @@
 // @ts-check
 const { test, expect } = require("@playwright/test");
 const { PrismaClient } = require("@prisma/client");
+const { demoAccountId } = require("../helpers/accounts");
 const { loginAsAdmin } = require("../helpers/auth");
 const { apiGet } = require("../helpers/api");
 
@@ -20,7 +21,7 @@ test.describe("Compliance API @api", () => {
   test.beforeAll(async () => {
     const suffix = Date.now();
     const center = await prisma.center.create({
-      data: { name: `QA Compliance Center ${suffix}` },
+      data: { subscriberAccountId: await demoAccountId(prisma), name: `QA Compliance Center ${suffix}` },
     });
 
     const teacherClockedIn = await prisma.user.create({

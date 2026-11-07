@@ -189,3 +189,40 @@ export function activeGoalIds(levels, stepsById) {
   }
   return [...active];
 }
+
+const stepMinMonths = (s) => (s.ageYears == null && s.ageMonths == null ? null : (s.ageYears || 0) * 12 + (s.ageMonths || 0));
+const stepMaxMonths = (s) =>
+  s.maxAgeYears == null && s.maxAgeMonths == null ? stepMinMonths(s) : (s.maxAgeYears || 0) * 12 + (s.maxAgeMonths || 0);
+
+/**
+ * The steps a sub category group starts with in the Initial Developmental
+ * Assessment: those for the child's current age, not the first infant steps
+ * (client request 2026-10-29). Steps already assessed (isTouched) stay;
+ * earlier or later steps come in through Not Started / Competency. Without an
+ * age match it starts at the closest step below the child's age. Shared by
+ * the page and the API, which uses it to send only these steps.
+ */
+export function stepsForAge(list, ageMonths, isTouched) {
+  if (ageMonths == null) return list;
+  const inRange = list.filter((s) => {
+    const min = stepMinMonths(s);
+    const max = stepMaxMonths(s);
+    return min == null || (min <= ageMonths && ageMonths <= (max ?? min));
+  });
+  let start = inRange;
+  if (!start.length) {
+    const below = list.filter((s) => stepMinMonths(s) != null && stepMinMonths(s) <= ageMonths).sort((a, b) => stepMinMonths(b) - stepMinMonths(a));
+    start = below.length ? [below[0]] : list.slice(0, 1);
+  }
+  const ids = new Set(start.map((s) => s.id));
+  return list.filter((s) => ids.has(s.id) || isTouched(s));
+}
+
+/** Whole months old today, or null without a birth date. */
+export function monthsOld(birthDate, now = new Date()) {
+  if (!birthDate) return null;
+  const b = new Date(birthDate);
+  let m = (now.getFullYear() - b.getFullYear()) * 12 + (now.getMonth() - b.getMonth());
+  if (now.getDate() < b.getDate()) m -= 1;
+  return m;
+}

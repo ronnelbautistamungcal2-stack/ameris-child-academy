@@ -6,7 +6,7 @@ export function serializeRequirement(r) {
   const status = requirementStatus(r);
   return {
     ...r,
-    nextDue: keyOf(new Date(r.nextDue)),
+    nextDue: r.nextDue ? keyOf(new Date(r.nextDue)) : "",
     status,
   };
 }

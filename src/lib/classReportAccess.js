@@ -9,9 +9,16 @@ export const CLASS_REPORT_ROLES = ["ADMIN", "COACH", "STUDENT_SUPPORT", "TEACHER
 /** Prisma `where` for the classrooms the user can report on, or null. */
 export async function classReportScope(sessionUser) {
   const user = signedInAs(sessionUser);
-  if (hasAnyRole(user, ["ADMIN"])) return {};
+  if (hasAnyRole(user, ["ADMIN"])) {
+    // Only the admin's own subscriber account (null = no account, all).
+    const ids = await accessibleCenterIds(user.id);
+    return ids ? { centerId: { in: ids } } : {};
+  }
   if (hasAnyRole(user, ["COACH", "STUDENT_SUPPORT"])) {
-    return { centerId: { in: (await accessibleCenterIds(user.id)) || [] } };
+    // null: someone who is also an admin with no subscriber account, who
+    // reaches every center (e.g. an admin signed in as Coach or Student Support).
+    const ids = await accessibleCenterIds(user.id);
+    return ids ? { centerId: { in: ids } } : {};
   }
   if (hasAnyRole(user, ["TEACHER"])) return { teachers: { some: { teacherId: user.id } } };
   return null;

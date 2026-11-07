@@ -24,10 +24,8 @@ export default async function handler(req, res) {
   });
   if (!plan) return res.status(404).json({ error: "Plan not found" });
 
-  if (role !== "ADMIN") {
-    const ok = await hasAccessToCenter(session.user.id, plan.centerId);
-    if (!ok) return res.status(403).json({ error: "Forbidden" });
-  }
+  const ok = await hasAccessToCenter(session.user.id, plan.centerId);
+  if (!ok) return res.status(403).json({ error: "Forbidden" });
 
   if (req.method === "GET") {
     const full = await prisma.milestoneChecklistPlan.findUnique({

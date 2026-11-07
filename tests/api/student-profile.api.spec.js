@@ -106,4 +106,20 @@ test.describe("Student profile and Edit Child tabs (Phase 7b) @api", () => {
     expect(after.emergency.contacts[0].name).toBe("Grandma Linda");
     expect(after.about).toMatchObject({ strengths: "Kind, helpful", languages: "English" });
   });
+
+  test("a child already linked to a staff account can still be saved", async ({ request }) => {
+    // Client sheet 2026-11-07 (R58): a staff member's own child is linked to
+    // their staff account, which has no Parent role, and every Save failed
+    // with "Only parent accounts can be linked to a child."
+    const admin = await loginAsAdmin(request);
+    await prisma.child.update({ where: { id: childId }, data: { parentId: teacher.id } });
+    const saved = await apiPut(request, `/api/v1/children/${childId}`, { firstName: "Oliver", parentAccountIds: [teacher.id] }, admin);
+    expect(saved.status(), await saved.text()).toBe(200);
+
+    // A newly linked account still has to be a parent.
+    const coach = await prisma.user.findUnique({ where: { email: "coach@demo.com" } });
+    const refused = await apiPut(request, `/api/v1/children/${childId}`, { parentAccountIds: [teacher.id, coach.id] }, admin);
+    expect(refused.status()).toBe(400);
+    await prisma.child.update({ where: { id: childId }, data: { parentId: parent.id } });
+  });
 });

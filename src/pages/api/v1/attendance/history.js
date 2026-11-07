@@ -49,6 +49,8 @@ export default async function handler(req, res) {
       } else if (role === "TEACHER") {
         const ok = await teacherCanAccessChild(session.user.id, child);
         if (!ok) return res.status(403).json({ error: "Forbidden" });
+      } else if (!(await hasAccessToCenter(session.user.id, child.centerId))) {
+        return res.status(403).json({ error: "Forbidden" });
       }
 
       where.childId = childId;
@@ -56,10 +58,8 @@ export default async function handler(req, res) {
       if (role === "PARENT") {
         return res.status(403).json({ error: "Forbidden" });
       }
-      if (role !== "ADMIN") {
-        const ok = await hasAccessToCenter(session.user.id, centerId);
-        if (!ok) return res.status(403).json({ error: "Forbidden" });
-      }
+      const ok = await hasAccessToCenter(session.user.id, centerId);
+      if (!ok) return res.status(403).json({ error: "Forbidden" });
 
       where.centerId = centerId;
 

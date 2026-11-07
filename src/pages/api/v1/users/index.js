@@ -1,4 +1,5 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { adminUserScope, getSession, hasAccessToCenter } from "@/lib/auth";
+import { accountIdForUser, isGlobalAdmin } from "@/lib/subscriberAccounts";
 import { coachTeamUserIds, onCoachTeam } from "@/lib/coachTeam";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
@@ -12,6 +13,7 @@ import {
   primaryRoleFromRoles,
   STAFF_PORTAL_ROLES,
   userRoles,
+  centerAssignableRoles,
 } from "@/lib/roles";
 
 const STAFF_ROLES = ["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "COACH"];
@@ -100,7 +102,8 @@ export default async function handler(req, res) {
           ? STAFF_ROLES
           : [];
 
-    const where = {};
+    // Only people in the admin's own subscriber account.
+    const where = { AND: [await adminUserScope(session.user.id)] };
     // Checklists, staff management and reports list only current employees.
     if (employedOnly === "true") Object.assign(where, EMPLOYED_WHERE);
     if (centerId) {
@@ -154,7 +157,10 @@ export default async function handler(req, res) {
     if (!normalizedMiddleInitial) {
       return res.status(400).json({ error: "Middle initial is required" });
     }
-    const assignedRoles = normalizeRoles(roles || role, role || "PARENT");
+    const requestedRoles = normalizeRoles(roles || role, role || "PARENT");
+    // Only a global admin can make another global admin.
+    const assignedRoles = isGlobalAdmin(session.user) ? requestedRoles : centerAssignableRoles(requestedRoles);
+    if (!assignedRoles.length) assignedRoles.push("PARENT");
     const primaryRole = primaryRoleFromRoles(assignedRoles, "PARENT");
     const centerRole = assignedRoles.includes("TEACHER")
       ? "TEACHER"
@@ -172,10 +178,11 @@ export default async function handler(req, res) {
         where: { id: normalizedCenterId },
         select: { id: true },
       });
-      if (!center) {
+      if (!center || !(await hasAccessToCenter(session.user.id, normalizedCenterId))) {
         return res.status(400).json({ error: "Invalid centerId" });
       }
     }
+    const subscriberAccountId = await accountIdForUser(session.user.id);
 
     const passwordHash = await bcrypt.hash(password, 10);
     const weeklyScheduleData = isEmployee ? parseWeeklySchedules(weeklySchedules) : [];
@@ -194,6 +201,7 @@ export default async function handler(req, res) {
           pictureUrl: isEmployee && pictureUrl ? String(pictureUrl).slice(0, 2000) : null,
           role: primaryRole,
           roles: assignedRoles,
+          ...(subscriberAccountId ? { subscriberAccountId } : {}),
           centers: normalizedCenterId
             ? {
                 create: {

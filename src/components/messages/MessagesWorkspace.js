@@ -34,16 +34,13 @@ const OUTLINE_BUTTON =
 const FIELD =
   "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:ring-sky-900/40";
 
+// Every role, coaches and admins included, files conversations as Inbox,
+// Sent and Archive (client sheet 2026-11-07; coaches and admins had
+// Current / Past / Archived).
 const TABS = [
   { id: "inbox", label: "Inbox" },
   { id: "sent", label: "Sent" },
-  { id: "archived", label: "Archived" },
-];
-
-const WORKFLOW_TABS = [
-  { id: "current", label: "Current" },
-  { id: "past", label: "Past" },
-  { id: "archived", label: "Archived" },
+  { id: "archived", label: "Archive" },
 ];
 
 const TYPE_PILL = {
@@ -154,12 +151,6 @@ function threadFolders(thread) {
   return folders;
 }
 
-/** Coach/admin tabs: Current (not completed), Past (completed), Archived. */
-function workflowFolder(thread) {
-  if (thread.archivedAt) return "archived";
-  return thread.status === "COMPLETED" ? "past" : "current";
-}
-
 function relativeDays(value) {
   if (!value) return "";
   const days = Math.floor((Date.now() - new Date(value).getTime()) / 86400000);
@@ -199,7 +190,7 @@ export default function MessagesWorkspace({ variant: variantProp } = {}) {
   const [threads, setThreads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState(workflowView ? "current" : "inbox");
+  const [tab, setTab] = useState("inbox");
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
@@ -212,13 +203,6 @@ export default function MessagesWorkspace({ variant: variantProp } = {}) {
   const [filing, setFiling] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeSeed, setComposeSeed] = useState(null);
-
-  useEffect(() => {
-    setTab((current) => {
-      const ids = (workflowView ? WORKFLOW_TABS : TABS).map((t) => t.id);
-      return ids.includes(current) ? current : ids[0];
-    });
-  }, [workflowView]);
 
   const activeIdRef = useRef(activeId);
   useEffect(() => {
@@ -336,7 +320,7 @@ export default function MessagesWorkspace({ variant: variantProp } = {}) {
           date: last?.createdAt || thread.updatedAt,
           unread: (thread.unreadCount || 0) > 0,
           hasAttachment: Boolean(last?.attachmentUrl),
-          folders: workflowView ? new Set([workflowFolder(thread)]) : threadFolders(thread),
+          folders: threadFolders(thread),
           type: thread.type || "MESSAGE",
           status: thread.status || "OPEN",
           priority: thread.priority || "",
@@ -345,7 +329,7 @@ export default function MessagesWorkspace({ variant: variantProp } = {}) {
           workflow: isWorkflowThread(thread.type),
         };
       }),
-    [threads, userId, workflowView],
+    [threads, userId],
   );
 
   const inboxUnread = useMemo(
@@ -367,9 +351,9 @@ export default function MessagesWorkspace({ variant: variantProp } = {}) {
     });
   }, [rows, tab, search, readFilter, typeFilter, statusFilter]);
 
-  // Coach/admin summary tiles: what is still current, by kind.
+  // Coach/admin summary tiles: what is still open (not completed or archived), by kind.
   const tiles = useMemo(() => {
-    const current = rows.filter((row) => row.folders.has("current"));
+    const current = rows.filter((row) => !row.folders.has("archived") && row.status !== "COMPLETED");
     return [
       { type: "MESSAGE", label: "Messages", hint: "General messages and announcements", count: current.filter((r) => r.type === "MESSAGE").length, tone: "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-200" },
       { type: "OPEN_POINT", label: "Open Points", hint: "Items to review and complete", count: current.filter((r) => r.type === "OPEN_POINT").length, tone: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-200" },
@@ -455,7 +439,7 @@ export default function MessagesWorkspace({ variant: variantProp } = {}) {
     setComposeSeed(null);
     await refreshThreads();
     if (thread?.id) {
-      setTab(workflowView ? "current" : "sent");
+      setTab("sent");
       setActiveId(thread.id);
       setMobilePanel("thread");
       replaceQuery(thread.id);
@@ -505,7 +489,7 @@ export default function MessagesWorkspace({ variant: variantProp } = {}) {
               type="button"
               onClick={() => {
                 setTypeFilter(typeFilter === tile.type ? "" : tile.type);
-                if (tab !== "current") changeTab("current");
+                if (tab !== "inbox") changeTab("inbox");
               }}
               aria-pressed={typeFilter === tile.type}
               className={`flex items-center justify-between gap-3 rounded-xl p-4 text-left shadow-sm ring-1 ring-black/5 transition hover:brightness-95 ${tile.tone} ${typeFilter === tile.type ? "ring-2 ring-blue-500" : ""}`}
@@ -537,7 +521,7 @@ export default function MessagesWorkspace({ variant: variantProp } = {}) {
         >
           <div className="space-y-3 border-b border-gray-100 px-3 pt-2 pb-3 dark:border-gray-700">
             <div role="tablist" aria-label="Message folders" className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
-              {(workflowView ? WORKFLOW_TABS : TABS).map((item) => {
+              {TABS.map((item) => {
                 const selected = tab === item.id;
                 const count = workflowView ? rows.filter((row) => row.folders.has(item.id)).length : 0;
                 const label = workflowView
@@ -643,11 +627,7 @@ export default function MessagesWorkspace({ variant: variantProp } = {}) {
                     ? "Archived conversations will appear here."
                     : tab === "sent"
                       ? "Messages you send will appear here."
-                      : tab === "past"
-                        ? "Completed items will appear here."
-                        : tab === "current"
-                          ? "Nothing open right now."
-                          : "Your inbox is empty."}
+                      : "Your inbox is empty."}
               </li>
             ) : (
               visibleRows.map((row) => workflowView ? (
@@ -1025,17 +1005,23 @@ function ThreadView({ thread, userId, isAdmin, archived, filing, onBack, onArchi
   );
 }
 
-function ComposeDialog({ seed, userId, role, workflowView, suggestedContacts, onClose, onCreated }) {
+/**
+ * New Message dialog. seed: { subject, message, recipient, threadType } to
+ * start from; also opened from other pages (e.g. Checklist Review's Add Open
+ * Point, client sheet 2026-11-07).
+ */
+export function ComposeDialog({ seed, userId, role, workflowView, suggestedContacts = [], onClose, onCreated }) {
   const toast = useToast();
   const family = FAMILY_ROLES.has(role);
   const threadTypes = getAvailableThreadTypesForRole(role);
   const [recipients, setRecipients] = useState(seed?.recipient ? [seed.recipient] : []);
   const recipient = recipients[0] || null;
   const setRecipient = (person) => setRecipients(person ? (family ? [person] : [...recipients.filter((r) => r.id !== person.id), person]) : []);
-  const [threadType, setThreadType] = useState("MESSAGE");
+  const [threadType, setThreadType] = useState(() =>
+    threadTypes.some((t) => t.value === seed?.threadType) ? seed.threadType : "MESSAGE",
+  );
   const [priority, setPriority] = useState("B");
   const [dueDate, setDueDate] = useState("");
-  const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
   const [audiences, setAudiences] = useState([]);
   const [audienceKeys, setAudienceKeys] = useState([]);
@@ -1073,24 +1059,26 @@ function ComposeDialog({ seed, userId, role, workflowView, suggestedContacts, on
     return () => clearTimeout(timer);
   }, [query, userId, family]);
 
-  // Coaches and admins can also send to a whole group at a center.
+  // Coaches and admins can also send to a whole group by role; with a single
+  // center, the conversation is filed under it.
   useEffect(() => {
     if (!workflowView) return;
     apiJson("/api/v1/centers")
       .then((rows) => {
         const list = Array.isArray(rows) ? rows : [];
-        setCenters(list);
         if (list.length === 1) setCenterId(list[0].id);
       })
-      .catch(() => setCenters([]));
+      .catch(() => {});
   }, [workflowView]);
 
+  // Groups by role across the sender's centers (one center when that's all
+  // they have); no center to pick first (client sheet 2026-11-07).
   useEffect(() => {
-    if (!workflowView || !centerId) {
+    if (!workflowView) {
       setAudiences([]);
       return;
     }
-    const qs = new URLSearchParams({ centerId, threadType });
+    const qs = new URLSearchParams({ threadType, ...(centerId ? { centerId } : {}) });
     apiJson(`/api/v1/messages/audiences?${qs}`)
       .then((rows) => setAudiences(Array.isArray(rows) ? rows.filter((a) => a.count > 0) : []))
       .catch(() => setAudiences([]));
@@ -1258,13 +1246,7 @@ function ComposeDialog({ seed, userId, role, workflowView, suggestedContacts, on
 
         {workflowView ? (
           <div className="space-y-2 rounded-lg bg-gray-50 p-3 dark:bg-gray-900/40">
-            <label className={`block text-sm font-semibold ${NAVY}`}>
-              Or send to a group at
-              <select value={centerId} onChange={(e) => { setCenterId(e.target.value); setAudienceKeys([]); }} className={`${FIELD} mt-1`}>
-                <option value="">Select a center...</option>
-                {centers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </label>
+            <div className={`text-sm font-semibold ${NAVY}`}>Send to group (role)</div>
             {audiences.length ? (
               <div className="grid gap-1 sm:grid-cols-2">
                 {audiences.map((a) => (

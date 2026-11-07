@@ -20,10 +20,8 @@ export default async function handler(req, res) {
   if (req.method === "GET") {
     const { centerId, period, start, from, to, classRoomId } = req.query || {};
     if (!centerId) return res.status(400).json({ error: "centerId is required" });
-    if (role !== "ADMIN") {
-      const ok = await hasAccessToCenter(session.user.id, centerId);
-      if (!ok) return res.status(403).json({ error: "Forbidden" });
-    }
+    const ok = await hasAccessToCenter(session.user.id, centerId);
+    if (!ok) return res.status(403).json({ error: "Forbidden" });
 
     const where = { centerId };
     if (period) where.period = period;

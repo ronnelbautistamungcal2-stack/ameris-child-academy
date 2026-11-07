@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { canReachPlan } from "@/lib/ippAccess";
 
 export default async function handler(req, res) {
   try {
@@ -18,7 +19,9 @@ export default async function handler(req, res) {
     }
 
     const goal = await prisma.behaviorPlanGoal.findUnique({ where: { id: goalId } });
-    if (!goal) return res.status(404).json({ error: "Goal not found" });
+    if (!goal || !(await canReachPlan(session.user, goal.planId))) {
+      return res.status(404).json({ error: "Goal not found" });
+    }
 
     const { status, currentScore, notes, title, description, targetScore, strategies, domain } = req.body || {};
 

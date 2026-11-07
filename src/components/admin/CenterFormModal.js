@@ -141,6 +141,37 @@ function Section({ icon, title, description, action, children }) {
 
 // Staff Overall Grade weights and the pay schedule (client requests
 // 2026-10-22/23), on one tab.
+// The five evaluation categories a center scores staff on (client sheet
+// 2026-11-07); the Evaluations page and Create Evaluation use these names.
+const EVALUATION_CATEGORY_COUNT = 5;
+const DEFAULT_EVALUATION_CATEGORIES = ["Classroom Management", "Communication", "Curriculum Delivery", "Child Engagement", "Professionalism"];
+
+function padCategories(list) {
+  const names = (Array.isArray(list) ? list : []).slice(0, EVALUATION_CATEGORY_COUNT);
+  while (names.length < EVALUATION_CATEGORY_COUNT) names.push("");
+  return names;
+}
+
+function EvaluationCategoriesSection({ categories, onChange }) {
+  return (
+    <Section icon={"\u{1F4DD}"} title="Evaluation Categories" description="The five categories staff are scored on in their evaluations. New evaluations use these names; past evaluations keep theirs.">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {categories.map((name, i) => (
+          <Field key={i} label={`Category ${i + 1}`}>
+            <input
+              className={input}
+              value={name}
+              maxLength={80}
+              onChange={(e) => onChange(categories.map((c, j) => (j === i ? e.target.value : c)))}
+              aria-label={`Evaluation category ${i + 1}`}
+            />
+          </Field>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
 function StaffGradeSection({ weights, onChange, payPeriod, onPayPeriodChange }) {
   const total = STAFF_GRADE_PARTS.reduce((sum, { key }) => sum + (Number(weights[key]) || 0), 0);
   const ok = Math.abs(total - 100) < 0.01;
@@ -207,6 +238,14 @@ export default function CenterFormModal({ center, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [evaluationCategories, setEvaluationCategories] = useState(() => padCategories(DEFAULT_EVALUATION_CATEGORIES));
+
+  useEffect(() => {
+    if (!center?.id) return;
+    apiJson(`/api/v1/evaluation-category-config?centerId=${encodeURIComponent(center.id)}`)
+      .then((config) => setEvaluationCategories(padCategories(config?.categories)))
+      .catch(() => {});
+  }, [center?.id]);
 
   useEffect(() => {
     apiJson("/api/v1/users?staffOnly=true")
@@ -271,6 +310,14 @@ export default function CenterFormModal({ center, onClose, onSaved }) {
         method: editing ? "PUT" : "POST",
         body: JSON.stringify(body),
       });
+      const names = evaluationCategories.map((c) => c.trim()).filter(Boolean);
+      const centerId = saved?.id || center?.id;
+      if (names.length && centerId) {
+        await apiJson(`/api/v1/evaluation-category-config?centerId=${encodeURIComponent(centerId)}`, {
+          method: "PUT",
+          body: JSON.stringify({ categories: names }),
+        });
+      }
       onSaved?.(saved);
     } catch (e) {
       setError(e.message || "Failed to save the center");
@@ -561,12 +608,15 @@ export default function CenterFormModal({ center, onClose, onSaved }) {
           ) : null}
 
           {tab === "grade" ? (
-            <StaffGradeSection
-              weights={form.staffGradeWeights}
-              onChange={(patch) => set({ staffGradeWeights: { ...form.staffGradeWeights, ...patch } })}
-              payPeriod={form.payPeriodSettings}
-              onPayPeriodChange={(value) => set({ payPeriodSettings: value })}
-            />
+            <div className="space-y-4">
+              <StaffGradeSection
+                weights={form.staffGradeWeights}
+                onChange={(patch) => set({ staffGradeWeights: { ...form.staffGradeWeights, ...patch } })}
+                payPeriod={form.payPeriodSettings}
+                onPayPeriodChange={(value) => set({ payPeriodSettings: value })}
+              />
+              <EvaluationCategoriesSection categories={evaluationCategories} onChange={setEvaluationCategories} />
+            </div>
           ) : null}
 
           {tab === "roles" ? (

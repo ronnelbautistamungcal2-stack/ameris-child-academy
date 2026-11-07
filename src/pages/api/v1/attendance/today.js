@@ -26,10 +26,8 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "centerId is required" });
   }
 
-  if (role !== "ADMIN") {
-    const ok = await hasAccessToCenter(session.user.id, centerId);
-    if (!ok) return res.status(403).json({ error: "Forbidden" });
-  }
+  const ok = await hasAccessToCenter(session.user.id, centerId);
+  if (!ok) return res.status(403).json({ error: "Forbidden" });
 
   const day = startOfDay();
   let teacherClassIds = null;

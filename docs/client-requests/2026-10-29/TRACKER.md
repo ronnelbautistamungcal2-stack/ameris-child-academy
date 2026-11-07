@@ -167,7 +167,7 @@
 - [x] R179 Coach › My Performance: same, like Center Performance, scoped to the coach's team
 - [x] R180 HR / Other Staff / Kitchen › My Performance: no citizenship/milestones
 - [x] R181 Student Support › My Performance: combined, like Center Performance student section
-- [ ] R172 Average SOP on Student Performance Report (waiting on the screenshot)
+- [x] R172 Average SOP on Student Performance Report (screenshot received 2026-11-07: matches what fe2d8c1 built; only "developmental age" is open, see README)
 
 ## L. Reports
 

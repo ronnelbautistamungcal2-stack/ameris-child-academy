@@ -1,7 +1,8 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { buildParentLinkedChildWhere } from "@/lib/child-parent-links";
 import { normalizeParentFaqTopic } from "@/lib/parentFaqs";
+import { accountIdForUser, accountOwnedWhere } from "@/lib/subscriberAccounts";
 
 /**
  * Centers a non-admin viewer belongs to: staff through their center memberships,
@@ -34,18 +35,23 @@ export default async function handler(req, res) {
 
     if (req.method === "GET") {
       const { centerId, topic } = req.query;
-      let where = {};
+      // Only the viewer's own account's questions, whatever the role.
+      let where = await accountOwnedWhere(user.id);
       if (user.role !== "ADMIN") {
         // Parents and staff see published questions for their own centers,
         // plus the ones published to every center.
         const centerIds = await viewerCenterIds(user);
         where = {
+          ...where,
           published: true,
           OR: [
             { centerId: null },
             ...(centerIds.length ? [{ centerId: { in: centerIds } }] : []),
           ],
         };
+      }
+      if (centerId && user.role === "ADMIN" && !(await hasAccessToCenter(user.id, centerId))) {
+        return res.status(403).json({ error: "Forbidden" });
       }
       if (centerId) where = { ...where, centerId };
       const normalizedTopic = normalizeParentFaqTopic(topic, "");
@@ -68,8 +74,13 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "question and answer are required" });
       }
 
+      if (centerId && !(await hasAccessToCenter(user.id, centerId))) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const subscriberAccountId = await accountIdForUser(user.id);
       const created = await prisma.parentFaq.create({
         data: {
+          ...(subscriberAccountId ? { subscriberAccountId } : {}),
           question: String(question).trim(),
           answer: String(answer).trim(),
           topic: normalizeParentFaqTopic(topic),

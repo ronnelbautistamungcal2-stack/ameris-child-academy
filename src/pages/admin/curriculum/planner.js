@@ -540,7 +540,10 @@ function LessonBank({ entries, used, onDragStart, disabled }) {
                 title={[entry.term, entry.age, entry.category, entry.subject].filter(Boolean).join(" · ")}
               >
                 <span aria-hidden className="text-gray-400">{"∷"}</span>
-                <span className="flex-1 truncate">{entry.title}</span>
+                {/* The term shows so lessons with the same name in different
+                    terms can be told apart (client sheet 2026-11-07). */}
+                <span className="min-w-0 flex-1 truncate">{entry.title}</span>
+                {entry.term ? <span className="shrink-0 rounded bg-gray-100 px-1.5 text-[10px] font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300">{entry.term}</span> : null}
                 {isUsed && (
                   <span
                     role="img"

@@ -11,10 +11,8 @@ export default async function handler(req, res) {
   const { id } = req.query;
 
   // Check access unless admin
-  if (session.user.role !== "ADMIN") {
-    const hasAccess = await hasAccessToCenter(session.user.id, id);
-    if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
-  }
+  const hasAccess = await hasAccessToCenter(session.user.id, id);
+  if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
 
   if (req.method === "GET") {
     const center = await prisma.center.findUnique({

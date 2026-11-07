@@ -1,17 +1,25 @@
 import prisma from "@/lib/prisma";
+import { publicSiteAccountId } from "@/lib/subscriberAccounts";
 
 /**
  * GET /api/v1/public/resources
  * Additional Resources an admin marked "Add to Home Page", for the public
- * Resources page (no sign-in). Only the fields the public page shows.
+ * Resources page (no sign-in), from this site's own account only. Only the
+ * fields the public page shows.
  */
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     res.setHeader("Allow", ["GET"]);
     return res.status(405).end();
   }
+  const accountId = await publicSiteAccountId();
   const docs = await prisma.policyDocument.findMany({
-    where: { category: "RESOURCE", active: true, showOnHomePage: true },
+    where: {
+      category: "RESOURCE",
+      active: true,
+      showOnHomePage: true,
+      ...(accountId ? { subscriberAccountId: accountId } : {}),
+    },
     select: { id: true, title: true, description: true, url: true, websiteUrl: true, logoUrl: true },
     orderBy: { createdAt: "asc" },
     take: 50,

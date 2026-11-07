@@ -75,6 +75,8 @@ function cycleStart(frequency, nextDue) {
  */
 export function requirementStatus(req, today = new Date()) {
   if (req.done) return "COMPLETED";
+  // No due date (it's optional): never overdue or due soon.
+  if (!req.nextDue) return req.lastCompletedAt && req.frequency === "ONCE" ? "COMPLETED" : "UPCOMING";
   const todayKey = keyOf(new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())));
   const due = keyOf(new Date(req.nextDue));
   const days = (fromKey(due) - fromKey(todayKey)) / 86400000;
@@ -98,7 +100,9 @@ export function parseRequirement(body = {}) {
   const category = text(body.category, 60);
   if (!category) return { error: "Choose a category" };
   if (!FREQUENCIES.some((f) => f.value === body.frequency)) return { error: "Choose how often it repeats" };
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(body.nextDue || ""))) return { error: "Choose the next due date" };
+  // The next due date is optional (client sheet 2026-11-07).
+  const nextDueKey = String(body.nextDue || "");
+  if (nextDueKey && !/^\d{4}-\d{2}-\d{2}$/.test(nextDueKey)) return { error: "The next due date is invalid" };
   const repeatOn = body.repeatOn === "" || body.repeatOn === null || body.repeatOn === undefined ? null : Number(body.repeatOn);
   if (repeatOn !== null && (!Number.isInteger(repeatOn) || repeatOn < 0 || repeatOn > 31)) return { error: "Repeat On is invalid" };
   const list = (v) => (Array.isArray(v) ? [...new Set(v.map((x) => text(x, 60)).filter(Boolean))] : []);
@@ -112,7 +116,7 @@ export function parseRequirement(body = {}) {
       appliesToRoles: list(body.appliesToRoles),
       ageGroups: list(body.ageGroups),
       notes: text(body.notes, 1000) || null,
-      nextDue: fromKey(body.nextDue),
+      nextDue: nextDueKey ? fromKey(nextDueKey) : null,
     },
   };
 }

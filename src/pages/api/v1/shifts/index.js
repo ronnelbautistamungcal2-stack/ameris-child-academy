@@ -21,7 +21,7 @@ export default async function handler(req, res) {
 async function handleGet(req, res, session) {
   const { centerId, from, to, userId } = req.query;
   if (!centerId) return res.status(400).json({ error: "centerId is required" });
-  if (session.user.role !== "ADMIN" && !(await hasAccessToCenter(session.user.id, centerId))) {
+  if (!(await hasAccessToCenter(session.user.id, centerId))) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -61,10 +61,8 @@ async function handlePost(req, res, session) {
     return res.status(400).json({ error: "centerId, userId, date, startTime, and endTime are required" });
   }
 
-  if (session.user.role !== "ADMIN") {
-    const allowed = await hasAccessToCenter(session.user.id, centerId);
-    if (!allowed) return res.status(403).json({ error: "Forbidden" });
-  }
+  const allowed = await hasAccessToCenter(session.user.id, centerId);
+  if (!allowed) return res.status(403).json({ error: "Forbidden" });
 
   if (!/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime)) {
     return res.status(400).json({ error: "startTime and endTime must be in HH:MM format" });

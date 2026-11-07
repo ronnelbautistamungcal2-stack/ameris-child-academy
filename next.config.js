@@ -3,7 +3,9 @@ const isDev = process.env.NODE_ENV !== "production";
 
 const nextConfig = {
   reactStrictMode: true,
-  distDir: isDev ? ".next-dev" : ".next-build",
+  // NEXT_DIST_DIR lets a second dev server (another port) build somewhere else
+  // instead of clobbering .next-dev.
+  distDir: process.env.NEXT_DIST_DIR || (isDev ? ".next-dev" : ".next-build"),
   outputFileTracing: false,
   webpack: (config, { dev }) => {
     if (dev) {

@@ -1,6 +1,5 @@
 import { CenterSelect, ReportControls, ReportMessage, input, monthRange, useReportCenters } from "@/components/reports/ReportSheet";
 import { apiJson } from "@/lib/api";
-import { exportToExcel } from "@/lib/exportTable";
 import { useEffect, useMemo, useState } from "react";
 
 // Staff Training Report (client request 2026-10-29): each staff member's
@@ -35,30 +34,10 @@ export default function StaffTrainingReport() {
   const shown = staffId === "ALL" ? matches : matches.filter((r) => r.id === staffId);
   const centerName = centers.find((c) => c.id === centerId)?.name || "";
 
-  function exportExcel() {
-    exportToExcel(`staff-training-${range.from}-to-${range.to}`, [
-      {
-        name: "Staff Training",
-        headers: ["Staff Member", "Position", "Topic", "Source of Training", "Date Completed", "Non-Interactive Hours", "Interactive Hours", "Hours"],
-        rows: shown.flatMap((s) =>
-          (s.logs || []).length
-            ? s.logs.map((l) => [s.name, s.position, l.topic, l.source || "", fmtDate(l.date), l.nonInteractiveHours ?? "", l.interactiveHours ?? "", l.hours])
-            : [[s.name, s.position, "No training in these dates", "", "", "", "", 0]],
-        ),
-      },
-    ]).catch((e) => setError(e.message || "Export failed"));
-  }
-
   return (
     <div className="space-y-4">
-      <ReportControls
-        title="Staff Training Report"
-        actions={
-          <button type="button" onClick={exportExcel} disabled={!shown.length} className="rounded-lg border border-emerald-600 px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
-            Export to Excel
-          </button>
-        }
-      >
+      {/* Print and Export are the Reports page's buttons at the top (client sheet 2026-11-07). */}
+      <ReportControls title="Staff Training Report" onPrint={false}>
         <CenterSelect centers={centers} centerId={centerId} setCenterId={setCenterId} />
         <label className="block text-sm font-bold">
           From

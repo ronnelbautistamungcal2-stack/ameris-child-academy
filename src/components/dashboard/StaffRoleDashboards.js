@@ -17,8 +17,9 @@ import { SOP_STATUSES } from "@/lib/sop";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-// Kitchen, Student Support and HR dashboards (client mockups 03-Dashboards
-// 16, 17 and 19), shown on /staff/dashboard for those roles.
+// Kitchen, Student Support, HR and Other Staff dashboards (client mockups
+// 03-Dashboards 16, 17 and 19; Other Staff: client sheet 2026-11-07), shown on
+// /staff/dashboard for those roles.
 
 function Avatar({ name, photoUrl }) {
   if (photoUrl) return <img src={photoUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />;
@@ -42,6 +43,21 @@ const MEAL_STYLE = {
   dinner: { icon: "\u{1F37D}️", box: "bg-sky-50 dark:bg-sky-900/20", title: "text-sky-700" },
 };
 const SNACK_STYLE = { icon: "\u{1F34E}", box: "bg-violet-50 dark:bg-violet-900/20", title: "text-violet-700" };
+
+/** Other Staff: the welcome line, New Messages and the center calendar. */
+export function OtherStaffDashboard() {
+  const { centers, centerId, setCenterId } = useDashboardCenters();
+  const unread = useUnreadMessages();
+  return (
+    <Shell error="">
+      <DashboardWelcome controls={<CenterSelect centers={centers} centerId={centerId} onChange={setCenterId} />} />
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <StatBubble kind="messages" icon={"✉️"} value={unread} label="New Messages" href="/staff/messages" />
+      </div>
+      {centerId ? <DashboardCalendar centerId={centerId} /> : null}
+    </Shell>
+  );
+}
 
 export function KitchenDashboard() {
   const { centers, centerId, setCenterId } = useDashboardCenters();

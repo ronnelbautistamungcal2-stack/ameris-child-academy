@@ -8,7 +8,7 @@ import { isChildLinkedToParent } from "@/lib/child-parent-links";
 
 async function canAccessProgress(user, progress) {
   if (!user || !progress?.child) return false;
-  if (user.role === "ADMIN") return true;
+  if (user.role === "ADMIN") return hasAccessToCenter(user.id, progress.child.centerId);
   if (user.role === "PARENT") return isChildLinkedToParent(progress.child, user.id);
 
   const hasCenterAccess = await hasAccessToCenter(user.id, progress.child.centerId);

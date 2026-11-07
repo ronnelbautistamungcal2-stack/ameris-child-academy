@@ -1,4 +1,4 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { isEmployeeRole, isManagerRole, isSelfServiceEmployeeRole, STAFF_PORTAL_ROLES } from "@/lib/roles";
 
@@ -30,13 +30,13 @@ export default async function handler(req, res) {
 
 async function handleGet(req, res, session) {
   const { centerId, classRoomId, status } = req.query;
-  if (centerId && session.user.role !== "ADMIN") {
+  if (centerId) {
     const allowed = await hasAccessToCenter(session.user.id, centerId);
     if (!allowed) return res.status(403).json({ error: "Forbidden" });
   }
 
   const where = {};
-  if (centerId) where.centerId = centerId;
+  where.centerId = await centerIdFilter(session.user.id, centerId);
   if (classRoomId) where.classRoomId = classRoomId;
   if (status) where.status = status;
 
@@ -64,10 +64,8 @@ async function handlePost(req, res, session) {
     return res.status(400).json({ error: "centerId and item are required" });
   }
 
-  if (session.user.role !== "ADMIN") {
-    const allowed = await hasAccessToCenter(session.user.id, centerId);
-    if (!allowed) return res.status(403).json({ error: "Forbidden" });
-  }
+  const allowed = await hasAccessToCenter(session.user.id, centerId);
+  if (!allowed) return res.status(403).json({ error: "Forbidden" });
 
   const request = await prisma.supplyRequest.create({
     data: {

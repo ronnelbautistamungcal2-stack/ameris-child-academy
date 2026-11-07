@@ -57,7 +57,7 @@ export default createApiHandler(async function handler(req, res) {
     });
   }
 
-  if (centerId && session.user.role !== "ADMIN") {
+  if (centerId) {
     const allowed = await hasAccessToCenter(session.user.id, centerId);
     if (!allowed) throw forbidden();
   }

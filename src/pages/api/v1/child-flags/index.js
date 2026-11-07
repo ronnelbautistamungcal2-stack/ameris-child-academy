@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
 import {
   buildActiveChildFlags,
   createChildFlagSnapshot,
@@ -154,14 +154,17 @@ export default async function handler(req, res) {
 
   const isAdmin = session.user.role === "ADMIN";
   const isTeacher = session.user.role === "TEACHER";
+  // Coaches see and close the flags of every child at their centers (the
+  // coach Student List and dashboard Red Flags).
+  const isCoach = session.user.role === "COACH";
 
-  if (!isAdmin && !isTeacher) {
+  if (!isAdmin && !isTeacher && !isCoach) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
-  // Resolve teacher's allowed center IDs once upfront
+  // Resolve teacher's / coach's allowed center IDs once upfront
   let teacherAllowedCenterIds = null;
-  if (isTeacher) {
+  if (isTeacher || isCoach) {
     const memberships = await prisma.centerUser.findMany({
       where: { userId: session.user.id },
       select: { centerId: true },
@@ -194,6 +197,11 @@ export default async function handler(req, res) {
         return res.status(403).json({ error: "Forbidden" });
       }
       teacherWhere = await buildTeacherChildWhere(session.user.id, normalizedCenterId);
+    }
+    // Coaches: any center they can reach (an admin signed in as Coach has no
+    // membership rows but reaches their centers).
+    if (isCoach && (!normalizedCenterId || !(await hasAccessToCenter(session.user.id, normalizedCenterId)))) {
+      return res.status(normalizedCenterId ? 403 : 400).json({ error: normalizedCenterId ? "Forbidden" : "centerId is required" });
     }
 
     const status = normalizeStatus(rawStatus);
@@ -280,6 +288,12 @@ export default async function handler(req, res) {
 
     // Teachers may only modify flags in their assigned centers, for
     // children in classrooms they are assigned to.
+    if (isCoach) {
+      const normalizedCenterId = typeof centerId === "string" ? centerId.trim() : "";
+      if (!normalizedCenterId || !(await hasAccessToCenter(session.user.id, normalizedCenterId))) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+    }
     if (isTeacher) {
       const normalizedCenterId = typeof centerId === "string" ? centerId.trim() : "";
       if (!normalizedCenterId || !teacherAllowedCenterIds.includes(normalizedCenterId)) {

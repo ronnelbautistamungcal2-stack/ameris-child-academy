@@ -14,10 +14,8 @@ export default async function handler(req, res) {
   const lesson = await prisma.lesson.findUnique({ where: { id } });
   if (!lesson) return res.status(404).json({ error: "Lesson not found" });
 
-  if (session.user.role !== "ADMIN") {
-    const hasAccess = await hasAccessToCenter(session.user.id, lesson.centerId);
-    if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
-  }
+  const hasAccess = await hasAccessToCenter(session.user.id, lesson.centerId);
+  if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
 
   if (req.method === "GET") {
     const remediations = await prisma.lessonRemediation.findMany({

@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     }
     const checklist = await prisma.dailyChecklist.findUnique({ where: { id: checklistId }, select: { centerId: true } });
     if (!checklist) return res.status(404).json({ error: "Checklist not found" });
-    if (session.user.role !== "ADMIN" && !(await hasAccessToCenter(userId, checklist.centerId))) {
+    if (!(await hasAccessToCenter(userId, checklist.centerId))) {
       return res.status(403).json({ error: "Forbidden" });
     }
     const day = new Date(date);

@@ -162,9 +162,19 @@ async function completions(stepIds, childIds, reportDate) {
   return out;
 }
 
+/** Completions grouped by step id, so each step's lookup is not a full scan. */
+function byStep(done) {
+  const out = new Map();
+  for (const d of done) {
+    if (!out.has(d.stepId)) out.set(d.stepId, []);
+    out.get(d.stepId).push(d);
+  }
+  return out;
+}
+
 /** Center average ages (years) at Competency and Mastery for one step. */
-function centerAverages(done, stepId) {
-  const forStep = done.filter((d) => d.stepId === stepId);
+function centerAverages(doneByStep, stepId) {
+  const forStep = doneByStep.get(stepId) || [];
   const competency = forStep.map((d) => d.competency.age);
   const mastery = forStep.filter((d) => d.mastery).map((d) => d.mastery.age);
   return { competency: avg(competency), mastery: avg(mastery), competencyChildren: competency.length, masteryChildren: mastery.length };
@@ -179,6 +189,18 @@ function groupByCategory(rows) {
   return Object.values(groups)
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
     .map(({ sortOrder, ...g }) => ({ ...g, rows: g.rows.sort((a, b) => a.world - b.world || a.title.localeCompare(b.title)).map(({ sortOrder: _s, ...r }) => r) }));
+}
+
+// A report over a very large step bank (the client has ~46,000 steps) is
+// tens of megabytes and tens of thousands of table rows. Past this many rows,
+// with no category chosen, each category is sent with its row count only and
+// the page asks for one category at a time.
+export const REPORT_ROW_LIMIT = 2000;
+
+function limitRows(categories, categoryId) {
+  const total = categories.reduce((n, c) => n + c.rows.length, 0);
+  if (categoryId || total <= REPORT_ROW_LIMIT) return { categories, rowsOmitted: false };
+  return { categories: categories.map((c) => ({ ...c, rowCount: c.rows.length, rows: [] })), rowsOmitted: true };
 }
 
 function endOfDay(dateKey) {
@@ -210,8 +232,9 @@ export async function milestoneProgressReport({ centerId, date, categoryId, subC
     childrenInRange(centerId, reportDate, { minMonths, maxMonths, enrolledOnly }),
   ]);
   const done = await completions(steps.map((s) => s.id), children.map((c) => c.id), reportDate);
+  const doneByStep = byStep(done);
   const rows = steps.map((s) => {
-    const c = centerAverages(done, s.id);
+    const c = centerAverages(doneByStep, s.id);
     const level = c.mastery != null ? "MASTERY" : c.competency != null ? "COMPETENCY" : null;
     const age = level === "MASTERY" ? c.mastery : c.competency;
     return {
@@ -229,7 +252,9 @@ export async function milestoneProgressReport({ centerId, date, categoryId, subC
     date,
     childrenInRange: children.length,
     totalChildren: new Set(done.map((d) => d.childId)).size,
-    categories: groupByCategory(rows),
+    totalSteps: rows.length,
+    ...limitRows(groupByCategory(rows), categoryId),
+    rowLimit: REPORT_ROW_LIMIT,
     filters,
   };
 }
@@ -251,9 +276,11 @@ export async function childStepsReport({ child, date, categoryId, subCategory, m
   const stepIds = steps.map((s) => s.id);
   const [done, peerDone] = await Promise.all([completions(stepIds, [child.id], reportDate), completions(stepIds, peers.map((p) => p.id), reportDate)]);
   const ageNow = ageYears(child.birthDate, reportDate);
+  const mineByStep = new Map(done.map((d) => [d.stepId, d]));
+  const peerByStep = byStep(peerDone);
   let rows = steps.map((s) => {
-    const mine = done.find((d) => d.stepId === s.id);
-    const center = centerAverages(peerDone, s.id);
+    const mine = mineByStep.get(s.id);
+    const center = centerAverages(peerByStep, s.id);
     const level = mine?.mastery ? "MASTERY" : mine ? "COMPETENCY" : null;
     const age = level === "MASTERY" ? mine.mastery.age : level ? mine.competency.age : ageNow;
     const centerAge = level === "MASTERY" ? center.mastery : center.competency;
@@ -281,7 +308,8 @@ export async function childStepsReport({ child, date, categoryId, subCategory, m
     masteryCount: rows.filter((r) => r.mastery).length,
     totalSteps: rows.length,
     childrenInRange: peers.length,
-    categories: groupByCategory(rows),
+    ...limitRows(groupByCategory(rows), categoryId),
+    rowLimit: REPORT_ROW_LIMIT,
     filters,
   };
 }

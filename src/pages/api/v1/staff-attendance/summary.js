@@ -1,4 +1,4 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { isSelfServiceEmployeeRole, STAFF_PORTAL_ROLES } from "@/lib/roles";
 
@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     }
 
     const { centerId, userId, from, to } = req.query;
-    if (centerId && session.user.role !== "ADMIN") {
+    if (centerId) {
       const allowed = await hasAccessToCenter(session.user.id, centerId);
       if (!allowed) return res.status(403).json({ error: "Forbidden" });
     }
@@ -24,7 +24,7 @@ export default async function handler(req, res) {
       : userId;
 
     const where = {};
-    if (centerId) where.centerId = centerId;
+    where.centerId = await centerIdFilter(session.user.id, centerId);
     if (resolvedUserId) where.userId = resolvedUserId;
     const dateFilter = {};
     if (from) dateFilter.gte = new Date(from);

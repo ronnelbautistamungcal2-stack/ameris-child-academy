@@ -27,8 +27,9 @@ const RANGES = [
   { value: "90", label: "Next 90 days" },
 ];
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const fmt = (key) => new Date(`${key}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+const fmt = (key) => (key ? new Date(`${key}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—");
 const daysUntil = (key) => {
+  if (!key) return null;
   const today = new Date();
   return Math.round((new Date(`${key}T00:00:00`) - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
 };
@@ -305,7 +306,7 @@ function RequirementDialog({ requirement, centerId, onClose, onSaved }) {
               {COMPLIANCE_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.value}</option>)}
             </select>
           </label>
-          <label className={label}>Next Due Date <span className="text-red-600">*</span>
+          <label className={label}>Next Due Date
             <input type="date" value={form.nextDue} onChange={set("nextDue")} className={`${control} mt-1`} />
           </label>
         </div>

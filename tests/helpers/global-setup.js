@@ -29,7 +29,6 @@ const WARMUP_ROUTES = [
       "/coach/reports",
       "/coach/progress",
       "/coach/shifts",
-      "/coach/staff-management",
       "/coach/teachers",
     ],
   ],

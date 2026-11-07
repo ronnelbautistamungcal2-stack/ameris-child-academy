@@ -63,7 +63,7 @@ export default async function handler(req, res) {
     const studentsView = req.query.view === "students" && ["ADMIN", "COACH", "STUDENT_SUPPORT"].includes(session.user.role);
     if (!isAdmin && !studentsView && !hasAnyRole(session.user, ["COACH", "HR_STAFF"])) return res.status(403).json({ error: "Forbidden" });
     const staffOnly = !isAdmin || req.query.staffOnly === "1";
-    const scope = isAdmin ? null : (await accessibleCenterIds(session.user.id)) || [];
+    const scope = await accessibleCenterIds(session.user.id);
 
     const centers = await prisma.center.findMany({
       where: scope ? { id: { in: scope } } : {},

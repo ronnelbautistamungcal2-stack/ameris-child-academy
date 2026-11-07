@@ -2,7 +2,7 @@ import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { hasAnyRole } from "@/lib/roles";
 import { childStatus, isLevel, statusDistribution } from "@/lib/sop";
-import { SOP_ROLES, canUseChild, loadChildSteps, saveLevels } from "@/lib/sopServer";
+import { SOP_ROLES, canUseChild, loadAssessmentSteps, loadChildGoals, saveLevels } from "@/lib/sopServer";
 import { isChildLinkedToParent } from "@/lib/child-parent-links";
 
 const CHILD_SELECT = {
@@ -33,8 +33,14 @@ function summary(steps, birthDate) {
 
 /**
  * GET /api/v1/sop/:childId
- *     The child and every step in their center with the child's level, notes
- *     and whether it is an active goal, plus status summaries.
+ *     The child, the steps they have a level on or as an active goal, and the
+ *     status summaries (Progression Tracking, profile).
+ * GET /api/v1/sop/:childId?view=assessment&category=&all=1&q=
+ *     One tab of the Initial Developmental Assessment instead: the category's
+ *     steps for the child's age (every age with all=1, matching q), steps
+ *     with a level, and their linked prior/next steps; plus `category` (the tab
+ *     shown) and `tabs` (every category name). A center can hold tens of thousands of steps, so neither
+ *     view sends the whole bank.
  * PUT /api/v1/sop/:childId  { mode: "assessment" | "tracking", levels: [{ stepId, level, notes? }], generate? }
  *     Initial Developmental Assessment (Save / Generate Active Goals) or the
  *     Progression Tracking sliders. Parents may only save "tracking" levels
@@ -67,7 +73,15 @@ export default async function handler(req, res) {
       return res.status(405).end();
     }
 
-    const steps = await loadChildSteps(child);
+    const goals = await loadChildGoals(child);
+    const assessment =
+      req.query.view === "assessment"
+        ? await loadAssessmentSteps(child, {
+            category: req.query.category ? String(req.query.category) : "",
+            all: req.query.all === "1",
+            q: req.query.q ? String(req.query.q) : "",
+          })
+        : null;
     return res.status(200).json({
       child: {
         id: child.id,
@@ -76,8 +90,8 @@ export default async function handler(req, res) {
         photoUrl: child.photoUrl,
         classroom: child.classRoom?.name || "",
       },
-      steps,
-      ...summary(steps, child.birthDate),
+      ...(assessment || { steps: goals }),
+      ...summary(goals, child.birthDate),
     });
   } catch (e) {
     console.error("sop child error:", e);

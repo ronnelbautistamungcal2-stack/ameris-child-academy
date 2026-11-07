@@ -28,7 +28,7 @@ export default createApiHandler(async function handler(req, res) {
     const from = optionalDate(req.query, "from");
     const to = optionalDate(req.query, "to");
 
-    if (centerId && session.user.role !== "ADMIN") {
+    if (centerId) {
       const allowed = await hasAccessToCenter(session.user.id, centerId);
       if (!allowed) throw forbidden();
     }
@@ -65,10 +65,8 @@ export default createApiHandler(async function handler(req, res) {
 
   const body = ensureObject(req.body || {});
   const centerId = requiredString(body, "centerId");
-  if (session.user.role !== "ADMIN") {
-    const allowed = await hasAccessToCenter(session.user.id, centerId);
-    if (!allowed) throw forbidden();
-  }
+  const allowed = await hasAccessToCenter(session.user.id, centerId);
+  if (!allowed) throw forbidden();
   const topic = requiredString(body, "topic");
   const date = optionalDate(body, "date");
   const hours = optionalNumber(body, "hours", { min: 0.25 });

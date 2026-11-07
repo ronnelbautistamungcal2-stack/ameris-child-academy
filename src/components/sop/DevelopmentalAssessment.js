@@ -1,5 +1,5 @@
 import { apiJson } from "@/lib/api";
-import { SOP_LEVELS, formatExpectedAge, linkedStepFor } from "@/lib/sop";
+import { SOP_LEVELS, formatExpectedAge, linkedStepFor, monthsOld, stepsForAge } from "@/lib/sop";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -32,40 +32,6 @@ function age(birthDate) {
   return y ? `${y} year${y === 1 ? "" : "s"} ${m % 12} month${m % 12 === 1 ? "" : "s"}` : `${m} month${m === 1 ? "" : "s"}`;
 }
 
-function monthsOld(birthDate) {
-  if (!birthDate) return null;
-  const b = new Date(birthDate);
-  const now = new Date();
-  let m = (now.getFullYear() - b.getFullYear()) * 12 + now.getMonth() - b.getMonth();
-  if (now.getDate() < b.getDate()) m -= 1;
-  return m;
-}
-
-const stepMin = (s) => (s.ageYears == null && s.ageMonths == null ? null : (s.ageYears || 0) * 12 + (s.ageMonths || 0));
-const stepMax = (s) => (s.maxAgeYears == null && s.maxAgeMonths == null ? stepMin(s) : (s.maxAgeYears || 0) * 12 + (s.maxAgeMonths || 0));
-
-/**
- * The steps a group starts with: those for the child's current age, not the
- * first infant steps (client request 2026-10-29). Steps already assessed stay;
- * earlier or later steps come in through Not Started / Competency as before.
- * Without an age match it starts at the closest step below the child's age.
- */
-function stepsForAge(list, ageMonths, isTouched) {
-  if (ageMonths == null) return list;
-  const inRange = list.filter((s) => {
-    const min = stepMin(s);
-    const max = stepMax(s);
-    return min == null || (min <= ageMonths && ageMonths <= (max ?? min));
-  });
-  let start = inRange;
-  if (!start.length) {
-    const below = list.filter((s) => stepMin(s) != null && stepMin(s) <= ageMonths).sort((a, b) => stepMin(b) - stepMin(a));
-    start = below.length ? [below[0]] : list.slice(0, 1);
-  }
-  const ids = new Set(start.map((s) => s.id));
-  return list.filter((s) => ids.has(s.id) || isTouched(s));
-}
-
 export default function DevelopmentalAssessment() {
   const router = useRouter();
   const [children, setChildren] = useState([]);
@@ -92,22 +58,55 @@ export default function DevelopmentalAssessment() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const load = useCallback(async (id) => {
-    if (!id) return;
-    setError("");
-    try {
-      const next = await apiJson(`/api/v1/sop/${id}`);
-      setData(next);
+  // The API sends one tab at a time (a center can hold tens of thousands of
+  // steps): the category's steps for the child's age, every age with "Show
+  // steps for every age", or the search matches. `known` keeps every step
+  // received for this child so prior/next links and unsaved edits survive a
+  // tab change.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [known, setKnown] = useState({});
+  const [loading, setLoading] = useState(false);
+  const loadedChild = useRef("");
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const viewQuery = useCallback(
+    () =>
+      new URLSearchParams({
+        view: "assessment",
+        category: tab || "",
+        ...(allAges ? { all: "1" } : {}),
+        ...(debouncedSearch ? { q: debouncedSearch } : {}),
+      }),
+    [tab, allAges, debouncedSearch],
+  );
+
+  const receive = useCallback((next) => {
+    const switched = loadedChild.current !== next.child?.id;
+    loadedChild.current = next.child?.id || "";
+    if (switched) {
       setEdits({});
       setDismissed({});
-    } catch (e) {
-      setError(e.message || "Could not load the assessment");
     }
+    setData(next);
+    setKnown((prev) => ({ ...(switched ? {} : prev), ...Object.fromEntries((next.steps || []).map((s) => [s.id, s])) }));
   }, []);
 
   useEffect(() => {
-    load(childId);
-  }, [childId, load]);
+    if (!childId) return undefined;
+    let alive = true;
+    setError("");
+    setLoading(true);
+    apiJson(`/api/v1/sop/${childId}?${viewQuery()}`, { timeoutMs: 120000 })
+      .then((next) => alive && receive(next))
+      .catch((e) => alive && setError(e.message || "Could not load the assessment"))
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [childId, viewQuery, receive]);
 
   const dirty = Object.keys(edits).length > 0;
   const dirtyRef = useRef(false);
@@ -123,14 +122,11 @@ export default function DevelopmentalAssessment() {
   }, []);
 
   const steps = useMemo(() => data?.steps || [], [data]);
-  const byId = useMemo(() => Object.fromEntries(steps.map((s) => [s.id, s])), [steps]);
+  const byId = useMemo(() => ({ ...known, ...Object.fromEntries(steps.map((s) => [s.id, s])) }), [known, steps]);
   const levelOf = (s) => edits[s.id]?.level ?? s.level;
   const notesOf = (s) => edits[s.id]?.notes ?? s.notes;
-  const categories = useMemo(() => {
-    const names = [...new Set(steps.map((s) => s.category))];
-    return names.sort((a, b) => (a === "General" ? -1 : b === "General" ? 1 : a.localeCompare(b)));
-  }, [steps]);
-  const currentTab = categories.includes(tab) ? tab : categories[0];
+  const categories = useMemo(() => data?.tabs || [], [data]);
+  const currentTab = data?.category || categories[0];
 
   const childMonths = monthsOld(data?.child?.birthDate);
   const groups = useMemo(() => {
@@ -164,8 +160,8 @@ export default function DevelopmentalAssessment() {
       const levels = Object.entries(edits)
         .map(([stepId, e]) => ({ stepId, level: e.level ?? byId[stepId]?.level, ...(e.notes !== undefined ? { notes: e.notes } : {}) }))
         .filter((l) => l.level);
-      const next = await apiJson(`/api/v1/sop/${childId}`, { method: "PUT", body: JSON.stringify({ mode: "assessment", levels, generate }) });
-      setData(next);
+      const next = await apiJson(`/api/v1/sop/${childId}?${viewQuery()}`, { method: "PUT", body: JSON.stringify({ mode: "assessment", levels, generate }), timeoutMs: 120000 });
+      receive(next);
       setEdits({});
       setNotice(generate ? `Saved. ${next.activeGoals} active goal${next.activeGoals === 1 ? "" : "s"} sent to Progression Tracking.` : "Assessment saved.");
     } catch (e) {
@@ -273,7 +269,9 @@ export default function DevelopmentalAssessment() {
         <div role="status" className={`rounded-lg px-3 py-2 text-sm ${error ? "bg-red-50 text-red-700" : "bg-green-50 text-green-800"}`}>{error || notice}</div>
       )}
 
-      {data && !steps.length && (
+      {loading && <p className="text-sm text-gray-500">Loading steps...</p>}
+
+      {data && !categories.length && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
           This center has no Steps of Progression yet. Add or import them in Curriculum &gt; Steps of Progression Bank.
         </p>

@@ -45,12 +45,22 @@ export function isKitchenStaff(user) {
   return userRoles(user).includes("KITCHEN_STAFF");
 }
 
+// Ameris Solutions staff. Never offered in center role pickers, and only a
+// global admin can grant it (src/pages/api/v1/users).
+export const GLOBAL_ADMIN_ROLE = "GLOBAL_ADMIN";
+const KNOWN_ROLES = [...ROLE_OPTIONS, GLOBAL_ADMIN_ROLE];
+
+/** Drops GLOBAL_ADMIN from roles a center admin asked for. */
+export function centerAssignableRoles(roles) {
+  return (roles || []).filter((role) => role !== GLOBAL_ADMIN_ROLE);
+}
+
 export function normalizeRoles(value, fallback = "PARENT") {
   const source = Array.isArray(value) ? value : value ? [value] : [];
   const out = [];
   for (const raw of source) {
     const role = String(raw || "").trim().toUpperCase();
-    if (ROLE_OPTIONS.includes(role) && !out.includes(role)) out.push(role);
+    if (KNOWN_ROLES.includes(role) && !out.includes(role)) out.push(role);
   }
   if (!out.length && fallback) out.push(fallback);
   return out;
@@ -112,6 +122,8 @@ export function hasEmployeeRole(roles) {
 
 export function roleHomePath(role) {
   switch (String(role || "").toUpperCase()) {
+    case "GLOBAL_ADMIN":
+      return "/global/subscribers";
     case "ADMIN":
       return "/admin/dashboard";
     case "TEACHER":
@@ -131,6 +143,7 @@ export function roleHomePath(role) {
 }
 
 const ROLE_LABELS = {
+  GLOBAL_ADMIN: "Global Administrator",
   HR_STAFF: "HR Staff",
   STUDENT_SUPPORT: "Student Support Staff",
 };

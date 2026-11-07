@@ -24,9 +24,12 @@ export default async function handler(req, res) {
     const action = req.body?.action;
     if (action === "complete") {
       if (requirement.done) return res.status(200).json({ requirement: serializeRequirement(requirement), next: null });
-      const nextDue = nextDueAfter(requirement.frequency, requirement.nextDue, requirement.repeatOn);
+      // With no due date set, the cycle runs from the day it's checked off.
+      const now = new Date();
+      const dueDate = requirement.nextDue || new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+      const nextDue = nextDueAfter(requirement.frequency, dueDate, requirement.repeatOn);
       const result = await prisma.$transaction(async (tx) => {
-        await tx.complianceCompletion.create({ data: { requirementId: requirement.id, dueDate: requirement.nextDue, completedById: session.user.id } });
+        await tx.complianceCompletion.create({ data: { requirementId: requirement.id, dueDate, completedById: session.user.id } });
         const done = await tx.complianceRequirement.update({
           where: { id: requirement.id },
           data: { done: true, lastCompletedAt: new Date() },
@@ -69,7 +72,7 @@ export default async function handler(req, res) {
       });
       return res.status(200).json({ requirement: serializeRequirement(updated), removedId: followUp?.id || null });
     }
-    const parsed = parseRequirement({ ...requirement, nextDue: keyOf(new Date(requirement.nextDue)), ...(req.body || {}) });
+    const parsed = parseRequirement({ ...requirement, nextDue: requirement.nextDue ? keyOf(new Date(requirement.nextDue)) : "", ...(req.body || {}) });
     if (parsed.error) return res.status(400).json({ error: parsed.error });
     const updated = await prisma.complianceRequirement.update({ where: { id: requirement.id }, data: parsed.data });
     return res.status(200).json(serializeRequirement(updated));

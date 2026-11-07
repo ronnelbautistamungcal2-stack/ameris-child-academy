@@ -81,7 +81,13 @@ export function buildParentLinkedChildWhere(parentUserId, extraWhere = undefined
   };
 }
 
-export async function resolveLinkedParentAccountIds(prismaClient, value) {
+/**
+ * Checks the parent accounts to link to a child. alreadyLinked: accounts the
+ * child is linked to now, which may stay even without the Parent role (e.g. a
+ * staff member's own child), so saving the profile doesn't fail on them
+ * (client sheet 2026-11-07, R58). Newly added accounts must be parents.
+ */
+export async function resolveLinkedParentAccountIds(prismaClient, value, { alreadyLinked = [] } = {}) {
   const requestedIds = uniqueIds(value);
   if (requestedIds.length > MAX_LINKED_PARENT_ACCOUNTS) {
     throw new Error("You can link up to 2 parent accounts per child.");
@@ -97,7 +103,8 @@ export async function resolveLinkedParentAccountIds(prismaClient, value) {
     throw new Error("One or more selected parent accounts were not found.");
   }
 
-  if (users.some((user) => !isParentUser(user))) {
+  const kept = new Set(alreadyLinked.filter(Boolean));
+  if (users.some((user) => !kept.has(user.id) && !isParentUser(user))) {
     throw new Error("Only parent accounts can be linked to a child.");
   }
 

@@ -374,7 +374,9 @@ export default function SettingsPage() {
           )}
         </div>
         {isParentRole ? preferencesCard : null}
-        {session?.user?.id && !isParentRole ? <KioskPinCard userId={session.user.id} /> : null}
+        {/* Parents sign children in and out at the kiosk with a PIN too, so they
+            can view it here after entering their password (client sheet 2026-11-07). */}
+        {session?.user?.id ? <KioskPinCard userId={session.user.id} /> : null}
       </div>
     </>
   );

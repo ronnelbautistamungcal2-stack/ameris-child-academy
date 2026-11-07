@@ -3,13 +3,20 @@
 // browser's Print > Save as PDF on the print-friendly sheet).
 
 /** sheets: [{ name, headers: [...], rows: [[...], ...] }] */
+/**
+ * sheets: [{ name, headers, rows }]; a sheet can instead give headerRows
+ * (several heading rows) and merges ([{ s: { r, c }, e: { r, c } }]).
+ */
 export async function exportToExcel(filename, sheets) {
   const XLSX = await import("xlsx");
   const book = XLSX.utils.book_new();
   for (const sheet of sheets) {
-    const ws = XLSX.utils.aoa_to_sheet([sheet.headers, ...sheet.rows]);
-    ws["!cols"] = sheet.headers.map((h, i) => ({
-      wch: Math.min(40, Math.max(String(h).length, ...sheet.rows.map((r) => String(r[i] ?? "").length)) + 2),
+    const head = sheet.headerRows || [sheet.headers];
+    const ws = XLSX.utils.aoa_to_sheet([...head, ...sheet.rows]);
+    if (sheet.merges?.length) ws["!merges"] = sheet.merges;
+    const width = Math.max(...head.map((h) => h.length));
+    ws["!cols"] = Array.from({ length: width }, (_, i) => ({
+      wch: Math.min(40, Math.max(...head.map((h) => String(h[i] ?? "").length), ...sheet.rows.map((r) => String(r[i] ?? "").length)) + 2),
     }));
     XLSX.utils.book_append_sheet(book, ws, String(sheet.name || "Report").replace(/[\\/?*[\]:]/g, " ").slice(0, 31));
   }

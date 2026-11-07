@@ -38,7 +38,7 @@ test.describe("Messages for staff and coaches", () => {
     await page.goto(`/teacher/messages?threadId=${threadId}`);
     await waitForLoadingDone(page);
     await expect(page.getByRole("tab", { name: /^Inbox/ })).toBeVisible();
-    await expect(page.getByRole("tab", { name: "Archived" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Archive" })).toBeVisible();
     const pane = page.getByRole("region", { name: "Conversation", exact: true });
     await expect(pane.getByRole("heading", { name: title })).toBeVisible();
     await pane.getByRole("button", { name: "Ready for Review" }).click();
@@ -70,7 +70,7 @@ test.describe("Messages for staff and coaches", () => {
     await waitForLoadingDone(page);
     const pane = page.getByRole("region", { name: "Conversation", exact: true });
     await pane.getByRole("button", { name: "Archive" }).click();
-    await page.getByRole("tab", { name: "Archived" }).click();
+    await page.getByRole("tab", { name: "Archive" }).click();
     await expect(page.getByRole("button", { name: new RegExp(title) })).toBeVisible();
   });
 });

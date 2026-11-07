@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { ownsAccountDocument } from "@/lib/subscriberAccounts";
 
 /**
  * GET /api/v1/forms/submissions/:id
@@ -16,12 +17,16 @@ export default async function handler(req, res) {
   const submission = await prisma.formSubmission.findUnique({
     where: { id: String(req.query.id) },
     include: {
-      template: { select: { id: true, title: true, description: true } },
+      template: { select: { id: true, title: true, description: true, subscriberAccountId: true } },
       child: { select: { id: true, firstName: true, lastName: true } },
       submittedBy: { select: { id: true, name: true, email: true } },
     },
   });
   if (!submission) return res.status(404).json({ error: "Form not found" });
-  if (session.user.role !== "ADMIN" && submission.submittedById !== session.user.id) return res.status(403).json({ error: "Forbidden" });
+  const mine = submission.submittedById === session.user.id;
+  if (!mine && session.user.role !== "ADMIN") return res.status(403).json({ error: "Forbidden" });
+  if (!mine && !(await ownsAccountDocument(session.user.id, submission.template?.subscriberAccountId))) {
+    return res.status(404).json({ error: "Form not found" });
+  }
   return res.status(200).json(submission);
 }

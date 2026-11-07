@@ -32,10 +32,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "centerId and weekStart are required" });
     }
 
-    if (session.user.role !== "ADMIN") {
-      const allowed = await hasAccessToCenter(session.user.id, centerId);
-      if (!allowed) return res.status(403).json({ error: "Forbidden" });
-    }
+    const allowed = await hasAccessToCenter(session.user.id, centerId);
+    if (!allowed) return res.status(403).json({ error: "Forbidden" });
 
     const monday = parseMonday(weekStart);
     if (!monday) return res.status(400).json({ error: "Invalid weekStart" });

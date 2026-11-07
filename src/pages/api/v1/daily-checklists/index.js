@@ -1,4 +1,4 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { adminCanReachUser, centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import { CHECKLIST_ROLE_VALUES } from "@/lib/dailyChecklistVisibility";
 import { normalizeChecklistClassRoomIds } from "@/lib/dailyChecklistClassrooms";
 import { normalizeChecklistAssignedUserIds } from "@/lib/dailyChecklistAssignees";
@@ -35,7 +35,7 @@ import { splitChecklistPerAssignee } from "@/lib/dailyChecklistSplit";
 const MANAGER_ROLES = ["ADMIN", "COACH"];
 
 async function canManageCenter(session, centerId) {
-  if (session.user.role === "ADMIN") return true;
+  if (session.user.role === "ADMIN") return !centerId || hasAccessToCenter(session.user.id, centerId);
   return session.user.role === "COACH" && !!centerId && (await hasAccessToCenter(session.user.id, centerId));
 }
 
@@ -492,7 +492,7 @@ export default async function handler(req, res) {
     const { centerId, category, classRoomId, date } = req.query;
     const staffUserId = String(req.query.staffUserId || "").trim();
 
-    if (centerId && role !== "ADMIN") {
+    if (centerId) {
       const ok = await hasAccessToCenter(session.user.id, centerId);
       if (!ok) return res.status(403).json({ error: "Forbidden" });
     }
@@ -501,6 +501,9 @@ export default async function handler(req, res) {
     // sees it; anyone can ask for their own ("My Checklist").
     if (staffUserId && role !== "ADMIN" && staffUserId !== session.user.id) {
       return res.status(403).json({ error: "Only admins can view another employee's checklist" });
+    }
+    if (staffUserId && !(await adminCanReachUser(session.user.id, staffUserId))) {
+      return res.status(404).json({ error: "Employee not found" });
     }
 
     let staffScope = null;
@@ -539,7 +542,9 @@ export default async function handler(req, res) {
       ];
     }
 
-    if (!centerId && role !== "ADMIN") {
+    if (!centerId && role === "ADMIN") {
+      where.centerId = await centerIdFilter(session.user.id, null);
+    } else if (!centerId) {
       const memberships = await prisma.centerUser.findMany({
         where: { userId: session.user.id },
         select: { centerId: true },

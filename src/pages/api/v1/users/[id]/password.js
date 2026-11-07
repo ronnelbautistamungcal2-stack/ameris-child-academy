@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { adminCanReachUser, getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
@@ -12,6 +12,11 @@ export default async function handler(req, res) {
   if (!session) return res.status(401).json({ error: "Unauthorized" });
 
   const { id } = req.query;
+
+  // Admins only reach people in their own subscriber account.
+  if (session.user.role === "ADMIN" && !(await adminCanReachUser(session.user.id, id))) {
+    return res.status(404).json({ error: "User not found" });
+  }
 
   if (session.user.id !== id && session.user.role !== "ADMIN") {
     return res.status(403).json({ error: "Forbidden" });

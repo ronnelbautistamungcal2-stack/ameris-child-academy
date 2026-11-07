@@ -17,6 +17,8 @@ enum Role {
   PARENT
   COACH
   SUBSCRIBER
+  // Ameris Solutions staff: manages subscriber accounts from /global.
+  GLOBAL_ADMIN
 }
 
 enum ActivityType {
@@ -300,6 +302,13 @@ model User {
   coachTeamMembers                   CoachTeamMember[]                   @relation("CoachTeamMembers")
   coachTeamOf                        CoachTeamMember[]                   @relation("CoachTeamStaff")
   supplyRequests                     SupplyRequest[]                     @relation("SupplyRequestsRequestedBy")
+  // The subscriber account this person belongs to. Admins only see this
+  // account's centers (src/lib/subscriberAccounts.js).
+  subscriberAccount                  SubscriberAccount?                  @relation(fields: [subscriberAccountId], references: [id], onDelete: SetNull)
+  subscriberAccountId                String?
+  subscriberAccountNotes             SubscriberAccountNote[]
+
+  @@index([subscriberAccountId])
 }
 
 model Center {
@@ -347,6 +356,8 @@ model Center {
   lessons                     Lesson[]
   checklists                  TaskChecklist[]
   subscription                Subscription?
+  subscriberAccount           SubscriberAccount?           @relation(fields: [subscriberAccountId], references: [id], onDelete: SetNull)
+  subscriberAccountId         String?
   messageThreads              MessageThread[]
   formTemplates               FormTemplate[]
   policyDocuments             PolicyDocument[]
@@ -400,6 +411,8 @@ model Center {
   lessonPlanners              LessonPlanner[]
   lessonPlanCells             LessonPlanCell[]
   curriculumOptions           CurriculumOption[]
+
+  @@index([subscriberAccountId])
 }
 
 model CenterUser {
@@ -494,6 +507,7 @@ model Child {
   formSubmissions               FormSubmission[]
   enrollmentStartDate           DateTime?
   enrollmentEndDate             DateTime?
+  enrollmentStatusEntries       ChildEnrollmentStatusEntry[]
   permissions                   ChildPermission[]
   createdAt                     DateTime                           @default(now())
   OutboundEmail                 OutboundEmail[]
@@ -971,6 +985,47 @@ model Subscription {
   paymentInfo Json?
 }
 
+// A customer of Ameris Solutions (client 2026-11-06). Owns one or more
+// centers; add-ons unlock pages, limits cap centers and children.
+model SubscriberAccount {
+  id            String                  @id @default(uuid())
+  accountNumber String                  @unique // "C-1001"
+  name          String
+  status        String                  @default("PENDING") // PENDING | ACTIVE | ON_HOLD | CANCELLED
+  // STEPS_OF_PROGRESSION | CURRICULUM | TEACHER_TRAINING | STAFF_MANAGEMENT
+  addOns        String[]                @default([])
+  maxCenters    Int                     @default(1)
+  maxChildren   Int?
+  startDate     DateTime?
+  renewalDate   DateTime?
+  autoRenew     Boolean                 @default(true)
+  contactName   String?
+  contactEmail  String?
+  phone         String?
+  address       String?
+  activatedAt   DateTime?
+  centers       Center[]
+  users         User[]
+  notes         SubscriberAccountNote[]
+  formTemplates FormTemplate[]
+  policies      PolicyDocument[]
+  parentFaqs    ParentFaq[]
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+}
+
+model SubscriberAccountNote {
+  id          String            @id @default(uuid())
+  account     SubscriberAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId   String
+  author      User?             @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorId    String?
+  description String
+  createdAt   DateTime          @default(now())
+
+  @@index([accountId])
+}
+
 model CenterInvite {
   id          String    @id @default(uuid())
   code        String    @unique
@@ -1066,10 +1121,16 @@ model FormTemplate {
   attachmentName    String?
   attachmentSize    Int?
   dueDate           DateTime?
+  // Owner. A template with no center is shared by every center of this
+  // account only.
+  subscriberAccount   SubscriberAccount? @relation(fields: [subscriberAccountId], references: [id], onDelete: SetNull)
+  subscriberAccountId String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
   submissions FormSubmission[]
+
+  @@index([subscriberAccountId])
 }
 
 model FormSubmission {
@@ -1124,12 +1185,17 @@ model PolicyDocument {
   logoUrl                 String?
   showOnHomePage          Boolean                  @default(false)
   active                  Boolean                  @default(true)
+  // Owner: a document with no center is shared by every center of this account only.
+  subscriberAccount       SubscriberAccount?       @relation(fields: [subscriberAccountId], references: [id], onDelete: SetNull)
+  subscriberAccountId     String?
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @default(now()) @updatedAt
   milestoneChecklistItems MilestoneChecklistItem[]
   lessons                 Lesson[]
   dailyChecklistItems     DailyChecklistItem[]
   permissionPolicyConfigs PermissionPolicyConfig[]
+
+  @@index([subscriberAccountId])
 }
 
 model ParentFaq {
@@ -1141,11 +1207,15 @@ model ParentFaq {
   topic     String   @default("general")
   sortOrder Int      @default(0)
   published Boolean  @default(true)
+  // Owner: a question with no center is shown at every center of this account only.
+  subscriberAccount   SubscriberAccount? @relation(fields: [subscriberAccountId], references: [id], onDelete: SetNull)
+  subscriberAccountId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
   @@index([centerId])
   @@index([topic])
+  @@index([subscriberAccountId])
 }
 
 // One filled-in line of the admin Menu Planner: the food item planned for a
@@ -1284,7 +1354,7 @@ model ComplianceRequirement {
   appliesToRoles  String[]               @default([])
   ageGroups       String[]               @default([])
   notes           String?
-  nextDue         DateTime               @db.Date
+  nextDue         DateTime?              @db.Date // optional (client sheet 2026-11-07)
   lastCompletedAt DateTime?
   // Checking a row off keeps it as a completed row and adds a new row for the
   // next due date, linked back through previousId (client request 2026-10-29).
@@ -2196,6 +2266,9 @@ model DailyChecklistCompletion {
   completedById String
   date          DateTime           @db.Date
   notes         String?
+  // Excused by a coach or admin in Checklist Review: left out of the
+  // checklist total, neither done nor missing (client sheet 2026-11-07).
+  excused       Boolean            @default(false)
   completedAt   DateTime           @default(now())
 
   @@unique([itemId, completedById, date])
@@ -2234,6 +2307,23 @@ model DailyChecklistChoice {
 }
 
 // Employment Status history (Staff List pop-up, client mockup 2026-10-02).
+// A child's enrollment history (Student List > Enrollment Status, client sheet
+// 2026-11-07). The latest entry sets Child.enrollmentEndDate: withdrawn,
+// graduated or on hold end the enrollment; enrolled or re-enrolled clear it.
+model ChildEnrollmentStatusEntry {
+  id             String   @id @default(uuid())
+  child          Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  childId        String
+  date           DateTime @db.Date
+  status         String
+  notes          String?
+  recordedById   String?
+  recordedByName String?
+  createdAt      DateTime @default(now())
+
+  @@index([childId, date])
+}
+
 model EmploymentStatusEntry {
   id             String   @id @default(uuid())
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)

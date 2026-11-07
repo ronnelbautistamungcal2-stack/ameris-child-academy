@@ -61,7 +61,7 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
-  if (thread.centerId && user.role !== "ADMIN") {
+  if (thread.centerId) {
     const ok = await hasAccessToCenter(user.id, thread.centerId);
     if (!ok) return res.status(403).json({ error: "Forbidden" });
   }

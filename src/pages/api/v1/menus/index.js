@@ -122,11 +122,14 @@ export default async function handler(req, res) {
       const meals = new Set(mealKeysFor(center));
       const groups = new Set(ageGroupsFor(center).map((g) => g.key));
       for (const line of lines) {
+        // Clearing a line is always allowed, even one saved before the
+        // center's meals or age groups changed (Clear Week sends them all;
+        // client sheet 2026-11-07).
+        const clearing = !String(line?.item ?? "").trim();
         if (
           !isDateKey(line?.date) ||
-          !meals.has(line.meal) ||
-          !groups.has(line.ageGroup) ||
-          !isValidLine(line.meal, line.ageGroup, line.component)
+          (!clearing &&
+            (!meals.has(line.meal) || !groups.has(line.ageGroup) || !isValidLine(line.meal, line.ageGroup, line.component)))
         ) {
           return res.status(400).json({ error: "Invalid menu line", line });
         }

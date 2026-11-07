@@ -622,3 +622,13 @@ main {
 @media print {
   .protected-lesson { display: none !important; }
 }
+
+/* Printed reports keep their colours: the milestone and grade bars are
+   background colours, which browsers drop when printing (client sheet
+   2026-11-07). */
+@media print {
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

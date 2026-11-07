@@ -35,7 +35,7 @@ const REPORTS = {
   "infant-feeding-plan": { label: "Infant Feeding Plan", render: () => <InfantFeedingPlanReport /> },
   "infant-feeding": { label: "Infant Feeding Report", render: () => <InfantFeedingReport /> },
   "meal-production": { label: "Meal Production Record", render: () => <MealProductionReport /> },
-  "meal-claim": { label: "Meal Claim", render: () => <MealClaimReport /> },
+  "meal-claim": { label: "Meal Claim", ownExport: true, render: () => <MealClaimReport /> },
   "staff-overview": { label: "Staff Performance Overview", addOn: "STAFF_MANAGEMENT", render: () => <StaffPerformanceOverview Layout={Plain} viewHref={(row) => `/admin/reports/staff-performance?staffId=${row.id}`} /> },
   "staff-performance": { label: "Staff Performance Report", addOn: "STAFF_MANAGEMENT", render: () => <StaffPerformanceReport /> },
   "staff-training": { label: "Staff Training Report", addOn: "TEACHER_TRAINING", render: () => <StaffTrainingReport /> },
@@ -55,7 +55,7 @@ const CATEGORIES = [
   { label: "Staff", icon: "👥", keys: ["staff-overview", "staff-performance", "staff-training"] },
   { label: "Time Sheets", icon: "🕒", keys: ["student-time-sheets", "student-time-overview", "staff-time-sheets", "staff-time-overview"] },
   { label: "Custom", icon: "🔎", keys: ["query"] },
-].map((cat) => ({ ...cat, reports: cat.keys.map((key) => ({ key, label: REPORTS[key].label, addOn: REPORTS[key].addOn })) }));
+].map((cat) => ({ ...cat, reports: cat.keys.map((key) => ({ key, label: REPORTS[key].label, addOn: REPORTS[key].addOn, ownExport: REPORTS[key].ownExport })) }));
 
 export default function AdminReportsPage({ reportKey }) {
   const router = useRouter();

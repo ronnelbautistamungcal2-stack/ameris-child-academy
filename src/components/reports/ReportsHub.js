@@ -26,8 +26,9 @@ function readSavedFilters() {
 }
 
 /**
- * categories: [{ label, icon, reports: [{ key, label, addOn? }] }]; a report
- * whose add-on the account lacks shows a lock and an upgrade notice.
+ * categories: [{ label, icon, reports: [{ key, label, addOn?, ownExport? }] }]; a
+ * report whose add-on the account lacks shows a lock and an upgrade notice;
+ * ownExport hides the Export button here (the report has a better one).
  * selectedKey, hrefFor(key), children: the selected report.
  */
 export default function ReportsHub({ categories, selectedKey, hrefFor, children }) {
@@ -206,9 +207,11 @@ export default function ReportsHub({ categories, selectedKey, hrefFor, children 
               <button type="button" onClick={() => window.print()} className="rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 dark:bg-gray-900">
                 🖨 Print / PDF
               </button>
-              <button type="button" onClick={exportExcel} className="rounded-lg border border-emerald-600 bg-white px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50 dark:bg-gray-900">
-                ⬇ Export to Excel
-              </button>
+              {selected.ownExport ? null : (
+                <button type="button" onClick={exportExcel} className="rounded-lg border border-emerald-600 bg-white px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50 dark:bg-gray-900">
+                  ⬇ Export to Excel
+                </button>
+              )}
             </div>
           ) : null}
           <div id="reports-print-area" ref={printRef}>

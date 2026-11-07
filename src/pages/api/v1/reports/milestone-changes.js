@@ -55,22 +55,26 @@ export default async function handler(req, res) {
   for (const e of earlier) (history.get(e.progressId) || history.set(e.progressId, []).get(e.progressId)).push(e);
   const names = new Map(children.map((c) => [c.id, `${c.firstName || ""} ${c.lastName || ""}`.trim()]));
 
-  const rows = entries.map((e) => {
+  // Only real changes (client sheet 2026-11-07): an entry with an earlier level
+  // that differs. A step's first assessment, or a save that kept the same
+  // level, is not listed.
+  const rows = entries.flatMap((e) => {
     const list = history.get(e.progressId) || [];
     const i = list.findIndex((x) => x.id === e.id);
     const previous = i > 0 ? list[i - 1] : null;
-    return {
+    if (!previous || levelForStatus(previous.status) === levelForStatus(e.status)) return [];
+    return [{
       id: e.id,
       date: e.occurredAt,
       childId: e.progress.childId,
       child: names.get(e.progress.childId) || "",
       category: e.progress.lesson.category?.name || "General",
       milestone: e.progress.lesson.title,
-      from: previous ? levelLabel(previous.status) : "—",
+      from: levelLabel(previous.status),
       to: levelLabel(e.status),
       changedBy: e.recordedBy?.name || e.recordedBy?.email || "—",
       notes: e.notes || "",
-    };
+    }];
   });
   return res.status(200).json({ from, to, children: children.map((c) => ({ id: c.id, name: names.get(c.id) })), rows });
 }

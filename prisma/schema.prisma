@@ -2265,6 +2265,9 @@ model DailyChecklistCompletion {
   completedById String
   date          DateTime           @db.Date
   notes         String?
+  // Excused by a coach or admin in Checklist Review: left out of the
+  // checklist total, neither done nor missing (client sheet 2026-11-07).
+  excused       Boolean            @default(false)
   completedAt   DateTime           @default(now())
 
   @@unique([itemId, completedById, date])

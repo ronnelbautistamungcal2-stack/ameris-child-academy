@@ -197,6 +197,17 @@ test.describe("Checklist Manager, checklists and review @api", () => {
     const again = (await (await apiGet(request, `/api/v1/checklist-review?centerId=${center.id}&date=${today}`, coachCookies)).json()).rows;
     expect(again.find((r) => r.id === teacher.id)).toMatchObject({ done: 2, status: "COMPLETE" });
 
+    // Excused (client sheet 2026-11-07): the item drops out of the total; a
+    // teacher can't excuse their own items.
+    const [sweep, mop] = detail.row.items;
+    await apiPost(request, "/api/v1/daily-checklists/complete", { itemId: mop.id, date: today, undo: true, forUserId: teacher.id }, coachCookies);
+    expect((await apiPost(request, "/api/v1/daily-checklists/complete", { itemId: mop.id, date: today, forUserId: teacher.id, excused: true }, coachCookies)).status()).toBe(200);
+    const excused = (await (await apiGet(request, `/api/v1/checklist-review/${teacher.id}?centerId=${center.id}&date=${today}`, coachCookies)).json()).row;
+    expect(excused).toMatchObject({ total: 1, done: 1, pct: 100, status: "COMPLETE", missing: [] });
+    expect(excused.items.find((i) => i.id === mop.id)).toMatchObject({ excused: true, done: false });
+    expect(excused.items.find((i) => i.id === sweep.id)).toMatchObject({ excused: false, done: true });
+    await apiPost(request, "/api/v1/daily-checklists/complete", { itemId: mop.id, date: today, forUserId: teacher.id }, coachCookies);
+
     // Only admins and coaches can mark for someone else or open the review.
     expect((await apiPost(request, "/api/v1/daily-checklists/complete", { itemId: detail.row.items[0].id, date: today, forUserId: kitchen.id }, teacherCookies)).status()).toBe(403);
     expect((await apiGet(request, `/api/v1/checklist-review?centerId=${center.id}&date=${today}`, teacherCookies)).status()).toBe(403);

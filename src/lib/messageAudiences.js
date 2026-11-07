@@ -1,4 +1,6 @@
+import { accessibleCenterIds } from "@/lib/auth";
 import { STAFF_PORTAL_ROLES, userRoles } from "@/lib/roles";
+import { accountIdForUser } from "@/lib/subscriberAccounts";
 import { buildParentLinkedChildWhere } from "@/lib/child-parent-links";
 import { isAccommodationThread } from "@/lib/messageWorkflows";
 
@@ -28,6 +30,11 @@ export const MESSAGE_AUDIENCE_OPTIONS = [
     label: "All Coaches",
     description: "Coaching team",
   },
+  // One group per staff role (client sheet 2026-11-07: "send to group (role)").
+  { key: "ALL_KITCHEN_STAFF", label: "All Kitchen Staff", description: "Kitchen staff", roles: ["KITCHEN_STAFF"] },
+  { key: "ALL_HR_STAFF", label: "All HR Staff", description: "HR staff", roles: ["HR_STAFF"] },
+  { key: "ALL_STUDENT_SUPPORT", label: "All Student Support", description: "Student support staff", roles: ["STUDENT_SUPPORT"] },
+  { key: "ALL_OTHER_STAFF", label: "All Other Staff", description: "Other staff", roles: ["OTHER_STAFF"] },
 ];
 
 function makeAudienceError(message, status = 400) {
@@ -89,6 +96,9 @@ export function getMessageAudienceOption(key) {
 
 export async function getAllowedMessagingCenterIds(prismaClient, user) {
   if (user.role === "ADMIN") {
+    // The admin's own subscriber account (null = no account, every center).
+    const ids = await accessibleCenterIds(user.id);
+    if (ids) return ids;
     const centers = await prismaClient.center.findMany({ select: { id: true } });
     return centers.map((center) => center.id);
   }
@@ -199,7 +209,9 @@ export async function resolveMessageAudienceUsers({
       }
       scopedCenterIds = [normalizedCenterId];
     }
-  } else if (user.role !== "ADMIN") {
+  } else {
+    // No center picked: every center the sender reaches (an admin's whole
+    // subscriber account, never another account's centers).
     scopedCenterIds = await getAllowedMessagingCenterIds(prismaClient, user);
   }
 
@@ -227,11 +239,20 @@ export async function resolveMessageAudienceUsers({
       return resolveUsersForRoles(prismaClient, ["TEACHER"], scopedCenterIds, user.id);
     case "ALL_COACHES":
       return resolveUsersForRoles(prismaClient, ["COACH"], scopedCenterIds, user.id);
-    case "ALL_ADMINS":
-      return resolveUsersForRoles(prismaClient, ["ADMIN"], [], user.id);
+    case "ALL_ADMINS": {
+      // Admins of the sender's own subscriber account (admins need no center rows).
+      const admins = await resolveUsersForRoles(prismaClient, ["ADMIN"], [], user.id);
+      const accountId = await accountIdForUser(user.id);
+      if (!accountId) return admins;
+      const inAccount = new Set(
+        (await prismaClient.user.findMany({ where: { id: { in: admins.map((a) => a.id) }, subscriberAccountId: accountId }, select: { id: true } })).map((u) => u.id),
+      );
+      return admins.filter((a) => inAccount.has(a.id));
+    }
     case "ALL_PARENTS":
       return resolveParents(prismaClient, scopedCenterIds, user.id);
     default:
+      if (option.roles) return resolveUsersForRoles(prismaClient, option.roles, scopedCenterIds, user.id);
       throw makeAudienceError("Invalid audience selection.");
   }
 }

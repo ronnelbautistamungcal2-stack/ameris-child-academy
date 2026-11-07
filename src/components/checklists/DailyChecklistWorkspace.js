@@ -357,7 +357,9 @@ export default function DailyChecklistWorkspace({ Layout, mode = "staff", title 
 
 function ChecklistItems({ checklist, isDone, canComplete, busyItem, onToggle, onDetails }) {
   const [blockedId, setBlockedId] = useState("");
-  const items = sortByTaskTime(checklist.items);
+  // Ticked tasks move below the ones still to do (client sheet 2026-11-07).
+  const byTime = sortByTaskTime(checklist.items);
+  const items = [...byTime.filter((item) => !isDone(item)), ...byTime.filter((item) => isDone(item))];
   if (!items.length) return <p className="text-sm text-gray-500">Nothing is due on this checklist today.</p>;
   return (
     <ul className="divide-y divide-gray-100 dark:divide-gray-800">

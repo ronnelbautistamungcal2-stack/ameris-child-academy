@@ -129,6 +129,8 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Only admins and coaches can mark items for someone else" });
     }
     const completedById = forUserId || session.user.id;
+    // Excused: only from Checklist Review (an admin or coach marking someone's item).
+    const excused = Boolean(forUserId) && req.body?.excused === true;
 
     if (!itemId || !date) {
       return res.status(400).json({ error: "itemId and date are required" });
@@ -237,12 +239,13 @@ export default async function handler(req, res) {
           date: completionDate,
         },
       },
-      update: { notes: notes || null, completedAt: new Date() },
+      update: { notes: notes || null, completedAt: new Date(), excused },
       create: {
         itemId,
         completedById,
         date: completionDate,
         notes: notes || null,
+        excused,
       },
       include: {
         completedBy: { select: { id: true, name: true, email: true } },

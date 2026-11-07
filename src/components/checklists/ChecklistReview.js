@@ -300,14 +300,15 @@ function StaffChecklistDetails({ userId, centerId, centerName, date, messagesPat
     load();
   }, [load]);
 
-  async function mark(items, undo) {
+  // excused: mark the items Excused (left out of the total) instead of complete.
+  async function mark(items, undo, excused = false) {
     setBusy(true);
     setError("");
     try {
       for (const item of items) {
         await apiJson("/api/v1/daily-checklists/complete", {
           method: "POST",
-          body: JSON.stringify({ itemId: item.id, date, undo, forUserId: userId }),
+          body: JSON.stringify({ itemId: item.id, date, undo, forUserId: userId, excused }),
         });
       }
       await load();
@@ -321,7 +322,7 @@ function StaffChecklistDetails({ userId, centerId, centerName, date, messagesPat
 
   const row = data?.row;
   const items = row?.items || [];
-  const missing = items.filter((i) => !i.done);
+  const missing = items.filter((i) => !i.done && !i.excused);
   const listed = tab === "items" ? items : missing;
   const logs = data?.logs || [];
   const logCounts = logs.reduce((acc, log) => ({ ...acc, [log.type]: (acc[log.type] || 0) + 1 }), {});
@@ -461,7 +462,7 @@ function StaffChecklistDetails({ userId, centerId, centerName, date, messagesPat
                 <button type="button" disabled={busy || !missing.length} onClick={() => mark(missing, false)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">
                   Mark All Complete
                 </button>
-                <button type="button" disabled={busy || missing.length === items.length} onClick={() => mark(items.filter((i) => i.done), true)} className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50">
+                <button type="button" disabled={busy || missing.length === items.length} onClick={() => mark(items.filter((i) => i.done || i.excused), true)} className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50">
                   Mark All Incomplete
                 </button>
               </div>
@@ -483,16 +484,31 @@ function StaffChecklistDetails({ userId, centerId, centerName, date, messagesPat
                       <td className="whitespace-nowrap px-4 py-2 text-gray-700 dark:text-gray-300">{formatTaskTime(item.taskTime) || "—"}</td>
                       <td className="px-3 py-2 text-gray-900 dark:text-gray-100">{item.title}</td>
                       <td className="px-3 py-2">
-                        {item.done ? (
+                        {item.excused ? (
+                          <span className="font-semibold text-slate-600">Excused</span>
+                        ) : item.done ? (
                           <span className="font-semibold text-emerald-700">✓ Completed</span>
                         ) : (
                           <span className="font-semibold text-amber-700">Not completed</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-center">
-                        <button type="button" disabled={busy} onClick={() => mark([item], item.done)} className="rounded-lg border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200">
-                          {item.done ? "Mark Incomplete" : "Mark Complete"}
-                        </button>
+                        {/* Mark Incomplete / Mark Complete / Excused (client sheet 2026-11-07). */}
+                        <select
+                          aria-label={`Action for ${item.title}`}
+                          disabled={busy}
+                          value={item.excused ? "EXCUSED" : item.done ? "COMPLETE" : "INCOMPLETE"}
+                          onChange={(e) => {
+                            const action = e.target.value;
+                            if (action === "INCOMPLETE") mark([item], true);
+                            else mark([item], false, action === "EXCUSED");
+                          }}
+                          className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs font-semibold text-gray-800 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                        >
+                          <option value="INCOMPLETE">Mark Incomplete</option>
+                          <option value="COMPLETE">Mark Complete</option>
+                          <option value="EXCUSED">Excused</option>
+                        </select>
                       </td>
                     </tr>
                   ))}

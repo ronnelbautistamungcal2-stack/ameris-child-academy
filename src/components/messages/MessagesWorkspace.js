@@ -1015,7 +1015,6 @@ function ComposeDialog({ seed, userId, role, workflowView, suggestedContacts, on
   const [threadType, setThreadType] = useState("MESSAGE");
   const [priority, setPriority] = useState("B");
   const [dueDate, setDueDate] = useState("");
-  const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
   const [audiences, setAudiences] = useState([]);
   const [audienceKeys, setAudienceKeys] = useState([]);
@@ -1053,24 +1052,26 @@ function ComposeDialog({ seed, userId, role, workflowView, suggestedContacts, on
     return () => clearTimeout(timer);
   }, [query, userId, family]);
 
-  // Coaches and admins can also send to a whole group at a center.
+  // Coaches and admins can also send to a whole group by role; with a single
+  // center, the conversation is filed under it.
   useEffect(() => {
     if (!workflowView) return;
     apiJson("/api/v1/centers")
       .then((rows) => {
         const list = Array.isArray(rows) ? rows : [];
-        setCenters(list);
         if (list.length === 1) setCenterId(list[0].id);
       })
-      .catch(() => setCenters([]));
+      .catch(() => {});
   }, [workflowView]);
 
+  // Groups by role across the sender's centers (one center when that's all
+  // they have); no center to pick first (client sheet 2026-11-07).
   useEffect(() => {
-    if (!workflowView || !centerId) {
+    if (!workflowView) {
       setAudiences([]);
       return;
     }
-    const qs = new URLSearchParams({ centerId, threadType });
+    const qs = new URLSearchParams({ threadType, ...(centerId ? { centerId } : {}) });
     apiJson(`/api/v1/messages/audiences?${qs}`)
       .then((rows) => setAudiences(Array.isArray(rows) ? rows.filter((a) => a.count > 0) : []))
       .catch(() => setAudiences([]));
@@ -1238,13 +1239,7 @@ function ComposeDialog({ seed, userId, role, workflowView, suggestedContacts, on
 
         {workflowView ? (
           <div className="space-y-2 rounded-lg bg-gray-50 p-3 dark:bg-gray-900/40">
-            <label className={`block text-sm font-semibold ${NAVY}`}>
-              Or send to a group at
-              <select value={centerId} onChange={(e) => { setCenterId(e.target.value); setAudienceKeys([]); }} className={`${FIELD} mt-1`}>
-                <option value="">Select a center...</option>
-                {centers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </label>
+            <div className={`text-sm font-semibold ${NAVY}`}>Send to group (role)</div>
             {audiences.length ? (
               <div className="grid gap-1 sm:grid-cols-2">
                 {audiences.map((a) => (

@@ -123,7 +123,7 @@ export async function checklistReview(prisma, { centerId, date, userId = "" }) {
     prisma.dailyChecklistChoice.findMany({ where: { userId: { in: ids }, date: day }, select: { userId: true, checklistId: true } }),
     prisma.dailyChecklistCompletion.findMany({
       where: { completedById: { in: ids }, date: day, item: { checklist: { centerId } } },
-      select: { itemId: true, completedById: true, completedAt: true },
+      select: { itemId: true, completedById: true, completedAt: true, excused: true },
     }),
     prisma.dailyChecklistNote.findMany({
       where: { createdById: { in: ids }, date: day, checklist: { centerId } },
@@ -145,14 +145,15 @@ export async function checklistReview(prisma, { centerId, date, userId = "" }) {
 
   const rows = members.map((member) => {
     const mine = completions.filter((c) => c.completedById === member.id);
-    const doneAt = new Map(mine.map((c) => [c.itemId, c.completedAt]));
+    const doneAt = new Map(mine.filter((c) => !c.excused).map((c) => [c.itemId, c.completedAt]));
+    const excusedIds = new Set(mine.filter((c) => c.excused).map((c) => c.itemId));
     const lists = listsForDay({
       member,
       checklists,
       teacherClassIds: classMap.get(member.id) || [],
       key,
       choiceId: choices.find((c) => c.userId === member.id)?.checklistId,
-      doneIds: new Set(doneAt.keys()),
+      doneIds: new Set(mine.map((c) => c.itemId)),
     });
     const items = lists.flatMap((c) =>
       c.items.map((item) => ({
@@ -162,10 +163,13 @@ export async function checklistReview(prisma, { centerId, date, userId = "" }) {
         title: item.title,
         taskTime: item.taskTime,
         done: doneAt.has(item.id),
+        excused: excusedIds.has(item.id),
         completedAt: doneAt.get(item.id) || null,
       })),
     );
-    const done = items.filter((i) => i.done).length;
+    // Excused items count neither way.
+    const counted = items.filter((i) => !i.excused);
+    const done = counted.filter((i) => i.done).length;
     const listIds = new Set(lists.map((c) => c.id));
     const myNotes = notes.filter((n) => n.createdById === member.id && listIds.has(n.checklistId) && n.notes.trim());
     const absence = absences.find((a) => a.userId === member.id);
@@ -174,7 +178,7 @@ export async function checklistReview(prisma, { centerId, date, userId = "" }) {
     const updates = [...items.map((i) => i.completedAt), ...myNotes.map((n) => n.updatedAt)].filter(Boolean).map((d) => new Date(d));
     const rooms = [...new Map(lists.flatMap(roomsOf).map((r) => [r.id, r])).values()];
     const role = primaryRole(member);
-    const pct = items.length && !closed ? Math.round((done * 100) / items.length) : null;
+    const pct = counted.length && !closed ? Math.round((done * 100) / counted.length) : null;
     return {
       id: member.id,
       name: member.name || member.email,
@@ -185,15 +189,15 @@ export async function checklistReview(prisma, { centerId, date, userId = "" }) {
       area: rooms.length ? rooms.map((r) => r.name).join(", ") : member.staffDepartment || roleLabel(role),
       classRoomIds: rooms.map((r) => r.id),
       checklistTitles: lists.map((c) => c.title),
-      total: items.length,
+      total: counted.length,
       done,
       pct,
-      missing: items.filter((i) => !i.done).map((i) => i.title),
+      missing: counted.filter((i) => !i.done).map((i) => i.title),
       notes: absent
         ? [absence?.notes || (off ? `Time off${off.reason ? ` – ${off.reason}` : ""}` : "Absent")].filter(Boolean).join("; ")
         : myNotes.map((n) => n.notes).join(" · "),
       lastUpdated: updates.length ? new Date(Math.max(...updates.map((d) => d.getTime()))) : null,
-      status: closed ? "CLOSED" : absent ? "ABSENT" : !items.length ? "NO_CHECKLIST" : done === items.length ? "COMPLETE" : done ? "IN_PROGRESS" : "NOT_STARTED",
+      status: closed ? "CLOSED" : absent ? "ABSENT" : !items.length ? "NO_CHECKLIST" : done === counted.length ? "COMPLETE" : done ? "IN_PROGRESS" : "NOT_STARTED",
       ...(userId ? { items } : {}),
     };
   });
@@ -244,7 +248,7 @@ export async function checklistCompletionForRange(prisma, { userId, centerId, da
     prisma.dailyChecklistChoice.findMany({ where: { userId, date: { gte: dbDay(rangeKey(dateFrom)), lte: dbDay(rangeKey(dateTo)) } } }),
     prisma.dailyChecklistCompletion.findMany({
       where: { completedById: userId, date: { gte: dbDay(rangeKey(dateFrom)), lte: dbDay(rangeKey(dateTo)) }, item: { checklist: { centerId } } },
-      select: { itemId: true, date: true },
+      select: { itemId: true, date: true, excused: true },
     }),
     prisma.staffAttendance.findMany({ where: { userId, centerId, date: { gte: from, lte: to } }, select: { date: true, status: true } }),
     prisma.timeOffRequest.findMany({
@@ -265,27 +269,32 @@ export async function checklistCompletionForRange(prisma, { userId, centerId, da
   }
 
   const doneByDay = new Map();
+  const excusedByDay = new Map();
   for (const c of completions) {
     const key = utcKey(c.date);
-    if (!doneByDay.has(key)) doneByDay.set(key, new Set());
-    doneByDay.get(key).add(c.itemId);
+    const byDay = c.excused ? excusedByDay : doneByDay;
+    if (!byDay.has(key)) byDay.set(key, new Set());
+    byDay.get(key).add(c.itemId);
   }
   let assigned = 0;
   let completed = 0;
   for (const key of days) {
     if (!isCenterOpenOn(center, key)) continue;
     const doneIds = doneByDay.get(key) || new Set();
+    const excusedIds = excusedByDay.get(key) || new Set();
     const lists = listsForDay({
       member,
       checklists,
       teacherClassIds: classMap.get(userId) || [],
       key,
       choiceId: choices.find((c) => utcKey(c.date) === key)?.checklistId,
-      doneIds,
+      doneIds: new Set([...doneIds, ...excusedIds]),
     });
     for (const list of lists) {
-      assigned += list.items.length;
-      completed += list.items.filter((item) => doneIds.has(item.id)).length;
+      // Excused items count neither way.
+      const counted = list.items.filter((item) => !excusedIds.has(item.id));
+      assigned += counted.length;
+      completed += counted.filter((item) => doneIds.has(item.id)).length;
     }
   }
   return { completedCount: completed, assignedCount: assigned, pct: assigned ? Math.round((completed * 100) / assigned) : null };

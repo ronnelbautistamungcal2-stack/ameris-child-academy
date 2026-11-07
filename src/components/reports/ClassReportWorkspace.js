@@ -46,8 +46,10 @@ export default function ClassReportWorkspace({ classHref, showClassList = true }
     router.replace({ pathname: router.pathname, query: { ...router.query, classRoomId: id } }, undefined, { shallow: true });
   }
 
-  // Teachers only see their own class, with no class list (client request 2026-10-29).
+  // Teachers only see their own class, with no class list (client request 2026-10-29);
+  // a teacher with several classes picks one at the top (client sheet 2026-11-07).
   const showList = showClassList && classes.length > 1;
+  const showPicker = !showClassList && classes.length > 1;
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
@@ -82,6 +84,20 @@ export default function ClassReportWorkspace({ classHref, showClassList = true }
         {error && <div role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
         {loading && <p className="text-sm text-gray-500">Loading...</p>}
         {!loading && !classes.length && !error && <p className="text-sm text-gray-500">No classes to show.</p>}
+        {showPicker && (
+          <label className={`no-print mb-3 block text-sm font-bold ${NAVY}`}>
+            Classroom
+            <select
+              value={classRoomId}
+              onChange={(e) => choose(e.target.value)}
+              className="mt-1 block w-72 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-normal dark:border-gray-600 dark:bg-gray-800"
+            >
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>{c.center ? `${c.name} (${c.center})` : c.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
         {classRoomId && (
           <ClassPerformance
             classRoomId={classRoomId}

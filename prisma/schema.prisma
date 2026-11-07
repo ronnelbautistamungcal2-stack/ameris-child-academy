@@ -507,6 +507,7 @@ model Child {
   formSubmissions               FormSubmission[]
   enrollmentStartDate           DateTime?
   enrollmentEndDate             DateTime?
+  enrollmentStatusEntries       ChildEnrollmentStatusEntry[]
   permissions                   ChildPermission[]
   createdAt                     DateTime                           @default(now())
   OutboundEmail                 OutboundEmail[]
@@ -2306,6 +2307,23 @@ model DailyChecklistChoice {
 }
 
 // Employment Status history (Staff List pop-up, client mockup 2026-10-02).
+// A child's enrollment history (Student List > Enrollment Status, client sheet
+// 2026-11-07). The latest entry sets Child.enrollmentEndDate: withdrawn,
+// graduated or on hold end the enrollment; enrolled or re-enrolled clear it.
+model ChildEnrollmentStatusEntry {
+  id             String   @id @default(uuid())
+  child          Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  childId        String
+  date           DateTime @db.Date
+  status         String
+  notes          String?
+  recordedById   String?
+  recordedByName String?
+  createdAt      DateTime @default(now())
+
+  @@index([childId, date])
+}
+
 model EmploymentStatusEntry {
   id             String   @id @default(uuid())
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)

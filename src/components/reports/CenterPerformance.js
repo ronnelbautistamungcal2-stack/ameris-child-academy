@@ -98,9 +98,12 @@ function Collapsible({ title, open, onToggle, children }) {
 
 /**
  * studentsOnly: just the Student Performance bars (with the click-through
- * list), for a coach's or Student Support's My Performance.
+ * list), for Student Support's My Performance.
+ * teamOnly: a coach's My Performance (client sheet 2026-11-07): the Teacher
+ * and Student Performance bars and the Staff Performance Overview for the
+ * coach's own teachers and their students only.
  */
-export default function CenterPerformance({ studentsOnly = false, fixedCenterId = "", showCounts = false }) {
+export default function CenterPerformance({ studentsOnly = false, teamOnly = false, fixedCenterId = "", showCounts = false }) {
   const { data: session } = useSession();
   const viewerRole = session?.user?.role || "";
   const [pickedCorrection, setPickedCorrection] = useState("");
@@ -130,14 +133,21 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
     setLoading(true);
     setError("");
     const q = new URLSearchParams({ from: range.start, to: range.end, ...(centerId ? { centerId } : {}), ...(studentsOnly ? { view: "students" } : {}) });
-    apiJson(`/api/v1/reports/center-performance?${q}`)
+    // Team view: the coach's staff rows plus the students of their teachers.
+    const load = teamOnly
+      ? Promise.all([
+          apiJson(`/api/v1/reports/center-performance?${q}&staffOnly=1`),
+          apiJson(`/api/v1/reports/center-performance?${q}&view=students`),
+        ]).then(([staffPart, studentPart]) => ({ ...staffPart, students: studentPart.students || [] }))
+      : apiJson(`/api/v1/reports/center-performance?${q}`);
+    load
       .then((d) => {
         setData(d);
         if (d.center && d.center.id !== centerId) setCenterId(d.center.id);
       })
       .catch((e) => setError(e.message || "Could not load the center report"))
       .finally(() => setLoading(false));
-  }, [centerId, range, studentsOnly]);
+  }, [centerId, range, studentsOnly, teamOnly]);
 
   const staff = useMemo(() => data?.staff || [], [data]);
   const students = useMemo(() => data?.students || [], [data]);
@@ -216,6 +226,8 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
     return CHARACTER_HIGHLIGHT_TYPE_OPTIONS.map((t) => ({ key: t.value, label: t.label, count: tally[t.value] }));
   }, [data, highlights]);
 
+  // A coach opens their own Staff Performance page; admins the Staff Performance Report.
+  const staffHref = (id) => (viewerRole === "COACH" ? `/coach/staff-performance/${id}` : `/admin/reports/staff-performance?staffId=${id}`);
   const select = (chart) => (key) => setSelected((cur) => (cur?.chart === chart && cur?.key === key ? null : { chart, key }));
   const isSel = (chart) => (selected?.chart === chart ? selected.key : null);
 
@@ -256,10 +268,14 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className={`text-4xl font-black ${NAVY}`}>Center Performance Overview</h1>
+        {teamOnly ? (
+          <h2 className={`text-2xl font-black ${NAVY}`}>My Team&apos;s Performance</h2>
+        ) : (
+          <h1 className={`text-4xl font-black ${NAVY}`}>Center Performance Overview</h1>
+        )}
         <div className="flex flex-wrap items-end gap-3">
           {/* Always shown so the center can be switched (client request 2026-10-29). */}
-          {data?.centers?.length > 0 && (
+          {!teamOnly && data?.centers?.length > 0 && (
             <label className={`text-xs font-semibold ${NAVY}`}>
               Center
               <select value={centerId} onChange={(e) => { setSelected(null); setCenterId(e.target.value); }} className={`${control} mt-1 block w-48`}>
@@ -336,7 +352,7 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
                 {picked.people.map((p) => (
                   <li key={p.id} className="flex justify-between border-b border-gray-100 py-1.5 text-sm dark:border-gray-800">
                     {picked.kind === "staff" ? (
-                      <Link href={`/admin/reports/staff-performance?staffId=${p.id}`} className="font-semibold text-blue-700 hover:underline dark:text-blue-300">{p.name}</Link>
+                      <Link href={staffHref(p.id)} className="font-semibold text-blue-700 hover:underline dark:text-blue-300">{p.name}</Link>
                     ) : (
                       <Link href={studentReportHref(viewerRole, p.id)} className="font-semibold text-blue-700 hover:underline dark:text-blue-300">{p.name}</Link>
                     )}
@@ -349,10 +365,12 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
 
           <Collapsible title="Staff Performance Overview" open={staffOpen} onToggle={() => setStaffOpen((o) => !o)}>
             <AddOnGate addOn="STAFF_MANAGEMENT">
-              <StaffPerformanceTable staff={staff} viewHref={(row) => `/admin/reports/staff-performance?staffId=${row.id}`} />
+              <StaffPerformanceTable staff={staff} viewHref={(row) => staffHref(row.id)} />
             </AddOnGate>
           </Collapsible>
 
+          {teamOnly ? null : (
+          <>
           <Collapsible title="Student Performance Overview" open={studentsOpen} onToggle={() => setStudentsOpen((o) => !o)}>
             <div className="flex flex-wrap items-end gap-3">
               <input value={studentFilter.q} onChange={(e) => { setStudentFilter({ ...studentFilter, q: e.target.value }); setStudentPage(1); }} placeholder="Search students..." aria-label="Search students" className={`${control} w-56`} />
@@ -440,6 +458,8 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
               ) : null}
             </section>
           </div>
+          </>
+          )}
         </>
       )}
     </div>

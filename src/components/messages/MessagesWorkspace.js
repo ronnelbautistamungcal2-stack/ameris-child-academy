@@ -1005,14 +1005,21 @@ function ThreadView({ thread, userId, isAdmin, archived, filing, onBack, onArchi
   );
 }
 
-function ComposeDialog({ seed, userId, role, workflowView, suggestedContacts, onClose, onCreated }) {
+/**
+ * New Message dialog. seed: { subject, message, recipient, threadType } to
+ * start from; also opened from other pages (e.g. Checklist Review's Add Open
+ * Point, client sheet 2026-11-07).
+ */
+export function ComposeDialog({ seed, userId, role, workflowView, suggestedContacts = [], onClose, onCreated }) {
   const toast = useToast();
   const family = FAMILY_ROLES.has(role);
   const threadTypes = getAvailableThreadTypesForRole(role);
   const [recipients, setRecipients] = useState(seed?.recipient ? [seed.recipient] : []);
   const recipient = recipients[0] || null;
   const setRecipient = (person) => setRecipients(person ? (family ? [person] : [...recipients.filter((r) => r.id !== person.id), person]) : []);
-  const [threadType, setThreadType] = useState("MESSAGE");
+  const [threadType, setThreadType] = useState(() =>
+    threadTypes.some((t) => t.value === seed?.threadType) ? seed.threadType : "MESSAGE",
+  );
   const [priority, setPriority] = useState("B");
   const [dueDate, setDueDate] = useState("");
   const [centerId, setCenterId] = useState("");

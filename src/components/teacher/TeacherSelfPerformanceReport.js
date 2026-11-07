@@ -194,7 +194,10 @@ export default function TeacherSelfPerformanceReport({ centerId, centers, loadin
                 <ClassPerformance classRoomId={room.id} sections={["grades"]} />
               </div>
             ))
-          ) : role === "COACH" || role === "STUDENT_SUPPORT" ? (
+          ) : role === "COACH" ? (
+            // The coach's own teachers and their students (client sheet 2026-11-07).
+            <CenterPerformance teamOnly fixedCenterId={centerId} />
+          ) : role === "STUDENT_SUPPORT" ? (
             <CenterPerformance studentsOnly fixedCenterId={centerId} />
           ) : role === "ADMIN" ? (
             <AddOnGate addOn="STEPS_OF_PROGRESSION">

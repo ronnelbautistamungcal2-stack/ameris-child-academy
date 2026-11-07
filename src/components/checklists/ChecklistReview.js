@@ -1,4 +1,5 @@
 import { ChecklistIcon } from "@/components/checklists/ChecklistManagerPage";
+import { ComposeDialog } from "@/components/messages/MessagesWorkspace";
 import ActivityLogEntry, { ACTIVITY_ICONS, ACTIVITY_TYPE_LABELS } from "@/components/reports/ActivityLogEntry";
 import { NAVY } from "@/components/reports/reportUi";
 import Skeleton from "@/components/ui/Skeleton";
@@ -6,6 +7,7 @@ import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
 import { formatDayKey, formatTaskTime, shiftDayKey, todayKey } from "@/lib/checklistTime";
 import { EMPLOYEE_ROLES, roleLabel } from "@/lib/roles";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -328,15 +330,18 @@ function StaffChecklistDetails({ userId, centerId, centerName, date, messagesPat
   const logCounts = logs.reduce((acc, log) => ({ ...acc, [log.type]: (acc[log.type] || 0) + 1 }), {});
   const shownLogs = logFilter === "ALL" ? logs : logFilter ? logs.filter((l) => l.type === logFilter) : [];
   const statusLabel = STATUS_OPTIONS.find((s) => s.value === row?.status)?.label || "";
-  const composeHref = row
-    ? `${messagesPath}?${new URLSearchParams({
-        compose: "1",
-        recipientId: row.id,
-        recipientName: row.name,
-        recipientEmail: row.email || "",
+  // Add Open Point opens the message form here, so the review stays open
+  // (client sheet 2026-11-07).
+  const { data: session } = useSession();
+  const [composing, setComposing] = useState(false);
+  const [sentNotice, setSentNotice] = useState("");
+  const composeSeed = row
+    ? {
+        threadType: "OPEN_POINT",
+        recipient: { id: row.id, name: row.name, email: row.email || "" },
         subject: `Open point: checklist for ${formatDayKey(date, { month: "short", day: "numeric", year: "numeric" })}`,
-      }).toString()}`
-    : messagesPath;
+      }
+    : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/50 px-4 py-8" role="dialog" aria-modal="true" aria-label="Staff Checklist Details">
@@ -523,14 +528,35 @@ function StaffChecklistDetails({ userId, centerId, centerName, date, messagesPat
           </div>
         )}
         <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4 dark:border-gray-700">
-          <Link href={composeHref} className="inline-flex items-center gap-2 rounded-lg border border-blue-300 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50">
-            💬 Add Open Point
-          </Link>
+          <div className="flex items-center gap-3">
+            <button type="button" disabled={!row} onClick={() => { setSentNotice(""); setComposing(true); }} className="inline-flex items-center gap-2 rounded-lg border border-blue-300 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50">
+              💬 Add Open Point
+            </button>
+            {sentNotice ? (
+              <span role="status" className="text-sm font-semibold text-emerald-700">
+                {sentNotice}{" "}
+                <Link href={messagesPath} className="underline">View in Messages</Link>
+              </span>
+            ) : null}
+          </div>
           <button type="button" onClick={onClose} className="rounded-lg border border-gray-300 px-6 py-2 text-sm font-bold text-gray-800 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200">
             Close
           </button>
         </div>
       </div>
+      {composing && composeSeed ? (
+        <ComposeDialog
+          seed={composeSeed}
+          userId={session?.user?.id}
+          role={String(session?.user?.role || "").toUpperCase()}
+          workflowView
+          onClose={() => setComposing(false)}
+          onCreated={() => {
+            setComposing(false);
+            setSentNotice("Open point sent.");
+          }}
+        />
+      ) : null}
     </div>
   );
 }

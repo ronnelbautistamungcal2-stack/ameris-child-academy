@@ -17,7 +17,10 @@ export function dbDate(dateKey) {
 export async function menuCenterIds(user) {
   // Admins: their own subscriber account's centers (null = no account, all).
   if (hasAnyRole(user, ["ADMIN"])) return accessibleCenterIds(user.id);
-  const ids = new Set((await accessibleCenterIds(user.id)) || []);
+  const own = await accessibleCenterIds(user.id);
+  // null: also an admin with no subscriber account, who sees every center.
+  if (own === null) return null;
+  const ids = new Set(own);
   if (hasAnyRole(user, ["PARENT"])) {
     const children = await prisma.child.findMany({
       where: buildParentLinkedChildWhere(user.id),

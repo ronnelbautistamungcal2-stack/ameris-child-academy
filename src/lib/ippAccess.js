@@ -24,8 +24,10 @@ export async function ippScope(user) {
     return ids ? { centerId: { in: ids } } : {};
   }
   if (canManageIpp(user)) {
-    const ids = (await accessibleCenterIds(user.id)) || [];
-    return { centerId: { in: ids } };
+    // null: someone who is also an admin with no subscriber account, who
+    // reaches every center (e.g. an admin signed in as Coach or Student Support).
+    const ids = await accessibleCenterIds(user.id);
+    return ids ? { centerId: { in: ids } } : {};
   }
   if (hasAnyRole(user, ["TEACHER"])) return { child: await buildTeacherChildWhere(user.id) };
   if (hasAnyRole(user, ["PARENT"])) return { child: buildParentLinkedChildWhere(user.id) };

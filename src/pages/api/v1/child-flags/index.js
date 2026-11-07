@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
 import {
   buildActiveChildFlags,
   createChildFlagSnapshot,
@@ -198,7 +198,9 @@ export default async function handler(req, res) {
       }
       teacherWhere = await buildTeacherChildWhere(session.user.id, normalizedCenterId);
     }
-    if (isCoach && (!normalizedCenterId || !teacherAllowedCenterIds.includes(normalizedCenterId))) {
+    // Coaches: any center they can reach (an admin signed in as Coach has no
+    // membership rows but reaches their centers).
+    if (isCoach && (!normalizedCenterId || !(await hasAccessToCenter(session.user.id, normalizedCenterId)))) {
       return res.status(normalizedCenterId ? 403 : 400).json({ error: normalizedCenterId ? "Forbidden" : "centerId is required" });
     }
 
@@ -288,7 +290,7 @@ export default async function handler(req, res) {
     // children in classrooms they are assigned to.
     if (isCoach) {
       const normalizedCenterId = typeof centerId === "string" ? centerId.trim() : "";
-      if (!normalizedCenterId || !teacherAllowedCenterIds.includes(normalizedCenterId)) {
+      if (!normalizedCenterId || !(await hasAccessToCenter(session.user.id, normalizedCenterId))) {
         return res.status(403).json({ error: "Forbidden" });
       }
     }

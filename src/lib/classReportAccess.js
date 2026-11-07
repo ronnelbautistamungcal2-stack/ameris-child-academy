@@ -15,7 +15,10 @@ export async function classReportScope(sessionUser) {
     return ids ? { centerId: { in: ids } } : {};
   }
   if (hasAnyRole(user, ["COACH", "STUDENT_SUPPORT"])) {
-    return { centerId: { in: (await accessibleCenterIds(user.id)) || [] } };
+    // null: someone who is also an admin with no subscriber account, who
+    // reaches every center (e.g. an admin signed in as Coach or Student Support).
+    const ids = await accessibleCenterIds(user.id);
+    return ids ? { centerId: { in: ids } } : {};
   }
   if (hasAnyRole(user, ["TEACHER"])) return { teachers: { some: { teacherId: user.id } } };
   return null;

@@ -20,7 +20,10 @@ export async function sopChildScope(sessionUser, centerId) {
     return { centerId: { in: centerId ? ids.filter((id) => id === centerId) : ids } };
   }
   if (hasAnyRole(user, ["COACH", "STUDENT_SUPPORT"])) {
-    const ids = (await accessibleCenterIds(user.id)) || [];
+    // null: someone who is also an admin with no subscriber account, who
+    // reaches every center (e.g. an admin signed in as Coach or Student Support).
+    const ids = await accessibleCenterIds(user.id);
+    if (!ids) return centerId ? { centerId } : {};
     return { centerId: { in: centerId ? ids.filter((id) => id === centerId) : ids } };
   }
   if (hasAnyRole(user, ["TEACHER"])) return buildTeacherChildWhere(user.id, centerId);
@@ -32,7 +35,8 @@ export async function canUseChild(sessionUser, child) {
   const user = signedInAs(sessionUser);
   if (hasAnyRole(user, ["ADMIN"])) return hasAccessToCenter(user.id, child.centerId);
   if (hasAnyRole(user, ["COACH", "STUDENT_SUPPORT"])) {
-    return ((await accessibleCenterIds(user.id)) || []).includes(child.centerId);
+    const ids = await accessibleCenterIds(user.id);
+    return ids === null || ids.includes(child.centerId);
   }
   if (hasAnyRole(user, ["TEACHER"])) return teacherCanAccessChild(user.id, child);
   return false;

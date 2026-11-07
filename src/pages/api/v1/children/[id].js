@@ -164,9 +164,14 @@ export default async function handler(req, res) {
     let resolvedParentAccountIds;
     if (requestedParentAccountIds !== undefined) {
       try {
+        const current = await prisma.child.findUnique({
+          where: { id },
+          select: { parentId: true, guardians: { select: { guardianId: true } } },
+        });
         resolvedParentAccountIds = await resolveLinkedParentAccountIds(
           prisma,
           requestedParentAccountIds,
+          { alreadyLinked: [current?.parentId, ...(current?.guardians || []).map((g) => g.guardianId)] },
         );
       } catch (error) {
         return res.status(400).json({

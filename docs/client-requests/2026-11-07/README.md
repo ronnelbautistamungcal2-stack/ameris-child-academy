@@ -36,16 +36,25 @@ website development > Ameris Solutions home pages; local copy in Downloads).
 5. **Child limit**: one number on the account that applies to each center, or a different limit per center?
 6. **Stripe and DocuSign**: we need their Stripe account (test keys first), a DocuSign developer account with an integration key, and the agreement document/template. Also the prices: per add-on, per classroom, per child range.
 
+## Answers to the follow-up questions (2026-11-07)
+
+1. **Type "Other"**: a fixed third option (Non-Denominational, Non-Denominational Christian, Other).
+2. **Type per account**: set by the Global admin on the subscriber's account. "Standard" = Non-Denominational; "Faith Based" = Non-Denominational Christian.
+3. **Planner per classroom**: each subscriber follows the curriculum for the age group(s) they subscribe to.
+4. **Support access**: ends when someone clicks **End Access** (no time limit, not tied to closing the ticket).
+5. **Child limit**: one number on the account that applies to every center.
+6. Stripe / DocuSign accounts, keys and prices: not answered yet.
+
 ## Build plan
 
 | Step | What | Waits on |
 |---|---|---|
 | A | Add-on locks from the sheet (pages and sections), with answers 8 and 9 | **done 2026-11-07** (see below) |
-| B | Child limit per center | question 5 (default: one number per center) |
-| C | Lesson and step **Type** multi-select | question 1 (default: three fixed options) |
+| B | Child limit per center (one number, every center) | ready |
+| C | Lesson and step **Type** multi-select (three fixed options) | ready |
 | D | Character Guide **Import** for Teacher Training subscribers | nothing |
-| E | Banks move to the Global admin; subscriber Lesson Calendar (own start day and closed days, view-only lessons, live updates, filtered by type) | questions 2 and 3 |
-| F | Customer Support tickets with Request / Grant / End center access | question 4 |
+| E | Banks move to the Global admin; subscriber Lesson Calendar (own start day and closed days, view-only lessons, live updates, filtered by the account's type and age groups) | ready |
+| F | Customer Support tickets with Request / Grant / End center access (ends on End Access) | ready |
 | G | Quote → enrollment → Stripe payment → embedded DocuSign → Pending → Activate | question 6 (accounts, keys, prices) |
 
 ## Step A — add-on locks (done 2026-11-07)

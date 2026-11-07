@@ -10,12 +10,12 @@ import { addOnsForPath, missingAddOns } from "@/lib/addOns";
 import { LockedPage, useAddOns } from "@/components/subscription/AddOnGate";
 
 // Greys out and locks the pages the subscriber's add-ons don't include.
-function withLocks(items, addOns) {
+function withLocks(items, addOns, role) {
   if (addOns == null) return items;
   return (items || []).map((item) => {
-    if (item?.children) return { ...item, children: withLocks(item.children, addOns) };
+    if (item?.children) return { ...item, children: withLocks(item.children, addOns, role) };
     if (!item?.href) return item;
-    return missingAddOns(addOnsForPath(item.href), addOns).length ? { ...item, locked: true } : item;
+    return missingAddOns(addOnsForPath(item.href, role), addOns).length ? { ...item, locked: true } : item;
   });
 }
 
@@ -91,8 +91,9 @@ export default function AppShell({
   // Subscription add-ons: lock nav items and, on a locked page, show the
   // upgrade message instead of the page (data stays saved, just hidden).
   const { addOns, loaded: addOnsLoaded } = useAddOns();
-  const navItems = useMemo(() => withLocks(navItemsProp, addOns), [navItemsProp, addOns]);
-  const pageNeeds = addOnsForPath(activePath);
+  const lockRole = session?.user?.role || "";
+  const navItems = useMemo(() => withLocks(navItemsProp, addOns, lockRole), [navItemsProp, addOns, lockRole]);
+  const pageNeeds = addOnsForPath(activePath, lockRole);
   const pageMissing = missingAddOns(pageNeeds, addOns);
   const children = pageMissing.length ? (
     <LockedPage missing={pageMissing} />

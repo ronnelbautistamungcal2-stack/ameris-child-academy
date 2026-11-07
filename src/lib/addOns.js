@@ -62,9 +62,25 @@ const PAGE_ADD_ONS = {
   "/staff/student-support/reports/child-steps": ["STEPS_OF_PROGRESSION"],
 };
 
-/** Add-ons a route needs, or [] when the page is in the base package. */
-export function addOnsForPath(path) {
+// HR and Other Staff: every page of theirs is Staff Management (client
+// sheet 2026-11-06), except the dashboard, messages and My Performance, whose
+// tabs lock themselves (Professional Development is Teacher Training).
+const STAFF_MANAGEMENT_ROLES = ["HR_STAFF", "OTHER_STAFF"];
+const ALWAYS_OPEN_STAFF_PAGES = ["/staff/dashboard", "/staff/messages", "/staff/performance"];
+
+/**
+ * Add-ons a route needs, or [] when the page is in the base package. role
+ * (the signed-in role) matters for the shared /staff pages.
+ */
+export function addOnsForPath(path, role = "") {
   const clean = String(path || "").split("?")[0].replace(/\/+$/, "");
+  if (
+    STAFF_MANAGEMENT_ROLES.includes(role) &&
+    clean.startsWith("/staff/") &&
+    !ALWAYS_OPEN_STAFF_PAGES.some((open) => clean === open || clean.startsWith(`${open}/`))
+  ) {
+    return ["STAFF_MANAGEMENT"];
+  }
   if (PAGE_ADD_ONS[clean]) return PAGE_ADD_ONS[clean];
   // Sub-pages (e.g. /coach/evaluations/[id]) follow their parent page.
   const parent = Object.keys(PAGE_ADD_ONS)

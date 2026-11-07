@@ -2,6 +2,7 @@ import ActivityLogEntry, { ACTIVITY_ICONS, ACTIVITY_TYPE_LABELS } from "@/compon
 import DrillDownList from "@/components/reports/DrillDownList";
 import { Heading, NAVY, RangePicker, card, useRange } from "@/components/reports/reportUi";
 import StatusMixBar from "@/components/sop/StatusMixBar";
+import AddOnGate from "@/components/subscription/AddOnGate";
 import { apiJson } from "@/lib/api";
 import { classCitizenshipPercent } from "@/lib/citizenship";
 import { SOP_STATUSES } from "@/lib/sop";
@@ -128,6 +129,7 @@ export default function ClassPerformance({ classRoomId, header = null, sections 
           <RangePicker {...citizenship} label="Citizenship Grade" />
           {points.length ? <CitizenshipChart points={points} /> : <p className="py-6 text-center text-sm text-gray-500">No citizenship grades in these dates.</p>}
         </section>
+        <AddOnGate addOn="STEPS_OF_PROGRESSION">
         <section className={card}>
           <div className="flex items-center gap-3">
             <Heading icon={"\u{1F3C6}"}>Milestones Grade</Heading>
@@ -150,6 +152,7 @@ export default function ClassPerformance({ classRoomId, header = null, sections 
             />
           ) : null}
         </section>
+        </AddOnGate>
       </div>
       </div>
     ) : (
@@ -174,6 +177,7 @@ export default function ClassPerformance({ classRoomId, header = null, sections 
           <RangePicker {...citizenship} label="Citizenship Grade" />
           {points.length ? <CitizenshipChart points={points} /> : <p className="py-6 text-center text-sm text-gray-500">No citizenship grades in these dates.</p>}
         </section>
+        <AddOnGate addOn="STEPS_OF_PROGRESSION">
         <section className={card}>
           <div className="flex items-center gap-3">
             <Heading icon={"\u{1F3C6}"}>Milestones Grade</Heading>
@@ -196,6 +200,7 @@ export default function ClassPerformance({ classRoomId, header = null, sections 
             />
           ) : null}
         </section>
+        </AddOnGate>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">

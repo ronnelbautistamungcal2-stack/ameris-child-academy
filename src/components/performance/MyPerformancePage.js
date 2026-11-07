@@ -1,9 +1,12 @@
 import MyEvaluations from "@/components/performance/MyEvaluations";
+import AddOnGate, { useAddOns } from "@/components/subscription/AddOnGate";
 import TeacherSelfPerformanceReport from "@/components/teacher/TeacherSelfPerformanceReport";
 import MyPathways from "@/components/training/MyPathways";
 import MyTraining from "@/components/training/MyTraining";
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
+import { missingAddOns } from "@/lib/addOns";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 
@@ -14,10 +17,20 @@ import { useEffect, useState } from "react";
 const NAVY = "text-[#0b2a5b] dark:text-blue-100";
 const TABS = [
   { key: "performance", label: "My Performance" },
-  { key: "evaluations", label: "Evaluations" },
-  { key: "professional-development", label: "Professional Development" },
-  { key: "training", label: "Training" },
+  { key: "evaluations", label: "Evaluations", addOn: "STAFF_MANAGEMENT" },
+  { key: "professional-development", label: "Professional Development", addOn: "TEACHER_TRAINING" },
+  { key: "training", label: "Training", addOn: "TEACHER_TRAINING" },
 ];
+
+// Add-on locks (client sheet 2026-11-06). For admins, coaches and Student
+// Support the My Performance tab locks section by section inside the report;
+// for everyone else the whole tab needs Staff Management.
+const SECTION_LOCKED_ROLES = ["ADMIN", "COACH", "STUDENT_SUPPORT"];
+
+function tabAddOn(tab, role) {
+  if (tab.key === "performance") return SECTION_LOCKED_ROLES.includes(role) ? null : "STAFF_MANAGEMENT";
+  return tab.addOn;
+}
 
 export default function MyPerformancePage({ Layout, layoutProps = {} }) {
   const router = useRouter();
@@ -28,6 +41,11 @@ export default function MyPerformancePage({ Layout, layoutProps = {} }) {
   const queryTab = typeof router.query.tab === "string" ? router.query.tab : "";
   const tab = TABS.some((t) => t.key === queryTab) ? queryTab : "performance";
   const portalBase = `/${String(router.pathname).split("/").filter(Boolean)[0] || ""}`;
+  const { data: session } = useSession();
+  const role = session?.user?.role || "";
+  const { addOns } = useAddOns();
+  const isLocked = (t) => missingAddOns([].concat(tabAddOn(t, role) || []), addOns).length > 0;
+  const activeTab = TABS.find((t) => t.key === tab);
 
   useSyncedCenterId(centerId, setCenterId, centers);
 
@@ -84,13 +102,16 @@ export default function MyPerformancePage({ Layout, layoutProps = {} }) {
               className={`whitespace-nowrap border-b-2 px-1 pb-2 text-sm font-semibold ${tab === t.key ? "border-blue-600 text-blue-700 dark:text-blue-300" : "border-transparent text-gray-500 hover:text-gray-800"}`}
             >
               {t.label}
+              {isLocked(t) ? <span className="ml-1 text-gray-400" aria-label="Locked">{"\u{1F512}"}</span> : null}
             </button>
           ))}
         </div>
 
         {error ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
 
-        {!centerId ? (
+        {isLocked(activeTab) ? (
+          <AddOnGate addOn={tabAddOn(activeTab, role)} />
+        ) : !centerId ? (
           <p className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900">Choose a center to see your performance.</p>
         ) : tab === "performance" ? (
           <TeacherSelfPerformanceReport centerId={centerId} centers={centers} loading={loading} setCenterId={setCenterId} />

@@ -1,5 +1,7 @@
+import { useHasAddOns } from "@/components/subscription/AddOnGate";
 import TeacherCalendarPanel from "@/components/teacher/TeacherCalendarPanel";
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
+import { ADD_ON_LABELS } from "@/lib/addOns";
 import { apiJson } from "@/lib/api";
 import { DASHBOARD_BUBBLES } from "@/lib/dashboardBubbles";
 import { useSession } from "next-auth/react";
@@ -45,8 +47,22 @@ export function DashboardWelcome({ controls = null }) {
 }
 
 /** A stat bubble in the shared colour for its kind (messages, redFlags, ...). */
-export function StatBubble({ kind, icon, value, label, href }) {
+/** addOn: the add-on the bubble needs; without it the bubble is greyed out with a lock. */
+export function StatBubble({ kind, icon, value, label, href, addOn }) {
   const c = DASHBOARD_BUBBLES[kind] || DASHBOARD_BUBBLES.messages;
+  const locked = !useHasAddOns(addOn ? [addOn] : []);
+  if (locked) {
+    const name = ADD_ON_LABELS[addOn] || addOn;
+    return (
+      <div className="flex items-center gap-3 rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-4 opacity-70 dark:border-gray-700 dark:bg-gray-900" title={`Part of the ${name} add-on`} data-testid={`bubble-${kind}`}>
+        <span aria-hidden className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gray-200 text-2xl dark:bg-gray-800">{"\u{1F512}"}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-gray-600 dark:text-gray-300">{label}</span>
+          <span className="block text-xs text-gray-500">Part of the {name} add-on</span>
+        </span>
+      </div>
+    );
+  }
   return (
     <Link href={href} className={`group flex items-center gap-3 rounded-2xl border p-4 transition ${c.card}`} data-testid={`bubble-${kind}`}>
       <span aria-hidden className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-2xl ${c.icon}`}>{icon}</span>

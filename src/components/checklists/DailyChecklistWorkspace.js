@@ -3,6 +3,7 @@ import ChecklistItemDetailModal from "@/components/checklists/ChecklistItemDetai
 import { ChecklistIcon } from "@/components/checklists/ChecklistManagerPage";
 import KitchenShoppingList from "@/components/checklists/KitchenShoppingList";
 import NextWeekSupplies from "@/components/checklists/NextWeekSupplies";
+import AddOnGate from "@/components/subscription/AddOnGate";
 import WeeklyLessonPlanner from "@/components/planning/WeeklyLessonPlanner";
 import { NAVY } from "@/components/reports/reportUi";
 import Skeleton from "@/components/ui/Skeleton";
@@ -284,6 +285,8 @@ export default function DailyChecklistWorkspace({ Layout, mode = "staff", title 
               </div>
 
               {mode === "teacher" && scheduledLists.length ? (
+                // The lesson plan is part of the Curriculum add-on (client sheet 2026-11-06).
+                <AddOnGate addOn="CURRICULUM">
                 <div className={card}>
                   {scheduledLists.map((checklist) => (
                     <div key={checklist.id}>
@@ -299,6 +302,7 @@ export default function DailyChecklistWorkspace({ Layout, mode = "staff", title 
                     </div>
                   ))}
                 </div>
+                </AddOnGate>
               ) : null}
 
               {shown.length ? (
@@ -331,10 +335,10 @@ export default function DailyChecklistWorkspace({ Layout, mode = "staff", title 
               <div className="w-full space-y-3 lg:w-[380px] lg:shrink-0">
                 {mode === "teacher" ? (
                   teacherClassId ? (
-                    <>
+                    <AddOnGate addOn="CURRICULUM">
                       <WeeklyLessonPlanner centerId={centerId} classId={teacherClassId} mode="teacher" singleDay />
                       <NextWeekSupplies centerId={centerId} classRoomId={teacherClassId} />
-                    </>
+                    </AddOnGate>
                   ) : (
                     <div className={`${card} text-sm text-gray-500`}>The weekly lesson plan shows once you are assigned a classroom.</div>
                   )

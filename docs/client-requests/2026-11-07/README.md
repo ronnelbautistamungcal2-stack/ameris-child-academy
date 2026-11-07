@@ -40,10 +40,18 @@ website development > Ameris Solutions home pages; local copy in Downloads).
 
 | Step | What | Waits on |
 |---|---|---|
-| A | Add-on locks from the sheet (pages and sections), with answers 8 and 9 | nothing |
+| A | Add-on locks from the sheet (pages and sections), with answers 8 and 9 | **done 2026-11-07** (see below) |
 | B | Child limit per center | question 5 (default: one number per center) |
 | C | Lesson and step **Type** multi-select | question 1 (default: three fixed options) |
 | D | Character Guide **Import** for Teacher Training subscribers | nothing |
 | E | Banks move to the Global admin; subscriber Lesson Calendar (own start day and closed days, view-only lessons, live updates, filtered by type) | questions 2 and 3 |
 | F | Customer Support tickets with Request / Grant / End center access | question 4 |
 | G | Quote → enrollment → Stripe payment → embedded DocuSign → Pending → Activate | question 6 (accounts, keys, prices) |
+
+## Step A — add-on locks (done 2026-11-07)
+
+- Whole pages: `src/lib/addOns.js` (by route). HR and Other Staff get Staff Management on every page except Dashboard, Messages and My Performance (whose tabs lock themselves), read from the sheet's "All Full Pages are locked" row.
+- My Performance tabs: Evaluations = Staff Management, Professional Development and Training = Teacher Training. The My Performance tab is Staff Management for Teacher, Kitchen, HR and Other Staff; for Admin, Coach and Student Support its staff sections need Staff Management and its student section Steps of Progression.
+- Sections: Student Performance Report Active Goals and Milestones, Class Performance Milestones Grade, Center Performance Overview (Teacher chart and Staff overview = Staff Management; Student chart and the Milestones column = Steps of Progression), the Average SOP % column, the teacher checklist's lesson plan (Curriculum), and the dashboard bubbles "Staff Members Signed In" (admin) and "Pending Time Off Requests" (coach).
+- Reports hub: Milestone Progress, Child Steps and Milestone Change Log = Steps of Progression; Staff Performance Overview / Report and all four Time Sheets reports = Staff Management; Staff Training = Teacher Training.
+- Locks are on screen only. The APIs still return the data to anyone who asks for it directly; blocking them server-side is a follow-up.

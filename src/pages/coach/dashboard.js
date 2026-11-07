@@ -28,7 +28,7 @@ export default function CoachDashboard() {
           <StatBubble kind="studentsPresent" icon={"\u{1F46A}"} value={data ? data.students.in : "…"} label="# Children Present" href={`/coach/students${q}`} />
           <StatBubble kind="staffPresent" icon={"\u{1F465}"} value={data ? data.staff.in : "…"} label="Staff Members Present" href={`/coach/staff-attendance${q}`} />
           <StatBubble kind="redFlags" icon={"\u{1F6A9}"} value={data ? data.redFlags : "…"} label="Red Flags" href={`/coach/students${q}`} />
-          <StatBubble kind="timeOffPending" icon={"⏳"} value={data ? data.pendingTimeOff : "…"} label="Pending Time Off Requests" href={`/coach/time-off${q}`} />
+          <StatBubble kind="timeOffPending" icon={"⏳"} value={data ? data.pendingTimeOff : "…"} label="Pending Time Off Requests" href={`/coach/time-off${q}`} addOn="STAFF_MANAGEMENT" />
           <StatBubble kind="messages" icon={"✉️"} value={unread} label="New Messages" href={`/coach/messages${q}`} />
         </div>
         {centerId ? (

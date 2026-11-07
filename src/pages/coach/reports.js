@@ -19,23 +19,23 @@ const Plain = ({ children }) => children;
 const REPORTS = {
   "student-performance": { label: "Student Performance", render: () => <StudentReportWorkspace /> },
   "class-performance": { label: "Class Performance", render: () => <ClassReportWorkspace /> },
-  "milestone-progress": { label: "Milestone Progress Report", render: () => <MilestoneProgressReport /> },
-  "child-steps": { label: "Child Steps of Progression", render: () => <ChildStepsReport /> },
+  "milestone-progress": { label: "Milestone Progress Report", addOn: "STEPS_OF_PROGRESSION", render: () => <MilestoneProgressReport /> },
+  "child-steps": { label: "Child Steps of Progression", addOn: "STEPS_OF_PROGRESSION", render: () => <ChildStepsReport /> },
   "infant-feeding-plan": { label: "Infant Feeding Plan", render: () => <InfantFeedingPlanReport /> },
   "infant-feeding": { label: "Infant Feeding Report", render: () => <InfantFeedingReport /> },
   "meal-production": { label: "Meal Production Record", render: () => <MealProductionReport /> },
   "meal-claim": { label: "Meal Claim", render: () => <MealClaimReport /> },
-  "staff-performance": { label: "Staff Performance", render: () => <StaffPerformanceOverview Layout={Plain} basePath="/coach/staff-performance" /> },
+  "staff-performance": { label: "Staff Performance", addOn: "STAFF_MANAGEMENT", render: () => <StaffPerformanceOverview Layout={Plain} basePath="/coach/staff-performance" /> },
   "carpool": { label: "Carpool Report", render: () => <CarpoolReport /> },
-  "milestone-changes": { label: "Milestone Change Log", render: () => <MilestoneChangeLog /> },
-  "staff-training": { label: "Staff Training Report", render: () => <StaffTrainingReport /> },
+  "milestone-changes": { label: "Milestone Change Log", addOn: "STEPS_OF_PROGRESSION", render: () => <MilestoneChangeLog /> },
+  "staff-training": { label: "Staff Training Report", addOn: "TEACHER_TRAINING", render: () => <StaffTrainingReport /> },
 };
 
 const CATEGORIES = [
   { label: "Children & Development", icon: "🧒", keys: ["student-performance", "class-performance", "milestone-progress", "child-steps", "milestone-changes", "carpool"] },
   { label: "Meals", icon: "🍽️", keys: ["infant-feeding-plan", "infant-feeding", "meal-production", "meal-claim"] },
   { label: "Staff", icon: "👥", keys: ["staff-performance", "staff-training"] },
-].map((cat) => ({ ...cat, reports: cat.keys.map((key) => ({ key, label: REPORTS[key].label })) }));
+].map((cat) => ({ ...cat, reports: cat.keys.map((key) => ({ key, label: REPORTS[key].label, addOn: REPORTS[key].addOn })) }));
 
 export default function CoachReports() {
   const router = useRouter();

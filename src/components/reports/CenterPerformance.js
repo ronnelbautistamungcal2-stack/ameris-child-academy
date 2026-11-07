@@ -1,6 +1,7 @@
 import DrillDownList from "@/components/reports/DrillDownList";
 import Pager from "@/components/ui/Pager";
 import StaffPerformanceTable from "@/components/reports/StaffPerformanceTable";
+import AddOnGate, { LockedValue, useHasAddOns } from "@/components/subscription/AddOnGate";
 import SegmentBar, { RANGE_COLORS, RANGE_TEXT } from "@/components/reports/SegmentBar";
 import { Heading, NAVY, RangePicker, card, keyOf, useRange } from "@/components/reports/reportUi";
 import { apiJson } from "@/lib/api";
@@ -121,6 +122,9 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
   const [studentPage, setStudentPage] = useState(1);
   const corrections = useRange();
   const highlights = useRange();
+  // Add-on locks (client sheet 2026-11-06): staff sections need Staff
+  // Management, student milestone sections Steps of Progression.
+  const sopUnlocked = useHasAddOns("STEPS_OF_PROGRESSION");
 
   useEffect(() => {
     setLoading(true);
@@ -217,6 +221,7 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
 
   if (studentsOnly) {
     return (
+      <AddOnGate addOn="STEPS_OF_PROGRESSION">
       <section className={`${card} space-y-5`}>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <h2 className={`text-2xl font-black ${NAVY}`}>Student Performance</h2>
@@ -244,6 +249,7 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
           </>
         ) : null}
       </section>
+      </AddOnGate>
     );
   }
 
@@ -293,6 +299,7 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
       {data && (
         <>
           <div className={`grid grid-cols-1 gap-4 xl:grid-cols-2 ${loading ? "opacity-60" : ""}`}>
+            <AddOnGate addOn="STAFF_MANAGEMENT">
             <section className={`${card} space-y-5`}>
               <h2 className={`text-3xl font-black ${NAVY}`}>Teacher Performance</h2>
               <SegmentBar title="Overall Grade (%)" segments={charts.grade} selected={isSel("grade")} onSelect={select("grade")} />
@@ -306,12 +313,15 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
                 ))}
               </div>
             </section>
+            </AddOnGate>
+            <AddOnGate addOn="STEPS_OF_PROGRESSION">
             <section className={`${card} space-y-5`}>
               <h2 className={`text-3xl font-black ${NAVY}`}>Student Performance</h2>
               <SegmentBar title="Citizenship (0 - 10)" segments={charts.citizenship} selected={isSel("citizenship")} onSelect={select("citizenship")} />
               <SegmentBar title="Milestone Competency" segments={charts.competency} selected={isSel("competency")} onSelect={select("competency")} />
               <SegmentBar title="Milestone Progress" segments={charts.progress} selected={isSel("progress")} onSelect={select("progress")} />
             </section>
+            </AddOnGate>
           </div>
 
           {picked && (
@@ -338,7 +348,9 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
           )}
 
           <Collapsible title="Staff Performance Overview" open={staffOpen} onToggle={() => setStaffOpen((o) => !o)}>
-            <StaffPerformanceTable staff={staff} viewHref={(row) => `/admin/reports/staff-performance?staffId=${row.id}`} />
+            <AddOnGate addOn="STAFF_MANAGEMENT">
+              <StaffPerformanceTable staff={staff} viewHref={(row) => `/admin/reports/staff-performance?staffId=${row.id}`} />
+            </AddOnGate>
           </Collapsible>
 
           <Collapsible title="Student Performance Overview" open={studentsOpen} onToggle={() => setStudentsOpen((o) => !o)}>
@@ -378,7 +390,7 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
                         <td className="px-2 py-1.5">{ageLabel(s.birthDate)}</td>
                         <td className="px-2 py-1.5">{s.teacher || "—"}</td>
                         <td className="px-2 py-1.5"><span className={`inline-block min-w-[40px] rounded px-2 py-0.5 text-center font-bold ${citizenshipTone(s.citizenship)}`}>{num(s.citizenship)}</span></td>
-                        <td className="px-2 py-1.5">{status ? <span className={`inline-block rounded px-3 py-0.5 text-xs font-bold ${status.pill}`}>{status.label}</span> : "—"}</td>
+                        <td className="px-2 py-1.5">{!sopUnlocked ? <LockedValue addOn="STEPS_OF_PROGRESSION" /> : status ? <span className={`inline-block rounded px-3 py-0.5 text-xs font-bold ${status.pill}`}>{status.label}</span> : "—"}</td>
                         <td className="px-2 py-1.5">
                           {s.ipp === "ON_TRACK" ? <span className="rounded bg-green-100 px-2 py-0.5 text-xs font-bold text-green-800">On Track</span> : s.ipp === "NEEDS_REVIEW" ? <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">Needs Review</span> : "—"}
                         </td>

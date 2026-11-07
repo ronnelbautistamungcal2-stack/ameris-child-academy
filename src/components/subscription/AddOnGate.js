@@ -90,6 +90,16 @@ function UpgradeNotice({ missing, compact = false }) {
   );
 }
 
+/** One greyed-out value in a table column the account hasn't unlocked. */
+export function LockedValue({ addOn }) {
+  const names = [].concat(addOn || []).map((key) => ADD_ON_LABELS[key] || key).join(" and ");
+  return (
+    <span title={`Part of the ${names} add-on`} aria-label={`Locked: part of the ${names} add-on`} className="text-gray-400">
+      {"\u{1F512}"}
+    </span>
+  );
+}
+
 /** Whole-page lock, shown by AppShell in place of a locked page. */
 export function LockedPage({ missing }) {
   return <UpgradeNotice missing={missing} />;

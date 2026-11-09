@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     res.setHeader("Allow", ["GET"]);
     return res.status(405).end();
   }
-  const centerIds = session.user.role === "ADMIN" ? null : (await accessibleCenterIds(session.user.id)) || [];
+  const centerIds = await accessibleCenterIds(session.user.id);
   const count = await prisma.supplyRequest.count({
     where: { status: "PENDING", ...(centerIds ? { centerId: { in: centerIds } } : {}) },
   });

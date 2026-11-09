@@ -5,6 +5,7 @@ import {
   targetRoleForAssignment,
 } from "@/lib/formAssignments";
 import prisma from "@/lib/prisma";
+import { accountIdForUser, accountOwnedWhere } from "@/lib/subscriberAccounts";
 import { assertSubscriptionFeature } from "@/lib/subscriptions";
 
 function parseDueDate(value) {
@@ -28,12 +29,15 @@ export default async function handler(req, res) {
   const { centerId } = req.query;
 
   if (req.method === "GET") {
-    // Admin sees all; others see templates targeted to their role and accessible centers.
-    let where = {};
+    // Everyone sees only their own account's templates. Admins see all of
+    // those; others the ones targeted to their role and accessible centers.
+    const owned = await accountOwnedWhere(user.id);
+    let where = { ...owned };
     if (user.role !== "ADMIN") {
       // A staff assignment can name several roles, so match either the visibility
       // role or the assignment's staffRoles list.
       where = {
+        ...owned,
         active: true,
         AND: [{ OR: [{ targetRole: user.role }, { staffRoles: { array_contains: [user.role] } }] }],
       };
@@ -65,7 +69,10 @@ export default async function handler(req, res) {
         where.AND.push({ OR: [{ centerId }, { centerId: null }] });
       }
     } else if (centerId) {
-      where = { centerId };
+      if (!(await hasAccessToCenter(user.id, centerId))) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      where = { ...where, centerId };
     }
 
     const templates = await prisma.formTemplate.findMany({
@@ -129,6 +136,9 @@ export default async function handler(req, res) {
       ? targetRoleForAssignment(assignment, roles)
       : targetRole || "PARENT";
     if (cId) {
+      if (!(await hasAccessToCenter(user.id, cId))) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
       const center = await prisma.center.findUnique({
         where: { id: cId },
         include: { subscription: true },
@@ -150,8 +160,10 @@ export default async function handler(req, res) {
       }
     }
 
+    const subscriberAccountId = await accountIdForUser(user.id);
     const created = await prisma.formTemplate.create({
       data: {
+        ...(subscriberAccountId ? { subscriberAccountId } : {}),
         title,
         description: description || null,
         targetRole: resolvedRole,

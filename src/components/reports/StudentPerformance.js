@@ -2,6 +2,7 @@ import IppPopup from "@/components/ipp/IppPopup";
 import ActivityLogEntry from "@/components/reports/ActivityLogEntry";
 import ChildPhotos from "@/components/reports/ChildPhotos";
 import MilestonesTracker from "@/components/sop/MilestonesTracker";
+import AddOnGate from "@/components/subscription/AddOnGate";
 import { apiJson } from "@/lib/api";
 import dynamic from "next/dynamic";
 import { RangePicker, Heading, NAVY, card, shortDate, useRange } from "@/components/reports/reportUi";
@@ -143,6 +144,7 @@ export default function StudentPerformance({ childId, header = null, familyView 
           <RangePicker {...citizenship} label="Citizenship Grade" />
           {points.length ? <CitizenshipChart points={points} /> : <p className="py-6 text-center text-sm text-gray-500">No citizenship grades in these dates.</p>}
         </section>
+        <AddOnGate addOn="STEPS_OF_PROGRESSION">
         <section className={card}>
           <Heading icon={"\u{1F3AF}"}>Active Goals</Heading>
           {data.activeGoals.length ? (
@@ -155,8 +157,10 @@ export default function StudentPerformance({ childId, header = null, familyView 
             <p className="text-sm text-gray-500">No active goals yet.</p>
           )}
         </section>
+        </AddOnGate>
       </div>
 
+      <AddOnGate addOn="STEPS_OF_PROGRESSION">
       <section className={card}>
         <MilestonesTracker
           childId={childId}
@@ -167,6 +171,7 @@ export default function StudentPerformance({ childId, header = null, familyView 
           heading={<Heading icon={"\u{1F3C6}"}>Milestones</Heading>}
         />
       </section>
+      </AddOnGate>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section className={card}>

@@ -1,10 +1,11 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
 import {
   normalizeAssignmentType,
   normalizeStaffRoles,
   targetRoleForAssignment,
 } from "@/lib/formAssignments";
 import prisma from "@/lib/prisma";
+import { ownsAccountDocument } from "@/lib/subscriberAccounts";
 
 function parseDueDate(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -26,6 +27,12 @@ export default async function handler(req, res) {
 
   const { id } = req.query;
   if (!id || typeof id !== "string") return res.status(400).json({ error: "Invalid id" });
+
+  // Another account's template answers 404, like one that doesn't exist.
+  const owner = await prisma.formTemplate.findUnique({ where: { id }, select: { subscriberAccountId: true } });
+  if (!owner || !(await ownsAccountDocument(session.user.id, owner.subscriberAccountId))) {
+    return res.status(404).json({ error: "Form template not found" });
+  }
 
   if (req.method === "GET") {
     const template = await prisma.formTemplate.findUnique({
@@ -67,7 +74,12 @@ export default async function handler(req, res) {
     if (typeof description === "string" || description === null) data.description = description;
     if (typeof targetRole === "string") data.targetRole = targetRole;
     if (schema !== undefined) data.schema = schema;
-    if (centerId === null || typeof centerId === "string") data.centerId = centerId;
+    if (centerId === null || typeof centerId === "string") {
+      if (centerId && !(await hasAccessToCenter(session.user.id, centerId))) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      data.centerId = centerId;
+    }
     if (typeof active === "boolean") data.active = active;
     if (typeof requiresRenewal === "boolean") data.requiresRenewal = requiresRenewal;
     if (renewalPeriodDays !== undefined) {

@@ -41,13 +41,30 @@ export async function hasAccessToCenter(userId, centerId) {
     include: { centers: true },
   });
   if (!user) return false;
-  if (hasAnyRole(user, ["ADMIN"])) return true;
-  return (user.centers || []).some((c) => c.centerId === centerId);
+  if ((user.centers || []).some((c) => c.centerId === centerId)) return true;
+  if (!hasAnyRole(user, ["ADMIN"])) return false;
+  // Admins reach every center of their own subscriber account, nothing else.
+  const ids = await adminCenterIds(prisma, user);
+  return ids === null || ids.includes(centerId);
 }
 
 /**
- * The centers a non-admin user belongs to. Returns null for admins, who are
- * not scoped to any subset of centers.
+ * The centers an admin may manage: every center of their subscriber account.
+ * null means no limit, for an admin with no account (legacy data).
+ */
+async function adminCenterIds(prisma, user) {
+  if (!user.subscriberAccountId) return null;
+  const centers = await prisma.center.findMany({
+    where: { subscriberAccountId: user.subscriberAccountId },
+    select: { id: true },
+  });
+  return centers.map((c) => c.id);
+}
+
+/**
+ * The centers a user may reach: their memberships, plus every center of
+ * their subscriber account for admins. null means no limit (an admin with no
+ * account, legacy data).
  */
 export async function accessibleCenterIds(userId) {
   const { default: prisma } = await import("@/lib/prisma");
@@ -56,6 +73,50 @@ export async function accessibleCenterIds(userId) {
     include: { centers: { select: { centerId: true } } },
   });
   if (!user) return [];
-  if (hasAnyRole(user, ["ADMIN"])) return null;
-  return (user.centers || []).map((c) => c.centerId);
+  const memberships = (user.centers || []).map((c) => c.centerId);
+  if (!hasAnyRole(user, ["ADMIN"])) return memberships;
+  const ids = await adminCenterIds(prisma, user);
+  if (ids === null) return null;
+  return [...new Set([...ids, ...memberships])];
+}
+
+/**
+ * Prisma condition for a centerId column: the requested center (the caller has
+ * already checked access to it), else every center the user may reach.
+ * undefined means no limit (an admin with no account, legacy data).
+ */
+export async function centerIdFilter(userId, centerId) {
+  if (centerId) return centerId;
+  const ids = await accessibleCenterIds(userId);
+  return ids === null ? undefined : { in: ids };
+}
+
+/**
+ * Prisma `where` limiting users to the signed-in admin's subscriber account,
+ * or {} for an admin with no account (legacy data).
+ */
+export async function adminUserScope(userId) {
+  const { default: prisma } = await import("@/lib/prisma");
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { subscriberAccountId: true },
+  });
+  const accountId = user?.subscriberAccountId;
+  if (!accountId) return {};
+  return {
+    OR: [
+      { subscriberAccountId: accountId },
+      { centers: { some: { center: { subscriberAccountId: accountId } } } },
+    ],
+  };
+}
+
+/** True when the user is inside the signed-in admin's subscriber account. */
+export async function adminCanReachUser(adminId, userId) {
+  if (!userId) return false;
+  if (adminId === userId) return true;
+  const { default: prisma } = await import("@/lib/prisma");
+  const scope = await adminUserScope(adminId);
+  const found = await prisma.user.count({ where: { id: String(userId), ...scope } });
+  return found > 0;
 }

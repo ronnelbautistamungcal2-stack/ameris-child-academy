@@ -1,6 +1,7 @@
 // @ts-check
 const { test, expect } = require("@playwright/test");
 const { PrismaClient } = require("@prisma/client");
+const { demoAccountId } = require("../helpers/accounts");
 const {
   loginAsAdmin,
   loginAsCoach,
@@ -28,13 +29,13 @@ test.describe("Progress API @api", () => {
     }
 
     const centerA = await prisma.center.create({
-      data: {
+      data: { subscriberAccountId: await demoAccountId(prisma),
         name: `QA Progress Center A ${suffix}`,
         address: "QA Street A",
       },
     });
     const centerB = await prisma.center.create({
-      data: {
+      data: { subscriberAccountId: await demoAccountId(prisma),
         name: `QA Progress Center B ${suffix}`,
         address: "QA Street B",
       },

@@ -1,4 +1,4 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { isSelfServiceEmployeeRole, STAFF_PORTAL_ROLES } from "@/lib/roles";
 import { editorInitials, timeChangeAudits } from "@/lib/timeSheets";
@@ -44,13 +44,13 @@ function parseAttendanceTime(date, value) {
 
 async function handleGet(req, res, session) {
   const { centerId, userId, from, to, date } = req.query;
-  if (centerId && session.user.role !== "ADMIN") {
+  if (centerId) {
     const allowed = await hasAccessToCenter(session.user.id, centerId);
     if (!allowed) return res.status(403).json({ error: "Forbidden" });
   }
 
   const where = {};
-  if (centerId) where.centerId = centerId;
+  where.centerId = await centerIdFilter(session.user.id, centerId);
   if (userId) where.userId = userId;
   if (isSelfServiceEmployeeRole(session.user.role)) where.userId = session.user.id;
 

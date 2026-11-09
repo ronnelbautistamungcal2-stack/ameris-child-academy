@@ -3,6 +3,9 @@ import prisma from "@/lib/prisma";
 import { normalizeSubscription } from "@/lib/subscriptions";
 import { buildParentLinkedChildWhere } from "@/lib/child-parent-links";
 import { directorError, parseCenterInput } from "@/lib/centerSettings";
+import { accessibleCenterIds } from "@/lib/auth";
+import { accountIdForUser, assertCenterLimit } from "@/lib/subscriberAccounts";
+import { sendApiError } from "@/lib/api-error";
 
 function withResolvedSubscription(center) {
   return {
@@ -19,7 +22,10 @@ export default async function handler(req, res) {
     // List centers (filtered by user's access if not admin)
     let centers;
     if (session.user.role === "ADMIN") {
+      // Only the centers of the admin's own subscriber account.
+      const scope = await accessibleCenterIds(session.user.id);
       centers = await prisma.center.findMany({
+        where: scope ? { id: { in: scope } } : {},
         include: {
           users: true,
           classes: true,
@@ -79,8 +85,16 @@ export default async function handler(req, res) {
     const badDirector = await directorError(prisma, parsed.data.directorId);
     if (badDirector) return res.status(400).json({ error: badDirector });
 
+    // New centers join the admin's account, up to the number it pays for.
+    const accountId = await accountIdForUser(session.user.id);
+    try {
+      await assertCenterLimit(accountId);
+    } catch (err) {
+      return sendApiError(res, err);
+    }
+
     const center = await prisma.center.create({
-      data: parsed.data,
+      data: { ...parsed.data, ...(accountId ? { subscriberAccountId: accountId } : {}) },
       include: { users: true },
     });
 

@@ -93,7 +93,7 @@ export function serializeInvoice(invoice) {
 
 /** Who may open an invoice: admins, coaches at its center, the parent it bills. */
 export async function canViewInvoice(user, invoice) {
-  if (user.role === "ADMIN") return true;
+  if (user.role === "ADMIN") return hasAccessToCenter(user.id, invoice.centerId);
   if (invoice.parentId === user.id) return true;
   return user.role === "COACH" && hasAccessToCenter(user.id, invoice.centerId);
 }

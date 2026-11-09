@@ -22,7 +22,7 @@ export default async function handler(req, res) {
 
     const canViewOthers = ["ADMIN", "COACH", "HR_STAFF"].includes(session.user.role);
     const resolvedTeacherId = !teacherId || teacherId === "me" || !canViewOthers ? session.user.id : teacherId;
-    if (session.user.role !== "ADMIN" && !(await hasAccessToCenter(session.user.id, centerId))) {
+    if (!(await hasAccessToCenter(session.user.id, centerId))) {
       return res.status(403).json({ error: "Forbidden" });
     }
 

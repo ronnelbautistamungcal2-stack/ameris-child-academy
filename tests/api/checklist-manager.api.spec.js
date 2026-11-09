@@ -1,6 +1,7 @@
 // @ts-check
 const { test, expect } = require("@playwright/test");
 const { PrismaClient } = require("@prisma/client");
+const { demoAccountId } = require("../helpers/accounts");
 const { loginAsAdmin, loginAsCoach, loginAsTeacher, loginAsKitchenStaff } = require("../helpers/auth");
 const { apiDelete, apiGet, apiPost, apiPut } = require("../helpers/api");
 
@@ -28,8 +29,15 @@ test.describe("Checklist Manager, checklists and review @api", () => {
       ["teacher@demo.com", "kitchen@demo.com", "coach@demo.com"].map((email) => prisma.user.findUnique({ where: { email } })),
     );
     center = await prisma.center.create({
-      data: {
+      data: { subscriberAccountId: await demoAccountId(prisma),
         name: `QA Checklist Phase6 ${Date.now()}`,
+        // Open every day, so today is graded even on a weekend (closed days get no grade).
+        careSchedule: Object.fromEntries(
+          ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"].map((day) => [
+            day,
+            { open: true, start: "07:30", end: "16:45" },
+          ]),
+        ),
         meals: {
           breakfast: { provided: true, catered: false },
           amSnack: { provided: true, catered: false },
@@ -104,7 +112,7 @@ test.describe("Checklist Manager, checklists and review @api", () => {
   test("teachers cannot manage checklists and coaches only at their centers", async ({ request }) => {
     const teacherCookies = await loginAsTeacher(request);
     expect((await apiPost(request, "/api/v1/daily-checklists", { centerId: center.id, title: "Nope" }, teacherCookies)).status()).toBe(403);
-    const other = await prisma.center.create({ data: { name: `QA Other ${Date.now()}` } });
+    const other = await prisma.center.create({ data: { subscriberAccountId: await demoAccountId(prisma), name: `QA Other ${Date.now()}` } });
     try {
       const coachCookies = await loginAsCoach(request);
       expect((await apiPost(request, "/api/v1/daily-checklists", { centerId: other.id, title: "Nope" }, coachCookies)).status()).toBe(403);
@@ -188,6 +196,17 @@ test.describe("Checklist Manager, checklists and review @api", () => {
     }
     const again = (await (await apiGet(request, `/api/v1/checklist-review?centerId=${center.id}&date=${today}`, coachCookies)).json()).rows;
     expect(again.find((r) => r.id === teacher.id)).toMatchObject({ done: 2, status: "COMPLETE" });
+
+    // Excused (client sheet 2026-11-07): the item drops out of the total; a
+    // teacher can't excuse their own items.
+    const [sweep, mop] = detail.row.items;
+    await apiPost(request, "/api/v1/daily-checklists/complete", { itemId: mop.id, date: today, undo: true, forUserId: teacher.id }, coachCookies);
+    expect((await apiPost(request, "/api/v1/daily-checklists/complete", { itemId: mop.id, date: today, forUserId: teacher.id, excused: true }, coachCookies)).status()).toBe(200);
+    const excused = (await (await apiGet(request, `/api/v1/checklist-review/${teacher.id}?centerId=${center.id}&date=${today}`, coachCookies)).json()).row;
+    expect(excused).toMatchObject({ total: 1, done: 1, pct: 100, status: "COMPLETE", missing: [] });
+    expect(excused.items.find((i) => i.id === mop.id)).toMatchObject({ excused: true, done: false });
+    expect(excused.items.find((i) => i.id === sweep.id)).toMatchObject({ excused: false, done: true });
+    await apiPost(request, "/api/v1/daily-checklists/complete", { itemId: mop.id, date: today, forUserId: teacher.id }, coachCookies);
 
     // Only admins and coaches can mark for someone else or open the review.
     expect((await apiPost(request, "/api/v1/daily-checklists/complete", { itemId: detail.row.items[0].id, date: today, forUserId: kitchen.id }, teacherCookies)).status()).toBe(403);

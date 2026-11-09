@@ -1,4 +1,6 @@
 import { DEFAULT_REPORT_FILTERS, ReportFiltersContext } from "@/components/reports/ReportFilters";
+import AddOnGate, { useAddOns } from "@/components/subscription/AddOnGate";
+import { missingAddOns } from "@/lib/addOns";
 import { apiJson } from "@/lib/api";
 import { exportElementTables } from "@/lib/exportTable";
 import Link from "next/link";
@@ -24,7 +26,9 @@ function readSavedFilters() {
 }
 
 /**
- * categories: [{ label, icon, reports: [{ key, label }] }]
+ * categories: [{ label, icon, reports: [{ key, label, addOn?, ownExport? }] }]; a
+ * report whose add-on the account lacks shows a lock and an upgrade notice;
+ * ownExport hides the Export button here (the report has a better one).
  * selectedKey, hrefFor(key), children: the selected report.
  */
 export default function ReportsHub({ categories, selectedKey, hrefFor, children }) {
@@ -86,6 +90,8 @@ export default function ReportsHub({ categories, selectedKey, hrefFor, children 
     [categories, q],
   );
   const selected = categories.flatMap((c) => c.reports).find((r) => r.key === selectedKey);
+  const { addOns } = useAddOns();
+  const isLocked = (r) => Boolean(r?.addOn) && missingAddOns([].concat(r.addOn), addOns).length > 0;
 
   async function exportExcel() {
     setExportError("");
@@ -175,7 +181,10 @@ export default function ReportsHub({ categories, selectedKey, hrefFor, children 
                             r.key === selectedKey ? "bg-blue-100 font-bold text-blue-800 dark:bg-gray-700 dark:text-blue-100" : "text-[#0b2a5b] hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
                           }`}
                         >
-                          {r.label}
+                          <span>
+                            {r.label}
+                            {isLocked(r) ? <span className="ml-1 text-gray-400" aria-label="Locked">{"\u{1F512}"}</span> : null}
+                          </span>
                           <span aria-hidden="true" className="text-gray-400">›</span>
                         </Link>
                       </li>
@@ -198,9 +207,11 @@ export default function ReportsHub({ categories, selectedKey, hrefFor, children 
               <button type="button" onClick={() => window.print()} className="rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 dark:bg-gray-900">
                 🖨 Print / PDF
               </button>
-              <button type="button" onClick={exportExcel} className="rounded-lg border border-emerald-600 bg-white px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50 dark:bg-gray-900">
-                ⬇ Export to Excel
-              </button>
+              {selected.ownExport ? null : (
+                <button type="button" onClick={exportExcel} className="rounded-lg border border-emerald-600 bg-white px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50 dark:bg-gray-900">
+                  ⬇ Export to Excel
+                </button>
+              )}
             </div>
           ) : null}
           <div id="reports-print-area" ref={printRef}>
@@ -209,7 +220,11 @@ export default function ReportsHub({ categories, selectedKey, hrefFor, children 
               {selected ? <div className="text-lg font-bold text-[#0b2a5b]">{selected.label}</div> : null}
             </div>
             <ReportFiltersContext.Provider value={filters}>
-              {selected ? children : <p className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-600">Choose a report on the left.</p>}
+              {selected ? (
+                isLocked(selected) ? <AddOnGate addOn={selected.addOn} /> : children
+              ) : (
+                <p className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-600">Choose a report on the left.</p>
+              )}
             </ReportFiltersContext.Provider>
           </div>
           <style jsx global>{`

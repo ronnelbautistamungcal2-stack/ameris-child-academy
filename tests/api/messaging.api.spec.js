@@ -68,6 +68,10 @@ test.describe("Messaging API @api", () => {
     expect(Array.isArray(data)).toBe(true);
     expect(data.some((item) => item.key === "ALL_TEACHERS")).toBe(true);
     expect(data.some((item) => item.key === "ALL_PARENTS")).toBe(true);
+    // A group per staff role, with no center to pick (client sheet 2026-11-07).
+    for (const key of ["ALL_KITCHEN_STAFF", "ALL_HR_STAFF", "ALL_STUDENT_SUPPORT", "ALL_OTHER_STAFF"]) {
+      expect(data.find((item) => item.key === key)?.count, key).toBeGreaterThan(0);
+    }
   });
 
   test("GET /api/v1/messages/threads/:id returns 401 without auth", async ({ request }) => {

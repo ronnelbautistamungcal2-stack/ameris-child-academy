@@ -1,6 +1,7 @@
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import CenterPerformance from "@/components/reports/CenterPerformance";
 import ClassPerformance from "@/components/reports/ClassPerformance";
+import AddOnGate, { useHasAddOns } from "@/components/subscription/AddOnGate";
 import { useSession } from "next-auth/react";
 import { formatStaffGradeFormula } from "@/lib/staffGrade";
 import { apiJson } from "@/lib/api";
@@ -49,6 +50,10 @@ export default function TeacherSelfPerformanceReport({ centerId, centers, loadin
   const [loading, setLoading] = useState(false);
   const { data: session } = useSession();
   const role = session?.user?.role || "";
+  // Add-on locks (client sheet 2026-11-06): the grade, evaluation, checklist,
+  // HR and training sections need Staff Management; the student section has
+  // its own Steps of Progression lock.
+  const staffUnlocked = useHasAddOns("STAFF_MANAGEMENT");
   // Teachers: their own classes' Citizenship and Milestones cards.
   const [myClasses, setMyClasses] = useState([]);
   useEffect(() => {
@@ -111,6 +116,7 @@ export default function TeacherSelfPerformanceReport({ centerId, centers, loadin
       {report && !loading && (
         <div className="space-y-4">
           {/* Overall Grade */}
+          {!staffUnlocked ? <AddOnGate addOn="STAFF_MANAGEMENT" /> : (
           <div className={`rounded-2xl border p-6 ${gradeBg(report.overallGrade)}`}>
             <div className="flex flex-wrap items-center gap-6">
               <div className="text-center">
@@ -148,12 +154,14 @@ export default function TeacherSelfPerformanceReport({ centerId, centers, loadin
               </div>
             </div>
           </div>
+          )}
 
           {/* Citizenship and Milestones by role (client requests 2026-10-29): teachers
               get the Class Performance cards for their classes; coaches and Student
               Support get the Center Performance student bars for their students; HR,
               Kitchen and Other Staff don't have these sections. */}
           {userId !== "me" ? (
+            <AddOnGate addOn="STEPS_OF_PROGRESSION">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="rounded-2xl border border-gray-200 bg-white p-5">
               <div className="text-sm font-extrabold text-gray-900">Class Citizenship Grade</div>
@@ -178,6 +186,7 @@ export default function TeacherSelfPerformanceReport({ centerId, centers, loadin
               </div>
             </div>
           </div>
+            </AddOnGate>
           ) : role === "TEACHER" ? (
             myClasses.map((room) => (
               <div key={room.id} className="space-y-2">
@@ -185,9 +194,13 @@ export default function TeacherSelfPerformanceReport({ centerId, centers, loadin
                 <ClassPerformance classRoomId={room.id} sections={["grades"]} />
               </div>
             ))
-          ) : role === "COACH" || role === "STUDENT_SUPPORT" ? (
+          ) : role === "COACH" ? (
+            // The coach's own teachers and their students (client sheet 2026-11-07).
+            <CenterPerformance teamOnly fixedCenterId={centerId} />
+          ) : role === "STUDENT_SUPPORT" ? (
             <CenterPerformance studentsOnly fixedCenterId={centerId} />
           ) : role === "ADMIN" ? (
+            <AddOnGate addOn="STEPS_OF_PROGRESSION">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="rounded-2xl border border-gray-200 bg-white p-5">
               <div className="text-sm font-extrabold text-gray-900">Class Citizenship Grade</div>
@@ -212,8 +225,11 @@ export default function TeacherSelfPerformanceReport({ centerId, centers, loadin
               </div>
             </div>
           </div>
+            </AddOnGate>
           ) : null}
 
+          {staffUnlocked ? (
+          <>
           {/* Evaluation Grade + Checklist Grade */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="rounded-2xl border border-gray-200 bg-white p-5">
@@ -311,6 +327,8 @@ export default function TeacherSelfPerformanceReport({ centerId, centers, loadin
               </div>
             )}
           </div>
+          </>
+          ) : null}
         </div>
       )}
     </div>

@@ -16,10 +16,8 @@ export default async function handler(req, res) {
     if (!centerId || !classRoomId) {
       return res.status(400).json({ error: "centerId and classRoomId are required" });
     }
-    if (role !== "ADMIN") {
-      const ok = await hasAccessToCenter(session.user.id, centerId);
-      if (!ok) return res.status(403).json({ error: "Forbidden" });
-    }
+    const ok = await hasAccessToCenter(session.user.id, centerId);
+    if (!ok) return res.status(403).json({ error: "Forbidden" });
 
     const rows = await prisma.lessonPlanRow.findMany({
       where: { centerId, classRoomId },

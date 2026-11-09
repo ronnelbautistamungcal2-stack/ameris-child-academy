@@ -1,4 +1,4 @@
-import { HrDashboard, KitchenDashboard, StudentSupportDashboard } from "@/components/dashboard/StaffRoleDashboards";
+import { HrDashboard, KitchenDashboard, OtherStaffDashboard as OtherStaffHome, StudentSupportDashboard } from "@/components/dashboard/StaffRoleDashboards";
 import StaffCalendarPanel from "@/components/staff/StaffCalendarPanel";
 import StaffLayout from "@/components/staff/StaffLayout";
 import Skeleton, { SkeletonCard } from "@/components/ui/Skeleton";
@@ -48,6 +48,7 @@ const ROLE_DASHBOARDS = {
   KITCHEN_STAFF: KitchenDashboard,
   HR_STAFF: HrDashboard,
   STUDENT_SUPPORT: StudentSupportDashboard,
+  OTHER_STAFF: OtherStaffHome,
 };
 
 export default function StaffDashboardPage() {

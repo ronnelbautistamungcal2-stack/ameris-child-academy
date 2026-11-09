@@ -36,7 +36,8 @@ export const COMPONENTS = {
 const PATTERNS = {
   breakfast: {
     youngerInfants: ["breastMilkOrFormula"],
-    olderInfants: ["breastMilkOrFormula", "fruitOrVegetable", "grain"],
+    // Older infants' breakfast has Meat/Meat Alternate, not Grain (client sheet 2026-11-07).
+    olderInfants: ["breastMilkOrFormula", "fruitOrVegetable", "meatOrAlternate"],
     children: ["milk", "fruitOrVegetable", "grains"],
   },
   snack: {
@@ -55,7 +56,7 @@ const PATTERNS = {
 const REQUIREMENTS = {
   breakfast: [
     ["Younger Infants (0–5 months)", "Breast Milk or Formula."],
-    ["Older Infants (6–12 months)", "Breast Milk or Formula, Fruit or Vegetable, Grain."],
+    ["Older Infants (6–12 months)", "Breast Milk or Formula, Fruit or Vegetable, Meat/Meat Alternate."],
     ["1–12 Years", "Serve all 3 components – Milk, Fruit or Vegetable, and Grains."],
   ],
   snack: [

@@ -32,7 +32,7 @@ test.describe("Compliance Alerts and Form Renewals pages", () => {
   });
 
   test.afterAll(async ({ request }) => {
-    await prisma.complianceRequirement.deleteMany({ where: { centerId: center?.id } });
+    if (center?.id) await prisma.complianceRequirement.deleteMany({ where: { centerId: center.id } });
     if (template?.id) {
       await prisma.formRenewalNote.deleteMany({ where: { templateId: template.id } });
       await prisma.formTemplate.delete({ where: { id: template.id } }).catch(() => {});

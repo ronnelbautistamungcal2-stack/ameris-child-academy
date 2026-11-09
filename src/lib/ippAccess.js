@@ -18,14 +18,27 @@ export function canManageIpp(user) {
 
 /** Prisma `where` for the plans this user may read, or null for none. */
 export async function ippScope(user) {
-  if (hasAnyRole(user, ["ADMIN"])) return {};
+  if (hasAnyRole(user, ["ADMIN"])) {
+    // Only the admin's own subscriber account (null = no account, all).
+    const ids = await accessibleCenterIds(user.id);
+    return ids ? { centerId: { in: ids } } : {};
+  }
   if (canManageIpp(user)) {
-    const ids = (await accessibleCenterIds(user.id)) || [];
-    return { centerId: { in: ids } };
+    // null: someone who is also an admin with no subscriber account, who
+    // reaches every center (e.g. an admin signed in as Coach or Student Support).
+    const ids = await accessibleCenterIds(user.id);
+    return ids ? { centerId: { in: ids } } : {};
   }
   if (hasAnyRole(user, ["TEACHER"])) return { child: await buildTeacherChildWhere(user.id) };
   if (hasAnyRole(user, ["PARENT"])) return { child: buildParentLinkedChildWhere(user.id) };
   return null;
+}
+
+/** Whether the plan is one the user may read (ippScope), for routes that load it themselves. */
+export async function canReachPlan(user, id) {
+  const scope = await ippScope(user);
+  if (!scope || !id) return false;
+  return (await prisma.behaviorPlan.count({ where: { id: String(id), ...scope } })) > 0;
 }
 
 /** Whether the user may create a plan for this child. */
@@ -33,8 +46,9 @@ export async function canManageChild(user, childId) {
   if (!canManageIpp(user)) return false;
   const child = await prisma.child.findUnique({ where: { id: String(childId) }, select: { centerId: true } });
   if (!child) return false;
-  if (hasAnyRole(user, ["ADMIN"])) return true;
-  return ((await accessibleCenterIds(user.id)) || []).includes(child.centerId);
+  const ids = await accessibleCenterIds(user.id);
+  // null: an admin with no subscriber account, who reaches every center.
+  return ids === null || ids.includes(child.centerId);
 }
 
 /**

@@ -1,6 +1,7 @@
 import DrillDownList from "@/components/reports/DrillDownList";
 import Pager from "@/components/ui/Pager";
 import StaffPerformanceTable from "@/components/reports/StaffPerformanceTable";
+import AddOnGate, { LockedValue, useHasAddOns } from "@/components/subscription/AddOnGate";
 import SegmentBar, { RANGE_COLORS, RANGE_TEXT } from "@/components/reports/SegmentBar";
 import { Heading, NAVY, RangePicker, card, keyOf, useRange } from "@/components/reports/reportUi";
 import { apiJson } from "@/lib/api";
@@ -97,9 +98,12 @@ function Collapsible({ title, open, onToggle, children }) {
 
 /**
  * studentsOnly: just the Student Performance bars (with the click-through
- * list), for a coach's or Student Support's My Performance.
+ * list), for Student Support's My Performance.
+ * teamOnly: a coach's My Performance (client sheet 2026-11-07): the Teacher
+ * and Student Performance bars and the Staff Performance Overview for the
+ * coach's own teachers and their students only.
  */
-export default function CenterPerformance({ studentsOnly = false, fixedCenterId = "", showCounts = false }) {
+export default function CenterPerformance({ studentsOnly = false, teamOnly = false, fixedCenterId = "", showCounts = false }) {
   const { data: session } = useSession();
   const viewerRole = session?.user?.role || "";
   const [pickedCorrection, setPickedCorrection] = useState("");
@@ -121,19 +125,29 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
   const [studentPage, setStudentPage] = useState(1);
   const corrections = useRange();
   const highlights = useRange();
+  // Add-on locks (client sheet 2026-11-06): staff sections need Staff
+  // Management, student milestone sections Steps of Progression.
+  const sopUnlocked = useHasAddOns("STEPS_OF_PROGRESSION");
 
   useEffect(() => {
     setLoading(true);
     setError("");
     const q = new URLSearchParams({ from: range.start, to: range.end, ...(centerId ? { centerId } : {}), ...(studentsOnly ? { view: "students" } : {}) });
-    apiJson(`/api/v1/reports/center-performance?${q}`)
+    // Team view: the coach's staff rows plus the students of their teachers.
+    const load = teamOnly
+      ? Promise.all([
+          apiJson(`/api/v1/reports/center-performance?${q}&staffOnly=1`),
+          apiJson(`/api/v1/reports/center-performance?${q}&view=students`),
+        ]).then(([staffPart, studentPart]) => ({ ...staffPart, students: studentPart.students || [] }))
+      : apiJson(`/api/v1/reports/center-performance?${q}`);
+    load
       .then((d) => {
         setData(d);
         if (d.center && d.center.id !== centerId) setCenterId(d.center.id);
       })
       .catch((e) => setError(e.message || "Could not load the center report"))
       .finally(() => setLoading(false));
-  }, [centerId, range, studentsOnly]);
+  }, [centerId, range, studentsOnly, teamOnly]);
 
   const staff = useMemo(() => data?.staff || [], [data]);
   const students = useMemo(() => data?.students || [], [data]);
@@ -212,11 +226,14 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
     return CHARACTER_HIGHLIGHT_TYPE_OPTIONS.map((t) => ({ key: t.value, label: t.label, count: tally[t.value] }));
   }, [data, highlights]);
 
+  // A coach opens their own Staff Performance page; admins the Staff Performance Report.
+  const staffHref = (id) => (viewerRole === "COACH" ? `/coach/staff-performance/${id}` : `/admin/reports/staff-performance?staffId=${id}`);
   const select = (chart) => (key) => setSelected((cur) => (cur?.chart === chart && cur?.key === key ? null : { chart, key }));
   const isSel = (chart) => (selected?.chart === chart ? selected.key : null);
 
   if (studentsOnly) {
     return (
+      <AddOnGate addOn="STEPS_OF_PROGRESSION">
       <section className={`${card} space-y-5`}>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <h2 className={`text-2xl font-black ${NAVY}`}>Student Performance</h2>
@@ -244,16 +261,21 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
           </>
         ) : null}
       </section>
+      </AddOnGate>
     );
   }
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className={`text-4xl font-black ${NAVY}`}>Center Performance Overview</h1>
+        {teamOnly ? (
+          <h2 className={`text-2xl font-black ${NAVY}`}>My Team&apos;s Performance</h2>
+        ) : (
+          <h1 className={`text-4xl font-black ${NAVY}`}>Center Performance Overview</h1>
+        )}
         <div className="flex flex-wrap items-end gap-3">
           {/* Always shown so the center can be switched (client request 2026-10-29). */}
-          {data?.centers?.length > 0 && (
+          {!teamOnly && data?.centers?.length > 0 && (
             <label className={`text-xs font-semibold ${NAVY}`}>
               Center
               <select value={centerId} onChange={(e) => { setSelected(null); setCenterId(e.target.value); }} className={`${control} mt-1 block w-48`}>
@@ -293,6 +315,7 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
       {data && (
         <>
           <div className={`grid grid-cols-1 gap-4 xl:grid-cols-2 ${loading ? "opacity-60" : ""}`}>
+            <AddOnGate addOn="STAFF_MANAGEMENT">
             <section className={`${card} space-y-5`}>
               <h2 className={`text-3xl font-black ${NAVY}`}>Teacher Performance</h2>
               <SegmentBar title="Overall Grade (%)" segments={charts.grade} selected={isSel("grade")} onSelect={select("grade")} />
@@ -306,12 +329,15 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
                 ))}
               </div>
             </section>
+            </AddOnGate>
+            <AddOnGate addOn="STEPS_OF_PROGRESSION">
             <section className={`${card} space-y-5`}>
               <h2 className={`text-3xl font-black ${NAVY}`}>Student Performance</h2>
               <SegmentBar title="Citizenship (0 - 10)" segments={charts.citizenship} selected={isSel("citizenship")} onSelect={select("citizenship")} />
               <SegmentBar title="Milestone Competency" segments={charts.competency} selected={isSel("competency")} onSelect={select("competency")} />
               <SegmentBar title="Milestone Progress" segments={charts.progress} selected={isSel("progress")} onSelect={select("progress")} />
             </section>
+            </AddOnGate>
           </div>
 
           {picked && (
@@ -326,7 +352,7 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
                 {picked.people.map((p) => (
                   <li key={p.id} className="flex justify-between border-b border-gray-100 py-1.5 text-sm dark:border-gray-800">
                     {picked.kind === "staff" ? (
-                      <Link href={`/admin/reports/staff-performance?staffId=${p.id}`} className="font-semibold text-blue-700 hover:underline dark:text-blue-300">{p.name}</Link>
+                      <Link href={staffHref(p.id)} className="font-semibold text-blue-700 hover:underline dark:text-blue-300">{p.name}</Link>
                     ) : (
                       <Link href={studentReportHref(viewerRole, p.id)} className="font-semibold text-blue-700 hover:underline dark:text-blue-300">{p.name}</Link>
                     )}
@@ -338,9 +364,13 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
           )}
 
           <Collapsible title="Staff Performance Overview" open={staffOpen} onToggle={() => setStaffOpen((o) => !o)}>
-            <StaffPerformanceTable staff={staff} viewHref={(row) => `/admin/reports/staff-performance?staffId=${row.id}`} />
+            <AddOnGate addOn="STAFF_MANAGEMENT">
+              <StaffPerformanceTable staff={staff} viewHref={(row) => staffHref(row.id)} />
+            </AddOnGate>
           </Collapsible>
 
+          {teamOnly ? null : (
+          <>
           <Collapsible title="Student Performance Overview" open={studentsOpen} onToggle={() => setStudentsOpen((o) => !o)}>
             <div className="flex flex-wrap items-end gap-3">
               <input value={studentFilter.q} onChange={(e) => { setStudentFilter({ ...studentFilter, q: e.target.value }); setStudentPage(1); }} placeholder="Search students..." aria-label="Search students" className={`${control} w-56`} />
@@ -378,7 +408,7 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
                         <td className="px-2 py-1.5">{ageLabel(s.birthDate)}</td>
                         <td className="px-2 py-1.5">{s.teacher || "—"}</td>
                         <td className="px-2 py-1.5"><span className={`inline-block min-w-[40px] rounded px-2 py-0.5 text-center font-bold ${citizenshipTone(s.citizenship)}`}>{num(s.citizenship)}</span></td>
-                        <td className="px-2 py-1.5">{status ? <span className={`inline-block rounded px-3 py-0.5 text-xs font-bold ${status.pill}`}>{status.label}</span> : "—"}</td>
+                        <td className="px-2 py-1.5">{!sopUnlocked ? <LockedValue addOn="STEPS_OF_PROGRESSION" /> : status ? <span className={`inline-block rounded px-3 py-0.5 text-xs font-bold ${status.pill}`}>{status.label}</span> : "—"}</td>
                         <td className="px-2 py-1.5">
                           {s.ipp === "ON_TRACK" ? <span className="rounded bg-green-100 px-2 py-0.5 text-xs font-bold text-green-800">On Track</span> : s.ipp === "NEEDS_REVIEW" ? <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">Needs Review</span> : "—"}
                         </td>
@@ -428,6 +458,8 @@ export default function CenterPerformance({ studentsOnly = false, fixedCenterId 
               ) : null}
             </section>
           </div>
+          </>
+          )}
         </>
       )}
     </div>

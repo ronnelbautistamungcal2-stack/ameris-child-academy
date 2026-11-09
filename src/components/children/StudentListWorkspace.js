@@ -1,7 +1,7 @@
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
-import { childAgeGroup, ageInMonths } from "@/lib/ageUtils";
+import { ageInMonths } from "@/lib/ageUtils";
 import { apiJson } from "@/lib/api";
 import { FLAG_CATEGORY_OPTIONS } from "@/lib/childFlags";
 import { userRoles } from "@/lib/roles";
@@ -13,15 +13,14 @@ import {
 import {
   MAX_EMERGENCY_CONTACTS,
   MAX_PARENT_CONTACTS,
-  formatContactLine,
   getEmergencyContacts,
   getParentContacts,
 } from "@/lib/child-contacts";
 import { useToast } from "@/contexts/ToastContext";
-import Link from "next/link";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import EditChildDialog from "@/components/children/EditChildDialog";
+import StudentListTable from "@/components/children/StudentListTable";
 import TimeSheetModal from "@/components/timesheets/TimeSheetModal";
 
 function createParentContacts(value = []) {
@@ -300,7 +299,9 @@ export default function StudentListWorkspace({ Layout, profileHref = (id) => `/a
         apiJson("/api/v1/children"),
         apiJson("/api/v1/centers"),
         apiJson("/api/v1/classes"),
-        apiJson("/api/v1/users"),
+        // Only admins can list users (to link parent accounts); coaches
+        // reuse this page without them.
+        apiJson("/api/v1/users").catch(() => []),
       ]);
       const nextChildren = Array.isArray(kids) ? kids : [];
       setChildren(nextChildren);
@@ -445,26 +446,6 @@ export default function StudentListWorkspace({ Layout, profileHref = (id) => `/a
       }));
   }, [profileFlagIssuesByChildId, scopedChildren]);
 
-  const filteredSorted = useMemo(() => {
-    const query = (q || "").trim().toLowerCase();
-    return [...scopedChildren]
-      .filter((ch) => {
-        if (!query) return true;
-        const name = `${ch.firstName || ""} ${ch.lastName || ""}`.trim().toLowerCase();
-        return name.includes(query) || String(ch.id || "").toLowerCase().includes(query);
-      })
-      .filter((ch) => {
-        if (!classroomFilter) return true;
-        const currentClassRoomId = getEffectiveClassRoomId(ch);
-        if (classroomFilter === "__unassigned__") return !currentClassRoomId;
-        return currentClassRoomId === classroomFilter;
-      })
-      .filter((ch) => {
-        if (profileFlagFilter !== "missing-profile") return true;
-        return !!profileFlagIssuesByChildId[ch.id];
-      })
-      .sort((a, b) => (a.firstName || "").localeCompare(b.firstName || ""));
-  }, [classroomFilter, profileFlagFilter, profileFlagIssuesByChildId, q, scopedChildren]);
 
   useEffect(() => {
     if (!flagsView) return;
@@ -1337,13 +1318,6 @@ export default function StudentListWorkspace({ Layout, profileHref = (id) => `/a
   }
 
   /* ── Stats ── */
-  const stats = useMemo(() => {
-    const total = children.length;
-    const infants = children.filter((c) => { const ag = childAgeGroup(c); return ag === "0-1"; }).length;
-    const withAllergies = children.filter((c) => c.allergies).length;
-    const unassigned = children.filter((c) => !c.classRoomId).length;
-    return { total, infants, withAllergies, unassigned };
-  }, [children]);
 
   const selectedFlagItem = useMemo(() => {
     return flagItems.find((item) => item.flagKey === selectedFlagKey) || null;
@@ -1360,22 +1334,12 @@ export default function StudentListWorkspace({ Layout, profileHref = (id) => `/a
       {timeSheetChildId ? (
         <TimeSheetModal kind="child" subjectId={timeSheetChildId} onClose={() => setTimeSheetChildId(null)} />
       ) : null}
-      {/* Stats Row */}
-      {!loading && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
-          <StatCard icon="👶" label="Total Children" value={stats.total} color="#2563eb" bg="#DBEAFE" />
-          <StatCard icon="🍼" label="Infants (0-1)" value={stats.infants} color="#D97706" bg="#FEF3C7" />
-          <StatCard icon="⚠️" label="With Allergies" value={stats.withAllergies} color="#DC2626" bg="#FEE2E2" />
-          <StatCard icon="📋" label="No Classroom" value={stats.unassigned} color="#7C3AED" bg="#EDE9FE" />
-        </div>
-      )}
-
       <div style={panelStyle}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--admin-text)" }}>
-              {flagsView ? "Children Flags" : "Children"}
+              {flagsView ? "Children Flags" : "Student List"}
             </h2>
             <p style={{ color: "var(--admin-text-muted)", marginTop: 4, fontSize: 13 }}>
               {flagsView
@@ -1737,77 +1701,22 @@ export default function StudentListWorkspace({ Layout, profileHref = (id) => `/a
           </>
         ) : (
           <>
-        {/* Search & Filter Bar */}
-        <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <div style={{ flex: "1 1 280px", minWidth: 200 }}>
-            <div style={filterLabelStyle}>Search</div>
-            <div style={{ position: "relative" }}>
-              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--admin-text-muted)", fontSize: 14, pointerEvents: "none" }}>🔍</span>
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                style={{ ...inputStyle, paddingLeft: 36 }}
-                placeholder="Search by name or ID..."
-              />
-            </div>
-          </div>
-          <div style={{ flex: "0 0 200px" }}>
-            <div style={filterLabelStyle}>Classroom</div>
-            <select
-              value={classroomFilter}
-              onChange={(e) => setClassroomFilter(e.target.value)}
-              style={inputStyle}
-            >
-              <option value="">All classrooms</option>
-              {classroomOptions.map((classroom) => {
-                const centerName = centerById[classroom.centerId]?.name || "";
-                return (
-                  <option key={classroom.id} value={classroom.id}>
-                    {centerName ? `${classroom.name} - ${centerName}` : classroom.name}
-                  </option>
-                );
-              })}
-              <option value="__unassigned__">
-                Unassigned
-              </option>
-            </select>
-          </div>
-          <div style={{ flex: "0 0 220px" }}>
-            <div style={filterLabelStyle}>Profile Status</div>
-            <select
-              value={profileFlagFilter}
-              onChange={(e) => setProfileFlagFilter(e.target.value)}
-              style={inputStyle}
-            >
-              <option value="">All profiles</option>
-              <option value="missing-profile">Missing DOB or classroom</option>
-            </select>
-          </div>
-          {(q || classroomFilter || profileFlagFilter) && (
-            <button
-              type="button"
-              onClick={() => {
-                setQ("");
-                setClassroomFilter("");
-                setProfileFlagFilter("");
-              }}
-              style={{ ...secondaryButtonStyle, alignSelf: "flex-end", fontSize: 12, padding: "10px 14px" }}
-            >
-              Clear Filters
-            </button>
-          )}
+        {/* Student List and Student Attendance (client mockup, sheet 2026-11-07). */}
+        <div style={{ marginTop: 16 }}>
+          <StudentListTable
+            children={scopedChildren}
+            classes={classes}
+            centerId={dashboardCenterId}
+            loading={loading}
+            profileHref={profileHref}
+            onChanged={refresh}
+            onTimeSheet={(child) => setTimeSheetChildId(child.id)}
+            onCheck={(child, action) => updateChildAttendanceFromCard(child, action)}
+            onMoveToday={(child, classRoomId) => saveChildTransferFromCard(child, classRoomId)}
+            savingId={rowAttendanceSavingId || rowTransferSavingId}
+            onDelete={(child) => setDeleteConfirmId(child.id)}
+          />
         </div>
-
-        {/* Result count */}
-        {!loading && (
-          <div style={{ marginTop: 12, fontSize: 12, color: "var(--admin-text-muted)", fontWeight: 600 }}>
-            Showing {filteredSorted.length} of {scopedChildren.length} children
-            {q && <> matching &quot;{q}&quot;</>}
-            {dashboardCenterId && centerById[dashboardCenterId]?.name ? (
-              <> in {centerById[dashboardCenterId].name}</>
-            ) : null}
-          </div>
-        )}
 
         {profileFlagFilter === "missing-profile" && !loading ? (
           <div
@@ -1947,257 +1856,6 @@ export default function StudentListWorkspace({ Layout, profileHref = (id) => `/a
 
         {error && !modalOpen ? <ErrorBanner message={error} /> : null}
 
-        {/* Children List */}
-        <div style={{ marginTop: 16 }}>
-          {loading ? (
-            <SkeletonTable rows={5} cols={7} />
-          ) : filteredSorted.length === 0 ? (
-            <EmptyState
-              title="No children found"
-              description={q || classroomFilter || profileFlagFilter ? "Try adjusting your search or filters." : "Get started by adding your first child record."}
-              actionLabel={!q && !classroomFilter && !profileFlagFilter ? "+ Add Child" : undefined}
-              onAction={!q && !classroomFilter && !profileFlagFilter ? openCreate : undefined}
-              className="py-8"
-            />
-          ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8 }}>
-              {filteredSorted.map((ch) => {
-                const fullName = `${ch.firstName || ""} ${ch.lastName || ""}`.trim();
-                const centerName = centerById[ch.centerId]?.name || "—";
-                const defaultClassRoomId = getDefaultClassRoomId(ch);
-                const effectiveClassRoomId = getEffectiveClassRoomId(ch);
-                const className = effectiveClassRoomId ? (classById[effectiveClassRoomId]?.name || effectiveClassRoomId) : null;
-                const defaultClassName = defaultClassRoomId ? (classById[defaultClassRoomId]?.name || defaultClassRoomId) : null;
-                const movedToday = !!ch.hasTemporaryClassRoomToday;
-                const checkedInToday = isChildCheckedInToday(ch);
-                const rowAttendanceSaving = rowAttendanceSavingId === ch.id;
-                const rowTransferSaving = rowTransferSavingId === ch.id;
-                const selectedTransferClassRoomId = quickTransferValue(ch);
-                const profileIssues = profileFlagIssuesByChildId[ch.id] || [];
-                const linkedParents = getLinkedParentUsers(ch).map(formatLinkedParentAccount).filter(Boolean);
-                const parentSummaries = getParentContacts(ch)
-                  .map((contact) => formatContactLine(contact))
-                  .filter(Boolean);
-                const emergencySummary = getEmergencyContacts(ch)
-                  .map((contact) => formatContactLine(contact, { includeEmail: false }))
-                  .filter(Boolean);
-
-                return (
-                  <div
-                    key={ch.id}
-                    style={childCardStyle}
-                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#93C5FD"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(37,99,235,0.08)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--admin-border)"; e.currentTarget.style.boxShadow = "none"; }}
-                  >
-                    {/* Avatar */}
-                    <div style={avatarStyle}>
-                      {getInitials(ch)}
-                    </div>
-
-                    {/* Info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                        <span style={{ fontWeight: 700, fontSize: 14, color: "var(--admin-text)" }}>
-                          {fullName || "Unnamed"}
-                        </span>
-                        {ch.allergies && (
-                          <span style={{ ...tagStyle, background: "#FEE2E2", color: "#991B1B", borderColor: "#FECACA" }}>
-                            ⚠ Allergies
-                          </span>
-                        )}
-                        {movedToday && (
-                          <span style={{ ...tagStyle, background: "#E0F2FE", color: "#075985", borderColor: "#BAE6FD" }}>
-                            Moved Today
-                          </span>
-                        )}
-                        {!effectiveClassRoomId && (
-                          <span style={{ ...tagStyle, background: "#FEF3C7", color: "#92400E", borderColor: "#FDE68A" }}>
-                            No class
-                          </span>
-                        )}
-                        {profileIssues.includes("Missing DOB") && (
-                          <span style={{ ...tagStyle, background: "#FEF2F2", color: "#991B1B", borderColor: "#FECACA" }}>
-                            Missing DOB
-                          </span>
-                        )}
-                        {profileIssues.includes("Missing classroom") && !profileIssues.includes("Missing DOB") && (
-                          <span style={{ ...tagStyle, background: "#FFF7ED", color: "#9A3412", borderColor: "#FED7AA" }}>
-                            Missing classroom
-                          </span>
-                        )}
-                      </div>
-
-                      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 6, flexWrap: "wrap", fontSize: 12, color: "var(--admin-text-muted)" }}>
-                        {ch.birthDate && (
-                          <span>Born {new Date(ch.birthDate).toLocaleDateString()}</span>
-                        )}
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2563eb", display: "inline-block" }} />
-                          {centerName}
-                        </span>
-                        {className && (
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", display: "inline-block" }} />
-                            {movedToday ? `Today: ${className}` : className}
-                          </span>
-                        )}
-                        {linkedParents[0] && (
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                            Linked: {linkedParents[0]}
-                          </span>
-                        )}
-                      </div>
-
-                      {linkedParents.length > 1 || parentSummaries.length > 0 || emergencySummary.length > 0 ? (
-                        <div style={{ marginTop: 4, fontSize: 11, color: "var(--admin-text-muted)" }}>
-                          {linkedParents.length > 1 ? `Linked 2: ${linkedParents[1]}` : null}
-                          {linkedParents.length > 1 && parentSummaries.length > 0 ? " • " : null}
-                          {parentSummaries.length > 0 ? `Contacts: ${parentSummaries.join(" • ")}` : null}
-                          {((linkedParents.length > 1) || parentSummaries.length > 0) && emergencySummary.length > 0 ? " • " : null}
-                          {emergencySummary.length > 0 ? `Emergency: ${emergencySummary.join(" • ")}` : null}
-                        </div>
-                      ) : null}
-
-                      {(ch.enrollmentStartDate || ch.enrollmentEndDate) && (
-                        <div style={{ marginTop: 4, fontSize: 11, color: "var(--admin-text-muted)" }}>
-                          Enrolled: {ch.enrollmentStartDate ? new Date(ch.enrollmentStartDate).toLocaleDateString() : "—"} — {ch.enrollmentEndDate ? new Date(ch.enrollmentEndDate).toLocaleDateString() : "Present"}
-                        </div>
-                      )}
-                      {movedToday && defaultClassName ? (
-                        <div style={{ marginTop: 4, fontSize: 11, color: "var(--admin-text-muted)" }}>
-                          Default classroom: {defaultClassName}
-                        </div>
-                      ) : null}
-
-                      <div
-                        style={{
-                          marginTop: 10,
-                          display: "grid",
-                          gap: 8,
-                          borderTop: "1px solid var(--admin-border)",
-                          paddingTop: 10,
-                        }}
-                      >
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--admin-text-muted)" }}>
-                            Today: {checkedInToday ? "Checked in" : "Not checked in"}
-                          </span>
-                          <button
-                            type="button"
-                            style={secondaryButtonStyle}
-                            onClick={() => updateChildAttendanceFromCard(ch, "CHECK_IN")}
-                            disabled={checkedInToday || rowAttendanceSaving || rowTransferSaving}
-                          >
-                            {rowAttendanceSaving && !checkedInToday ? "Saving..." : "Check In"}
-                          </button>
-                          <button
-                            type="button"
-                            style={secondaryButtonStyle}
-                            onClick={() => updateChildAttendanceFromCard(ch, "CHECK_OUT")}
-                            disabled={!checkedInToday || rowAttendanceSaving || rowTransferSaving}
-                          >
-                            {rowAttendanceSaving && checkedInToday ? "Saving..." : "Check Out"}
-                          </button>
-                        </div>
-
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                          <select
-                            value={selectedTransferClassRoomId}
-                            onChange={(e) => updateQuickTransferValue(ch.id, e.target.value)}
-                            style={{ ...inputStyle, minWidth: 240, maxWidth: 320, background: "#fff" }}
-                            disabled={!checkedInToday || rowTransferSaving}
-                          >
-                            <option value="">Return to default classroom</option>
-                            {classes
-                              .filter((cl) => cl.centerId === ch.centerId)
-                              .map((cl) => (
-                                <option key={cl.id} value={cl.id}>
-                                  {cl.name}
-                                </option>
-                              ))}
-                          </select>
-                          <button
-                            type="button"
-                            style={secondaryButtonStyle}
-                            onClick={() => saveChildTransferFromCard(ch, selectedTransferClassRoomId)}
-                            disabled={!checkedInToday || rowTransferSaving}
-                          >
-                            {rowTransferSaving ? "Saving..." : "Transfer for Today"}
-                          </button>
-                          {ch.hasTemporaryClassRoomToday ? (
-                            <button
-                              type="button"
-                              style={secondaryButtonStyle}
-                              onClick={() => {
-                                updateQuickTransferValue(ch.id, "");
-                                saveChildTransferFromCard(ch, "");
-                              }}
-                              disabled={!checkedInToday || rowTransferSaving}
-                            >
-                              Return to Default
-                            </button>
-                          ) : null}
-                        </div>
-
-                        {!checkedInToday ? (
-                          <div style={{ fontSize: 11, color: "var(--admin-text-muted)" }}>
-                            Temporary classroom transfer is available after the child is checked in.
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-                      <Link
-                        href={profileHref(ch.id)}
-                        style={cardActionButton}
-                        title="View profile"
-                      >
-                        View Profile
-                      </Link>
-                      <button
-                        type="button"
-                        style={cardActionButton}
-                        onClick={() => openEdit(ch)}
-                        title="Edit"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-                          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-                        </svg>
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        style={cardActionButton}
-                        onClick={() => setTimeSheetChildId(ch.id)}
-                        title="Time sheet"
-                        aria-label={`Time sheet for ${ch.firstName}`}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="9" />
-                          <path d="M12 7v5l3 2" />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        style={cardDangerButton}
-                        onClick={() => setDeleteConfirmId(ch.id)}
-                        title="Delete"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6" />
-                          <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
           </>
         )}
       </div>
@@ -2445,28 +2103,6 @@ export default function StudentListWorkspace({ Layout, profileHref = (id) => `/a
 
 /* ── Sub-components ── */
 
-function StatCard({ icon, label, value, color, bg }) {
-  return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 14,
-      padding: 16, borderRadius: 14,
-      background: "var(--admin-bg)",
-      border: "1px solid var(--admin-border)",
-    }}>
-      <div style={{
-        width: 48, height: 48, borderRadius: 12,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        background: bg, fontSize: 22,
-      }}>
-        {icon}
-      </div>
-      <div>
-        <div style={{ fontSize: 24, fontWeight: 800, color }}>{value}</div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--admin-text-muted)" }}>{label}</div>
-      </div>
-    </div>
-  );
-}
 
 function SectionHeader({ icon, title, style: extraStyle }) {
   return (
@@ -2746,31 +2382,7 @@ const tagStyle = {
   border: "1px solid",
 };
 
-const cardActionButton = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 4,
-  padding: "7px 12px",
-  border: "1px solid var(--admin-border)",
-  borderRadius: 8,
-  background: "var(--admin-bg)",
-  color: "var(--admin-text)",
-  cursor: "pointer",
-  fontWeight: 600,
-  fontSize: 12,
-};
 
-const cardDangerButton = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: 7,
-  border: "1px solid #FECACA",
-  borderRadius: 8,
-  background: "#FEF2F2",
-  color: "#DC2626",
-  cursor: "pointer",
-};
 
 const primaryButtonStyle = {
   display: "inline-flex",

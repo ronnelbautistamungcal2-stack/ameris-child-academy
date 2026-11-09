@@ -1,4 +1,4 @@
-import { accessibleCenterIds, getSession, hasAccessToCenter } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import {
   badRequest,
@@ -97,7 +97,7 @@ export default createApiHandler(async function handler(req, res) {
     const to = endOfDay(optionalDate(req.query, "to"));
     validateRangeOrder(from, to, "Filter");
 
-    if (centerId && session.user.role !== "ADMIN") {
+    if (centerId) {
       const allowed = await hasAccessToCenter(session.user.id, centerId);
       if (!allowed) throw forbidden();
     }
@@ -116,9 +116,7 @@ export default createApiHandler(async function handler(req, res) {
       where.teacherId = session.user.id;
     } else {
       if (teacherId) where.teacherId = teacherId;
-      if (session.user.role === "COACH" && !centerId) {
-        where.centerId = { in: (await accessibleCenterIds(session.user.id)) || [] };
-      }
+      if (!centerId) where.centerId = await centerIdFilter(session.user.id, null);
     }
 
     const evaluations = await prisma.teacherEvaluation.findMany({
@@ -140,10 +138,8 @@ export default createApiHandler(async function handler(req, res) {
 
   const body = ensureObject(req.body || {});
   const centerId = requiredString(body, "centerId");
-  if (session.user.role !== "ADMIN") {
-    const allowed = await hasAccessToCenter(session.user.id, centerId);
-    if (!allowed) throw forbidden();
-  }
+  const allowed = await hasAccessToCenter(session.user.id, centerId);
+  if (!allowed) throw forbidden();
   const teacherId = requiredString(body, "teacherId");
   const periodStart = optionalDate(body, "periodStart", { nullable: true });
   const periodEnd = optionalDate(body, "periodEnd", { nullable: true });

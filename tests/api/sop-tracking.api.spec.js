@@ -49,8 +49,12 @@ test.describe("SOP Tracking @api", () => {
   test("the assessment lists the center's steps; Generate Active Goals picks what to work on", async ({ request }) => {
     const admin = await loginAsAdmin(request);
     const url = `/api/v1/sop/${childId}`;
+    // The child's own view lists only goals (none yet); the assessment view
+    // lists the bank's steps, every age with all=1.
     let data = await (await apiGet(request, url, admin)).json();
-    expect(data.steps.map((s) => s.reference)).toEqual(["SP-climb", "SP-crawl", "SP-walk"]);
+    expect(data.steps).toEqual([]);
+    data = await (await apiGet(request, `${url}?view=assessment&all=1`, admin)).json();
+    expect(data.steps.map((s) => s.reference).sort()).toEqual(["SP-climb", "SP-crawl", "SP-walk"]);
     expect(data.steps.every((s) => s.level === null && !s.active)).toBe(true);
 
     // Walking is not started, so the previous step (crawling) gets assessed:

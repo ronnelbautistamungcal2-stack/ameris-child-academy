@@ -27,7 +27,7 @@ export default async function handler(req, res) {
   if (!requiresLinkVisit(item.directLink)) {
     return res.status(400).json({ error: "This item does not link to Log Activity" });
   }
-  if (session.user.role !== "ADMIN" && !(await hasAccessToCenter(session.user.id, item.checklist.centerId))) {
+  if (!(await hasAccessToCenter(session.user.id, item.checklist.centerId))) {
     return res.status(403).json({ error: "Forbidden" });
   }
 

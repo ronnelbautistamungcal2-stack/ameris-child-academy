@@ -1,6 +1,7 @@
-import { getSession } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import { childMatchesAgeGroup, normalizeAssignmentType } from "@/lib/formAssignments";
 import prisma from "@/lib/prisma";
+import { accountOwnedWhere, ownsAccountDocument } from "@/lib/subscriberAccounts";
 
 const DAY = 86400000;
 const parentName = (child) => child.parent?.name || child.guardians[0]?.guardian?.name || "";
@@ -23,6 +24,18 @@ export default async function handler(req, res) {
     const templateId = String(req.body?.templateId || "");
     const childId = String(req.body?.childId || "");
     if (!templateId || !childId) return res.status(400).json({ error: "templateId and childId are required" });
+    const [template, child] = await Promise.all([
+      prisma.formTemplate.findUnique({ where: { id: templateId }, select: { subscriberAccountId: true } }),
+      prisma.child.findUnique({ where: { id: childId }, select: { centerId: true } }),
+    ]);
+    if (
+      !template ||
+      !child ||
+      !(await ownsAccountDocument(session.user.id, template.subscriberAccountId)) ||
+      !(await hasAccessToCenter(session.user.id, child.centerId))
+    ) {
+      return res.status(404).json({ error: "Form or child not found" });
+    }
     const note = String(req.body?.note || "").trim().slice(0, 500);
     if (!note) {
       await prisma.formRenewalNote.deleteMany({ where: { templateId, childId } });
@@ -42,15 +55,22 @@ export default async function handler(req, res) {
   }
 
   const centerId = req.query.centerId ? String(req.query.centerId) : null;
+  if (centerId && !(await hasAccessToCenter(session.user.id, centerId))) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  const [owned, childCenter] = await Promise.all([
+    accountOwnedWhere(session.user.id),
+    centerIdFilter(session.user.id, centerId),
+  ]);
   const startOfToday = new Date(new Date().setHours(0, 0, 0, 0));
   const [templates, children] = await Promise.all([
     prisma.formTemplate.findMany({
-      where: { active: true, requiresRenewal: true, targetRole: "PARENT", ...(centerId ? { OR: [{ centerId }, { centerId: null }] } : {}) },
+      where: { ...owned, active: true, requiresRenewal: true, targetRole: "PARENT", ...(centerId ? { OR: [{ centerId }, { centerId: null }] } : {}) },
       orderBy: { title: "asc" },
     }),
     prisma.child.findMany({
       where: {
-        ...(centerId ? { centerId } : {}),
+        centerId: childCenter,
         OR: [{ enrollmentEndDate: null }, { enrollmentEndDate: { gte: startOfToday } }],
       },
       select: {

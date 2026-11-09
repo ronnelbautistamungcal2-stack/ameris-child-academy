@@ -1,4 +1,4 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { createApiHandler, forbidden, notFound, unauthorized } from "@/lib/api-error";
 import {
@@ -23,13 +23,13 @@ export default createApiHandler(async function handler(req, res) {
     const centerId = optionalString(req.query, "centerId");
     const type = optionalString(req.query, "type");
     const status = optionalString(req.query, "status");
-    if (centerId && role !== "ADMIN") {
+    if (centerId) {
       const allowed = await hasAccessToCenter(session.user.id, centerId);
       if (!allowed) throw forbidden();
     }
 
     const where = {};
-    if (centerId) where.centerId = centerId;
+    where.centerId = await centerIdFilter(session.user.id, centerId);
     if (type && VALID_TYPES.includes(type)) where.type = type;
     if (status && VALID_STATUSES.includes(status)) where.status = status;
 
@@ -72,10 +72,8 @@ export default createApiHandler(async function handler(req, res) {
       });
     }
 
-    if (role !== "ADMIN") {
-      const allowed = await hasAccessToCenter(session.user.id, centerId);
-      if (!allowed) throw forbidden();
-    }
+    const allowed = await hasAccessToCenter(session.user.id, centerId);
+    if (!allowed) throw forbidden();
 
     const followUp = await prisma.coachFollowUp.create({
       data: {

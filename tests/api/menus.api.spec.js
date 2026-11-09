@@ -81,7 +81,7 @@ test.describe("Menus API @api", () => {
         centerId,
         items: [
           line(),
-          line({ date: "2099-06-03", meal: "breakfast", ageGroup: "olderInfants", component: "grain", item: "E2E Oat Cereal" }),
+          line({ date: "2099-06-03", meal: "breakfast", ageGroup: "olderInfants", component: "meatOrAlternate", item: "E2E Oat Cereal" }),
         ],
       },
       admin,
@@ -199,7 +199,7 @@ test.describe("Menus API @api", () => {
         items: [
           line({ item: "" }),
           line({ component: "fruit", item: "" }),
-          line({ date: "2099-06-03", meal: "breakfast", ageGroup: "olderInfants", component: "grain", item: "  " }),
+          line({ date: "2099-06-03", meal: "breakfast", ageGroup: "olderInfants", component: "meatOrAlternate", item: "  " }),
         ],
       },
       admin,
@@ -209,5 +209,36 @@ test.describe("Menus API @api", () => {
     const res = await apiGet(request, `/api/v1/menus?centerId=${centerId}&start=${WEEK}&days=5`, admin);
     const { items } = await res.json();
     expect(items.filter((i) => i.kind === "PLANNED")).toEqual([]);
+  });
+
+  test("Clear Week can clear a line saved before the center's meals changed", async ({ request }) => {
+    // Client sheet 2026-11-07: Clear Week sends every saved line, and one
+    // for a meal the center no longer serves made the whole clear fail.
+    const { PrismaClient } = require("@prisma/client");
+    const prisma = new PrismaClient();
+    const stale = { centerId, date: new Date("2099-06-02T00:00:00.000Z"), meal: "no-longer-served", ageGroup: "children", component: "vegetable", kind: "PLANNED" };
+    await prisma.menuItem.create({ data: { ...stale, item: "E2E Stale line" } });
+    try {
+      const admin = await loginAsAdmin(request);
+      const clear = await apiPut(
+        request,
+        "/api/v1/menus",
+        { centerId, kind: "PLANNED", items: [{ date: "2099-06-02", meal: stale.meal, ageGroup: stale.ageGroup, component: stale.component, item: "" }] },
+        admin,
+      );
+      expect(clear.status(), await clear.text()).toBe(200);
+      expect(await prisma.menuItem.count({ where: stale })).toBe(0);
+      // Saving a real item on that line is still refused.
+      const save = await apiPut(
+        request,
+        "/api/v1/menus",
+        { centerId, kind: "PLANNED", items: [{ date: "2099-06-02", meal: stale.meal, ageGroup: stale.ageGroup, component: stale.component, item: "Soup" }] },
+        admin,
+      );
+      expect(save.status()).toBe(400);
+    } finally {
+      await prisma.menuItem.deleteMany({ where: stale });
+      await prisma.$disconnect();
+    }
   });
 });

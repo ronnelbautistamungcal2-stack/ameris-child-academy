@@ -1,10 +1,10 @@
 // SOP Tracking on the server: who may assess or track a child, the child's
 // steps with their levels, and saving levels (with history entries).
 
-import { accessibleCenterIds } from "@/lib/auth";
+import { accessibleCenterIds, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { hasAnyRole, signedInAs } from "@/lib/roles";
-import { activeGoalIds, levelForStatus, statusForLevel } from "@/lib/sop";
+import { activeGoalIds, levelForStatus, monthsOld, statusForLevel, stepsForAge } from "@/lib/sop";
 import { buildTeacherChildWhere, teacherCanAccessChild } from "@/lib/teacherScope";
 
 export const SOP_ROLES = ["ADMIN", "COACH", "STUDENT_SUPPORT", "TEACHER"];
@@ -13,9 +13,17 @@ const GOAL_INDEX = 1;
 /** Prisma `where` for the children the user may assess and track, or null. */
 export async function sopChildScope(sessionUser, centerId) {
   const user = signedInAs(sessionUser);
-  if (hasAnyRole(user, ["ADMIN"])) return centerId ? { centerId } : {};
+  if (hasAnyRole(user, ["ADMIN"])) {
+    // Only the admin's own subscriber account (null = no account, all).
+    const ids = await accessibleCenterIds(user.id);
+    if (!ids) return centerId ? { centerId } : {};
+    return { centerId: { in: centerId ? ids.filter((id) => id === centerId) : ids } };
+  }
   if (hasAnyRole(user, ["COACH", "STUDENT_SUPPORT"])) {
-    const ids = (await accessibleCenterIds(user.id)) || [];
+    // null: someone who is also an admin with no subscriber account, who
+    // reaches every center (e.g. an admin signed in as Coach or Student Support).
+    const ids = await accessibleCenterIds(user.id);
+    if (!ids) return centerId ? { centerId } : {};
     return { centerId: { in: centerId ? ids.filter((id) => id === centerId) : ids } };
   }
   if (hasAnyRole(user, ["TEACHER"])) return buildTeacherChildWhere(user.id, centerId);
@@ -25,9 +33,10 @@ export async function sopChildScope(sessionUser, centerId) {
 export async function canUseChild(sessionUser, child) {
   if (!child) return false;
   const user = signedInAs(sessionUser);
-  if (hasAnyRole(user, ["ADMIN"])) return true;
+  if (hasAnyRole(user, ["ADMIN"])) return hasAccessToCenter(user.id, child.centerId);
   if (hasAnyRole(user, ["COACH", "STUDENT_SUPPORT"])) {
-    return ((await accessibleCenterIds(user.id)) || []).includes(child.centerId);
+    const ids = await accessibleCenterIds(user.id);
+    return ids === null || ids.includes(child.centerId);
   }
   if (hasAnyRole(user, ["TEACHER"])) return teacherCanAccessChild(user.id, child);
   return false;
@@ -51,43 +60,165 @@ const STEP_SELECT = {
 
 const CENTER_STEPS = (child) => ({ centerId: child.centerId, isStep: true });
 
-/** The center's steps and the child's progress on them. */
-export async function loadChildSteps(child) {
-  const steps = await prisma.lesson.findMany({
-    where: { centerId: child.centerId, isStep: true },
-    select: STEP_SELECT,
-    orderBy: [{ reference: "asc" }, { title: "asc" }],
-  });
-  const progress = await prisma.progress.findMany({
-    // A relation filter, not lessonId IN (every step id): a big step bank
-    // passes Postgres's 32,767 bind-parameter limit (P2035).
+const PROGRESS_SELECT = { lessonId: true, status: true, active: true, notes: true, assessedAt: true, updatedAt: true };
+const ID_BATCH = 10000; // under Postgres's 32,767 bind-parameter limit
+const CHAIN_DEPTH = 4; // how far the assessment page follows Not Started / Competency links
+
+function stepRow(s, p) {
+  return {
+    id: s.id,
+    title: s.title,
+    reference: s.reference || "",
+    question: s.description || "",
+    category: s.category?.name || "General",
+    subCategory: s.subCategory || "Other",
+    ageYears: s.ageYears,
+    ageMonths: s.ageMonths,
+    maxAgeYears: s.maxAgeYears,
+    maxAgeMonths: s.maxAgeMonths,
+    priorStepId: s.priorStepId,
+    nextStepId: s.nextStepId,
+    criteria: s.criteria || null,
+    level: p ? levelForStatus(p.status) : null,
+    assessed: Boolean(p?.assessedAt),
+    active: Boolean(p?.active),
+    notes: p?.notes || "",
+    updatedAt: p?.updatedAt || null,
+  };
+}
+
+const byReference = (a, b) => (a.reference || "").localeCompare(b.reference || "") || (a.title || "").localeCompare(b.title || "");
+
+/** Every progress row the child has on the center's steps, by step id. */
+async function childProgress(child) {
+  // A relation filter, not lessonId IN (every step id): a big step bank
+  // passes Postgres's 32,767 bind-parameter limit (P2035).
+  const rows = await prisma.progress.findMany({
     where: { childId: child.id, goalIndex: GOAL_INDEX, lesson: CENTER_STEPS(child) },
-    select: { lessonId: true, status: true, active: true, notes: true, assessedAt: true, updatedAt: true },
+    select: PROGRESS_SELECT,
   });
-  const byStep = Object.fromEntries(progress.map((p) => [p.lessonId, p]));
-  return steps.map((s) => {
-    const p = byStep[s.id];
-    return {
-      id: s.id,
-      title: s.title,
-      reference: s.reference || "",
-      question: s.description || "",
-      category: s.category?.name || "General",
-      subCategory: s.subCategory || "Other",
-      ageYears: s.ageYears,
-      ageMonths: s.ageMonths,
-      maxAgeYears: s.maxAgeYears,
-      maxAgeMonths: s.maxAgeMonths,
-      priorStepId: s.priorStepId,
-      nextStepId: s.nextStepId,
-      criteria: s.criteria || null,
-      level: p ? levelForStatus(p.status) : null,
-      assessed: Boolean(p?.assessedAt),
-      active: Boolean(p?.active),
-      notes: p?.notes || "",
-      updatedAt: p?.updatedAt || null,
-    };
+  return new Map(rows.map((p) => [p.lessonId, p]));
+}
+
+async function findInBatches(ids, args) {
+  const out = [];
+  for (let i = 0; i < ids.length; i += ID_BATCH) {
+    out.push(...(await prisma.lesson.findMany({ ...args, where: { ...args.where, id: { in: ids.slice(i, i + ID_BATCH) } } })));
+  }
+  return out;
+}
+
+/**
+ * The steps the child has a level on or that are active goals, with that
+ * progress. Enough for Progression Tracking, the child profile and the status
+ * summaries, without sending a whole step bank (tens of thousands of steps).
+ */
+export async function loadChildGoals(child) {
+  const progress = await childProgress(child);
+  const steps = await findInBatches([...progress.keys()], { where: CENTER_STEPS(child), select: STEP_SELECT });
+  return steps.map((s) => stepRow(s, progress.get(s.id))).sort(byReference);
+}
+
+/** The center's step category names for the assessment tabs, General first. */
+export async function stepCategoryNames(centerId) {
+  const rows = await prisma.lesson.findMany({
+    where: { centerId, isStep: true },
+    distinct: ["categoryId"],
+    select: { category: { select: { name: true } } },
   });
+  const names = [...new Set(rows.map((r) => r.category?.name || "General"))];
+  return names.sort((a, b) => (a === "General" ? -1 : b === "General" ? 1 : a.localeCompare(b)));
+}
+
+const LEAN_SELECT = {
+  id: true,
+  subCategory: true,
+  ageYears: true,
+  ageMonths: true,
+  maxAgeYears: true,
+  maxAgeMonths: true,
+  priorStepId: true,
+  nextStepId: true,
+};
+
+/**
+ * One tab of the Initial Developmental Assessment: the category's steps the
+ * page shows, not the whole bank. By default that is each sub category's
+ * steps for the child's age (stepsForAge); with `all` or a search, every step
+ * in the category (matching the search). Always added: steps the child has a
+ * level on, and the steps up to CHAIN_DEPTH links before and after the shown
+ * ones, which the page pulls in when a step is marked Not Started or
+ * Competency. Returns { category, tabs, steps }.
+ */
+export async function loadAssessmentSteps(child, { category, all = false, q = "" } = {}) {
+  const categories = await stepCategoryNames(child.centerId);
+  const chosen = categories.includes(category) ? category : categories[0] || null;
+  if (!chosen) return { category: null, tabs: categories, steps: [] };
+
+  const inCategory =
+    chosen === "General"
+      ? { OR: [{ categoryId: null }, { category: { name: "General" } }] }
+      : { category: { name: chosen } };
+  const search = String(q || "").trim().slice(0, 100);
+  const textMatch = search
+    ? { OR: [{ title: { contains: search, mode: "insensitive" } }, { description: { contains: search, mode: "insensitive" } }] }
+    : {};
+  const [progress, lean] = await Promise.all([
+    childProgress(child),
+    prisma.lesson.findMany({ where: { ...CENTER_STEPS(child), AND: [inCategory, textMatch] }, select: LEAN_SELECT }),
+  ]);
+  const touched = (s) => progress.has(s.id);
+
+  let start;
+  if (all || search) {
+    start = lean;
+  } else {
+    const groups = new Map();
+    for (const s of lean) {
+      const key = s.subCategory || "Other";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(s);
+    }
+    const months = monthsOld(child.birthDate);
+    start = [...groups.values()].flatMap((list) => stepsForAge(list, months, touched));
+  }
+
+  const wanted = new Set(start.map((s) => s.id));
+  // Steps the child has a level on in this category stay visible (with a
+  // search, the page also matches on notes).
+  const leanById = new Map(lean.map((s) => [s.id, s]));
+  const touchedInCategory = await findInBatches([...progress.keys()].filter((id) => !leanById.has(id)), {
+    where: { ...CENTER_STEPS(child), ...inCategory },
+    select: LEAN_SELECT,
+  });
+  for (const s of touchedInCategory) leanById.set(s.id, s);
+  for (const id of progress.keys()) if (leanById.has(id)) wanted.add(id);
+
+  // Follow prior/next links so the page can pull those steps in.
+  let frontier = [...wanted];
+  for (let depth = 0; depth < CHAIN_DEPTH && frontier.length; depth += 1) {
+    const linked = [];
+    const missing = [];
+    for (const id of frontier) {
+      const s = leanById.get(id);
+      if (!s) continue;
+      for (const next of [s.priorStepId, s.nextStepId]) {
+        if (!next || wanted.has(next)) continue;
+        wanted.add(next);
+        linked.push(next);
+        if (!leanById.has(next)) missing.push(next);
+      }
+    }
+    for (const s of await findInBatches(missing, { where: CENTER_STEPS(child), select: LEAN_SELECT })) leanById.set(s.id, s);
+    frontier = linked;
+  }
+
+  const steps = await findInBatches([...wanted], { where: CENTER_STEPS(child), select: STEP_SELECT });
+  return {
+    category: chosen,
+    tabs: categories,
+    steps: steps.map((s) => stepRow(s, progress.get(s.id))).sort(byReference),
+  };
 }
 
 /**

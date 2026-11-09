@@ -22,7 +22,7 @@ export default async function handler(req, res) {
     }
     const centerId = String(req.query.centerId || "");
     if (!centerId) return res.status(400).json({ error: "centerId is required" });
-    if (session.user.role !== "ADMIN" && !(await hasAccessToCenter(session.user.id, centerId))) {
+    if (!(await hasAccessToCenter(session.user.id, centerId))) {
       return res.status(403).json({ error: "Forbidden" });
     }
 

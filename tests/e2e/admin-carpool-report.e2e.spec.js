@@ -1,5 +1,6 @@
 const { test, expect } = require("@playwright/test");
 const { PrismaClient } = require("@prisma/client");
+const { demoAccountId } = require("../helpers/accounts");
 const { loginAsAdmin, waitForLoadingDone } = require("../helpers/e2e");
 
 const prisma = new PrismaClient();
@@ -14,7 +15,7 @@ const fixture = {
 
 async function prepareFixture() {
   const center = await prisma.center.create({
-    data: { name: fixture.centerName, address: "QA Carpool Address" },
+    data: { subscriberAccountId: await demoAccountId(prisma), name: fixture.centerName, address: "QA Carpool Address" },
   });
 
   const childRouteA = await prisma.child.create({

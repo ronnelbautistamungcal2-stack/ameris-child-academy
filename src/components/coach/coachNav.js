@@ -75,7 +75,6 @@ export const COACH_NAV_ITEMS = [
     label: "Staff Management",
     icon: icons.staff,
     children: [
-      { href: "/coach/staff-management", label: "Staff Daily Management" },
       { href: "/coach/checklist-review", label: "Checklist Review" },
       { href: "/coach/staff-attendance", label: "Attendance" },
       { href: "/coach/shifts", label: "Shift Schedules" },

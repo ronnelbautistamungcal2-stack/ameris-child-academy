@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { adminCanReachUser, getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { pinStatusOf } from "@/lib/kioskPins";
@@ -9,7 +9,10 @@ import {
   normalizeStaffDepartment,
   primaryRoleFromRoles,
   userRoles,
+  centerAssignableRoles,
+  GLOBAL_ADMIN_ROLE,
 } from "@/lib/roles";
+import { isGlobalAdmin } from "@/lib/subscriberAccounts";
 
 function parseDateOrNull(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -50,6 +53,11 @@ export default async function handler(req, res) {
   if (!session) return res.status(401).json({ error: "Unauthorized" });
 
   const { id } = req.query;
+
+  // Admins only reach people in their own subscriber account.
+  if (session.user.role === "ADMIN" && !(await adminCanReachUser(session.user.id, id))) {
+    return res.status(404).json({ error: "User not found" });
+  }
 
   if (req.method === "GET") {
     // Get user by ID
@@ -127,8 +135,16 @@ export default async function handler(req, res) {
       updateData.disabled = Boolean(disabled);
     }
     if (assignedRoles && session.user.role === "ADMIN") {
+      // Only a global admin grants or removes GLOBAL_ADMIN; center admins keep
+      // whatever the person already had.
+      if (!isGlobalAdmin(session.user)) {
+        const current = await prisma.user.findUnique({ where: { id }, select: { roles: true } });
+        const kept = (current?.roles || []).includes(GLOBAL_ADMIN_ROLE) ? [GLOBAL_ADMIN_ROLE] : [];
+        assignedRoles.splice(0, assignedRoles.length, ...centerAssignableRoles(assignedRoles), ...kept);
+        if (!assignedRoles.length) assignedRoles.push("PARENT");
+      }
       updateData.roles = assignedRoles;
-      updateData.role = primaryRoleFromRoles(assignedRoles, "PARENT");
+      updateData.role = primaryRoleFromRoles(centerAssignableRoles(assignedRoles), "PARENT");
       if (!hasEmployeeRole(assignedRoles)) {
         updateData.dob = null;
         updateData.hireDate = null;

@@ -102,8 +102,17 @@ function ageRangeText(filters) {
   return `${min} – ${filters.maxMonths} months on the report date`;
 }
 
-function StepTable({ categories, columns, cells }) {
+// When a report is too big to send whole (REPORT_ROW_LIMIT rows in
+// src/lib/milestoneReports.js), each category comes with its row count only;
+// picking one sets the Category filter so the report loads just that one.
+function StepTable({ categories, columns, cells, rowsOmitted, rowLimit, onPickCategory }) {
   return (
+    <>
+    {rowsOmitted ? (
+      <p className="mx-3 mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        This report has more than {rowLimit?.toLocaleString("en-US") || "2,000"} steps, so each category shows its step count. Choose a category to see its steps.
+      </p>
+    ) : null}
     <table className="w-full min-w-[960px] border-collapse text-sm">
       <thead>
         <tr className={`border-y-2 border-blue-200 ${NAVY}`}>
@@ -113,19 +122,32 @@ function StepTable({ categories, columns, cells }) {
       </thead>
       <tbody>
         {categories.map((cat, i) => (
-          <CategoryRows key={cat.id || "none"} cat={cat} tone={CATEGORY_TONES[i % CATEGORY_TONES.length]} span={columns.length + 1} cells={cells} />
+          <CategoryRows key={cat.id || "none"} cat={cat} tone={CATEGORY_TONES[i % CATEGORY_TONES.length]} span={columns.length + 1} cells={cells} onPick={onPickCategory} />
         ))}
       </tbody>
     </table>
+    </>
   );
 }
 
-function CategoryRows({ cat, tone, span, cells }) {
+function CategoryRows({ cat, tone, span, cells, onPick }) {
   return (
     <>
       <tr>
         <td colSpan={span} className={`px-3 py-1.5 text-lg font-black ${tone}`} style={{ fontFamily: "Georgia, serif" }}>{cat.name}</td>
       </tr>
+      {!cat.rows.length && cat.rowCount ? (
+        <tr className="border-b border-gray-200 dark:border-gray-700">
+          <td colSpan={span} className="px-3 py-2 text-sm text-gray-600 dark:text-gray-300">
+            {cat.rowCount.toLocaleString("en-US")} step{cat.rowCount === 1 ? "" : "s"}
+            {cat.id && onPick ? (
+              <button type="button" onClick={() => onPick(cat.id)} className="ml-3 rounded-md border border-blue-300 px-2 py-0.5 text-xs font-semibold text-blue-800 hover:bg-blue-50 dark:text-blue-200 print:hidden">
+                Show these steps
+              </button>
+            ) : null}
+          </td>
+        </tr>
+      ) : null}
       {cat.rows.map((row) => (
         <tr key={row.id} className="border-b border-gray-200 dark:border-gray-700">
           <td className="px-3 py-1">
@@ -204,6 +226,9 @@ export function MilestoneProgressReport() {
           {data.categories.length ? (
             <StepTable
               categories={data.categories}
+              rowsOmitted={data.rowsOmitted}
+              rowLimit={data.rowLimit}
+              onPickCategory={(id) => setFilters((f) => ({ ...f, categoryId: id, subCategory: "" }))}
               columns={["Center Competency (avg. years)", "Center Mastery (avg. years)", "World Standard Average Age (years)", "Difference (years)", "Status"]}
               cells={(r) => [{ value: fmt(r.competencyYears) }, { value: fmt(r.masteryYears) }, { value: fmt(r.worldYears) }, { value: diff(r.difference) }, statusCell(r.status)]}
             />
@@ -283,6 +308,9 @@ export function ChildStepsReport({ parent = false }) {
           {data.categories.length ? (
             <StepTable
               categories={data.categories}
+              rowsOmitted={data.rowsOmitted}
+              rowLimit={data.rowLimit}
+              onPickCategory={(id) => setFilters((f) => ({ ...f, categoryId: id, subCategory: "" }))}
               columns={[
                 "Child's Competency (years)",
                 "Center Competency (avg. years)",

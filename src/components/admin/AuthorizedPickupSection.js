@@ -77,6 +77,25 @@ export default function AuthorizedPickupSection({ childId, centerId, otherChildr
       return data;
     });
 
+  // Someone already in the system (a staff member or parent): added as a
+  // pickup person; without a middle initial their name fills the form below.
+  const addUser = (user) => {
+    if (!user.middleInitial) {
+      setNewPerson({ firstName: user.firstName, middleInitial: "", lastName: user.lastName, phone: "" });
+      setError("Add their middle initial below, then Add Person.");
+      return;
+    }
+    run(async () => {
+      const data = await apiJson(listUrl, {
+        method: "POST",
+        body: JSON.stringify({ firstName: user.firstName, middleInitial: user.middleInitial, lastName: user.lastName }),
+      });
+      setQuery("");
+      setResults([]);
+      return data;
+    });
+  };
+
   const addNew = () =>
     run(async () => {
       const data = await apiJson(listUrl, { method: "POST", body: JSON.stringify(newPerson) });
@@ -135,11 +154,12 @@ export default function AuthorizedPickupSection({ childId, centerId, otherChildr
                 <span style={{ flex: 1 }}>
                   {pickupPersonName(person)}
                   {person.phone ? <span style={mutedStyle}> · {person.phone}</span> : null}
+                  {person.source === "USER" ? <span style={mutedStyle}> · {person.email} (user)</span> : null}
                 </span>
                 {listedIds.has(person.id) ? (
                   <span style={mutedStyle}>Already listed</span>
                 ) : (
-                  <button type="button" style={smallButton} disabled={busy} onClick={() => addExisting(person.id)}>
+                  <button type="button" style={smallButton} disabled={busy} onClick={() => (person.source === "USER" ? addUser(person) : addExisting(person.id))}>
                     Select
                   </button>
                 )}

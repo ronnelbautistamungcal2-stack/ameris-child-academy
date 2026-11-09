@@ -1,15 +1,13 @@
 import { CenterSelect, ReportControls, ReportMessage, input, monthRange, useReportCenters } from "@/components/reports/ReportSheet";
 import TimeSheetReportBody, { localDay, longDate } from "@/components/timesheets/TimeSheetReportBody";
 import { apiJson } from "@/lib/api";
-import { exportToExcel } from "@/lib/exportTable";
-import { hoursBetween, roundHours } from "@/lib/timeSheetReport";
+import { roundHours } from "@/lib/timeSheetReport";
 import { useEffect, useState } from "react";
 
 // Student / Staff Time Sheets (every time sheet in one printable report) and
 // Student / Staff Time Overview (hours signed in per person) for a date range
 // (client requests 2026-10-29). Print > Save as PDF gives the PDF.
 
-const time = (v) => (v ? new Date(v).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "");
 
 export default function TimeSheetReports({ kind = "child", mode = "sheets" }) {
   const { centers, centerId, setCenterId } = useReportCenters();
@@ -30,35 +28,11 @@ export default function TimeSheetReports({ kind = "child", mode = "sheets" }) {
       .catch((e) => setError(e.message || "Failed to load the report"));
   }, [kind, mode, centerId, range, population]);
 
-  function exportExcel() {
-    if (!data) return;
-    const name = mode === "overview" ? `${who} Time Overview` : `${who} Time Sheets`;
-    const sheets =
-      mode === "overview"
-        ? [{ name, headers: [isChild ? "Student" : "Employee", "Days Signed In", "Hours"], rows: data.people.map((p) => [p.name, p.days, p.hours]) }]
-        : [
-            {
-              name,
-              headers: [isChild ? "Student" : "Employee", "Date", "Time In", "Time Out", "Hours"],
-              rows: data.people.flatMap((p) =>
-                p.rows.map((r) => [p.name, new Date(r.day).toLocaleDateString(), time(r.timeIn), time(r.timeOut), roundHours(hoursBetween(r.timeIn, r.timeOut))]),
-              ),
-            },
-          ];
-    exportToExcel(`${name.toLowerCase().replace(/\s+/g, "-")}-${range.from}-to-${range.to}`, sheets).catch((e) => setError(e.message || "Export failed"));
-  }
-
   const title = mode === "overview" ? `${who} Time Overview` : `${who} Time Sheets`;
   return (
     <div className="space-y-4">
-      <ReportControls
-        title={title}
-        actions={
-          <button type="button" onClick={exportExcel} disabled={!data} className="rounded-lg border border-emerald-600 px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
-            Export to Excel
-          </button>
-        }
-      >
+      {/* Print and Export are the Reports page's buttons at the top (client sheet 2026-11-07). */}
+      <ReportControls title={title} onPrint={false}>
         <CenterSelect centers={centers} centerId={centerId} setCenterId={setCenterId} />
         <label className="block text-sm font-bold">
           From

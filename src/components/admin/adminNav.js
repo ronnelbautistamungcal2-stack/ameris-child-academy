@@ -103,6 +103,7 @@ export const ADMIN_NAV_ITEMS = [
     children: [
       { href: "/admin/curriculum/calendar", label: "Curriculum", alsoActive: ["/admin/curriculum", "/admin/lessons"] },
       { href: "/admin/parent-involvement", label: "Parent Involvement" },
+      { href: "/admin/classes", label: "Classroom List" },
       { href: "/admin/checklists", label: "Checklist Manager" },
       { href: "/admin/checklist-review", label: "Checklist Review" },
       {
@@ -140,5 +141,11 @@ export const ADMIN_NAV_ITEMS = [
     href: "/admin/messages",
     label: "Messages",
     icon: icons.messages,
+  },
+  // Bottom of the nav, regular admin only (client sheet 2026-11-06).
+  {
+    href: "/admin/subscription",
+    label: "Ameris Solutions Subscription",
+    icon: icons.finance,
   },
 ];

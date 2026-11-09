@@ -1,5 +1,6 @@
 const { test, expect } = require("@playwright/test");
 const { PrismaClient } = require("@prisma/client");
+const { demoAccountId } = require("../helpers/accounts");
 
 const prisma = new PrismaClient();
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3000";
@@ -75,7 +76,7 @@ async function prepareFixture() {
   });
   if (!centerA) {
     centerA = await prisma.center.create({
-      data: { name: fixture.centerAName, address: "QA Address A" },
+      data: { subscriberAccountId: await demoAccountId(prisma), name: fixture.centerAName, address: "QA Address A" },
     });
   }
 
@@ -84,7 +85,7 @@ async function prepareFixture() {
   });
   if (!centerB) {
     centerB = await prisma.center.create({
-      data: { name: fixture.centerBName, address: "QA Address B" },
+      data: { subscriberAccountId: await demoAccountId(prisma), name: fixture.centerBName, address: "QA Address B" },
     });
   }
 

@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
 import { emitNotification } from "@/lib/socket";
+import { publicSiteAccountId } from "@/lib/subscriberAccounts";
 
 const limiter = rateLimit({ interval: 60_000, limit: 5 });
 
@@ -49,8 +50,11 @@ export default async function handler(req, res) {
     },
   });
 
+  // Only this website's own account hears about the inquiry; other
+  // subscribers' admins never see a visitor's details.
+  const accountId = await publicSiteAccountId();
   const adminUsers = await prisma.user.findMany({
-    where: { role: "ADMIN" },
+    where: { role: "ADMIN", ...(accountId ? { subscriberAccountId: accountId } : {}) },
     select: { id: true },
   });
 

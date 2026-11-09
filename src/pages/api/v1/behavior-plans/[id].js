@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { isChildLinkedToParent } from "@/lib/child-parent-links";
+import { canReachPlan } from "@/lib/ippAccess";
 
 export default async function handler(req, res) {
   try {
@@ -12,6 +13,9 @@ export default async function handler(req, res) {
 
     const { id } = req.query;
     if (!id) return res.status(400).json({ error: "Plan id is required" });
+
+    // Plans outside the user's reach (another account, class or family) answer 404.
+    if (!(await canReachPlan(session.user, id))) return res.status(404).json({ error: "Plan not found" });
 
     if (req.method === "GET") return handleGet(req, res, session, id);
     if (req.method === "PUT") return handlePut(req, res, session, id);

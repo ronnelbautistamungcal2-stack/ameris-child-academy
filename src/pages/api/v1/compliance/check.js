@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   }
 
   const { centerId } = req.query;
-  if (centerId && role !== "ADMIN") {
+  if (centerId) {
     const ok = await hasAccessToCenter(session.user.id, centerId);
     if (!ok) return res.status(403).json({ error: "Forbidden" });
   }

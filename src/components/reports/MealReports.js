@@ -283,7 +283,23 @@ export function MealClaimReport() {
   function exportClaim() {
     const letters = data.meals;
     const rows = data.rows.filter((r) => !classroom || r.classroom === classroom);
-    const headers = ["Child First Name", "Child Last Name", "Date of Birth", "Age", "Classroom", ...data.dates.flatMap((d) => letters.map((m) => `${d} ${m.letter}`)), ...letters.map((m) => `${m.label} Total`)];
+    // Two heading rows (client sheet 2026-11-07): the date on the first, spread
+    // over its meals, and the meal on the second.
+    const childCols = ["Child First Name", "Child Last Name", "Date of Birth", "Age", "Classroom"];
+    const dateLabel = (key) => new Date(`${key}T00:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "2-digit", day: "2-digit", year: "numeric" });
+    const totals = letters.map((m) => `${m.label} Total`);
+    const headerRows = [
+      [...childCols, ...data.dates.flatMap((d) => letters.map((_, i) => (i === 0 ? dateLabel(d) : ""))), ...totals],
+      [...childCols.map(() => ""), ...data.dates.flatMap(() => letters.map((m) => m.label)), ...totals.map(() => "")],
+    ];
+    const merges = [
+      ...childCols.map((_, c) => ({ s: { r: 0, c }, e: { r: 1, c } })),
+      ...data.dates.map((_, i) => ({ s: { r: 0, c: childCols.length + i * letters.length }, e: { r: 0, c: childCols.length + (i + 1) * letters.length - 1 } })),
+      ...totals.map((_, i) => {
+        const c = childCols.length + data.dates.length * letters.length + i;
+        return { s: { r: 0, c }, e: { r: 1, c } };
+      }),
+    ].filter((m) => m.e.c > m.s.c || m.e.r > m.s.r);
     const body = rows.map((r) => [
       r.firstName,
       r.lastName,
@@ -295,7 +311,7 @@ export function MealClaimReport() {
     ]);
     const summary = data.summary.meals.map((m) => [m.label, m.total, m.days, Number(m.average.toFixed(1))]);
     exportToExcel(`meal-claim-${data.from}-to-${data.to}`, [
-      { name: "Meal Claim", headers, rows: body },
+      { name: "Meal Claim", headerRows, merges, rows: body },
       { name: "Summary", headers: ["Meal type", "Total meals served", "Days meal served", "Avg meals / service day"], rows: summary },
     ]).catch((e) => setError(e.message || "Export failed"));
   }

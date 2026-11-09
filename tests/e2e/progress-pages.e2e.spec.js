@@ -1,5 +1,6 @@
 const { test, expect } = require("@playwright/test");
 const { PrismaClient } = require("@prisma/client");
+const { demoAccountId } = require("../helpers/accounts");
 const { loginAsAdmin, loginAsTeacher, waitForLoadingDone } = require("../helpers/e2e");
 
 const prisma = new PrismaClient();
@@ -22,10 +23,10 @@ test.describe("Progress page filter behavior", () => {
 
     const [centerA, centerB] = await Promise.all([
       prisma.center.create({
-        data: { name: `QA Progress UI Center A ${suffix}`, address: "QA Street A" },
+        data: { subscriberAccountId: await demoAccountId(prisma), name: `QA Progress UI Center A ${suffix}`, address: "QA Street A" },
       }),
       prisma.center.create({
-        data: { name: `QA Progress UI Center B ${suffix}`, address: "QA Street B" },
+        data: { subscriberAccountId: await demoAccountId(prisma), name: `QA Progress UI Center B ${suffix}`, address: "QA Street B" },
       }),
     ]);
 

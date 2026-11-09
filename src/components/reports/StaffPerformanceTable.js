@@ -1,4 +1,5 @@
 import { NAVY } from "@/components/reports/reportUi";
+import { LockedValue, useHasAddOns } from "@/components/subscription/AddOnGate";
 import { roleLabel } from "@/lib/roles";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -22,10 +23,10 @@ export function gradeTone(value) {
   return "bg-red-100 text-red-800";
 }
 
-function downloadCsv(rows) {
+function downloadCsv(rows, sopUnlocked) {
   const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const lines = [COLUMNS.map(esc).join(",")].concat(
-    rows.map((r) => [r.name, r.position, r.currentGrade, r.priorGrade, r.evaluationPct, r.checklistPct, r.sopPct, r.citizenshipPct, r.commendations, r.citations, r.hoursWorked, r.hoursScheduled, r.hoursAbsence, r.lates].map(esc).join(",")),
+    rows.map((r) => [r.name, r.position, r.currentGrade, r.priorGrade, r.evaluationPct, r.checklistPct, sopUnlocked ? r.sopPct : "", r.citizenshipPct, r.commendations, r.citations, r.hoursWorked, r.hoursScheduled, r.hoursAbsence, r.lates].map(esc).join(",")),
   );
   const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
   const a = document.createElement("a");
@@ -39,6 +40,8 @@ export default function StaffPerformanceTable({ staff, viewHref, children }) {
   const [filter, setFilter] = useState({ role: "", id: "" });
   const rows = useMemo(() => staff.filter((s) => (!filter.role || s.role === filter.role) && (!filter.id || s.id === filter.id)), [staff, filter]);
   const roles = useMemo(() => [...new Set(staff.map((s) => s.role))], [staff]);
+  // Average SOP % needs Steps of Progression (client answer 2026-11-07).
+  const sopUnlocked = useHasAddOns("STEPS_OF_PROGRESSION");
 
   return (
     <div>
@@ -60,7 +63,7 @@ export default function StaffPerformanceTable({ staff, viewHref, children }) {
         </label>
         <div className="ml-auto flex gap-2">
           <button type="button" onClick={() => setFilter({ role: "", id: "" })} className="rounded-lg border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-700 dark:text-blue-300">Reset Filters</button>
-          <button type="button" onClick={() => downloadCsv(rows)} disabled={!rows.length} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{"⬇"} Export</button>
+          <button type="button" onClick={() => downloadCsv(rows, sopUnlocked)} disabled={!rows.length} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{"⬇"} Export</button>
         </div>
       </div>
       {/* Every column fits on screen (client request 2026-10-29): headers wrap,
@@ -86,7 +89,7 @@ export default function StaffPerformanceTable({ staff, viewHref, children }) {
                 <td className="px-1.5 py-1.5"><span className={`inline-block min-w-[36px] rounded px-1.5 py-0.5 font-bold ${gradeTone(s.priorGrade)}`}>{num(s.priorGrade)}</span></td>
                 <td className="px-1.5 py-1.5">{pct(s.evaluationPct)}</td>
                 <td className="px-1.5 py-1.5">{pct(s.checklistPct)}</td>
-                <td className="px-1.5 py-1.5">{pct(s.sopPct)}</td>
+                <td className="px-1.5 py-1.5">{sopUnlocked ? pct(s.sopPct) : <LockedValue addOn="STEPS_OF_PROGRESSION" />}</td>
                 <td className="px-1.5 py-1.5">{pct(s.citizenshipPct)}</td>
                 <td className="px-1.5 py-1.5">{s.commendations}</td>
                 <td className="px-1.5 py-1.5">{s.citations}</td>

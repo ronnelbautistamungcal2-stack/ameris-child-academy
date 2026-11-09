@@ -32,10 +32,8 @@ export default async function handler(req, res) {
   const { centerId } = req.query;
   if (!centerId) return res.status(400).json({ error: "centerId is required" });
 
-  if (session.user.role !== "ADMIN") {
-    const hasAccess = await hasAccessToCenter(session.user.id, centerId);
-    if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
-  }
+  const hasAccess = await hasAccessToCenter(session.user.id, centerId);
+  if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
 
   if (req.method === "GET") {
     const calendars = await prisma.lessonTermCalendar.findMany({

@@ -1,4 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { assertChildLimit } from "@/lib/subscriberAccounts";
+import { sendApiError } from "@/lib/api-error";
 import { changeStamps, profileTabData } from "@/lib/childProfile";
 import prisma from "@/lib/prisma";
 import {
@@ -163,7 +165,7 @@ export default async function handler(req, res) {
     }
 
     // Teachers/coaches must have access to the center
-    if (centerId && session.user.role !== "ADMIN") {
+    if (centerId) {
       const hasAccess = await hasAccessToCenter(session.user.id, centerId);
       if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
     }
@@ -227,9 +229,14 @@ export default async function handler(req, res) {
     if (!firstName || !cId) {
       return res.status(400).json({ error: "firstName and centerId required" });
     }
-    if (session.user.role === "TEACHER") {
-      const hasAccess = await hasAccessToCenter(session.user.id, cId);
-      if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
+    // Admins too: they may only add children to their own account's centers.
+    const hasAccess = await hasAccessToCenter(session.user.id, cId);
+    if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
+    // The account pays for a range of children; past it, upgrade first.
+    try {
+      await assertChildLimit(cId);
+    } catch (err) {
+      return sendApiError(res, err);
     }
 
     const requestedParentAccountIds = Object.prototype.hasOwnProperty.call(

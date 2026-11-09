@@ -25,10 +25,8 @@ export default async function handler(req, res) {
       const child = await prisma.child.findUnique({ where: { id: childId } });
       if (!child) return res.status(404).json({ error: "Child not found" });
 
-      if (role !== "ADMIN") {
-        const ok = await hasAccessToCenter(session.user.id, child.centerId);
-        if (!ok) return res.status(403).json({ error: "Forbidden" });
-      }
+      const ok = await hasAccessToCenter(session.user.id, child.centerId);
+      if (!ok) return res.status(403).json({ error: "Forbidden" });
 
       const where = { childId };
       if (planId) where.item = { planId };
@@ -78,10 +76,8 @@ export default async function handler(req, res) {
 
     const child = await prisma.child.findUnique({ where: { id: childId } });
     if (!child) return res.status(404).json({ error: "Child not found" });
-    if (role !== "ADMIN") {
-      const ok = await hasAccessToCenter(session.user.id, child.centerId);
-      if (!ok) return res.status(403).json({ error: "Forbidden" });
-    }
+    const ok = await hasAccessToCenter(session.user.id, child.centerId);
+    if (!ok) return res.status(403).json({ error: "Forbidden" });
 
     const item = await prisma.milestoneChecklistItem.findUnique({
       where: { id: itemId },

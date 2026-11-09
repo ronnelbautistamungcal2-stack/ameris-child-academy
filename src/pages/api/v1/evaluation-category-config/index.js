@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
 const DEFAULT_CATEGORIES = [
@@ -34,6 +34,7 @@ export default async function handler(req, res) {
 
     const { centerId } = req.query;
     if (!centerId) return res.status(400).json({ error: "centerId is required" });
+    if (!(await hasAccessToCenter(session.user.id, String(centerId)))) return res.status(403).json({ error: "Forbidden" });
 
     if (req.method === "GET") {
       const config = await prisma.evaluationCategoryConfig.findUnique({ where: { centerId } });

@@ -148,4 +148,10 @@ export const ADMIN_NAV_ITEMS = [
     label: "Ameris Solutions Subscription",
     icon: icons.finance,
   },
+  // Tickets to Ameris Solutions and support access requests (client 2026-11-07).
+  {
+    href: "/admin/support",
+    label: "Customer Support",
+    icon: icons.messages,
+  },
 ];

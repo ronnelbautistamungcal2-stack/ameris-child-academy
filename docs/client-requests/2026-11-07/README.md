@@ -54,7 +54,7 @@ website development > Ameris Solutions home pages; local copy in Downloads).
 | C | Lesson and step **Type** multi-select (three fixed options) | **done 2026-11-10** (see below) |
 | D | Character Guide **Import** for Teacher Training subscribers | nothing |
 | E | Banks move to the Global admin; subscriber Lesson Calendar (own start day and closed days, view-only lessons, live updates, filtered by the account's type and age groups) | ready |
-| F | Customer Support tickets with Request / Grant / End center access (ends on End Access) | ready |
+| F | Customer Support tickets with Request / Grant / End center access (ends on End Access) | **done 2026-11-10** (see below) |
 | G | Quote → enrollment → Stripe payment → embedded DocuSign → Pending → Activate | question 6 (accounts, keys, prices) |
 
 ## Step A — add-on locks (done 2026-11-07)
@@ -77,3 +77,17 @@ website development > Ameris Solutions home pages; local copy in Downloads).
 - The Global admin picks the subscriber's Curriculum Types on Add Subscriber and Edit Subscription; changes go to the account notes.
 - The Type list under Curriculum > Categories is gone (the three types are fixed).
 - Not yet used for filtering: the subscriber Lesson Calendar (step E) will show only lessons of the account's types.
+
+## Step F — Customer Support and center access (done 2026-11-10)
+
+- **Subscriber side:** Admin > Customer Support (bottom of the admin nav, no add-on needed). The admin opens a ticket (subject, description, optional center), replies, closes or reopens it. A reply on a closed ticket reopens it. When Ameris asks for access, a banner shows and the ticket has **Grant Access** / **Decline**; once granted, **End Access**.
+- **Ameris side:** Global admin > Customer Support. Queue with Open / In Progress / Closed counts, search, and a "Centers With Access" count. Ameris replies (an Open ticket moves to In Progress), sets the status, opens tickets for a subscriber, picks one of the subscriber's centers for **Request Center Access** (with an optional reason), and can **Withdraw Request** or **End Access**.
+- **What access does:** while a grant is on, every Ameris global admin who also has the Admin role sees that center in their Admin portal center list and can open its pages, people included. It ends only when someone clicks End Access. Closing the ticket does not end it (client answer 4).
+- Every step (request, grant, decline, end, status change) is written into the ticket's conversation, and the other side gets an in-app notification that links to the ticket.
+- Tickets are numbered T-1001 upwards. Tables: `SupportTicket`, `SupportTicketMessage`, `SupportAccessGrant` (migration `20261110090000_support_tickets`).
+
+**Guesses to confirm with the client:**
+- Access is given to the whole Ameris support team (every global admin), not only the person who asked.
+- A global admin reaches the center through the Admin portal (switch role to Admin, pick the center). There's no separate "view as subscriber" screen.
+- Some older routes check the account directly rather than the center list, so a few pages may still refuse a granted center. Fix as found.
+- No email is sent, only in-app notifications.

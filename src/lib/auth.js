@@ -42,10 +42,21 @@ export async function hasAccessToCenter(userId, centerId) {
   });
   if (!user) return false;
   if ((user.centers || []).some((c) => c.centerId === centerId)) return true;
+  if (hasAnyRole(user, ["GLOBAL_ADMIN"]) && (await supportCenterIds(prisma, user)).includes(centerId)) return true;
   if (!hasAnyRole(user, ["ADMIN"])) return false;
   // Admins reach every center of their own subscriber account, nothing else.
   const ids = await adminCenterIds(prisma, user);
   return ids === null || ids.includes(centerId);
+}
+
+/**
+ * Centers a subscriber has let Ameris support into (Customer Support > Grant
+ * Access), for Ameris global admins until someone clicks End Access.
+ */
+async function supportCenterIds(prisma, user) {
+  if (!hasAnyRole(user, ["GLOBAL_ADMIN"])) return [];
+  const grants = await prisma.supportAccessGrant.findMany({ where: { status: "GRANTED" }, select: { centerId: true } });
+  return grants.map((g) => g.centerId);
 }
 
 /**
@@ -74,10 +85,11 @@ export async function accessibleCenterIds(userId) {
   });
   if (!user) return [];
   const memberships = (user.centers || []).map((c) => c.centerId);
-  if (!hasAnyRole(user, ["ADMIN"])) return memberships;
+  const support = await supportCenterIds(prisma, user);
+  if (!hasAnyRole(user, ["ADMIN"])) return [...new Set([...memberships, ...support])];
   const ids = await adminCenterIds(prisma, user);
   if (ids === null) return null;
-  return [...new Set([...ids, ...memberships])];
+  return [...new Set([...ids, ...memberships, ...support])];
 }
 
 /**
@@ -99,14 +111,17 @@ export async function adminUserScope(userId) {
   const { default: prisma } = await import("@/lib/prisma");
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { subscriberAccountId: true },
+    select: { subscriberAccountId: true, role: true, roles: true },
   });
   const accountId = user?.subscriberAccountId;
   if (!accountId) return {};
+  const support = user ? await supportCenterIds(prisma, user) : [];
   return {
     OR: [
       { subscriberAccountId: accountId },
       { centers: { some: { center: { subscriberAccountId: accountId } } } },
+      // People at centers Ameris support has been granted access to.
+      ...(support.length ? [{ centers: { some: { centerId: { in: support } } } }] : []),
     ],
   };
 }

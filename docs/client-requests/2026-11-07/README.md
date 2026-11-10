@@ -45,6 +45,21 @@ website development > Ameris Solutions home pages; local copy in Downloads).
 5. **Child limit**: one number on the account that applies to every center.
 6. Stripe / DocuSign accounts, keys and prices: not answered yet.
 
+## Client update (2026-11-10)
+
+- **Stripe:** Ameris Solutions created its Stripe account and invited us with Developer access. Once the invitation is accepted, the test keys go into `.env` (never into chat or git).
+- **DocuSign:** Ameris Solutions created its DocuSign account and sent an invitation; the access code came with the client's message.
+- **Agreement:** "Ameris Solutions Subscription Agreement" (Google Drive > website development; local copy in Downloads). It has Part 1 (subscriber agreement), an Order Form, and Part 2 (End-User Terms of Use shown to every staff member and parent at first login with "I agree").
+- **Prices:** still not sent.
+
+### Questions the agreement raises
+
+1. Several terms are still in brackets: billing monthly or annual, the renewal notice (30 days), late payment (15 days, 10-day cure, 15.5% per month?), data export (30 days), deletion (90 days), liability cap (12 months), free trial (opt-in or converts automatically). Which values are final? 15.5% **per month** looks like a typo for per year.
+2. Signing: the agreement can be accepted by an "I agree" box at sign-up or by signing the Order Form. Do they want both (click to agree online; DocuSign only for subscribers who sign an Order Form), or DocuSign for everyone?
+3. Part 2 says every staff member, parent and guardian accepts the End-User Terms at first login. Should we add that "I agree" screen now (it doesn't depend on Stripe)?
+4. Monthly bills are due on the 1st. Is the first month prorated from the start date, or charged in full?
+5. The agreement says the subscriber can cancel and turn off auto-renew in their account settings. Should Admin > Subscription get Cancel Subscription and Auto-Renew buttons?
+
 ## Build plan
 
 | Step | What | Waits on |

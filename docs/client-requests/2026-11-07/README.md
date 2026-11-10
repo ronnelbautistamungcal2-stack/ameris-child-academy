@@ -70,7 +70,34 @@ website development > Ameris Solutions home pages; local copy in Downloads).
 | D | Character Guide **Import** for Teacher Training subscribers | **done 2026-11-10** (see below) |
 | E | Banks move to the Global admin; subscriber Lesson Calendar (own start day and closed days, view-only lessons, live updates, filtered by the account's type and age groups) | **done 2026-11-10** (see below) |
 | F | Customer Support tickets with Request / Grant / End center access (ends on End Access) | **done 2026-11-10** (see below) |
-| G | Quote → enrollment → Stripe payment → embedded DocuSign → Pending → Activate | question 6 (accounts, keys, prices) |
+| G | Quote → enrollment → Stripe payment → embedded DocuSign → Pending → Activate | **G1 pricing done 2026-11-11** (see below); payment and signing wait on the agreement answers |
+
+## Pricing answers (2026-11-10)
+
+From the client's Subscription Pricing mockup and message:
+- **Base Program**: the range that holds the subscriber's number of children; they pay the range's top number × its price per child (15 children → 11–20 → 20 × $17.45).
+- **Add-ons** (Steps of Progression, Teacher Training, Staff Management): the same top number × the add-on's price per child.
+- **Curriculum**: centers pay the price of each age group they pick, Standard or Faith Based; a Home Daycare pays its program's price.
+- **Discounts**: a percentage, with an editable name.
+- **Billing**: monthly or annual. Ordered before the 15th: full first month; after the 15th: half.
+- **No free trial**; a 2-week money-back guarantee.
+- **Late fee**: 15.5%.
+
+## Step G1 — Subscription Pricing (done 2026-11-11)
+
+- **Global admin > Settings > Subscription Pricing**, laid out like the mockup: Base Program ranges (Add Range, Delete Selected), Add-On prices, Curriculum – Centers (per age group, Standard / Faith Based), Curriculum – Home Daycare (per program), and Discounts (name, %, applies to, active). Save Changes checks the sheet (e.g. overlapping ranges).
+- **Pricing sets**: each has a name and an effective date. "+ New Pricing Set" copies the prices in effect today; the set in effect is the latest effective date on or before today, so future prices can be prepared ahead. The first set, "November 2026", is the mockup (its 200–300 range starts at 201 so it doesn't overlap 151–200).
+- **Subscriber > Pricing** card: number of children, billing, order date, curriculum (center age groups or Home Daycare program, Standard / Faith Based), discounts. It shows each line, the monthly price, the annual total and the first payment, and saves the choices on the account (logged in Notes). Add-ons come from the subscription's ticked add-ons.
+- Migration `20261111090000_subscription_pricing`. Calculation: `src/lib/subscriptionPricing.js`.
+
+**Guesses to confirm with the client:**
+- Discounts are picked per subscriber (none is automatic, not even Yearly for annual plans); several can be picked and each is taken off separately.
+- "All Packages" takes the discount off the whole monthly price; "Base Program" (a second choice we added) only off the base.
+- A center pays each curriculum age group once, however many classrooms of that age it has.
+- Annual = 12 × the monthly price (after discounts), paid up front with no half-month.
+- Ordering on the 15th itself pays half.
+- Existing subscribers are re-priced when a new set takes effect (the price shown always uses the set in effect today).
+- The late fee is 15.5% per month as the agreement says (the client confirmed "15.5%"; per month is very high).
 
 ## Step A — add-on locks (done 2026-11-07)
 

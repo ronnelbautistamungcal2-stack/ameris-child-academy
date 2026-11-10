@@ -1038,6 +1038,10 @@ model SubscriberAccount {
   supportTickets      SupportTicket[]
   characterCategories CharacterCategory[]
   characterBehaviors  CharacterBehavior[]
+  // Step G pricing (client 2026-11-10): the choices the price is worked out
+  // from: { children, billingCycle, programType, curriculumVersion,
+  // ageGroups, homeDaycareProgram, discountIds }. Add-ons come from addOns.
+  pricingSelection    Json?
   createdAt           DateTime                @default(now())
   updatedAt           DateTime                @updatedAt
 }
@@ -2799,4 +2803,20 @@ model CharacterBehavior {
   @@index([categoryId])
   @@index([type])
   @@index([subscriberAccountId])
+}
+
+// Global admin > Settings > Subscription Pricing (client 2026-11-10). One row
+// per pricing set; the set in effect is the latest effectiveDate on or before
+// today. `data` holds the sheet: { baseRanges, addOns, curriculumCenters,
+// homeDaycare, discounts } (shape in src/lib/subscriptionPricing.js).
+model PricingSet {
+  id            String   @id @default(uuid())
+  name          String
+  effectiveDate DateTime @db.Date
+  data          Json
+  updatedById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([effectiveDate])
 }

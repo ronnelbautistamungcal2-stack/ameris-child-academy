@@ -50,8 +50,8 @@ website development > Ameris Solutions home pages; local copy in Downloads).
 | Step | What | Waits on |
 |---|---|---|
 | A | Add-on locks from the sheet (pages and sections), with answers 8 and 9 | **done 2026-11-07** (see below) |
-| B | Child limit per center (one number, every center) | ready |
-| C | Lesson and step **Type** multi-select (three fixed options) | ready |
+| B | Child limit per center (one number, every center) | **done 2026-11-10** (see below) |
+| C | Lesson and step **Type** multi-select (three fixed options) | **done 2026-11-10** (see below) |
 | D | Character Guide **Import** for Teacher Training subscribers | nothing |
 | E | Banks move to the Global admin; subscriber Lesson Calendar (own start day and closed days, view-only lessons, live updates, filtered by the account's type and age groups) | ready |
 | F | Customer Support tickets with Request / Grant / End center access (ends on End Access) | ready |
@@ -64,3 +64,16 @@ website development > Ameris Solutions home pages; local copy in Downloads).
 - Sections: Student Performance Report Active Goals and Milestones, Class Performance Milestones Grade, Center Performance Overview (Teacher chart and Staff overview = Staff Management; Student chart and the Milestones column = Steps of Progression), the Average SOP % column, the teacher checklist's lesson plan (Curriculum), and the dashboard bubbles "Staff Members Signed In" (admin) and "Pending Time Off Requests" (coach).
 - Reports hub: Milestone Progress, Child Steps and Milestone Change Log = Steps of Progression; Staff Performance Overview / Report and all four Time Sheets reports = Staff Management; Staff Training = Teacher Training.
 - Locks are on screen only. The APIs still return the data to anyone who asks for it directly; blocking them server-side is a follow-up.
+
+## Step B — child limit per center (done 2026-11-10)
+
+- The account's "# of Children" is now a limit for each center: adding a child counts only that center's children (`assertChildLimit` in `src/lib/subscriberAccounts.js`). The error names the center.
+- Admin > Subscription shows one "Children at {center}: N of max" row per center; the Global admin labels say "allowed per center" and the detail lists each center's count.
+
+## Step C — curriculum types (done 2026-11-10)
+
+- Lessons and steps have `types` (one or more of Non-Denominational, Non-Denominational Christian, Other). The old single free-text `type` is kept in the database but no longer shown; the migration copied its values across where they named one of the three types. Existing lessons otherwise start with no type, so Ameris needs to tick them. The migration gives the Ameris account (C-1001) all three types.
+- Lesson Bank create/edit and the Steps of Progression Bank editor use checkboxes. The steps import's Type column takes a comma list; "Standard" and "Faith Based" are read as the two types.
+- The Global admin picks the subscriber's Curriculum Types on Add Subscriber and Edit Subscription; changes go to the account notes.
+- The Type list under Curriculum > Categories is gone (the three types are fixed).
+- Not yet used for filtering: the subscriber Lesson Calendar (step E) will show only lessons of the account's types.

@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { normalizeStepTerm, parseStepAge, STEP_CRITERIA_LEVELS } from "@/lib/progressionSteps";
+import { normalizeCurriculumTypes } from "@/lib/curriculumTypes";
 
 // Steps of Progression Bank import. The page reads the Excel/CSV file and
 // posts its rows here. A row whose Ref ID matches a step already in the bank
@@ -135,7 +136,7 @@ export default async function handler(req, res) {
         description: String(raw.description ?? "").trim().slice(0, 2000) || null,
         criteria,
         notes: String(raw.notes ?? "").trim().slice(0, 2000) || null,
-        type: text(raw.type, 80) || null,
+        types: normalizeCurriculumTypes(raw.type),
       };
       const related = relatedLessonFor(row);
       if (related.warning) warnings.push({ line: row.line, reason: related.warning });
@@ -154,7 +155,7 @@ export default async function handler(req, res) {
           description: ["description"],
           criteria: STEP_CRITERIA_LEVELS.map(({ key }) => key),
           notes: ["notes"],
-          type: ["type"],
+          types: ["type"],
           linkedLessonId: ["relatedLesson"],
         };
         for (const [field, columns] of Object.entries(sources)) {

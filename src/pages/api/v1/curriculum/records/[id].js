@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { normalizeCurriculumTypes } from "@/lib/curriculumTypes";
 import { normalizeSubjectForRef } from "@/lib/subjectNormalization.mjs";
 
 function normalizeSpaces(value) {
@@ -69,6 +70,7 @@ export default async function handler(req, res) {
     notes,
     theme,
     type,
+    types,
     link,
     supplies,
   } = req.body || {};
@@ -136,6 +138,9 @@ export default async function handler(req, res) {
   const updated = await prisma.$transaction(async (tx) => {
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "type")) {
       await tx.lesson.update({ where: { id: existing.lessonId }, data: { type: normalizeSpaces(type).slice(0, 80) || null } });
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "types")) {
+      await tx.lesson.update({ where: { id: existing.lessonId }, data: { types: normalizeCurriculumTypes(types) } });
     }
     if (Array.isArray(supplies)) {
       await tx.lessonSupply.deleteMany({ where: { lessonId: existing.lessonId } });

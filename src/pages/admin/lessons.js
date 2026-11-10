@@ -1,5 +1,6 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import CurriculumTabs from "@/components/curriculum/CurriculumTabs";
+import CurriculumTypePicker from "@/components/curriculum/CurriculumTypePicker";
 import ProtectedLessonViewer from "@/components/lessons/ProtectedLessonViewer";
 import ResourceLinks, { resourceLabel } from "@/components/lessons/ResourceLinks";
 import { apiJson } from "@/lib/api";
@@ -794,7 +795,7 @@ export default function AdminLessons() {
   const [editResource, setEditResource] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editTheme, setEditTheme] = useState("");
-  const [editType, setEditType] = useState("");
+  const [editTypes, setEditTypes] = useState([]);
   const [editLink, setEditLink] = useState("");
   const [editLessonDocument, setEditLessonDocument] = useState("");
   const [editSupplyRows, setEditSupplyRows] = useState([]);
@@ -814,7 +815,7 @@ export default function AdminLessons() {
   const [newResource, setNewResource] = useState("");
   const [newNotes, setNewNotes] = useState("");
   const [newTheme, setNewTheme] = useState("");
-  const [newType, setNewType] = useState("");
+  const [newTypes, setNewTypes] = useState([]);
   // Curriculum > Categories lists that feed the form dropdowns.
   const [listOptions, setListOptions] = useState(null);
   const [sortBy, setSortBy] = useState({ key: "refId", dir: 1 });
@@ -945,6 +946,7 @@ export default function AdminLessons() {
           notes: String(pc.notes ?? ""),
           theme: String(pc.theme ?? ""),
           type: String(lesson?.type ?? ""),
+          types: Array.isArray(lesson?.types) ? lesson.types : [],
           sheet: String(pc.sheet ?? ""),
           link: String(pc.link ?? ""),
           supplies: Array.isArray(lesson?.supplies) ? lesson.supplies : [],
@@ -1166,7 +1168,7 @@ export default function AdminLessons() {
     setEditLessonDocument(String(rec?.lessonDocument || ""));
     setEditNotes(String(rec?.notes || ""));
     setEditTheme(String(rec?.theme || ""));
-    setEditType(String(rec?.type || ""));
+    setEditTypes(Array.isArray(rec?.types) ? rec.types : []);
     setEditLink(String(rec?.link || ""));
     setEditSupplyRows(supplyRowsFromLesson(rec));
     setEditOpen(true);
@@ -1216,7 +1218,7 @@ export default function AdminLessons() {
     setNewLessonDocument("");
     setNewNotes("");
     setNewTheme("");
-    setNewType("");
+    setNewTypes([]);
     setNewLink("");
     setNewSupplyRows([]);
     setCreateOpen(true);
@@ -1243,7 +1245,7 @@ export default function AdminLessons() {
     setNewLessonDocument(String(rec.lessonDocument || ""));
     setNewNotes(String(rec.notes || ""));
     setNewTheme(String(rec.theme || ""));
-    setNewType(String(rec.type || ""));
+    setNewTypes(Array.isArray(rec.types) ? rec.types : []);
     setNewLink(String(rec.link || ""));
     setNewSupplyRows(supplyRowsFromLesson(rec));
     setCreateOpen(true);
@@ -1278,7 +1280,7 @@ export default function AdminLessons() {
             lessonDocument: String(newLessonDocument || ""),
             notes: String(newNotes || ""),
             theme: normalizeSpaces(newTheme),
-            type: normalizeSpaces(newType),
+            types: newTypes,
             link: normalizeSpaces(newLink),
             supplies: newSupplyRows.filter((s) => normalizeSpaces(s.name)),
           }),
@@ -1302,7 +1304,7 @@ export default function AdminLessons() {
       newLink,
       newNotes,
       newTheme,
-      newType,
+      newTypes,
       newReference,
       newResource,
       newSubject,
@@ -1342,7 +1344,7 @@ export default function AdminLessons() {
               lessonDocument: String(editLessonDocument || ""),
               notes: String(editNotes || ""),
               theme: normalizeSpaces(editTheme),
-              type: normalizeSpaces(editType),
+              types: editTypes,
               link: normalizeSpaces(editLink),
               supplies: editSupplyRows.filter((s) => normalizeSpaces(s.name)),
             }),
@@ -1367,7 +1369,7 @@ export default function AdminLessons() {
       editLink,
       editNotes,
       editTheme,
-      editType,
+      editTypes,
       editRecord?.id,
       editReference,
       editResource,
@@ -2189,17 +2191,7 @@ export default function AdminLessons() {
                 />
               </Field>
               <Field label="Type (optional)">
-                <select
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  value={editType}
-                  onChange={(e) => setEditType(e.target.value)}
-                  disabled={saving}
-                >
-                  <option value="">None</option>
-                  {mergeSelectOptions((listOptions?.TYPE || []).map((o) => o.name), editType ? [editType] : []).map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
+                <CurriculumTypePicker value={editTypes} onChange={setEditTypes} disabled={saving} idPrefix="edit-type" />
               </Field>
               <Field label="Link (optional)">
                 <input
@@ -2457,17 +2449,7 @@ export default function AdminLessons() {
                 />
               </Field>
               <Field label="Type (optional)">
-                <select
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                  value={newType}
-                  onChange={(e) => setNewType(e.target.value)}
-                  disabled={saving}
-                >
-                  <option value="">None</option>
-                  {mergeSelectOptions((listOptions?.TYPE || []).map((o) => o.name), newType ? [newType] : []).map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
+                <CurriculumTypePicker value={newTypes} onChange={setNewTypes} disabled={saving} idPrefix="new-type" />
               </Field>
               <Field label="Link (optional)">
                 <input

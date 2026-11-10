@@ -100,26 +100,28 @@ test.describe("Curriculum lists, steps and lesson theme @api", () => {
     expect(after.find((l) => l.id === collage.id).goals[0].passingCriteria.theme).toBe("Autumn");
   });
 
-  test("lessons and steps take an optional Type, kept when an edit leaves it out", async ({ request }) => {
+  test("lessons and steps take one or more curriculum types, kept when an edit leaves them out", async ({ request }) => {
+    // Client 2026-11-07: Non-Denominational, Non-Denominational Christian, Other.
     const admin = await loginAsAdmin(request);
     const rec = await apiPost(
       request,
       "/api/v1/curriculum/records",
-      { centerId, lessonTitle: "QA Counting Bears", reference: "LS-777", category: "Math", childAge: "4 Years", type: "DCCS" },
+      { centerId, lessonTitle: "QA Counting Bears", reference: "LS-777", category: "Math", childAge: "4 Years", types: ["NON_DENOMINATIONAL_CHRISTIAN", "NON_DENOMINATIONAL", "Bogus"] },
       admin,
     );
     expect(rec.status(), await rec.text()).toBeLessThan(300);
     let lessons = await (await apiGet(request, `/api/v1/lessons?centerId=${centerId}&kind=lesson`, admin)).json();
     const bears = lessons.find((l) => l.title === "QA Counting Bears");
-    expect(bears.type).toBe("DCCS");
+    expect(bears.types).toEqual(["NON_DENOMINATIONAL", "NON_DENOMINATIONAL_CHRISTIAN"]);
     await apiPatch(request, `/api/v1/curriculum/records/${bears.goals[0].id}`, { lessonTitle: "QA Counting Bears", reference: "LS-777", category: "Math", childAge: "4 Years" }, admin);
     lessons = await (await apiGet(request, `/api/v1/lessons?centerId=${centerId}&kind=lesson`, admin)).json();
-    expect(lessons.find((l) => l.id === bears.id).type).toBe("DCCS");
+    expect(lessons.find((l) => l.id === bears.id).types).toEqual(["NON_DENOMINATIONAL", "NON_DENOMINATIONAL_CHRISTIAN"]);
 
-    const step = await (await apiPost(request, "/api/v1/lessons", { centerId, isStep: true, title: "QA Typed Step", reference: "SP-T1", type: "Regular" }, admin)).json();
-    expect(step.type).toBe("Regular");
-    const cleared = await (await apiPut(request, `/api/v1/lessons/${step.id}`, { title: "QA Typed Step", media: [], type: "" }, admin)).json();
-    expect(cleared.type).toBeNull();
+    // Standard is the old name for Non-Denominational.
+    const step = await (await apiPost(request, "/api/v1/lessons", { centerId, isStep: true, title: "QA Typed Step", reference: "SP-T1", types: ["Standard", "OTHER"] }, admin)).json();
+    expect(step.types).toEqual(["NON_DENOMINATIONAL", "OTHER"]);
+    const cleared = await (await apiPut(request, `/api/v1/lessons/${step.id}`, { title: "QA Typed Step", media: [], types: [] }, admin)).json();
+    expect(cleared.types).toEqual([]);
   });
 
   test("the steps import links Related Lesson by Ref ID or title", async ({ request }) => {
@@ -130,7 +132,7 @@ test.describe("Curriculum lists, steps and lesson theme @api", () => {
       {
         centerId,
         rows: [
-          { line: 2, reference: "SP-R1", title: "Counts to five", relatedLesson: "LS-777", type: "DCCS" },
+          { line: 2, reference: "SP-R1", title: "Counts to five", relatedLesson: "LS-777", type: "Non-Denominational, Other" },
           { line: 3, reference: "SP-R2", title: "Glues leaves", relatedLesson: "qa leaf collage" },
           { line: 4, reference: "SP-R3", title: "Sorts colors", relatedLesson: "No Such Lesson" },
         ],
@@ -145,7 +147,7 @@ test.describe("Curriculum lists, steps and lesson theme @api", () => {
     const all = await (await apiGet(request, `/api/v1/lessons?centerId=${centerId}`, admin)).json();
     const byTitle = Object.fromEntries(all.map((l) => [l.title, l]));
     expect(byTitle["Counts to five"].linkedLessonId).toBe(byTitle["QA Counting Bears"].id);
-    expect(byTitle["Counts to five"].type).toBe("DCCS");
+    expect(byTitle["Counts to five"].types).toEqual(["NON_DENOMINATIONAL", "OTHER"]);
     expect(byTitle["Glues leaves"].linkedLessonId).toBe(byTitle["QA Leaf Collage"].id);
     expect(byTitle["Sorts colors"].linkedLessonId).toBeNull();
 

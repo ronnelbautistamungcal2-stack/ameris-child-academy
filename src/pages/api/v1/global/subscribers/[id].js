@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma";
 import { ACCOUNT_STATUS_LABELS, ADD_ON_LABELS } from "@/lib/addOns";
+import { curriculumTypeLabels } from "@/lib/curriculumTypes";
 import { parseAccountInput, requireGlobalAdmin } from "@/lib/globalAdmin";
 
 async function loadDetail(id) {
@@ -37,6 +38,10 @@ function describeChanges(before, data) {
     const removed = before.addOns.filter((k) => !data.addOns.includes(k));
     if (added.length) out.push(`Add-ons turned on: ${added.map((k) => ADD_ON_LABELS[k]).join(", ")}.`);
     if (removed.length) out.push(`Add-ons turned off: ${removed.map((k) => ADD_ON_LABELS[k]).join(", ")}.`);
+  }
+  if (data.curriculumTypes) {
+    const same = data.curriculumTypes.length === (before.curriculumTypes || []).length && data.curriculumTypes.every((t) => before.curriculumTypes.includes(t));
+    if (!same) out.push(`Curriculum types set to ${curriculumTypeLabels(data.curriculumTypes) || "none"}.`);
   }
   if (data.maxCenters !== undefined && data.maxCenters !== before.maxCenters) out.push(`Center limit set to ${data.maxCenters}.`);
   if (data.maxChildren !== undefined && data.maxChildren !== before.maxChildren) {

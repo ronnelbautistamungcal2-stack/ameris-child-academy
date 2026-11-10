@@ -592,8 +592,13 @@ model Lesson {
   isStep                  Boolean                  @default(false)
   criteria                Json?
   notes                   String?
-  // Optional Type from Curriculum > Categories (e.g. Regular, DCCS), on lessons and steps.
+  // Older single Type from the Curriculum > Categories list; kept for the data
+  // already saved. New lessons and steps use `types`.
   type                    String?
+  // Curriculum types (client 2026-11-07): NON_DENOMINATIONAL,
+  // NON_DENOMINATIONAL_CHRISTIAN, OTHER; one or more. A subscriber sees the
+  // lessons and steps of the types on their account.
+  types                   String[]                 @default([])
   media                   String[]                 @default([])
   goals                   LessonGoal[]
   progress                Progress[]
@@ -994,6 +999,8 @@ model SubscriberAccount {
   status        String                  @default("PENDING") // PENDING | ACTIVE | ON_HOLD | CANCELLED
   // STEPS_OF_PROGRESSION | CURRICULUM | TEACHER_TRAINING | STAFF_MANAGEMENT
   addOns        String[]                @default([])
+  // Curriculum types the account pays for (set by the Global admin).
+  curriculumTypes String[]              @default([])
   maxCenters    Int                     @default(1)
   maxChildren   Int?
   startDate     DateTime?

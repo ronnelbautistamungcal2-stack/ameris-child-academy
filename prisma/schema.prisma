@@ -308,6 +308,7 @@ model User {
   subscriberAccountId                String?
   subscriberAccountNotes             SubscriberAccountNote[]
   supportTicketsOpened               SupportTicket[]                     @relation("SupportTicketsOpened")
+  termsAcceptances                   TermsAcceptance[]
   supportTicketMessages              SupportTicketMessage[]
   supportAccessRequested             SupportAccessGrant[]                @relation("SupportAccessRequested")
   supportAccessAnswered              SupportAccessGrant[]                @relation("SupportAccessAnswered")
@@ -2799,4 +2800,41 @@ model CharacterBehavior {
   @@index([categoryId])
   @@index([type])
   @@index([subscriberAccountId])
+}
+
+// Terms people agree to with an "I agree" box (client 2026-11-11): the
+// End-User Terms of Use every staff member and parent accepts at first login,
+// and later the website Terms of Service and the Home Daycare Subscriber
+// Agreement. Each publish is a new version; the latest version of a kind is
+// the one in force.
+model TermsDocument {
+  id          String            @id @default(uuid())
+  kind        String // END_USER | TERMS_OF_SERVICE | SUBSCRIBER_AGREEMENT
+  version     String // e.g. "2026-11-11"
+  title       String
+  body        String
+  publishedAt DateTime          @default(now())
+  createdById String?
+  acceptances TermsAcceptance[]
+
+  @@unique([kind, version])
+  @@index([kind, publishedAt])
+}
+
+// Who accepted which version, when, from where (the client asked for date,
+// time, user and version).
+model TermsAcceptance {
+  id                  String        @id @default(uuid())
+  document            TermsDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  documentId          String
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId              String
+  subscriberAccountId String?
+  role                String?
+  ipAddress           String?
+  userAgent           String?
+  acceptedAt          DateTime      @default(now())
+
+  @@unique([documentId, userId])
+  @@index([userId])
 }

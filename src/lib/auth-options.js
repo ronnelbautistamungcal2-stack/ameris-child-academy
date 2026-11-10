@@ -3,6 +3,7 @@ import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import prisma from "@/lib/prisma";
 import { normalizeRoles, normalizeStaffDepartment, primaryRoleFromRoles } from "@/lib/roles";
+import { hasPendingTerms } from "@/lib/terms";
 
 export const authOptions = {
   adapter: PrismaAdapter(prisma),
@@ -57,7 +58,17 @@ export const authOptions = {
         token.pictureUrl = user.pictureUrl || null;
         token.staffDepartment = normalizeStaffDepartment(user.staffDepartment);
         token.mustChangePassword = Boolean(user.mustChangePassword);
+        // "I agree" terms not yet accepted (client 2026-11-11); the middleware
+        // sends the user to /terms until they are.
+        token.termsPending = await hasPendingTerms(user.id);
         token.pictureUrlFetchedAt = Date.now();
+        return token;
+      }
+
+      // After accepting on /terms the page asks for a session update; the
+      // flag is read again from the database, never taken from the client.
+      if (trigger === "update" && session && "termsPending" in session) {
+        token.termsPending = await hasPendingTerms(token.id);
         return token;
       }
 
@@ -126,6 +137,8 @@ export const authOptions = {
       token.name = dbUser.name || token.name;
       token.email = dbUser.email || token.email;
       token.mustChangePassword = Boolean(dbUser.mustChangePassword);
+      // A newly published version is asked for within a few minutes.
+      token.termsPending = await hasPendingTerms(userId);
       token.pictureUrlFetchedAt = Date.now();
 
       return token;
@@ -139,6 +152,7 @@ export const authOptions = {
         session.user.pictureUrl = token.pictureUrl || null;
         session.user.staffDepartment = normalizeStaffDepartment(token.staffDepartment);
         session.user.mustChangePassword = Boolean(token.mustChangePassword);
+        session.user.termsPending = Boolean(token.termsPending);
         session.user.disabled = Boolean(token.disabled);
       }
       return session;

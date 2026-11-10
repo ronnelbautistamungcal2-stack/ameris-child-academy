@@ -29,6 +29,15 @@ export const GLOBAL_NAV_ITEMS = [
     ),
   },
   {
+    href: "/global/terms",
+    label: "Terms & Agreements",
+    icon: (
+      <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
+        <path fillRule="evenodd" d="M4.5 2A1.5 1.5 0 003 3.5v13A1.5 1.5 0 004.5 18h11a1.5 1.5 0 001.5-1.5V7.621a1.5 1.5 0 00-.44-1.06l-4.12-4.122A1.5 1.5 0 0011.378 2H4.5zm8.03 8.28a.75.75 0 00-1.06-1.06L8.5 12.19l-1.22-1.22a.75.75 0 00-1.06 1.06l1.75 1.75a.75.75 0 001.06 0l3.5-3.5z" clipRule="evenodd" />
+      </svg>
+    ),
+  },
+  {
     href: "/global/settings",
     label: "Settings",
     icon: (

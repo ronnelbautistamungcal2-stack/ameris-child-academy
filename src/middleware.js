@@ -78,6 +78,14 @@ export async function middleware(request) {
     return NextResponse.redirect(settingsUrl);
   }
 
+  // "I agree" terms first (client 2026-11-11): until the user accepts the
+  // current End-User Terms of Use, every page sends them to /terms.
+  if (token.termsPending && pathname !== "/terms") {
+    const termsUrl = new URL("/terms", request.url);
+    if (pathname !== "/" && pathname !== "/dashboard") termsUrl.searchParams.set("callbackUrl", pathname);
+    return NextResponse.redirect(termsUrl);
+  }
+
   const userRole = token.role;
   for (const [prefix, roles] of Object.entries(ROUTE_ROLES)) {
     if (pathname.startsWith(prefix) && !roles.includes(userRole) && userRole !== "ADMIN") {

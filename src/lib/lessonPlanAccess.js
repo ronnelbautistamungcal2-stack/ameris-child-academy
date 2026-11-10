@@ -21,7 +21,8 @@ export async function classroomAccess(user, centerId, classRoomId, { admin = fal
   if (admin ? !hasAnyRole(user, ["ADMIN"]) : !hasAnyRole(user, PLAN_VIEW_ROLES)) {
     return { status: 403, error: admin ? "Only admins can change the curriculum" : "Forbidden" };
   }
-  if (!hasAnyRole(user, ["ADMIN"]) && !(await hasAccessToCenter(user.id, centerId))) {
+  // Admins too: an admin reaches only their own account's centers.
+  if (!(await hasAccessToCenter(user.id, centerId))) {
     return { status: 403, error: "Forbidden" };
   }
   const classRoom = await prisma.classRoom.findFirst({

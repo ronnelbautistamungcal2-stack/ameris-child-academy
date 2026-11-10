@@ -241,6 +241,12 @@ export default function WeeklyLessonPlanner({
         ).catch(() => null);
         if (abortRef.current.aborted) return;
         const dayInfo = {};
+        // A subscriber classroom follows an Ameris age-group planner (step E),
+        // whose categories replace the classroom's own rows.
+        if (week?.curriculum === "AMERIS" && week.rows?.length) {
+          setRows(week.rows);
+          setLabelDrafts(Object.fromEntries(week.rows.map((r) => [r.rowIndex, r.label])));
+        }
         if (week?.planned) {
           const titles = {};
           const lessonIds = {};

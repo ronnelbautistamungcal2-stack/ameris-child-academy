@@ -1,5 +1,6 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import CurriculumTabs from "@/components/curriculum/CurriculumTabs";
+import LessonDetailView from "@/components/lessons/LessonDetailView";
 import useCurriculumClassroom, { ClassroomPicker } from "@/components/curriculum/useCurriculumClassroom";
 import { apiJson } from "@/lib/api";
 import { findDateForDay, isSchoolDay, parseDateKey, toDateKey } from "@/lib/lessonCalendar";
@@ -43,6 +44,8 @@ export default function LessonCalendarPage() {
   const [showStartDay, setShowStartDay] = useState(false);
   const [jumpDay, setJumpDay] = useState("1");
   const [highlight, setHighlight] = useState("");
+  const [viewLesson, setViewLesson] = useState(null); // { id, lesson?, error? }
+  const [savingAgeGroup, setSavingAgeGroup] = useState(false);
 
   const grid = useMemo(() => monthGrid(month), [month]);
   const monthIndex = month.getMonth();
@@ -88,6 +91,33 @@ export default function LessonCalendarPage() {
   }
 
   const futureClosed = (data?.closedDays || []).filter((d) => d >= today);
+  const ameris = data?.curriculum?.mode === "AMERIS" ? data.curriculum : null;
+
+  async function openLesson(lessonId) {
+    setViewLesson({ id: lessonId });
+    try {
+      const lesson = await apiJson(`/api/v1/lessons/${encodeURIComponent(lessonId)}`);
+      setViewLesson({ id: lessonId, lesson });
+    } catch (e) {
+      setViewLesson({ id: lessonId, error: e.message || "Could not load the lesson" });
+    }
+  }
+
+  async function chooseAgeGroup(ageGroupId) {
+    setSavingAgeGroup(true);
+    setError("");
+    try {
+      await apiJson("/api/v1/lesson-calendar/age-group", {
+        method: "PUT",
+        body: JSON.stringify({ centerId, classRoomId, ageGroupId }),
+      });
+      await load();
+    } catch (e) {
+      setError(e.message || "Could not save the age group");
+    } finally {
+      setSavingAgeGroup(false);
+    }
+  }
 
   return (
     <AdminLayout title="Curriculum">
@@ -99,6 +129,22 @@ export default function LessonCalendarPage() {
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="flex flex-wrap items-end gap-3">
               <ClassroomPicker picker={picker} />
+              {ameris && (
+                <label className="text-xs font-semibold text-[#0b2a5b] dark:text-blue-100">
+                  Follows Age Group
+                  <select
+                    className="mt-1 block w-48 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                    value={ameris.ageGroupId || ""}
+                    disabled={savingAgeGroup || !ameris.ageGroups.length}
+                    onChange={(e) => chooseAgeGroup(e.target.value)}
+                  >
+                    {!ameris.ageGroupId && <option value="">{ameris.ageGroups.length ? "Choose an age group" : "No age groups"}</option>}
+                    {ameris.ageGroups.map((g) => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <button type="button" className={button} onClick={() => goToMonthOf(today)}>
                 Today
               </button>
@@ -141,6 +187,17 @@ export default function LessonCalendarPage() {
               {error || picker.error || notice}
             </div>
           )}
+          {ameris && !ameris.ageGroups.length && (
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Your subscription has no curriculum age groups yet. Contact Ameris Solutions to add them.
+            </p>
+          )}
+          {ameris && ameris.ageGroups.length > 0 && !ameris.ageGroupId && (
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Choose which age group this classroom follows to see its lessons.
+            </p>
+          )}
+          {data?.theme ? <p className={`mt-3 text-sm font-semibold ${NAVY}`}>Theme: {data.theme}</p> : null}
           {data && !data.anchors.length && (
             <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
               This classroom has no start day yet. Use Set Start Day to number the school days.
@@ -181,6 +238,28 @@ export default function LessonCalendarPage() {
                         <span className={inMonth ? NAVY : "text-gray-400"}>Day {info.day}</span>
                       ) : null}
                     </div>
+                    {!info?.closed && info?.lessons?.length ? (
+                      <ul className="mt-1 space-y-0.5">
+                        {info.lessons.map((l) => (
+                          <li key={l.rowIndex}>
+                            {l.lessonId ? (
+                              <button
+                                type="button"
+                                onClick={() => openLesson(l.lessonId)}
+                                title={l.category ? `${l.category}: ${l.title}` : l.title}
+                                className="block w-full truncate rounded bg-blue-50 px-1 text-left text-[11px] font-semibold text-blue-800 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-100"
+                              >
+                                {l.title}
+                              </button>
+                            ) : (
+                              <span className="block truncate px-1 text-[11px] text-gray-600 dark:text-gray-300" title={l.title}>
+                                {l.title}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </div>
                 );
               })}
@@ -188,6 +267,20 @@ export default function LessonCalendarPage() {
           </div>
         </div>
       </div>
+
+      {viewLesson && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setViewLesson(null)} role="dialog" aria-modal="true" aria-label="Lesson">
+          <div className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white p-5 shadow-xl dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
+            {viewLesson.error ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{viewLesson.error}</div>
+            ) : viewLesson.lesson ? (
+              <LessonDetailView lesson={viewLesson.lesson} onClose={() => setViewLesson(null)} />
+            ) : (
+              <div className="py-8 text-center text-sm text-gray-500">Loading...</div>
+            )}
+          </div>
+        </div>
+      )}
 
       {showStartDay && data && (
         <StartDayDialog

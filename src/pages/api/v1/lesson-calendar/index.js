@@ -9,6 +9,8 @@ import {
   toDateKey,
 } from "@/lib/lessonCalendar";
 import { classroomAccess, dbDate, loadCalendar } from "@/lib/lessonPlanAccess";
+import { classroomCurriculum, plannedLessons } from "@/lib/curriculumSource";
+import { buildActiveRows, rowLabel } from "@/lib/lessonPlanRows";
 
 const MAX_RANGE_DAYS = 400;
 
@@ -37,10 +39,32 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: `from and to must be dates at most ${MAX_RANGE_DAYS} days apart` });
       }
       const calendar = await loadCalendar(String(centerId), String(classRoomId));
+      const days = dayNumbersBetween(calendar.anchors, calendar.closedDays, from, to);
+      // Each day's planned lessons (step E): a subscriber classroom shows the
+      // Ameris age-group planner it follows, limited to the account's types.
+      const curriculum = await classroomCurriculum(classRoomId);
+      const dayList = [...new Set(Object.values(days).map((d) => d.day).filter(Boolean))];
+      const plan = await plannedLessons(curriculum, dayList, { buildActiveRows, rowLabel });
+      const rowOrder = plan.rows.map((r) => r.rowIndex);
+      for (const info of Object.values(days)) {
+        const cells = (info.day && plan.byDay[info.day]) || {};
+        info.lessons = rowOrder
+          .filter((i) => cells[i])
+          .map((i) => ({ rowIndex: i, category: plan.rows.find((r) => r.rowIndex === i)?.label || "", ...cells[i] }));
+      }
       return res.status(200).json({
         ...calendar,
         today: toDateKey(new Date()),
-        days: dayNumbersBetween(calendar.anchors, calendar.closedDays, from, to),
+        days,
+        theme: plan.theme,
+        curriculum: curriculum
+          ? {
+              mode: curriculum.mode,
+              ageGroupId: curriculum.ageGroupId || null,
+              chosenAgeGroupId: curriculum.chosenAgeGroupId || null,
+              ageGroups: curriculum.ageGroups || [],
+            }
+          : null,
       });
     }
 

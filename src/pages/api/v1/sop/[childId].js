@@ -2,7 +2,7 @@ import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { hasAnyRole } from "@/lib/roles";
 import { childStatus, isLevel, statusDistribution } from "@/lib/sop";
-import { SOP_ROLES, canUseChild, loadAssessmentSteps, loadChildGoals, saveLevels } from "@/lib/sopServer";
+import { SOP_ROLES, canUseChild, childStepsWhere, loadAssessmentSteps, loadChildGoals, saveLevels } from "@/lib/sopServer";
 import { isChildLinkedToParent } from "@/lib/child-parent-links";
 
 const CHILD_SELECT = {
@@ -64,7 +64,7 @@ export default async function handler(req, res) {
       if (levels.some((l) => !l?.stepId || !isLevel(l.level))) return res.status(400).json({ error: "Each level needs a step and one of Not Started, Exposure, Competency or Mastery" });
       if (levels.length > 1000) return res.status(400).json({ error: "Too many steps in one save" });
       const stepIds = new Set(
-        (await prisma.lesson.findMany({ where: { centerId: child.centerId, isStep: true, id: { in: levels.map((l) => String(l.stepId)) } }, select: { id: true } })).map((s) => s.id),
+        (await prisma.lesson.findMany({ where: { ...(await childStepsWhere(child)), id: { in: levels.map((l) => String(l.stepId)) } }, select: { id: true } })).map((s) => s.id),
       );
       if (levels.some((l) => !stepIds.has(String(l.stepId)))) return res.status(400).json({ error: "That step is not in this child's center" });
       await saveLevels(child, levels.map((l) => ({ ...l, stepId: String(l.stepId) })), user, { mode, generate: Boolean(req.body?.generate) });
@@ -110,7 +110,7 @@ async function parentSave(req, res, child, user) {
     return res.status(400).json({ error: "Each level needs a step and one of Not Started, Exposure, Competency or Mastery" });
   }
   const steps = await prisma.lesson.findMany({
-    where: { centerId: child.centerId, isStep: true, id: { in: levels.map((l) => String(l.stepId)) } },
+    where: { ...(await childStepsWhere(child)), id: { in: levels.map((l) => String(l.stepId)) } },
     select: { id: true, category: { select: { name: true } } },
   });
   const general = new Set(steps.filter((s) => (s.category?.name || "General") === "General").map((s) => s.id));

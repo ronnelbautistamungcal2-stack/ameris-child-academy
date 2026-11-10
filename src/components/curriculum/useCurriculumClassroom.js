@@ -37,7 +37,7 @@ export default function useCurriculumClassroom() {
         const list = (Array.isArray(data) ? data : []).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
         setCenters(list);
         const saved = remembered();
-        const center = list.find((c) => c.id === saved.centerId) || list.find((c) => c.name === "Demo Center") || list[0];
+        const center = list.find((c) => c.id === saved.centerId) || list.find((c) => c.curriculumSource) || list.find((c) => c.name === "Demo Center") || list[0];
         if (center) {
           setCenterIdState(center.id);
           const rooms = center.classes || [];

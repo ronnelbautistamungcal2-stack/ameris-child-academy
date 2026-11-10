@@ -353,6 +353,9 @@ model Center {
   enrollmentFee               Float?
   // Roles tab: saved for a future access structure; not enforced yet.
   roleAccess                  Role[]                       @default([])
+  // The Ameris Solutions curriculum center (step E): its Lesson Bank, Lesson
+  // Planner and Steps of Progression Bank feed every subscriber. One center.
+  curriculumSource            Boolean                      @default(false)
   users                       CenterUser[]
   classes                     ClassRoom[]
   children                    Child[]
@@ -453,6 +456,11 @@ model ClassRoom {
   lessonCalendarAnchors     LessonCalendarAnchor[]
   lessonPlanner             LessonPlanner?
   lessonPlanCells           LessonPlanCell[]
+  // Subscriber classrooms (client 2026-11-07, step E): the Ameris age-group
+  // planner (a classroom of the curriculum source center) this one follows.
+  curriculumAgeGroup        ClassRoom?                @relation("CurriculumAgeGroup", fields: [curriculumAgeGroupId], references: [id], onDelete: SetNull)
+  curriculumAgeGroupId      String?
+  curriculumFollowers       ClassRoom[]               @relation("CurriculumAgeGroup")
 }
 
 model TeacherClass {
@@ -1000,33 +1008,36 @@ model Subscription {
 // A customer of Ameris Solutions (client 2026-11-06). Owns one or more
 // centers; add-ons unlock pages, limits cap centers and children.
 model SubscriberAccount {
-  id              String                  @id @default(uuid())
-  accountNumber   String                  @unique // "C-1001"
-  name            String
-  status          String                  @default("PENDING") // PENDING | ACTIVE | ON_HOLD | CANCELLED
+  id                  String                  @id @default(uuid())
+  accountNumber       String                  @unique // "C-1001"
+  name                String
+  status              String                  @default("PENDING") // PENDING | ACTIVE | ON_HOLD | CANCELLED
   // STEPS_OF_PROGRESSION | CURRICULUM | TEACHER_TRAINING | STAFF_MANAGEMENT
-  addOns          String[]                @default([])
+  addOns              String[]                @default([])
   // Curriculum types the account pays for (set by the Global admin).
-  curriculumTypes String[]                @default([])
-  maxCenters      Int                     @default(1)
-  maxChildren     Int?
-  startDate       DateTime?
-  renewalDate     DateTime?
-  autoRenew       Boolean                 @default(true)
-  contactName     String?
-  contactEmail    String?
-  phone           String?
-  address         String?
-  activatedAt     DateTime?
-  centers         Center[]
-  users           User[]
-  notes           SubscriberAccountNote[]
-  formTemplates   FormTemplate[]
-  policies        PolicyDocument[]
-  parentFaqs      ParentFaq[]
-  supportTickets  SupportTicket[]
-  createdAt       DateTime                @default(now())
-  updatedAt       DateTime                @updatedAt
+  curriculumTypes     String[]                @default([])
+  // Age groups the account follows: ids of the curriculum source center's
+  // classrooms (each one is an age-group Lesson Planner). Set by Global admin.
+  curriculumAgeGroups String[]                @default([])
+  maxCenters          Int                     @default(1)
+  maxChildren         Int?
+  startDate           DateTime?
+  renewalDate         DateTime?
+  autoRenew           Boolean                 @default(true)
+  contactName         String?
+  contactEmail        String?
+  phone               String?
+  address             String?
+  activatedAt         DateTime?
+  centers             Center[]
+  users               User[]
+  notes               SubscriberAccountNote[]
+  formTemplates       FormTemplate[]
+  policies            PolicyDocument[]
+  parentFaqs          ParentFaq[]
+  supportTickets      SupportTicket[]
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
 }
 
 model SubscriberAccountNote {

@@ -53,6 +53,45 @@ function Row({ label, children }) {
   );
 }
 
+// Age groups (step E): the Ameris curriculum center's classrooms. Loaded once.
+let ageGroupPromise = null;
+function useAgeGroups() {
+  const [groups, setGroups] = useState([]);
+  useEffect(() => {
+    ageGroupPromise ||= apiJson("/api/v1/global/curriculum")
+      .then((d) => d.ageGroups || [])
+      .catch(() => {
+        ageGroupPromise = null;
+        return [];
+      });
+    let live = true;
+    ageGroupPromise.then((g) => live && setGroups(g));
+    return () => {
+      live = false;
+    };
+  }, []);
+  return groups;
+}
+
+function AgeGroupChecks({ value, onChange }) {
+  const groups = useAgeGroups();
+  if (!groups.length) return <p className="text-xs text-gray-500 dark:text-gray-400">The Ameris curriculum center has no age groups (classrooms) yet.</p>;
+  return (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      {groups.map((g) => (
+        <label key={g.id} className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
+          <input
+            type="checkbox"
+            checked={value.includes(g.id)}
+            onChange={(e) => onChange(e.target.checked ? [...value, g.id] : value.filter((k) => k !== g.id))}
+          />
+          {g.name}
+        </label>
+      ))}
+    </div>
+  );
+}
+
 function AddOnChecks({ value, onChange }) {
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -74,6 +113,7 @@ function SubscriptionEditor({ detail, onSave, onCancel, saving }) {
   const [form, setForm] = useState(() => ({
     addOns: detail.addOns || [],
     curriculumTypes: detail.curriculumTypes || [],
+    curriculumAgeGroups: detail.curriculumAgeGroups || [],
     maxCenters: detail.maxCenters,
     maxChildren: detail.maxChildren ?? "",
     startDate: dateInput(detail.startDate),
@@ -90,6 +130,10 @@ function SubscriptionEditor({ detail, onSave, onCancel, saving }) {
       <div>
         <div className="mb-2 text-sm font-bold text-gray-700 dark:text-gray-200">Curriculum Types</div>
         <CurriculumTypePicker value={form.curriculumTypes} onChange={(curriculumTypes) => set({ curriculumTypes })} idPrefix="edit-account-type" />
+      </div>
+      <div>
+        <div className="mb-2 text-sm font-bold text-gray-700 dark:text-gray-200">Curriculum Age Groups</div>
+        <AgeGroupChecks value={form.curriculumAgeGroups} onChange={(curriculumAgeGroups) => set({ curriculumAgeGroups })} />
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="text-sm">
@@ -136,6 +180,7 @@ function AddSubscriberDialog({ onClose, onCreated }) {
     adminPassword: "",
     addOns: [],
     curriculumTypes: [],
+    curriculumAgeGroups: [],
     maxCenters: 1,
     maxChildren: "",
   });
@@ -190,6 +235,10 @@ function AddSubscriberDialog({ onClose, onCreated }) {
         <div>
           <div className="mb-2 text-sm font-bold text-gray-700 dark:text-gray-200">Curriculum Types</div>
           <CurriculumTypePicker value={form.curriculumTypes} onChange={(curriculumTypes) => set({ curriculumTypes })} idPrefix="new-account-type" />
+        </div>
+        <div>
+          <div className="mb-2 text-sm font-bold text-gray-700 dark:text-gray-200">Curriculum Age Groups</div>
+          <AgeGroupChecks value={form.curriculumAgeGroups} onChange={(curriculumAgeGroups) => set({ curriculumAgeGroups })} />
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {field("maxCenters", "# of Centers allowed", { type: "number", min: 1, required: true })}
@@ -296,6 +345,7 @@ function Detail({ id, onChanged }) {
               <Row label="Renewal Date">{day(detail.renewalDate)}</Row>
               <Row label="Auto-Renew">{detail.autoRenew ? "Enabled" : "Off"}</Row>
               <Row label="Curriculum Types">{curriculumTypeLabels(detail.curriculumTypes) || "None"}</Row>
+              <Row label="Age Groups">{(detail.ageGroupNames || []).join(", ") || "None"}</Row>
             </div>
             <div>
               <div className="mb-1 text-sm font-bold text-gray-700 dark:text-gray-200">Purchased Add-Ons</div>

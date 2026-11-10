@@ -53,7 +53,7 @@ website development > Ameris Solutions home pages; local copy in Downloads).
 | B | Child limit per center (one number, every center) | **done 2026-11-10** (see below) |
 | C | Lesson and step **Type** multi-select (three fixed options) | **done 2026-11-10** (see below) |
 | D | Character Guide **Import** for Teacher Training subscribers | nothing |
-| E | Banks move to the Global admin; subscriber Lesson Calendar (own start day and closed days, view-only lessons, live updates, filtered by the account's type and age groups) | ready |
+| E | Banks move to the Global admin; subscriber Lesson Calendar (own start day and closed days, view-only lessons, live updates, filtered by the account's type and age groups) | **done 2026-11-10** (see below) |
 | F | Customer Support tickets with Request / Grant / End center access (ends on End Access) | **done 2026-11-10** (see below) |
 | G | Quote → enrollment → Stripe payment → embedded DocuSign → Pending → Activate | question 6 (accounts, keys, prices) |
 
@@ -77,6 +77,25 @@ website development > Ameris Solutions home pages; local copy in Downloads).
 - The Global admin picks the subscriber's Curriculum Types on Add Subscriber and Edit Subscription; changes go to the account notes.
 - The Type list under Curriculum > Categories is gone (the three types are fixed).
 - Not yet used for filtering: the subscriber Lesson Calendar (step E) will show only lessons of the account's types.
+
+## Step E — Ameris curriculum for subscribers (done 2026-11-10)
+
+- **Where the curriculum lives:** one center is the Ameris curriculum center (the migration picked the C-1001 center with the most lessons; in dev that's Demo Center). Its Lesson Bank, Lesson Planner and Steps of Progression Bank are the Ameris banks. Each of its classrooms is one **age group** with its own planner.
+- **Global admin > Lesson Bank & SOP Bank** (new nav item): shows the curriculum center and its age groups, can move the curriculum to another center, and has Open buttons for the Lesson Bank, Lesson Planner, Steps of Progression Bank and Categories. Those open the existing editors in the Admin portal on the curriculum center (the global admin needs the Admin role too). Global admins can always reach the curriculum center.
+- **Subscriber's account:** Global admin > Subscribers > Edit Subscription (and Add Subscriber) has **Curriculum Age Groups** checkboxes next to Curriculum Types. Changes go to the account notes.
+- **Subscriber's Lesson Calendar:** the subscriber still sets their own start day and closed days. A **Follows Age Group** picker chooses which of the account's age groups each classroom follows (with one age group it's automatic). Each day shows that age group's planned lessons, **only lessons of the account's curriculum types**; clicking one opens it view-only (description, supplies, the protected lesson file). Ameris edits show right away; nothing is copied.
+- **Teacher's weekly plan** shows the same Ameris lessons and categories for a subscriber classroom.
+- **Initial Developmental Assessment and Progression Tracking** use the Ameris steps of the account's types.
+- **Subscribers don't get the banks:** the Lesson Planner, Lesson Bank, Categories and Steps bank tabs are hidden and those pages show "Provided by Ameris Solutions".
+- Centers in the account that owns the curriculum center (C-1001 Ameris Academy) keep working as before.
+- Migration `20261110120000_curriculum_source`.
+
+**Guesses to confirm with the client:**
+- Lessons and steps with **no type ticked are hidden** from subscribers. Ameris needs to tick types on its existing lessons and steps first, or subscribers will see empty calendars.
+- An age group is a classroom of the curriculum center (e.g. "Toddlers"), not a separate list.
+- Free-text planner cells (no bank lesson attached) are shown to every subscriber, whatever their types.
+- Hiding the bank pages is on screen only; their APIs aren't blocked for subscribers yet (same as the add-on locks).
+- Reports that read steps (milestone reports, child steps) still use the child's own center; moving them to the Ameris steps is a follow-up.
 
 ## Step F — Customer Support and center access (done 2026-11-10)
 

@@ -1,8 +1,8 @@
 import { getSession } from "@/lib/auth";
-import prisma from "@/lib/prisma";
 import { addDaysKey, dayNumbersBetween, isDateKey } from "@/lib/lessonCalendar";
 import { classroomAccess, loadCalendar } from "@/lib/lessonPlanAccess";
 import { buildActiveRows, rowLabel } from "@/lib/lessonPlanRows";
+import { classroomCurriculum, plannedLessons } from "@/lib/curriculumSource";
 
 /**
  * GET /api/v1/lesson-planner/week?centerId=&classRoomId=&start=YYYY-MM-DD
@@ -28,23 +28,17 @@ export default async function handler(req, res) {
     const numbers = dayNumbersBetween(calendar.anchors, calendar.closedDays, start, end);
     const dayList = Object.values(numbers).map((n) => n.day).filter(Boolean);
 
-    const [planner, rows, cells] = await Promise.all([
-      prisma.lessonPlanner.findUnique({ where: { classRoomId: String(classRoomId) } }),
-      prisma.lessonPlanRow.findMany({ where: { centerId: String(centerId), classRoomId: String(classRoomId) } }),
-      dayList.length
-        ? prisma.lessonPlanCell.findMany({ where: { classRoomId: String(classRoomId), day: { in: dayList } } })
-        : [],
-    ]);
-
-    const byDay = {};
-    for (const cell of cells) {
-      (byDay[cell.day] ||= {})[cell.rowIndex] = { title: cell.title, lessonId: cell.lessonId };
-    }
+    // A subscriber classroom shows the Ameris age-group planner it follows
+    // (step E); everyone else their own classroom's planner.
+    const curriculum = await classroomCurriculum(classRoomId);
+    const plan = await plannedLessons(curriculum, dayList, { buildActiveRows, rowLabel });
+    const byDay = plan.byDay;
 
     return res.status(200).json({
       planned: calendar.anchors.length > 0,
-      theme: planner?.theme || "",
-      rows: buildActiveRows(rows).map((row) => ({ rowIndex: row.rowIndex, label: rowLabel(row) })),
+      theme: plan.theme,
+      rows: plan.rows,
+      curriculum: curriculum?.mode || "OWN",
       days: Object.entries(numbers).map(([date, info]) => ({
         date,
         day: info.day,

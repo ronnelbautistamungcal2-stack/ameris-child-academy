@@ -2,6 +2,7 @@ import prisma from "@/lib/prisma";
 import { ACCOUNT_STATUS_LABELS, ADD_ON_LABELS } from "@/lib/addOns";
 import { curriculumTypeLabels } from "@/lib/curriculumTypes";
 import { parseAccountInput, requireGlobalAdmin } from "@/lib/globalAdmin";
+import { ageGroupOptions, normalizeAgeGroups } from "@/lib/curriculumSource";
 
 async function loadDetail(id) {
   const account = await prisma.subscriberAccount.findUnique({
@@ -20,10 +21,13 @@ async function loadDetail(id) {
     },
   });
   if (!account) return null;
+  const options = await ageGroupOptions();
+  const ageGroupNames = options.filter((o) => account.curriculumAgeGroups.includes(o.id)).map((o) => o.name);
   const childCount = account.centers.reduce((sum, c) => sum + c._count.children, 0);
   return {
     ...account,
     childCount,
+    ageGroupNames,
     centers: account.centers.map(({ _count, ...c }) => ({ ...c, childCount: _count.children })),
   };
 }
@@ -42,6 +46,11 @@ function describeChanges(before, data) {
   if (data.curriculumTypes) {
     const same = data.curriculumTypes.length === (before.curriculumTypes || []).length && data.curriculumTypes.every((t) => before.curriculumTypes.includes(t));
     if (!same) out.push(`Curriculum types set to ${curriculumTypeLabels(data.curriculumTypes) || "none"}.`);
+  }
+  if (data.curriculumAgeGroups) {
+    const before_ = before.curriculumAgeGroups || [];
+    const same = data.curriculumAgeGroups.length === before_.length && data.curriculumAgeGroups.every((g) => before_.includes(g));
+    if (!same) out.push(`Age groups set to ${(data.ageGroupNames || []).join(", ") || "none"}.`);
   }
   if (data.maxCenters !== undefined && data.maxCenters !== before.maxCenters) out.push(`Center limit set to ${data.maxCenters}.`);
   if (data.maxChildren !== undefined && data.maxChildren !== before.maxChildren) {
@@ -73,9 +82,15 @@ export default async function handler(req, res) {
     const parsed = parseAccountInput(body);
     if (parsed.error) return res.status(400).json({ error: parsed.error });
     const data = parsed.data;
+    let ageGroupNames = [];
+    if (data.curriculumAgeGroups) {
+      const options = await ageGroupOptions();
+      data.curriculumAgeGroups = await normalizeAgeGroups(data.curriculumAgeGroups);
+      ageGroupNames = options.filter((o) => data.curriculumAgeGroups.includes(o.id)).map((o) => o.name);
+    }
     if (data.status === "ACTIVE" && !before.activatedAt) data.activatedAt = new Date();
 
-    const notes = describeChanges(before, data);
+    const notes = describeChanges(before, { ...data, ageGroupNames });
     const typed = String(body.note || "").trim().slice(0, 2000);
     if (typed) notes.push(typed);
 

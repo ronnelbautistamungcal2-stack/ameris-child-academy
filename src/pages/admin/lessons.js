@@ -827,6 +827,9 @@ export default function AdminLessons() {
 
   const mainCenter = useMemo(() => {
     const arr = Array.isArray(centers) ? centers : [];
+    // The Ameris curriculum center's bank when the user can reach it (step E).
+    const source = arr.find((c) => c?.curriculumSource);
+    if (source) return source;
     const sorted = arr.slice().sort((a, b) => {
       const ta = new Date(a?.createdAt || 0).getTime();
       const tb = new Date(b?.createdAt || 0).getTime();

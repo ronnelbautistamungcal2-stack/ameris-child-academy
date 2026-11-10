@@ -2,6 +2,7 @@
 // steps with their levels, and saving levels (with history entries).
 
 import { accessibleCenterIds, hasAccessToCenter } from "@/lib/auth";
+import { accountUsesAmerisCurriculum, curriculumSourceCenter } from "@/lib/curriculumSource";
 import prisma from "@/lib/prisma";
 import { hasAnyRole, signedInAs } from "@/lib/roles";
 import { activeGoalIds, levelForStatus, monthsOld, statusForLevel, stepsForAge } from "@/lib/sop";
@@ -58,7 +59,34 @@ const STEP_SELECT = {
   category: { select: { name: true } },
 };
 
-const CENTER_STEPS = (child) => ({ centerId: child.centerId, isStep: true });
+// The steps bank a child's center uses: its own, or for a subscriber the
+// Ameris curriculum center's steps of the account's types (step E).
+const stepScopes = new WeakMap();
+const CENTER_STEPS = (child) => stepScopes.get(child) || { centerId: child.centerId, isStep: true };
+
+/** Prisma `where` for the steps this child is assessed on. */
+export async function childStepsWhere(child) {
+  await prepareStepScope(child);
+  return CENTER_STEPS(child);
+}
+
+async function prepareStepScope(child) {
+  if (stepScopes.has(child)) return;
+  const center = await prisma.center.findUnique({
+    where: { id: child.centerId },
+    select: { curriculumSource: true, subscriberAccountId: true },
+  });
+  const source = center?.curriculumSource ? null : await curriculumSourceCenter();
+  if (source && (await accountUsesAmerisCurriculum(center?.subscriberAccountId, prisma, source))) {
+    const account = await prisma.subscriberAccount.findUnique({
+      where: { id: center.subscriberAccountId },
+      select: { curriculumTypes: true },
+    });
+    stepScopes.set(child, { centerId: source.id, isStep: true, types: { hasSome: account?.curriculumTypes || [] } });
+  } else {
+    stepScopes.set(child, { centerId: child.centerId, isStep: true });
+  }
+}
 
 const PROGRESS_SELECT = { lessonId: true, status: true, active: true, notes: true, assessedAt: true, updatedAt: true };
 const ID_BATCH = 10000; // under Postgres's 32,767 bind-parameter limit
@@ -114,15 +142,16 @@ async function findInBatches(ids, args) {
  * summaries, without sending a whole step bank (tens of thousands of steps).
  */
 export async function loadChildGoals(child) {
+  await prepareStepScope(child);
   const progress = await childProgress(child);
   const steps = await findInBatches([...progress.keys()], { where: CENTER_STEPS(child), select: STEP_SELECT });
   return steps.map((s) => stepRow(s, progress.get(s.id))).sort(byReference);
 }
 
-/** The center's step category names for the assessment tabs, General first. */
-export async function stepCategoryNames(centerId) {
+/** The step category names for the assessment tabs, General first. */
+export async function stepCategoryNames(where) {
   const rows = await prisma.lesson.findMany({
-    where: { centerId, isStep: true },
+    where: typeof where === "string" ? { centerId: where, isStep: true } : where,
     distinct: ["categoryId"],
     select: { category: { select: { name: true } } },
   });
@@ -151,7 +180,8 @@ const LEAN_SELECT = {
  * Competency. Returns { category, tabs, steps }.
  */
 export async function loadAssessmentSteps(child, { category, all = false, q = "" } = {}) {
-  const categories = await stepCategoryNames(child.centerId);
+  await prepareStepScope(child);
+  const categories = await stepCategoryNames(CENTER_STEPS(child));
   const chosen = categories.includes(category) ? category : categories[0] || null;
   if (!chosen) return { category: null, tabs: categories, steps: [] };
 
@@ -229,8 +259,9 @@ export async function loadAssessmentSteps(child, { category, all = false, q = ""
  *   step as an active goal; a mastered step stops being active.
  */
 export async function saveLevels(child, items, user, { mode, generate = false }) {
+  await prepareStepScope(child);
   const steps = await prisma.lesson.findMany({
-    where: { centerId: child.centerId, isStep: true },
+    where: CENTER_STEPS(child),
     select: { id: true, priorStepId: true, nextStepId: true },
   });
   const stepsById = Object.fromEntries(steps.map((s) => [s.id, s]));

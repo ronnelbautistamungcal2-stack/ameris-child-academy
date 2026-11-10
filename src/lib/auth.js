@@ -51,12 +51,17 @@ export async function hasAccessToCenter(userId, centerId) {
 
 /**
  * Centers a subscriber has let Ameris support into (Customer Support > Grant
- * Access), for Ameris global admins until someone clicks End Access.
+ * Access), for Ameris global admins until someone clicks End Access, plus the
+ * Ameris curriculum center.
  */
 async function supportCenterIds(prisma, user) {
   if (!hasAnyRole(user, ["GLOBAL_ADMIN"])) return [];
-  const grants = await prisma.supportAccessGrant.findMany({ where: { status: "GRANTED" }, select: { centerId: true } });
-  return grants.map((g) => g.centerId);
+  const [grants, source] = await Promise.all([
+    prisma.supportAccessGrant.findMany({ where: { status: "GRANTED" }, select: { centerId: true } }),
+    // The Ameris curriculum center (step E): global admins edit its banks.
+    prisma.center.findFirst({ where: { curriculumSource: true }, select: { id: true } }),
+  ]);
+  return [...new Set([...grants.map((g) => g.centerId), ...(source ? [source.id] : [])])];
 }
 
 /**

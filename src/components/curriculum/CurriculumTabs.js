@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useAddOns } from "@/components/subscription/AddOnGate";
 
 // The Curriculum tabs from the client's mockups (2026-10-02). Each tab is its
 // own page; this bar sits at the top of all of them.
@@ -11,10 +12,14 @@ export const CURRICULUM_TABS = [
 ];
 
 export default function CurriculumTabs({ active }) {
+  // Subscribers on the Ameris curriculum only get the calendar (step E).
+  const { account } = useAddOns();
+  const tabs = account?.amerisCurriculum ? CURRICULUM_TABS.filter((t) => t.key === "calendar") : CURRICULUM_TABS;
+  if (tabs.length === 1) return null;
   return (
     <nav aria-label="Curriculum" className="overflow-x-auto">
       <div className="flex min-w-max gap-1.5">
-        {CURRICULUM_TABS.map((tab) => {
+        {tabs.map((tab) => {
           const current = tab.key === active;
           return (
             <Link

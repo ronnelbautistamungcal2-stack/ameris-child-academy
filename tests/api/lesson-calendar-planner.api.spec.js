@@ -43,9 +43,9 @@ test.describe("Lesson Calendar and Lesson Planner @api", () => {
     const { days, closedDays, anchors } = await (await apiGet(request, calendarUrl("2099-06-01", "2099-06-12"), admin)).json();
     expect(anchors).toEqual([{ startDate: "2099-06-01", dayNumber: 1 }]);
     expect(closedDays).toEqual(["2099-06-03"]);
-    expect(days["2099-06-01"]).toEqual({ day: 1, closed: false });
+    expect(days["2099-06-01"]).toEqual({ day: 1, closed: false, lessons: [] });
     expect(days["2099-06-02"].day).toBe(2);
-    expect(days["2099-06-03"]).toEqual({ day: null, closed: true });
+    expect(days["2099-06-03"]).toMatchObject({ day: null, closed: true });
     expect(days["2099-06-04"].day).toBe(3);
     expect(days["2099-06-06"].day).toBeNull(); // Saturday
     expect(days["2099-06-08"].day).toBe(5);

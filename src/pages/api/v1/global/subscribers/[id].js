@@ -3,6 +3,8 @@ import { ACCOUNT_STATUS_LABELS, ADD_ON_LABELS } from "@/lib/addOns";
 import { curriculumTypeLabels } from "@/lib/curriculumTypes";
 import { parseAccountInput, requireGlobalAdmin } from "@/lib/globalAdmin";
 import { ageGroupOptions, normalizeAgeGroups } from "@/lib/curriculumSource";
+import { accountQuote, parsePricingSelection } from "@/lib/pricingServer";
+import { money } from "@/lib/subscriptionPricing";
 
 async function loadDetail(id) {
   const account = await prisma.subscriberAccount.findUnique({
@@ -28,6 +30,8 @@ async function loadDetail(id) {
     ...account,
     childCount,
     ageGroupNames,
+    // The price from the account's pricing choices and the pricing set in effect (step G).
+    quote: await accountQuote(account),
     centers: account.centers.map(({ _count, ...c }) => ({ ...c, childCount: _count.children })),
   };
 }
@@ -61,7 +65,7 @@ function describeChanges(before, data) {
 
 /**
  * GET   /api/v1/global/subscribers/:id
- * PATCH /api/v1/global/subscribers/:id { status, addOns, maxCenters, maxChildren, ..., note }
+ * PATCH /api/v1/global/subscribers/:id { status, addOns, maxCenters, maxChildren, ..., pricingSelection, note }
  *       Every change is written to the account's Notes. A plain { note } adds a note.
  */
 export default async function handler(req, res) {
@@ -89,8 +93,17 @@ export default async function handler(req, res) {
       ageGroupNames = options.filter((o) => data.curriculumAgeGroups.includes(o.id)).map((o) => o.name);
     }
     if (data.status === "ACTIVE" && !before.activatedAt) data.activatedAt = new Date();
+    if (body.pricingSelection !== undefined) {
+      const pricing = parsePricingSelection(body.pricingSelection);
+      if (pricing.error) return res.status(400).json({ error: pricing.error });
+      data.pricingSelection = pricing.data;
+    }
 
     const notes = describeChanges(before, { ...data, ageGroupNames });
+    if (data.pricingSelection) {
+      const q = await accountQuote({ ...before, ...data });
+      notes.push(q && !q.error ? `Pricing updated: ${money(q.monthly)} a month (${data.pricingSelection.children} children, ${data.pricingSelection.billingCycle === "ANNUAL" ? "annual" : "monthly"}).` : "Pricing choices updated.");
+    }
     const typed = String(body.note || "").trim().slice(0, 2000);
     if (typed) notes.push(typed);
 

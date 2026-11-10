@@ -70,7 +70,52 @@ website development > Ameris Solutions home pages; local copy in Downloads).
 | D | Character Guide **Import** for Teacher Training subscribers | **done 2026-11-10** (see below) |
 | E | Banks move to the Global admin; subscriber Lesson Calendar (own start day and closed days, view-only lessons, live updates, filtered by the account's type and age groups) | **done 2026-11-10** (see below) |
 | F | Customer Support tickets with Request / Grant / End center access (ends on End Access) | **done 2026-11-10** (see below) |
-| G | Quote → enrollment → Stripe payment → embedded DocuSign → Pending → Activate | question 6 (accounts, keys, prices) |
+| G | Quote → enrollment → Stripe payment → embedded DocuSign → Pending → Activate | **G1 pricing done 2026-11-11** (see below); payment and signing wait on the agreement answers |
+
+## Pricing answers (2026-11-10)
+
+From the client's Subscription Pricing mockup and message:
+- **Base Program**: the range that holds the subscriber's number of children; they pay the range's top number × its price per child (15 children → 11–20 → 20 × $17.45).
+- **Add-ons** (Steps of Progression, Teacher Training, Staff Management): the same top number × the add-on's price per child.
+- **Curriculum**: centers pay the price of each age group they pick, Standard or Faith Based; a Home Daycare pays its program's price.
+- **Discounts**: a percentage, with an editable name.
+- **Billing**: monthly or annual. Ordered before the 15th: full first month; after the 15th: half.
+- **No free trial**; a 2-week money-back guarantee.
+- **Late fee**: 15.5%.
+
+## Step G1 — Subscription Pricing (done 2026-11-11)
+
+- **Global admin > Settings > Subscription Pricing**, laid out like the mockup: Base Program ranges (Add Range, Delete Selected), Add-On prices, Curriculum – Centers (per age group, Standard / Faith Based), Curriculum – Home Daycare (per program), and Discounts (name, %, applies to, active). Save Changes checks the sheet (e.g. overlapping ranges).
+- **Pricing sets**: each has a name and an effective date. "+ New Pricing Set" copies the prices in effect today; the set in effect is the latest effective date on or before today, so future prices can be prepared ahead. The first set, "November 2026", is the mockup (its 200–300 range starts at 201 so it doesn't overlap 151–200).
+- **Subscriber > Pricing** card: number of children, billing, order date, curriculum (center age groups or Home Daycare program, Standard / Faith Based), discounts. It shows each line, the monthly price, the annual total and the first payment, and saves the choices on the account (logged in Notes). Add-ons come from the subscription's ticked add-ons.
+- Migration `20261111090000_subscription_pricing`. Calculation: `src/lib/subscriptionPricing.js`.
+
+**Client answers (2026-11-11), built:**
+- Discounts can't be combined: the Pricing card has one discount choice (No discount, or one of the active discounts).
+- Center curriculum = the age group's price per classroom × the number of classrooms in that age group. The Pricing card asks how many classrooms each age group has.
+- Ordering on the 15th pays the full month; only after the 15th is it half.
+- The late fee is 15.5% **per year** (the agreement's "per month" needs correcting).
+
+**Still guesses:**
+- Discounts are picked per subscriber (none is automatic, not even Yearly for annual plans).
+- "All Packages" takes the discount off the whole monthly price; "Base Program" (a second choice we added) only off the base.
+- Annual = 12 × the monthly price (after the discount), paid up front with no half-month.
+- Existing subscribers are re-priced when a new set takes effect (the price shown always uses the set in effect today).
+
+## Client answers (2026-11-11)
+
+- **Signing:** a Home Daycare signs up with an "I agree" box. A center signs its Subscriber Agreement and Order Form through DocuSign during enrollment; the signed documents show the services, pricing, billing terms and discount, and the signed agreement and DocuSign completion certificate are saved on the subscriber's account. Website Terms of Service and policy acknowledgments use an "I agree" box recording the date, time, user and version.
+- **First login:** staff and parents accept the End-User Terms of Use (built, PR 23).
+- **Cancel / auto-renew:** no buttons; subscribers phone Ameris.
+- **Age groups (R5/R8):** yes, from the Age Ranges on the Categories tab.
+- **Untyped lessons hidden, planner notes shown to everyone:** both OK.
+- **Home Daycare curriculum:** the same lessons; Ameris makes a separate lesson plan for home daycares from the same bank.
+- **Character Guide:** a subscriber's copy changes only when they click Import again, which should then bring in Ameris's changes (not only new behaviors).
+- **Customer Support:** access for the whole Ameris team is OK; they want **email** notifications for tickets (needs an email service).
+- **Developmental age:** comes from the Initial Developmental Assessment: the goals the child is currently at give their developmental age.
+- **Excelling:** client to find out. **Red flags:** client will send them per role.
+- **Staff overall grade:** the percentages entered on Center Setup (as built).
+- **R109:** remove the old staff report links. **R185, R186, R190:** already done; disregard.
 
 ## Step A — add-on locks (done 2026-11-07)
 

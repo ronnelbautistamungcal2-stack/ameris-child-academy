@@ -52,7 +52,7 @@ website development > Ameris Solutions home pages; local copy in Downloads).
 | A | Add-on locks from the sheet (pages and sections), with answers 8 and 9 | **done 2026-11-07** (see below) |
 | B | Child limit per center (one number, every center) | **done 2026-11-10** (see below) |
 | C | Lesson and step **Type** multi-select (three fixed options) | **done 2026-11-10** (see below) |
-| D | Character Guide **Import** for Teacher Training subscribers | nothing |
+| D | Character Guide **Import** for Teacher Training subscribers | **done 2026-11-10** (see below) |
 | E | Banks move to the Global admin; subscriber Lesson Calendar (own start day and closed days, view-only lessons, live updates, filtered by the account's type and age groups) | **done 2026-11-10** (see below) |
 | F | Customer Support tickets with Request / Grant / End center access (ends on End Access) | **done 2026-11-10** (see below) |
 | G | Quote → enrollment → Stripe payment → embedded DocuSign → Pending → Activate | question 6 (accounts, keys, prices) |
@@ -77,6 +77,19 @@ website development > Ameris Solutions home pages; local copy in Downloads).
 - The Global admin picks the subscriber's Curriculum Types on Add Subscriber and Edit Subscription; changes go to the account notes.
 - The Type list under Curriculum > Categories is gone (the three types are fixed).
 - Not yet used for filtering: the subscriber Lesson Calendar (step E) will show only lessons of the account's types.
+
+## Step D — Character Guide per account and Import (done 2026-11-10)
+
+- **Each subscriber now has its own Character Guide.** Before this, every account shared and edited one guide. The guide built so far became the Ameris Character Guide (it belongs to the Ameris account, C-1001). A new subscriber starts with an empty guide.
+- **Import:** an admin whose account has **Teacher Training** sees "Would you like the Ameris Character Guide?" on Admin > Character Guide, with **Import Ameris Character Guide**. It copies every Ameris category and behavior, decision trees included, into their guide; categories with the same name are reused. The copies are theirs to edit.
+- **Later Ameris additions:** when Ameris adds behaviors, the same card offers **Import New Behaviors**. Only behaviors never imported come in; ones the subscriber already imported or edited are left alone.
+- Without Teacher Training the card says the guide comes with that add-on and links to the Subscription page.
+- The class report's Course Correction type list uses the classroom's own account's categories.
+- Migration `20261110150000_character_guide_accounts`.
+
+**Guesses to confirm with the client:**
+- "Ameris asks whether they want it" is the offer card on the subscriber's Character Guide page, not a step Ameris takes in the Global admin.
+- An import is a one-time copy. Later edits by Ameris to behaviors already imported don't reach the subscriber.
 
 ## Step E — Ameris curriculum for subscribers (done 2026-11-10)
 

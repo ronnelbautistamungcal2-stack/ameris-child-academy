@@ -197,7 +197,17 @@ export default async function handler(req, res) {
         .map(([date, g]) => ({ date, score: Math.round((g.sum / g.n) * 10) / 10 })),
       citizenshipGrades: studentGrades,
       courseCorrectionTypes: courseCorrectionTypeOptions(
-        (await prisma.characterCategory.findMany({ select: { name: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] })).map((c) => c.name),
+        (
+          await prisma.characterCategory.findMany({
+            // The classroom's account's Character Guide (step D).
+            where: {
+              subscriberAccountId:
+                (await prisma.center.findUnique({ where: { id: room.centerId }, select: { subscriberAccountId: true } }))?.subscriberAccountId || null,
+            },
+            select: { name: true },
+            orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+          })
+        ).map((c) => c.name),
         corrections.map((l) => ({ type: l.details?.behaviorType || "OTHER" })),
       ),
       characterHighlightTypes: CHARACTER_HIGHLIGHT_TYPE_OPTIONS,

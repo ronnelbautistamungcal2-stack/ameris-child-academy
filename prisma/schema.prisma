@@ -1036,6 +1036,8 @@ model SubscriberAccount {
   policies            PolicyDocument[]
   parentFaqs          ParentFaq[]
   supportTickets      SupportTicket[]
+  characterCategories CharacterCategory[]
+  characterBehaviors  CharacterBehavior[]
   createdAt           DateTime                @default(now())
   updatedAt           DateTime                @updatedAt
 }
@@ -2762,28 +2764,39 @@ model TimeSheetAudit {
 // Character Highlight tree branches by trait with a praise prompt and reward
 // options. The tree itself is JSON (see src/lib/characterGuide.js).
 model CharacterCategory {
-  id          String              @id @default(uuid())
-  name        String              @unique
-  description String?
-  sortOrder   Int                 @default(0)
-  behaviors   CharacterBehavior[]
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  id                  String              @id @default(uuid())
+  // Each subscriber account has its own guide (step D); null = legacy rows.
+  subscriberAccount   SubscriberAccount?  @relation(fields: [subscriberAccountId], references: [id], onDelete: Cascade)
+  subscriberAccountId String?
+  name                String
+  description         String?
+  sortOrder           Int                 @default(0)
+  behaviors           CharacterBehavior[]
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@unique([subscriberAccountId, name])
 }
 
 model CharacterBehavior {
-  id          String            @id @default(uuid())
-  category    CharacterCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  categoryId  String
-  name        String
-  type        String // COURSE_CORRECTION | CHARACTER_HIGHLIGHT
-  level       Int               @default(1)
-  description String
-  tree        Json
-  updatedById String?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  id                  String             @id @default(uuid())
+  category            CharacterCategory  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  categoryId          String
+  name                String
+  type                String // COURSE_CORRECTION | CHARACTER_HIGHLIGHT
+  level               Int                @default(1)
+  description         String
+  tree                Json
+  // Same account as its category (step D), kept here for simple filtering.
+  subscriberAccount   SubscriberAccount? @relation(fields: [subscriberAccountId], references: [id], onDelete: Cascade)
+  subscriberAccountId String?
+  // The Ameris behavior this one was imported from, so a second import skips it.
+  importedFromId      String?
+  updatedById         String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
   @@index([categoryId])
   @@index([type])
+  @@index([subscriberAccountId])
 }

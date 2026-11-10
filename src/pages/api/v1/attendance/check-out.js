@@ -11,7 +11,8 @@ export default async function handler(req, res) {
 
   const role = session.user.role;
   // Parents sign their own children in and out from the dashboard.
-  if (!["ADMIN", "TEACHER", "PARENT"].includes(role)) {
+  // Coaches too, from the Student List (R24, client 2026-11-10).
+  if (!["ADMIN", "COACH", "TEACHER", "PARENT"].includes(role)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 

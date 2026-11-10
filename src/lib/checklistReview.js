@@ -98,6 +98,45 @@ function primaryRole(member) {
  * One row per staff member for a center and day. With `userId`, only that
  * person, with their items and daily log entries (the View Details pop-up).
  */
+const minutesOf = (hhmm) => {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(hhmm || ""));
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+};
+
+const clock = (minutes) => {
+  const h = Math.floor(minutes / 60) % 24;
+  const m = minutes % 60;
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+};
+
+/**
+ * Approved time off on one day (server-local day [startOfDay, endOfDay)):
+ * null, { whole: true }, or { whole: false, windows: [{ from, to }] } in
+ * minutes of the day. Partial-day time off (client answer 2026-11-10, old
+ * R50): the hours off count as absent and the checklist is graded only for
+ * the hours worked, so tasks timed inside a window count neither way.
+ */
+export function timeOffOn(requests, startOfDay, endOfDay) {
+  const windows = [];
+  for (const t of requests || []) {
+    const s = new Date(t.startDate);
+    const e = new Date(t.endDate);
+    if (s >= endOfDay || e < startOfDay) continue;
+    const from = s <= startOfDay ? 0 : s.getHours() * 60 + s.getMinutes();
+    const to = e.getTime() >= endOfDay.getTime() - 60000 ? 24 * 60 : e.getHours() * 60 + e.getMinutes();
+    if (from === 0 && to >= 24 * 60) return { whole: true };
+    windows.push({ from, to });
+  }
+  return windows.length ? { whole: false, windows } : null;
+}
+
+/** A task timed inside partial-day time off. */
+export function duringTimeOff(item, off) {
+  if (!off || off.whole) return false;
+  const m = minutesOf(item.taskTime);
+  return m !== null && off.windows.some((w) => m >= w.from && m < w.to);
+}
+
 export async function checklistReview(prisma, { centerId, date, userId = "" }) {
   const key = dayKey(date);
   const day = dbDay(key);
@@ -135,7 +174,7 @@ export async function checklistReview(prisma, { centerId, date, userId = "" }) {
     }),
     prisma.timeOffRequest.findMany({
       where: { userId: { in: ids }, centerId, status: "APPROVED", startDate: { lt: endOfDay }, endDate: { gte: startOfDay } },
-      select: { userId: true, type: true, reason: true },
+      select: { userId: true, type: true, reason: true, startDate: true, endDate: true },
     }),
     prisma.shiftSchedule.findMany({
       where: { userId: { in: ids }, centerId, date: { gte: startOfDay, lt: endOfDay } },
@@ -144,6 +183,9 @@ export async function checklistReview(prisma, { centerId, date, userId = "" }) {
   ]);
 
   const rows = members.map((member) => {
+    const myTimeOff = timeOff.filter((t) => t.userId === member.id);
+    const offToday = timeOffOn(myTimeOff, startOfDay, endOfDay);
+    const partialOff = offToday && !offToday.whole ? offToday : null;
     const mine = completions.filter((c) => c.completedById === member.id);
     const doneAt = new Map(mine.filter((c) => !c.excused).map((c) => [c.itemId, c.completedAt]));
     const excusedIds = new Set(mine.filter((c) => c.excused).map((c) => c.itemId));
@@ -164,17 +206,21 @@ export async function checklistReview(prisma, { centerId, date, userId = "" }) {
         taskTime: item.taskTime,
         done: doneAt.has(item.id),
         excused: excusedIds.has(item.id),
+        timeOff: duringTimeOff(item, partialOff),
         completedAt: doneAt.get(item.id) || null,
       })),
     );
-    // Excused items count neither way.
-    const counted = items.filter((i) => !i.excused);
+    // Excused items and tasks during partial-day time off count neither way.
+    const counted = items.filter((i) => !i.excused && !i.timeOff);
     const done = counted.filter((i) => i.done).length;
     const listIds = new Set(lists.map((c) => c.id));
     const myNotes = notes.filter((n) => n.createdById === member.id && listIds.has(n.checklistId) && n.notes.trim());
     const absence = absences.find((a) => a.userId === member.id);
-    const off = timeOff.find((t) => t.userId === member.id);
+    const off = offToday?.whole ? myTimeOff[0] : null;
     const absent = !!(absence || off);
+    const partialNote = partialOff
+      ? `Time off ${partialOff.windows.map((w) => `${clock(w.from)}–${w.to >= 24 * 60 ? "end of day" : clock(w.to)}`).join(", ")}`
+      : "";
     const updates = [...items.map((i) => i.completedAt), ...myNotes.map((n) => n.updatedAt)].filter(Boolean).map((d) => new Date(d));
     const rooms = [...new Map(lists.flatMap(roomsOf).map((r) => [r.id, r])).values()];
     const role = primaryRole(member);
@@ -195,7 +241,7 @@ export async function checklistReview(prisma, { centerId, date, userId = "" }) {
       missing: counted.filter((i) => !i.done).map((i) => i.title),
       notes: absent
         ? [absence?.notes || (off ? `Time off${off.reason ? ` – ${off.reason}` : ""}` : "Absent")].filter(Boolean).join("; ")
-        : myNotes.map((n) => n.notes).join(" · "),
+        : [partialNote, ...myNotes.map((n) => n.notes)].filter(Boolean).join(" · "),
       lastUpdated: updates.length ? new Date(Math.max(...updates.map((d) => d.getTime()))) : null,
       status: closed ? "CLOSED" : absent ? "ABSENT" : !items.length ? "NO_CHECKLIST" : done === counted.length ? "COMPLETE" : done ? "IN_PROGRESS" : "NOT_STARTED",
       ...(userId ? { items } : {}),
@@ -256,13 +302,20 @@ export async function checklistCompletionForRange(prisma, { userId, centerId, da
       select: { startDate: true, endDate: true },
     }),
   ]);
+  const offOn = (key) => {
+    const start = new Date(`${key}T00:00:00`);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    return timeOffOn(timeOff, start, end);
+  };
 
   let days;
   if (attendance.length) {
     days = [...new Set(attendance.filter((a) => a.status !== "ABSENT").map((a) => dayKey(a.date)))];
   } else {
     days = [];
-    const off = (d) => timeOff.some((t) => d >= new Date(new Date(t.startDate).setHours(0, 0, 0, 0)) && d <= t.endDate);
+    // Only whole-day time off removes the day; partial days are graded on the hours worked.
+    const off = (d) => offOn(dayKey(d))?.whole;
     for (let d = new Date(from.getFullYear(), from.getMonth(), from.getDate()); d <= to && days.length < 400; d.setDate(d.getDate() + 1)) {
       if (d.getDay() !== 0 && d.getDay() !== 6 && !off(d)) days.push(dayKey(d));
     }
@@ -290,9 +343,11 @@ export async function checklistCompletionForRange(prisma, { userId, centerId, da
       choiceId: choices.find((c) => utcKey(c.date) === key)?.checklistId,
       doneIds: new Set([...doneIds, ...excusedIds]),
     });
+    const partialOff = offOn(key);
+    if (partialOff?.whole) continue;
     for (const list of lists) {
-      // Excused items count neither way.
-      const counted = list.items.filter((item) => !excusedIds.has(item.id));
+      // Excused items and tasks during partial-day time off count neither way.
+      const counted = list.items.filter((item) => !excusedIds.has(item.id) && !duringTimeOff(item, partialOff));
       assigned += counted.length;
       completed += counted.filter((item) => doneIds.has(item.id)).length;
     }

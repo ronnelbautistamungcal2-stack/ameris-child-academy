@@ -16,7 +16,8 @@ export default async function handler(req, res) {
   }
 
   const role = session.user.role;
-  if (!["ADMIN", "TEACHER", "PARENT"].includes(role)) {
+  // Coaches read it on the Student List too (R24, client 2026-11-10).
+  if (!["ADMIN", "COACH", "TEACHER", "PARENT"].includes(role)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 

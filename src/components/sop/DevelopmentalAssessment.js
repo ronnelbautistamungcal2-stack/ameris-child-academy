@@ -36,6 +36,8 @@ export default function DevelopmentalAssessment() {
   const router = useRouter();
   const [children, setChildren] = useState([]);
   const [childId, setChildId] = useState("");
+  // Find a child by name (R9, client 2026-11-10).
+  const [childQuery, setChildQuery] = useState("");
   const [data, setData] = useState(null);
   const [edits, setEdits] = useState({}); // stepId -> { level?, notes? }
   const [tab, setTab] = useState("");
@@ -171,7 +173,15 @@ export default function DevelopmentalAssessment() {
     }
   }
 
+  const childMatches = (() => {
+    const q = childQuery.trim().toLowerCase();
+    if (!q) return children;
+    return children.filter((c) => `${c.name} ${c.classroom || ""}`.toLowerCase().includes(q));
+  })();
+  const selectedShown = childMatches.some((c) => c.id === childId);
+
   function switchChild(id) {
+    if (!id) return;
     if (dirty && !window.confirm("You have unsaved changes. Switch child without saving?")) return;
     setChildId(id);
   }
@@ -242,9 +252,26 @@ export default function DevelopmentalAssessment() {
         <div>
           <h1 className={`text-3xl font-black ${NAVY}`}>Initial Developmental Assessment</h1>
           <div className="mt-2 flex flex-wrap gap-2">
-            <select value={childId} onChange={(e) => switchChild(e.target.value)} aria-label="Switch child" className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800">
+            <input
+              type="search"
+              value={childQuery}
+              onChange={(e) => setChildQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && childMatches.length) {
+                  e.preventDefault();
+                  switchChild(childMatches[0].id);
+                }
+              }}
+              placeholder="Search child's name..."
+              aria-label="Search child's name"
+              className="w-52 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800"
+            />
+            <select value={selectedShown ? childId : ""} onChange={(e) => switchChild(e.target.value)} aria-label="Switch child" className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800">
               {!children.length && <option value="">No children</option>}
-              {children.map((c) => (
+              {children.length > 0 && !selectedShown && (
+                <option value="">{childMatches.length ? `Pick a child (${childMatches.length} found)` : "No child matches"}</option>
+              )}
+              {childMatches.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}{c.classroom ? ` — ${c.classroom}` : ""}</option>
               ))}
             </select>

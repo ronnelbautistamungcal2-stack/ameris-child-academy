@@ -324,7 +324,7 @@ function StaffChecklistDetails({ userId, centerId, centerName, date, messagesPat
 
   const row = data?.row;
   const items = row?.items || [];
-  const missing = items.filter((i) => !i.done && !i.excused);
+  const missing = items.filter((i) => !i.done && !i.excused && !i.timeOff);
   const listed = tab === "items" ? items : missing;
   const logs = data?.logs || [];
   const logCounts = logs.reduce((acc, log) => ({ ...acc, [log.type]: (acc[log.type] || 0) + 1 }), {});
@@ -489,7 +489,9 @@ function StaffChecklistDetails({ userId, centerId, centerName, date, messagesPat
                       <td className="whitespace-nowrap px-4 py-2 text-gray-700 dark:text-gray-300">{formatTaskTime(item.taskTime) || "—"}</td>
                       <td className="px-3 py-2 text-gray-900 dark:text-gray-100">{item.title}</td>
                       <td className="px-3 py-2">
-                        {item.excused ? (
+                        {item.timeOff && !item.done ? (
+                          <span className="font-semibold text-slate-600" title="During partial-day time off; not counted">Time off</span>
+                        ) : item.excused ? (
                           <span className="font-semibold text-slate-600">Excused</span>
                         ) : item.done ? (
                           <span className="font-semibold text-emerald-700">✓ Completed</span>

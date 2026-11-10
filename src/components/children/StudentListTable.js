@@ -323,6 +323,7 @@ function StudentAttendance({ children, classes, centerId, onCheck, onMoveToday, 
               <thead>
                 <tr className={`bg-blue-50 text-left text-xs font-bold dark:bg-gray-800 ${NAVY}`}>
                   <th className="px-3 py-2">Child Name</th>
+                  <th className="px-3 py-2">Signed Into</th>
                   <th className="px-3 py-2 text-center">Sign In Time</th>
                   <th className="px-3 py-2 text-center">Sign Out Time</th>
                   <th className="px-3 py-2 text-center">Actions</th>
@@ -336,6 +337,17 @@ function StudentAttendance({ children, classes, centerId, onCheck, onMoveToday, 
                         <Avatar child={child} />
                         <span className="font-semibold">{fullName(child)}</span>
                       </span>
+                    </td>
+                    {/* The classroom the child is signed into (R23, client 2026-11-10). */}
+                    <td className="px-3 py-1.5">
+                      {state === "NONE" ? (
+                        <span className="text-gray-400">—</span>
+                      ) : (
+                        <span className={state === "OUT" ? "text-gray-500" : "font-semibold"}>
+                          {classes.find((r) => r.id === (att?.classRoomId || child.classRoomId))?.name || "—"}
+                          {state === "OUT" ? " (signed out)" : ""}
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-1.5 text-center">{timeOf(att?.checkedInAt)}</td>
                     <td className="px-3 py-1.5 text-center">{timeOf(att?.checkedOutAt)}</td>
@@ -380,7 +392,7 @@ function StudentAttendance({ children, classes, centerId, onCheck, onMoveToday, 
                 ))}
                 {!rows.length ? (
                   <tr>
-                    <td colSpan={4} className="px-3 py-6 text-center text-gray-500">No children match.</td>
+                    <td colSpan={5} className="px-3 py-6 text-center text-gray-500">No children match.</td>
                   </tr>
                 ) : null}
               </tbody>

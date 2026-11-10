@@ -16,6 +16,8 @@ const stamp = Date.now();
 const staffEmail = `terms-staff-${stamp}@terms-test.local`;
 const globalEmail = `terms-global-${stamp}@terms-test.local`;
 const password = crypto.randomBytes(9).toString("base64url");
+// The staff member must keep their pending terms (the helper accepts them by default).
+const RAW = { acceptTerms: false };
 
 test.describe.configure({ mode: "serial" });
 
@@ -40,7 +42,7 @@ test.describe("Terms acceptance @api", () => {
   });
 
   test("a new staff member must accept the End-User Terms; pages send them to /terms", async ({ request }) => {
-    const staff = await getAuthCookie(request, staffEmail, password);
+    const staff = await getAuthCookie(request, staffEmail, password, RAW);
     const { pending } = await (await apiGet(request, "/api/v1/terms", staff)).json();
     expect(pending.map((d) => d.kind)).toEqual(["END_USER"]);
     expect(pending[0].title).toBe("End-User Terms of Use");
@@ -54,7 +56,7 @@ test.describe("Terms acceptance @api", () => {
   });
 
   test("I agree records who, which version, when and from where", async ({ request }) => {
-    const staff = await getAuthCookie(request, staffEmail, password);
+    const staff = await getAuthCookie(request, staffEmail, password, RAW);
     const { pending } = await (await apiGet(request, "/api/v1/terms", staff)).json();
     expect((await apiPost(request, "/api/v1/terms", { documentIds: ["not-a-version"] }, staff)).status()).toBe(409);
     const res = await apiPost(request, "/api/v1/terms", { documentIds: [pending[0].id] }, staff);
@@ -104,7 +106,7 @@ test.describe("Terms acceptance @api", () => {
     createdDocId = (await published.json()).id;
 
     // The new version is in force: the staff member is asked again.
-    const staff = await getAuthCookie(request, staffEmail, password);
+    const staff = await getAuthCookie(request, staffEmail, password, RAW);
     const again = await (await apiGet(request, "/api/v1/terms", staff)).json();
     expect(again.pending.map((d) => d.id)).toEqual([createdDocId]);
 

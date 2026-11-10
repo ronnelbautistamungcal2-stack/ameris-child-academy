@@ -34,8 +34,19 @@ test.describe("Terms acceptance @api", () => {
   test.afterAll(async () => {
     await prisma.termsAcceptance.deleteMany({ where: { userId: { in: userIds } } });
     if (createdDocId) {
-      await prisma.termsAcceptance.deleteMany({ where: { documentId: createdDocId } });
-      await prisma.termsDocument.deleteMany({ where: { id: createdDocId } });
+      // Other test files sign in at the same time and accept the version that
+      // is current, so new acceptances can appear between the two deletes.
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        try {
+          await prisma.$transaction([
+            prisma.termsAcceptance.deleteMany({ where: { documentId: createdDocId } }),
+            prisma.termsDocument.deleteMany({ where: { id: createdDocId } }),
+          ]);
+          break;
+        } catch (err) {
+          if (attempt === 4) throw err;
+        }
+      }
     }
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     await prisma.$disconnect();

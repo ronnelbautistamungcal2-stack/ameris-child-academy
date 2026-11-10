@@ -117,6 +117,23 @@ From the client's Subscription Pricing mockup and message:
 - **Staff overall grade:** the percentages entered on Center Setup (as built).
 - **R109:** remove the old staff report links. **R185, R186, R190:** already done; disregard.
 
+## Ameris Solutions website and Sales & Leads (2026-11-11)
+
+The client's priority for their conference (Friday 2026-11-13): the Global admin pages and the Ameris Solutions home pages first; the 10-29 sheet waits.
+
+- **Website, under `/solutions`** until the amerissolutions.com domain points at the server: Home, Plans & Features, Contact Us, Request a Quote, the quote page, Complete Your Enrollment, Terms of Service, Privacy Policy. Login goes to the existing sign-in page. Photos are the client's from the mockup folder.
+- **Request a Quote** creates a New Lead in Global admin > **Sales & Leads** and notifies the Ameris team in the app. Curriculum asks how many classrooms each age group has (the pricing sheet's age groups); Home Daycare picks a program.
+- **Contact Us** also creates a lead (source "Website message"). The mockup has only Subject and Message; we added Name, Email, Phone and Center so the team can reply.
+- **Sales & Leads**: status filter and search; lead details (customer info, pricing type = discount, program type, curriculum type, add-ons, classrooms per age group, locations, children, billing); the live price from Settings > Subscription Pricing; **Generate Quote** saves a priced snapshot with a quote number (Q-10001…), valid 14 days, and gives **Open Quote** / **Copy Quote Link**; activity history (status changes and quotes are logged).
+- **Quote page** (`/solutions/quote/<link>`) shows the mockup's quote with **Complete Your Enrollment**. Enrollment shows the plan and asks them to contact the team until signing and payment are built.
+- Migration `20261111150000_sales_leads`.
+
+**To confirm with the client:**
+- Phone (801) 555-1234 is the mockups' number, and the address (Suite 201) is from the agreement (the Contact mockup said Suite 124).
+- Quotes can't be emailed yet (no email service); the team copies the link.
+- Contact Us subjects: Pricing and plans, Request a demo, Support for my account, Partnership, Other.
+- Lead statuses: New Lead, Contacted, Quote Sent, Follow-Up, Pending Decision, Won, Lost (from the Sales Pipeline report mockup).
+
 ## Step A — add-on locks (done 2026-11-07)
 
 - Whole pages: `src/lib/addOns.js` (by route). HR and Other Staff get Staff Management on every page except Dashboard, Messages and My Performance (whose tabs lock themselves), read from the sheet's "All Full Pages are locked" row.

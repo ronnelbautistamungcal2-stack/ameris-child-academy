@@ -21,6 +21,8 @@ const PUBLIC_PREFIXES = [
   // Front-desk kiosk: used with no one signed in; its APIs require an enrolled
   // device instead, and /kiosk/setup checks for an admin itself.
   "/kiosk",
+  // The Ameris Solutions website (home, plans, contact, quotes, enrollment).
+  "/solutions",
   "/_next",
   "/icons",
   "/uploads",

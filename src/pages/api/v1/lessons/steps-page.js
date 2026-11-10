@@ -1,33 +1,19 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { formatStepAge } from "@/lib/progressionSteps";
+import { FILTER_KEYS, filterStepRows, stepBankRows, typeFilterOptions } from "@/lib/stepsBankQuery";
 import { LESSON_INCLUDE } from "@/lib/lessonInclude";
 
 /**
- * GET /api/v1/lessons/steps-page?centerId=&page=&pageSize=&q=&category=&subject=&age=&term=&sort=&dir=
+ * GET /api/v1/lessons/steps-page?centerId=&page=&pageSize=&q=&category=&subject=&age=&term=&type=&sort=&dir=
  * One page of the Steps of Progression Bank, filtered and sorted on the
  * server. A center can hold tens of thousands of steps (the client imported
  * ~46,000), far too many to send to the browser with their goals and links.
- * Responds { items, total, page, pageSize, facets: { category, subject, age, term } };
+ * Responds { items, total, page, pageSize, facets: { category, subject, age, term, type } };
  * items carry the full lesson (goals, supplies, links) for the edit pop-up.
  */
 
 const SORT_KEYS = new Set(["reference", "title", "category", "subject", "age", "term"]);
 const PAGE_SIZES = new Set([10, 25, 50]);
-const FILTER_KEYS = ["category", "subject", "age", "term"];
-
-function row(step) {
-  return {
-    id: step.id,
-    reference: step.reference || "",
-    title: step.title || "",
-    category: step.category?.name || "",
-    subject: step.subCategory || "",
-    age: step.category?.ageRange || formatStepAge(step) || "",
-    term: step.term || "",
-    ageSort: (step.ageYears ?? 99) * 12 + (step.ageMonths ?? 0),
-  };
-}
 
 function distinct(values) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
@@ -55,34 +41,13 @@ export default async function handler(req, res) {
     const pageSize = PAGE_SIZES.has(Number(req.query.pageSize)) ? Number(req.query.pageSize) : 10;
     const sortKey = SORT_KEYS.has(req.query.sort) ? req.query.sort : "reference";
     const dir = req.query.dir === "-1" || req.query.dir === "desc" ? -1 : 1;
-    const q = String(req.query.q || "").trim().toLowerCase();
-    const filters = Object.fromEntries(FILTER_KEYS.map((k) => [k, String(req.query[k] || "")]));
-
     // Only the columns the table shows, for every step: small enough to
     // filter and sort here even for a very large bank.
-    const steps = await prisma.lesson.findMany({
-      where: { centerId, isStep: true },
-      select: {
-        id: true,
-        reference: true,
-        title: true,
-        subCategory: true,
-        term: true,
-        ageYears: true,
-        ageMonths: true,
-        maxAgeYears: true,
-        maxAgeMonths: true,
-        category: { select: { name: true, ageRange: true } },
-      },
-    });
-    const rows = steps.map(row);
+    const rows = await stepBankRows(centerId);
     const facets = Object.fromEntries(FILTER_KEYS.map((k) => [k, distinct(rows.map((r) => r[k]))]));
-
-    const visible = rows.filter(
-      (r) =>
-        (!q || [r.reference, r.title, r.subject, r.category].some((v) => v.toLowerCase().includes(q))) &&
-        FILTER_KEYS.every((k) => !filters[k] || r[k] === filters[k]),
-    );
+    // Type filter (no type, a curriculum type, or an old Type value).
+    facets.type = typeFilterOptions(rows);
+    const visible = filterStepRows(rows, req.query);
     const key = sortKey === "age" ? "ageSort" : sortKey;
     visible.sort((a, b) => {
       const x = a[key];

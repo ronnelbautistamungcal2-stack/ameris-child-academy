@@ -1,5 +1,7 @@
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import BulkTypesDialog from "@/components/curriculum/BulkTypesDialog";
 import CurriculumTypePicker from "@/components/curriculum/CurriculumTypePicker";
+import { curriculumTypeLabels } from "@/lib/curriculumTypes";
 import { GoalEditor, MediaPreview, StepPicker } from "@/components/curriculum/stepParts";
 import { apiJson } from "@/lib/api";
 import {
@@ -54,7 +56,8 @@ function distinct(values) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
-const EMPTY_FACETS = { category: [], subject: [], age: [], term: [] };
+const EMPTY_FACETS = { category: [], subject: [], age: [], term: [], type: [] };
+const NO_FILTERS = { category: "", subject: "", age: "", term: "", type: "" };
 
 export default function StepsOfProgressionBank({ centerId }) {
   // One page of steps at a time: the server filters, sorts and pages, since a
@@ -65,7 +68,9 @@ export default function StepsOfProgressionBank({ centerId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  const [filters, setFilters] = useState({ category: "", subject: "", age: "", term: "" });
+  const [filters, setFilters] = useState(NO_FILTERS);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [notice, setNotice] = useState("");
   const [sort, setSort] = useState({ key: "reference", dir: 1 });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -175,17 +180,42 @@ export default function StepsOfProgressionBank({ centerId }) {
         {filterSelect("subject", "All Subjects")}
         {filterSelect("age", "All Ages")}
         {filterSelect("term", "All Terms")}
+        <select
+          value={filters.type}
+          onChange={(e) => {
+            setFilters({ ...filters, type: e.target.value });
+            setPage(1);
+          }}
+          aria-label="All Types"
+          className={`${control} min-w-[140px]`}
+        >
+          <option value="">All Types</option>
+          {(filterOptions.type || []).map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label} ({o.count.toLocaleString()})
+            </option>
+          ))}
+        </select>
         <button
           type="button"
           disabled={!filtered}
           onClick={() => {
             setQuery("");
-            setFilters({ category: "", subject: "", age: "", term: "" });
+            setFilters(NO_FILTERS);
             setPage(1);
           }}
           className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800 disabled:opacity-40 dark:border-gray-600 dark:bg-gray-800 dark:text-blue-200"
         >
           Clear Filters
+        </button>
+        <button
+          type="button"
+          onClick={() => setBulkOpen(true)}
+          disabled={!total}
+          title="Set curriculum types on every step that matches the search and filters"
+          className="rounded-lg border border-[#0b2a5b] bg-white px-3 py-2 text-sm font-bold text-[#0b2a5b] hover:bg-blue-50 disabled:opacity-40 dark:border-blue-300 dark:bg-gray-800 dark:text-blue-100"
+        >
+          Set Types ({total.toLocaleString()})
         </button>
         <button type="button" onClick={downloadStepTemplate} className="ml-auto rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50 dark:border-gray-600 dark:bg-gray-800 dark:text-blue-200">
           Download Template
@@ -199,6 +229,24 @@ export default function StepsOfProgressionBank({ centerId }) {
       </div>
 
       {error && <div role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+      {notice && <div role="status" className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">{notice}</div>}
+      {bulkOpen && (
+        <BulkTypesDialog
+          count={total}
+          noun="steps"
+          onClose={() => setBulkOpen(false)}
+          onApply={async (action, types) => {
+            const out = await apiJson("/api/v1/lessons/bulk-types", {
+              method: "POST",
+              timeoutMs: 300000,
+              body: JSON.stringify({ centerId, kind: "step", action, types, filter: { q: debouncedQuery, ...filters } }),
+            });
+            setBulkOpen(false);
+            setNotice(`Types updated on ${out.updated.toLocaleString()} steps.`);
+            await load();
+          }}
+        />
+      )}
 
       <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
         <table className="w-full min-w-[860px] text-left text-sm">
@@ -220,18 +268,19 @@ export default function StepsOfProgressionBank({ centerId }) {
                   </button>
                 </th>
               ))}
+              <th className="px-3 py-2">Types</th>
               <th className="px-3 py-2 text-center">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-gray-500">Loading...</td>
+                <td colSpan={8} className="px-3 py-6 text-center text-gray-500">Loading...</td>
               </tr>
             )}
             {!loading && !shown.length && (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-gray-500">{filtered ? "No steps match these filters." : "No steps yet."}</td>
+                <td colSpan={8} className="px-3 py-6 text-center text-gray-500">{filtered ? "No steps match these filters." : "No steps yet."}</td>
               </tr>
             )}
             {shown.map((r) => (
@@ -243,6 +292,7 @@ export default function StepsOfProgressionBank({ centerId }) {
                   <td className="px-3 py-1.5">{r.subject || "—"}</td>
                   <td className="px-3 py-1.5">{r.age || "—"}</td>
                   <td className="px-3 py-1.5">{r.term || "—"}</td>
+                  <td className="px-3 py-1.5 text-xs">{curriculumTypeLabels(r.lesson.types) || <span className="text-amber-700">None</span>}</td>
                   <td className="whitespace-nowrap px-3 py-1.5 text-center">
                     <button type="button" onClick={() => setEditing(r.lesson)} title="Edit" aria-label={`Edit ${r.title}`} className="rounded px-1.5 text-[#0b2a5b] hover:bg-blue-50 dark:text-blue-200">
                       &#9998;
@@ -264,7 +314,7 @@ export default function StepsOfProgressionBank({ centerId }) {
                 </tr>
                 {goalsFor === r.id && (
                   <tr>
-                    <td colSpan={7} className="bg-gray-50 px-4 py-3 dark:bg-gray-800/60">
+                    <td colSpan={8} className="bg-gray-50 px-4 py-3 dark:bg-gray-800/60">
                       <GoalEditor lessonId={r.id} goals={r.lesson.goals || []} onUpdate={load} />
                     </td>
                   </tr>

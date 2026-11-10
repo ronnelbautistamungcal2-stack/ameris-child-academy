@@ -1,6 +1,8 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import CurriculumTabs from "@/components/curriculum/CurriculumTabs";
+import BulkTypesDialog from "@/components/curriculum/BulkTypesDialog";
 import CurriculumTypePicker from "@/components/curriculum/CurriculumTypePicker";
+import { CURRICULUM_TYPES } from "@/lib/curriculumTypes";
 import ProtectedLessonViewer from "@/components/lessons/ProtectedLessonViewer";
 import ResourceLinks, { resourceLabel } from "@/components/lessons/ResourceLinks";
 import { apiJson } from "@/lib/api";
@@ -777,6 +779,9 @@ export default function AdminLessons() {
   const [category, setCategory] = useState("");
   const [term, setTerm] = useState("");
   const [subject, setSubject] = useState("");
+  // Type filter: "" all, "NONE", a curriculum type, or "OLD:<old Type>".
+  const [typeFilter, setTypeFilter] = useState("");
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -1090,6 +1095,9 @@ export default function AdminLessons() {
       if (catKey && normalizeSpaces(r.category) !== catKey) return false;
       if (termKey && normalizeSpaces(r.term) !== termKey) return false;
       if (subjectKey && normalizeSpaces(r.subject) !== subjectKey) return false;
+      if (typeFilter === "NONE" && r.types.length) return false;
+      if (typeFilter.startsWith("OLD:") && r.type.trim() !== typeFilter.slice(4)) return false;
+      if (typeFilter && typeFilter !== "NONE" && !typeFilter.startsWith("OLD:") && !r.types.includes(typeFilter)) return false;
       if (!q) return true;
       const hay = normalizeKey(
         [
@@ -1113,11 +1121,25 @@ export default function AdminLessons() {
       if (ref !== 0) return ref;
       return byNaturalString(a.progressionStep, b.progressionStep);
     });
-  }, [records, search, age, category, term, subject]);
+  }, [records, search, age, category, term, subject, typeFilter]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, age, category, term, subject, pageSize]);
+  }, [search, age, category, term, subject, typeFilter, pageSize]);
+
+  // Type filter choices, counted per lesson (a lesson can have several rows).
+  const typeOptions = useMemo(() => {
+    const byLesson = new Map();
+    for (const r of records) if (!byLesson.has(r.lessonId)) byLesson.set(r.lessonId, r);
+    const list = [...byLesson.values()];
+    const old = [...new Set(list.map((r) => r.type.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    return [
+      { value: "NONE", label: "No type ticked", count: list.filter((r) => !r.types.length).length },
+      ...CURRICULUM_TYPES.map((t) => ({ value: t.value, label: t.label, count: list.filter((r) => r.types.includes(t.value)).length })),
+      ...old.map((o) => ({ value: `OLD:${o}`, label: `Old Type: ${o}`, count: list.filter((r) => r.type.trim() === o).length })),
+    ];
+  }, [records]);
+  const filteredLessonIds = useMemo(() => [...new Set(filtered.map((r) => r.lessonId).filter(Boolean))], [filtered]);
 
   useEffect(() => {
     if (!subject) return;
@@ -1188,6 +1210,7 @@ export default function AdminLessons() {
     setCategory("");
     setTerm("");
     setSubject("");
+    setTypeFilter("");
   }, []);
 
   const runImport = useCallback(async () => {
@@ -1427,7 +1450,7 @@ export default function AdminLessons() {
     [deleteTarget?.id, refreshLessons],
   );
 
-  const activeFilterCount = [age, category, term, subject].filter(Boolean).length;
+  const activeFilterCount = [age, category, term, subject, typeFilter].filter(Boolean).length;
 
   return (
     <AdminLayout title="Curriculum">
@@ -1559,7 +1582,7 @@ export default function AdminLessons() {
               </span>
             ) : null}
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-7">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-8">
             <label className="block md:col-span-2">
               <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Search
@@ -1661,6 +1684,26 @@ export default function AdminLessons() {
               </select>
             </label>
 
+            <label className="block">
+              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Type
+              </div>
+              <select
+                className={`w-full rounded-xl border px-3 py-2 text-sm focus:border-blue-300 focus:ring-2 focus:ring-blue-100 focus:outline-none transition-colors ${typeFilter ? "border-blue-300 bg-blue-50/50 font-medium text-blue-900" : "border-gray-200"}`}
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                disabled={loading}
+                aria-label="Type"
+              >
+                <option value="">All Types</option>
+                {typeOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label} ({o.count.toLocaleString()})
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <div className="flex items-end md:col-span-1">
               <button
                 type="button"
@@ -1691,6 +1734,33 @@ export default function AdminLessons() {
               </span>{" "}
               results
             </div>
+
+            <button
+              type="button"
+              onClick={() => setBulkOpen(true)}
+              disabled={loading || !filteredLessonIds.length}
+              title="Set curriculum types on every lesson that matches the search and filters"
+              className="rounded-lg border border-[#0b2a5b] bg-white px-3 py-1.5 text-xs font-bold text-[#0b2a5b] hover:bg-blue-50 disabled:opacity-40"
+            >
+              Set Types ({filteredLessonIds.length.toLocaleString()} lessons)
+            </button>
+            {bulkOpen && (
+              <BulkTypesDialog
+                count={filteredLessonIds.length}
+                noun="lessons"
+                onClose={() => setBulkOpen(false)}
+                onApply={async (action, types) => {
+                  const out = await apiJson("/api/v1/lessons/bulk-types", {
+                    method: "POST",
+                    timeoutMs: 300000,
+                    body: JSON.stringify({ centerId: mainCenter?.id, kind: "lesson", action, types, ids: filteredLessonIds }),
+                  });
+                  setBulkOpen(false);
+                  setToast({ type: "success", message: `Types updated on ${out.updated.toLocaleString()} lessons.` });
+                  await refreshLessons();
+                }}
+              />
+            )}
 
             <label className="flex items-center gap-2 text-xs text-gray-500">
               <span className="font-medium">Show</span>

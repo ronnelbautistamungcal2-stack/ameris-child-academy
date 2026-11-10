@@ -197,10 +197,11 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    if (!["ADMIN", "TEACHER"].includes(session.user.role)) {
+    // Coaches add students from the Student List too (R24, client 2026-11-10).
+    if (!["ADMIN", "COACH", "TEACHER"].includes(session.user.role)) {
       return res
         .status(403)
-        .json({ error: "Only admins and teachers can create children" });
+        .json({ error: "Only admins, coaches and teachers can create children" });
     }
 
     const {

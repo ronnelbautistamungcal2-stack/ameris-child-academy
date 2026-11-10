@@ -65,9 +65,15 @@ function isWeekendUTC(date) {
  * Returns null when the range falls on a single calendar day (the caller
  * should keep treating it as one request in that case).
  */
-export function splitTimeOffRangeIntoWorkdays(startDate, endDate) {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
+export function splitTimeOffRangeIntoWorkdays(startDate, endDate, tzOffsetMinutes = 0) {
+  // Work in the requester's own calendar days (R25, client 2026-11-10): a
+  // browser on Mountain Time sends 00:00-23:59 local, which is two different
+  // UTC dates. tzOffsetMinutes is the browser's Date#getTimezoneOffset()
+  // (420 for Mountain Standard Time); 0 keeps the old UTC behavior.
+  const shift = (Number.isFinite(Number(tzOffsetMinutes)) ? Number(tzOffsetMinutes) : 0) * 60000;
+  const start = new Date(new Date(startDate).getTime() - shift);
+  const end = new Date(new Date(endDate).getTime() - shift);
+  const back = (date) => new Date(date.getTime() + shift);
   const startDay = toUTCDateOnly(start);
   const endDay = toUTCDateOnly(end);
   if (!startDay || !endDay || startDay.getTime() === endDay.getTime()) return null;
@@ -101,7 +107,7 @@ export function splitTimeOffRangeIntoWorkdays(startDate, endDate) {
         Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), endHours, endMinutes),
       );
     }
-    days.push({ startDate: dayStart, endDate: dayEnd });
+    days.push({ startDate: back(dayStart), endDate: back(dayEnd) });
   }
 
   return days;

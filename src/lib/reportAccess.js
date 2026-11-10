@@ -17,12 +17,12 @@ export async function canViewChildReport(user, child) {
   return canUseChild(user, child);
 }
 
-/** Admins can use any center; other allowed roles only the centers they belong to. */
+/** The allowed roles may use the centers they can reach (admins: their account's centers). */
 export async function reportCenter(user, centerId, roles) {
   if (!hasAnyRole(user, roles)) return { status: 403, error: "Forbidden" };
   const center = centerId ? await prisma.center.findUnique({ where: { id: String(centerId) }, select: { id: true, name: true } }) : null;
   if (!center) return { status: 400, error: "centerId is required" };
-  if (user.role !== "ADMIN" && !(await hasAccessToCenter(user.id, center.id))) return { status: 403, error: "Forbidden" };
+  if (!(await hasAccessToCenter(user.id, center.id))) return { status: 403, error: "Forbidden" };
   return { center };
 }
 

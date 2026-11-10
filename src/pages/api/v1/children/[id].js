@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
 import { changeStamps, profileTabData } from "@/lib/childProfile";
 import prisma from "@/lib/prisma";
 import {
@@ -93,6 +93,14 @@ export default async function handler(req, res) {
 
   const { id } = req.query;
 
+  // Staff reach only children in their own centers (a parent is checked
+  // against their own children below).
+  if (session.user.role !== "PARENT") {
+    const found = await prisma.child.findUnique({ where: { id: String(id) }, select: { centerId: true } });
+    if (!found) return res.status(404).json({ error: "Child not found" });
+    if (!(await hasAccessToCenter(session.user.id, found.centerId))) return res.status(404).json({ error: "Child not found" });
+  }
+
   if (req.method === "GET") {
     const child = await prisma.child.findUnique({
       where: { id },
@@ -117,7 +125,8 @@ export default async function handler(req, res) {
 
   if (req.method === "PUT") {
     // Teachers only view a student's profile (client request 07-02, B34).
-    if (session.user.role !== "ADMIN") {
+    // Coaches edit the Student List like admins (R24, client 2026-11-10).
+    if (!["ADMIN", "COACH"].includes(session.user.role)) {
       return res.status(403).json({ error: "Forbidden" });
     }
 

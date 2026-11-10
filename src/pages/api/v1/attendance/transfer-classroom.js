@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     return res.status(405).end();
   }
 
-  if (!["ADMIN", "TEACHER"].includes(session.user.role)) {
+  if (!["ADMIN", "COACH", "TEACHER"].includes(session.user.role)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -60,9 +60,9 @@ export default async function handler(req, res) {
     }
   }
 
+  // Every role: only children in the user's own centers.
+  if (!(await hasAccessToCenter(session.user.id, child.centerId))) return res.status(403).json({ error: "Forbidden" });
   if (session.user.role === "TEACHER") {
-    const hasCenterScope = await hasAccessToCenter(session.user.id, child.centerId);
-    if (!hasCenterScope) return res.status(403).json({ error: "Forbidden" });
 
     const canAccessCurrent = await teacherCanAccessChild(session.user.id, {
       id: child.id,

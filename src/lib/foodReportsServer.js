@@ -12,7 +12,7 @@ import {
   mealKeyForLog,
   mealLabel,
 } from "@/lib/foodReports";
-import { isCenterOpenOn } from "@/lib/centerSettings";
+import { isCenterOpenOn, providedMealKeys } from "@/lib/centerSettings";
 import { dbDate } from "@/lib/menuAccess";
 import { COMPONENTS, MEALS, ageGroupsFor, componentsFor } from "@/lib/menuPlan";
 import prisma from "@/lib/prisma";
@@ -220,7 +220,12 @@ export async function mealProductionReport({ centerId, meal, from, to }) {
  * and the monthly summary.
  */
 export async function mealClaimReport({ centerId, from, to, enrolledOnly = false }) {
-  const dates = dateKeysBetween(from, to);
+  // Only the days the center is open and the meals it offers, per Center
+  // Setup (R13, client 2026-11-10). A center that never ticked its meals
+  // keeps every meal.
+  const center = await prisma.center.findUnique({ where: { id: centerId }, select: { careSchedule: true, meals: true } });
+  const dates = dateKeysBetween(from, to).filter((date) => isCenterOpenOn(center, date));
+  const offered = providedMealKeys(center);
   const served = await mealLogsByDay(centerId, from, to);
   const loggedIds = new Set(Object.values(served).flatMap((byMeal) => Object.values(byMeal).flatMap((set) => [...set])));
   const children = await prisma.child.findMany({
@@ -248,7 +253,7 @@ export async function mealClaimReport({ centerId, from, to, enrolledOnly = false
       for (const [meal, ids] of Object.entries(byMeal)) byMeal[meal] = new Set([...ids].filter((id) => listed.has(id)));
     }
   }
-  const meals = MEALS.map((m) => m.key);
+  const meals = MEALS.map((m) => m.key).filter((m) => !offered.length || offered.includes(m));
   const rows = children.map((c) => {
     const cells = {};
     const totals = Object.fromEntries(meals.map((m) => [m, 0]));

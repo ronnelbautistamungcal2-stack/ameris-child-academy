@@ -65,8 +65,8 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    if (!["ADMIN", "TEACHER"].includes(role)) {
-      return res.status(403).json({ error: "Only teachers/admins can record completion" });
+    if (!["ADMIN", "COACH", "TEACHER"].includes(role)) {
+      return res.status(403).json({ error: "Only teachers, coaches and admins can record completion" });
     }
 
     const { childId, itemId, completed } = req.body || {};

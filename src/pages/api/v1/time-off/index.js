@@ -98,6 +98,7 @@ async function handlePost(req, res, session) {
     reason,
     coverageName,
     userId,
+    tzOffsetMinutes,
   } = req.body || {};
   if (!centerId || !startDate || !endDate) {
     return res.status(400).json({ error: "centerId, startDate, and endDate are required" });
@@ -124,7 +125,7 @@ async function handlePost(req, res, session) {
   // individual days, while the employee still only fills out one form.
   // Unexcused entries are single administrative records, so they're never
   // split even if they span multiple days.
-  const workdaySplit = unexcused ? null : splitTimeOffRangeIntoWorkdays(start, end);
+  const workdaySplit = unexcused ? null : splitTimeOffRangeIntoWorkdays(start, end, tzOffsetMinutes);
   if (workdaySplit && workdaySplit.length === 0) {
     return res.status(400).json({ error: "Selected range doesn't include any weekdays" });
   }

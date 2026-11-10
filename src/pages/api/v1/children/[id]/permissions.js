@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { teacherCanAccessChild } from "@/lib/teacherScope";
 import { isChildLinkedToParent } from "@/lib/child-parent-links";
@@ -42,7 +42,9 @@ export default async function handler(req, res) {
   } else if (session.user.role === "TEACHER") {
     const hasAccess = await teacherCanAccessChild(session.user.id, child);
     if (!hasAccess) return res.status(403).json({ error: "Forbidden" });
-  } else if (session.user.role !== "ADMIN") {
+  } else if (!["ADMIN", "COACH"].includes(session.user.role)) {
+    return res.status(403).json({ error: "Forbidden" });
+  } else if (!(await hasAccessToCenter(session.user.id, child.centerId))) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -59,7 +61,7 @@ export default async function handler(req, res) {
 
   if (req.method === "POST") {
     // Only PARENT (own child) and ADMIN can set permissions
-    if (!["ADMIN", "PARENT"].includes(session.user.role)) {
+    if (!["ADMIN", "COACH", "PARENT"].includes(session.user.role)) {
       return res.status(403).json({ error: "Only admins and parents can manage permissions" });
     }
 

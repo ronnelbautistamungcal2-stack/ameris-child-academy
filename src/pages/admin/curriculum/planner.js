@@ -13,7 +13,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 // on, and the teacher's Weekly Lesson Plan shows that day's lessons.
 
 const NAVY = "text-[#0b2a5b] dark:text-blue-100";
-const VISIBLE_DAYS = 10;
+// Day columns shown at once: as many as fit the screen (R7, client
+// 2026-11-10), between MIN and MAX; the arrows page through the rest.
+const MAX_VISIBLE_DAYS = 10;
+const MIN_VISIBLE_DAYS = 3;
+const DAY_COLUMN_PX = 96;
+const FIXED_COLUMNS_PX = 120 + 92;
 const PAGE_SIZE = 20;
 const DRAG_TYPE = "application/x-ameris-lesson";
 const input =
@@ -55,6 +60,17 @@ export default function LessonPlannerPage() {
   const [planner, setPlanner] = useState({ theme: "", dayCount: 10, cells: [], usedLessonIds: [] });
   const [themeDraft, setThemeDraft] = useState("");
   const [firstDay, setFirstDay] = useState(1);
+  const [visibleDays, setVisibleDays] = useState(MAX_VISIBLE_DAYS);
+  // Measures the grid's width and fits that many day columns.
+  const gridRef = useCallback((node) => {
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const fit = () => {
+      const n = Math.floor((node.clientWidth - FIXED_COLUMNS_PX) / DAY_COLUMN_PX);
+      setVisibleDays(Math.max(MIN_VISIBLE_DAYS, Math.min(MAX_VISIBLE_DAYS, n)));
+    };
+    fit();
+    new ResizeObserver(fit).observe(node);
+  }, []);
   const [jumpDay, setJumpDay] = useState("1");
   const [highlightDay, setHighlightDay] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -136,9 +152,9 @@ export default function LessonPlannerPage() {
   const bank = useMemo(() => bankEntries(lessons), [lessons]);
   const usedSet = useMemo(() => new Set(planner.usedLessonIds), [planner.usedLessonIds]);
 
-  const lastFirstDay = Math.max(1, planner.dayCount - VISIBLE_DAYS + 1);
+  const lastFirstDay = Math.max(1, planner.dayCount - visibleDays + 1);
   const start = Math.min(firstDay, lastFirstDay);
-  const days = Array.from({ length: Math.min(VISIBLE_DAYS, planner.dayCount) }, (_, i) => start + i);
+  const days = Array.from({ length: Math.min(visibleDays, planner.dayCount) }, (_, i) => start + i);
 
   function jump() {
     const day = Number(jumpDay);
@@ -248,14 +264,14 @@ export default function LessonPlannerPage() {
               </div>
             </div>
 
-            <div className="mt-4 overflow-x-auto">
-              <table className={`w-full min-w-[1080px] table-fixed border-collapse text-xs ${loading || busy ? "opacity-70" : ""}`}>
+            <div className="mt-4 overflow-x-auto" ref={gridRef}>
+              <table className={`w-full table-fixed border-collapse text-xs ${loading || busy ? "opacity-70" : ""}`}>
                 <thead>
                   <tr>
                     <th className="w-[120px] p-1">
                       <button
                         type="button"
-                        onClick={() => setFirstDay(Math.max(1, start - VISIBLE_DAYS))}
+                        onClick={() => setFirstDay(Math.max(1, start - visibleDays))}
                         disabled={start <= 1}
                         aria-label="Earlier days"
                         className="rounded border border-gray-300 px-2 py-1 text-base font-bold text-[#0b2a5b] disabled:opacity-30 dark:border-gray-600 dark:text-blue-100"
@@ -284,7 +300,7 @@ export default function LessonPlannerPage() {
                       <div className="flex items-center justify-center gap-1">
                         <button
                           type="button"
-                          onClick={() => setFirstDay(Math.min(lastFirstDay, start + VISIBLE_DAYS))}
+                          onClick={() => setFirstDay(Math.min(lastFirstDay, start + visibleDays))}
                           disabled={start >= lastFirstDay}
                           aria-label="Later days"
                           className="rounded border border-gray-300 px-2 py-1 text-base font-bold text-[#0b2a5b] disabled:opacity-30 dark:border-gray-600 dark:text-blue-100"
@@ -295,7 +311,7 @@ export default function LessonPlannerPage() {
                           type="button"
                           onClick={async () => {
                             const plan = await change({ action: "addDay" });
-                            if (plan) setFirstDay(Math.max(1, plan.dayCount - VISIBLE_DAYS + 1));
+                            if (plan) setFirstDay(Math.max(1, plan.dayCount - visibleDays + 1));
                           }}
                           disabled={!classRoomId || busy}
                           title="Add a day column"

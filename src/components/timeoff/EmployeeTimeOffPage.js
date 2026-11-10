@@ -218,6 +218,8 @@ export default function EmployeeTimeOffPage({
           centerId,
           startDate: start.toISOString(),
           endDate: end.toISOString(),
+          // The days are split in the requester's own time zone (R25).
+          tzOffsetMinutes: start.getTimezoneOffset(),
           reason: reason || null,
         }),
       });

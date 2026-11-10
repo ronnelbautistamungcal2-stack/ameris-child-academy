@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "@/lib/api";
-import { BILLING_CYCLES, CURRICULUM_VERSIONS, PROGRAM_TYPES, money, quote } from "@/lib/subscriptionPricing";
+import { BILLING_CYCLES, CURRICULUM_VERSIONS, PROGRAM_TYPES, chosenDiscountId, classroomCounts, money, quote } from "@/lib/subscriptionPricing";
 
 // Global admin > Subscribers > a subscriber > Pricing (client 2026-11-10,
 // step G). The Ameris team types how many children they have and what they
@@ -31,9 +31,11 @@ function fromDetail(detail) {
       ((detail.curriculumTypes || []).includes("NON_DENOMINATIONAL_CHRISTIAN") && !(detail.curriculumTypes || []).includes("NON_DENOMINATIONAL")
         ? "FAITH_BASED"
         : "STANDARD"),
-    ageGroups: s.ageGroups || [],
+    // Classrooms in each age group (client 2026-11-11: price per classroom).
+    classrooms: classroomCounts(s),
     homeDaycareProgram: s.homeDaycareProgram || "",
-    discountIds: s.discountIds || [],
+    // Discounts can't be combined (client 2026-11-11).
+    discountId: chosenDiscountId(s) || "",
     orderDate: s.orderDate || today(),
   };
 }
@@ -92,7 +94,13 @@ export default function PricingCard({ detail, saving, onSave }) {
   }, [pricing, form, detail.addOns]);
 
   const curriculumOn = detail.addOns.includes("CURRICULUM");
-  const toggle = (key, value) => set({ [key]: form[key].includes(value) ? form[key].filter((v) => v !== value) : [...form[key], value] });
+  const setClassrooms = (key, value) => {
+    const n = Math.max(0, Math.min(99, Number.parseInt(value, 10) || 0));
+    const next = { ...form.classrooms };
+    if (n) next[key] = n;
+    else delete next[key];
+    set({ classrooms: next });
+  };
 
   return (
     <div className={card}>
@@ -164,13 +172,25 @@ export default function PricingCard({ detail, saving, onSave }) {
                       ))}
                     </select>
                   ) : (
-                    <div className="grid grid-cols-2 gap-1">
-                      {pricing.data.curriculumCenters.map((g) => (
-                        <label key={g.key} className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
-                          <input type="checkbox" checked={form.ageGroups.includes(g.key)} onChange={() => toggle("ageGroups", g.key)} />
-                          {g.label}
-                        </label>
-                      ))}
+                    <div>
+                      <div className="mb-1 text-xs text-gray-500 dark:text-gray-400">Number of classrooms in each age group</div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                        {pricing.data.curriculumCenters.map((g) => (
+                          <label key={g.key} className="flex items-center justify-between gap-2 text-sm text-gray-800 dark:text-gray-200">
+                            {g.label}
+                            <input
+                              type="number"
+                              min="0"
+                              max="99"
+                              aria-label={`${g.label} classrooms`}
+                              className="w-16 rounded-lg border border-gray-300 bg-white px-2 py-1 text-right text-sm dark:border-gray-600 dark:bg-gray-800"
+                              value={form.classrooms[g.key] || ""}
+                              placeholder="0"
+                              onChange={(e) => setClassrooms(g.key, e.target.value)}
+                            />
+                          </label>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -178,13 +198,17 @@ export default function PricingCard({ detail, saving, onSave }) {
             </fieldset>
 
             <fieldset>
-              <legend className="mb-1 text-sm font-bold text-gray-700 dark:text-gray-200">Discounts</legend>
+              <legend className="mb-1 text-sm font-bold text-gray-700 dark:text-gray-200">Discount (one at most)</legend>
               <div className="grid grid-cols-2 gap-1">
+                <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
+                  <input type="radio" name="pricing-discount" checked={!form.discountId} onChange={() => set({ discountId: "" })} />
+                  No discount
+                </label>
                 {pricing.data.discounts
-                  .filter((d) => d.active || form.discountIds.includes(d.id))
+                  .filter((d) => d.active || form.discountId === d.id)
                   .map((d) => (
                     <label key={d.id} className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
-                      <input type="checkbox" checked={form.discountIds.includes(d.id)} onChange={() => toggle("discountIds", d.id)} />
+                      <input type="radio" name="pricing-discount" checked={form.discountId === d.id} onChange={() => set({ discountId: d.id })} />
                       {d.name} ({d.amount}%){d.active ? "" : " – inactive"}
                     </label>
                   ))}

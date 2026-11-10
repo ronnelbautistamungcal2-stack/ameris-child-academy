@@ -90,14 +90,32 @@ From the client's Subscription Pricing mockup and message:
 - **Subscriber > Pricing** card: number of children, billing, order date, curriculum (center age groups or Home Daycare program, Standard / Faith Based), discounts. It shows each line, the monthly price, the annual total and the first payment, and saves the choices on the account (logged in Notes). Add-ons come from the subscription's ticked add-ons.
 - Migration `20261111090000_subscription_pricing`. Calculation: `src/lib/subscriptionPricing.js`.
 
-**Guesses to confirm with the client:**
-- Discounts are picked per subscriber (none is automatic, not even Yearly for annual plans); several can be picked and each is taken off separately.
+**Client answers (2026-11-11), built:**
+- Discounts can't be combined: the Pricing card has one discount choice (No discount, or one of the active discounts).
+- Center curriculum = the age group's price per classroom × the number of classrooms in that age group. The Pricing card asks how many classrooms each age group has.
+- Ordering on the 15th pays the full month; only after the 15th is it half.
+- The late fee is 15.5% **per year** (the agreement's "per month" needs correcting).
+
+**Still guesses:**
+- Discounts are picked per subscriber (none is automatic, not even Yearly for annual plans).
 - "All Packages" takes the discount off the whole monthly price; "Base Program" (a second choice we added) only off the base.
-- A center pays each curriculum age group once, however many classrooms of that age it has.
-- Annual = 12 × the monthly price (after discounts), paid up front with no half-month.
-- Ordering on the 15th itself pays half.
+- Annual = 12 × the monthly price (after the discount), paid up front with no half-month.
 - Existing subscribers are re-priced when a new set takes effect (the price shown always uses the set in effect today).
-- The late fee is 15.5% per month as the agreement says (the client confirmed "15.5%"; per month is very high).
+
+## Client answers (2026-11-11)
+
+- **Signing:** a Home Daycare signs up with an "I agree" box. A center signs its Subscriber Agreement and Order Form through DocuSign during enrollment; the signed documents show the services, pricing, billing terms and discount, and the signed agreement and DocuSign completion certificate are saved on the subscriber's account. Website Terms of Service and policy acknowledgments use an "I agree" box recording the date, time, user and version.
+- **First login:** staff and parents accept the End-User Terms of Use (built, PR 23).
+- **Cancel / auto-renew:** no buttons; subscribers phone Ameris.
+- **Age groups (R5/R8):** yes, from the Age Ranges on the Categories tab.
+- **Untyped lessons hidden, planner notes shown to everyone:** both OK.
+- **Home Daycare curriculum:** the same lessons; Ameris makes a separate lesson plan for home daycares from the same bank.
+- **Character Guide:** a subscriber's copy changes only when they click Import again, which should then bring in Ameris's changes (not only new behaviors).
+- **Customer Support:** access for the whole Ameris team is OK; they want **email** notifications for tickets (needs an email service).
+- **Developmental age:** comes from the Initial Developmental Assessment: the goals the child is currently at give their developmental age.
+- **Excelling:** client to find out. **Red flags:** client will send them per role.
+- **Staff overall grade:** the percentages entered on Center Setup (as built).
+- **R109:** remove the old staff report links. **R185, R186, R190:** already done; disregard.
 
 ## Step A — add-on locks (done 2026-11-07)
 

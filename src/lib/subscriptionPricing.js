@@ -12,12 +12,14 @@
 // - Base: the range that holds the subscriber's number of children; charge
 //   the range's top number (its "To") x that range's price per child.
 // - Add-ons: the same top number x the add-on's price per child.
-// - Curriculum: centers pay the price of each age group they pick, Standard
-//   or Faith Based; a Home Daycare pays its program's price.
-// - Discounts: the percentage off. "All Packages" = off the whole monthly
-//   price; "Base Program" = off the base price only.
-// - Monthly or annual; annual = 12 months. Ordering before the 15th pays the
-//   full first month, from the 15th on half of it.
+// - Curriculum: centers pay the age group's price per classroom x the number
+//   of classrooms in that age group (client 2026-11-11), Standard or Faith
+//   Based; a Home Daycare pays its program's price.
+// - Discounts: one at most (they can't be combined, client 2026-11-11), a
+//   percentage off. "All Packages" = off the whole monthly price; "Base
+//   Program" = off the base price only.
+// - Monthly or annual; annual = 12 months. Ordering on or before the 15th pays
+//   the full first month, after the 15th half of it (client 2026-11-11).
 
 export const PRICED_ADD_ONS = [
   { key: "STEPS_OF_PROGRESSION", label: "Steps of Progression" },
@@ -166,13 +168,30 @@ export function rangeFor(pricing, children) {
   return (pricing?.baseRanges || []).find((r) => n >= r.from && n <= r.to) || null;
 }
 
-/** Day of the month the first payment is prorated on (client: before the 15th full, after half). */
-export const HALF_MONTH_FROM_DAY = 15;
+/** Orders after this day of the month pay half the first month (the 15th itself pays in full). */
+export const FULL_MONTH_THROUGH_DAY = 15;
+
+/** Classrooms per center age group: { key: count }; older saves had a list of keys (one each). */
+export function classroomCounts(choice) {
+  if (choice?.classrooms && typeof choice.classrooms === "object") {
+    return Object.fromEntries(
+      Object.entries(choice.classrooms)
+        .map(([k, v]) => [k, Number(v)])
+        .filter(([, v]) => Number.isInteger(v) && v > 0),
+    );
+  }
+  return Object.fromEntries((choice?.ageGroups || []).map((k) => [k, 1]));
+}
+
+/** The one discount chosen (discountId); older saves had a list. */
+export function chosenDiscountId(choice) {
+  return choice?.discountId || (choice?.discountIds || [])[0] || null;
+}
 
 /**
  * The price for a subscriber's choices:
- *   { children, billingCycle, programType, curriculumVersion, ageGroups,
- *     homeDaycareProgram, discountIds, addOns, orderDate }
+ *   { children, billingCycle, programType, curriculumVersion, classrooms,
+ *     homeDaycareProgram, discountId, addOns, orderDate }
  * Returns { error } or { range, lines, subtotal, discounts, monthly,
  * periodTotal, firstPayment, firstPaymentNote } (amounts in cents).
  */
@@ -204,19 +223,26 @@ export function quote(pricing, choice = {}) {
         lines.push({ kind: "CURRICULUM", label: `Curriculum – ${program.label}`, detail: version, amount: cents(faith ? program.faithBased : program.standard) });
       }
     } else {
-      const wanted = new Set(choice.ageGroups || []);
+      const counts = classroomCounts(choice);
       for (const g of pricing?.curriculumCenters || []) {
-        if (!wanted.has(g.key)) continue;
-        lines.push({ kind: "CURRICULUM", label: `Curriculum – ${g.label}`, detail: version, amount: cents(faith ? g.faithBased : g.standard) });
+        const n = counts[g.key];
+        if (!n) continue;
+        const per = cents(faith ? g.faithBased : g.standard);
+        lines.push({
+          kind: "CURRICULUM",
+          label: `Curriculum – ${g.label}`,
+          detail: `${version}, ${n} classroom${n === 1 ? "" : "s"} × ${money(per)}`,
+          amount: n * per,
+        });
       }
     }
   }
 
   const subtotal = lines.reduce((s, l) => s + l.amount, 0);
   const baseAmount = lines[0].amount;
-  const chosen = new Set(choice.discountIds || []);
+  const chosen = chosenDiscountId(choice);
   const discounts = (pricing?.discounts || [])
-    .filter((d) => d.active && chosen.has(d.id))
+    .filter((d) => d.active && d.id === chosen)
     .map((d) => {
       const on = d.appliesTo === "BASE" ? baseAmount : subtotal;
       return { id: d.id, label: `${d.name} (${d.amount}% off ${d.appliesTo === "BASE" ? "Base Program" : "all packages"})`, amount: -Math.round((on * d.amount) / 100) };
@@ -228,9 +254,9 @@ export function quote(pricing, choice = {}) {
   let firstPayment = periodTotal;
   let firstPaymentNote = annual ? "12 months" : "Full month";
   const day = choice.orderDate ? new Date(choice.orderDate).getDate() : null;
-  if (!annual && day && day >= HALF_MONTH_FROM_DAY) {
+  if (!annual && day && day > FULL_MONTH_THROUGH_DAY) {
     firstPayment = Math.round(monthly / 2);
-    firstPaymentNote = `Half month (ordered on or after the ${HALF_MONTH_FROM_DAY}th)`;
+    firstPaymentNote = `Half month (ordered after the ${FULL_MONTH_THROUGH_DAY}th)`;
   }
   return { range, billedChildren: billed, lines, subtotal, discounts, monthly, periodTotal, firstPayment, firstPaymentNote };
 }

@@ -80,7 +80,7 @@ test.describe("Subscription pricing @api", () => {
     expect(saved.data.discounts.find((d) => d.id === "dccs")).toMatchObject({ name: "DCCS Partner", amount: 40 });
   });
 
-  test("a subscriber's price: range top x price per child, add-ons, curriculum, discount, half month after the 15th", async ({ request }) => {
+  test("a subscriber's price: range top x price per child, add-ons, classrooms x curriculum, one discount, half month after the 15th", async ({ request }) => {
     const global = await getAuthCookie(request, globalEmail, password);
     const res = await apiPatch(
       request,
@@ -91,8 +91,9 @@ test.describe("Subscription pricing @api", () => {
           billingCycle: "MONTHLY",
           programType: "CENTER",
           curriculumVersion: "FAITH_BASED",
-          ageGroups: ["toddlers", "3-years"],
-          discountIds: ["dccs"],
+          classrooms: { toddlers: 2, "3-years": 1 },
+          // Discounts can't be combined: only the first one counts.
+          discountIds: ["dccs", "conference"],
           orderDate: "2026-11-20",
         },
       },
@@ -102,15 +103,23 @@ test.describe("Subscription pricing @api", () => {
     const detail = await res.json();
     const q = detail.quote;
     // 15 children is in 11–20: 20 x $17.45 = $349; SOP 20 x $1.35; TT 20 x $1.25;
-    // curriculum Toddlers $79 + 3 Years $89 (Faith Based); DCCS 50% off everything.
-    expect(q.lines.map((l) => l.amount)).toEqual([34900, 2700, 2500, 7900, 8900]);
-    expect(q.discounts.map((d) => d.amount)).toEqual([-28450]);
-    expect(q.monthly).toBe(28450);
-    expect(q.firstPayment).toBe(14225);
-    expect(detail.notes.some((n) => n.description.startsWith("Pricing updated: $284.50 a month"))).toBe(true);
+    // curriculum (Faith Based, per classroom) 2 Toddlers rooms x $79 + 1 3 Years room x $89;
+    // DCCS 50% off everything ($648 -> $324); ordered on the 20th: half the first month.
+    expect(q.lines.map((l) => l.amount)).toEqual([34900, 2700, 2500, 15800, 8900]);
+    expect(q.discounts.map((d) => d.amount)).toEqual([-32400]);
+    expect(q.monthly).toBe(32400);
+    expect(q.firstPayment).toBe(16200);
+    expect(detail.pricingSelection.discountId).toBe("dccs");
+    expect(detail.notes.some((n) => n.description.startsWith("Pricing updated: $324.00 a month"))).toBe(true);
+
+    // Ordered on the 15th itself: the full month.
+    const fifteenth = await (
+      await apiPatch(request, `/api/v1/global/subscribers/${accountId}`, { pricingSelection: { children: 15, discountId: "dccs", orderDate: "2026-11-15" } }, global)
+    ).json();
+    expect(fifteenth.quote.firstPayment).toBe(fifteenth.quote.monthly);
 
     const annual = await (
-      await apiPatch(request, `/api/v1/global/subscribers/${accountId}`, { pricingSelection: { children: 15, billingCycle: "ANNUAL", discountIds: [], orderDate: "2026-11-03" } }, global)
+      await apiPatch(request, `/api/v1/global/subscribers/${accountId}`, { pricingSelection: { children: 15, billingCycle: "ANNUAL", orderDate: "2026-11-03" } }, global)
     ).json();
     // No curriculum age groups now, so base + add-ons only: 349 + 27 + 25 = $401 a month.
     expect(annual.quote.monthly).toBe(40100);

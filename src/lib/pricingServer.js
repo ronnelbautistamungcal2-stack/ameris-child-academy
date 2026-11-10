@@ -1,7 +1,7 @@
 // Server side of subscription pricing (step G): which pricing set is in effect
 // and a subscriber's price from their saved choices.
 import prisma from "@/lib/prisma";
-import { BILLING_CYCLES, CURRICULUM_VERSIONS, PROGRAM_TYPES, quote } from "@/lib/subscriptionPricing";
+import { BILLING_CYCLES, CURRICULUM_VERSIONS, PROGRAM_TYPES, chosenDiscountId, classroomCounts, quote } from "@/lib/subscriptionPricing";
 
 const dateKey = (d) => new Date(d).toISOString().slice(0, 10);
 
@@ -32,9 +32,11 @@ export function parsePricingSelection(input) {
       billingCycle: pick(src.billingCycle, BILLING_CYCLES, "MONTHLY"),
       programType: pick(src.programType, PROGRAM_TYPES, "CENTER"),
       curriculumVersion: pick(src.curriculumVersion, CURRICULUM_VERSIONS, "STANDARD"),
-      ageGroups: ids(src.ageGroups),
+      // Classrooms per age group, { key: count } (client 2026-11-11).
+      classrooms: classroomCounts({ classrooms: src.classrooms, ageGroups: ids(src.ageGroups) }),
       homeDaycareProgram: src.homeDaycareProgram ? String(src.homeDaycareProgram).slice(0, 80) : null,
-      discountIds: ids(src.discountIds),
+      // One discount at most (client 2026-11-11).
+      discountId: chosenDiscountId({ discountId: src.discountId ? String(src.discountId).slice(0, 80) : null, discountIds: ids(src.discountIds) }),
       orderDate: src.orderDate ? dateKey(src.orderDate) : null,
     },
   };

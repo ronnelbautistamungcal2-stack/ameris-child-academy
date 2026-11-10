@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import { ACCOUNT_STATUSES, normalizeAddOns } from "@/lib/addOns";
+import { normalizeCurriculumTypes } from "@/lib/curriculumTypes";
 import { isGlobalAdmin } from "@/lib/subscriberAccounts";
 
 /** Session of a global admin signed in as GLOBAL_ADMIN, or null after replying 401/403. */
@@ -54,6 +55,13 @@ export function parseAccountInput(body = {}, { create = false } = {}) {
     if (value !== undefined) data[key] = key === "contactEmail" && value ? value.toLowerCase() : value;
   }
   if (body.addOns !== undefined) data.addOns = normalizeAddOns(body.addOns);
+  // The curriculum types the subscriber pays for (client 2026-11-07).
+  if (body.curriculumTypes !== undefined) data.curriculumTypes = normalizeCurriculumTypes(body.curriculumTypes);
+  // Age groups (step E): source classroom ids; checked against the database
+  // by normalizeAgeGroups in the route.
+  if (body.curriculumAgeGroups !== undefined) {
+    data.curriculumAgeGroups = Array.isArray(body.curriculumAgeGroups) ? body.curriculumAgeGroups.map(String) : [];
+  }
   if (body.status !== undefined) {
     const status = String(body.status || "").toUpperCase();
     if (!ACCOUNT_STATUSES.includes(status)) return { error: `Status must be one of ${ACCOUNT_STATUSES.join(", ")}` };

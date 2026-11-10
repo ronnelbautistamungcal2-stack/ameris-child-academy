@@ -60,12 +60,15 @@ export default function AdminSubscriptionPage() {
                 {data.usage?.centers ?? "—"} of {account.maxCenters}
               </span>
             </div>
-            <div className="flex justify-between py-1 text-sm">
-              <span className="text-gray-500 dark:text-gray-400">Children</span>
-              <span className="font-semibold text-gray-900 dark:text-gray-100">
-                {data.usage?.children ?? "—"} of {account.maxChildren ?? "no limit"}
-              </span>
-            </div>
+            {/* The child limit applies to each center. */}
+            {(data.usage?.childrenByCenter || []).map((c) => (
+              <div key={c.id} className="flex justify-between py-1 text-sm">
+                <span className="text-gray-500 dark:text-gray-400">Children at {c.name}</span>
+                <span className="font-semibold text-gray-900 dark:text-gray-100">
+                  {c.children} of {account.maxChildren ?? "no limit"}
+                </span>
+              </div>
+            ))}
             <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
               To add an add-on, more centers or more children, contact the Ameris Solutions sales team. Online upgrades and billing are coming soon.
             </p>

@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { accountSummaryForUser } from "@/lib/subscriberAccounts";
+import { accountUsesAmerisCurriculum } from "@/lib/curriculumSource";
 
 /**
  * GET /api/v1/account -> { account, addOns, usage }
@@ -16,14 +17,26 @@ export default async function handler(req, res) {
     return res.status(405).end();
   }
 
-  const { account, addOns } = await accountSummaryForUser(session.user.id);
+  const summary = await accountSummaryForUser(session.user.id);
+  const { addOns } = summary;
+  // amerisCurriculum: the account follows the Ameris Solutions curriculum, so
+  // it gets the Lesson Calendar but not the banks or planner (step E).
+  const account = summary.account
+    ? { ...summary.account, amerisCurriculum: await accountUsesAmerisCurriculum(summary.account.id) }
+    : null;
   let usage = null;
   if (account && session.user.role === "ADMIN") {
-    const [centers, children] = await Promise.all([
-      prisma.center.count({ where: { subscriberAccountId: account.id } }),
-      prisma.child.count({ where: { center: { subscriberAccountId: account.id } } }),
-    ]);
-    usage = { centers, children };
+    // The child limit is per center, so usage lists each center's children.
+    const centers = await prisma.center.findMany({
+      where: { subscriberAccountId: account.id },
+      select: { id: true, name: true, _count: { select: { children: true } } },
+      orderBy: { name: "asc" },
+    });
+    usage = {
+      centers: centers.length,
+      children: centers.reduce((sum, c) => sum + c._count.children, 0),
+      childrenByCenter: centers.map((c) => ({ id: c.id, name: c.name, children: c._count.children })),
+    };
   }
   return res.status(200).json({ account, addOns, usage });
 }

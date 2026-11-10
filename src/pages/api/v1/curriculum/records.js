@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { normalizeCurriculumTypes } from "@/lib/curriculumTypes";
 import { canonicalizeLessonCategoryName } from "@/lib/lessonCategoryNormalization.mjs";
 import { normalizeSubjectForRef } from "@/lib/subjectNormalization.mjs";
 
@@ -111,6 +112,7 @@ export default async function handler(req, res) {
     notes,
     theme,
     type,
+    types,
     link,
     supplies,
   } = req.body || {};
@@ -136,6 +138,10 @@ export default async function handler(req, res) {
   if (!lesson) return res.status(400).json({ error: "lessonTitle is required" });
   if (Object.prototype.hasOwnProperty.call(req.body || {}, "type")) {
     await prisma.lesson.update({ where: { id: lesson.id }, data: { type: normalizeSpaces(type).slice(0, 80) || null } });
+  }
+  // Curriculum types: Non-Denominational, Non-Denominational Christian, Other (client 2026-11-07).
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, "types")) {
+    await prisma.lesson.update({ where: { id: lesson.id }, data: { types: normalizeCurriculumTypes(types) } });
   }
 
   const maxGoal = await prisma.lessonGoal.aggregate({

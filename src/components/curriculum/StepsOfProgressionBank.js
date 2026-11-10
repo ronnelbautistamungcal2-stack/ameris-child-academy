@@ -1,4 +1,5 @@
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import CurriculumTypePicker from "@/components/curriculum/CurriculumTypePicker";
 import { GoalEditor, MediaPreview, StepPicker } from "@/components/curriculum/stepParts";
 import { apiJson } from "@/lib/api";
 import {
@@ -369,7 +370,7 @@ function emptyForm(step) {
     supplies: (step?.supplies || []).map((s) => ({ ...s, quantity: s.quantity ?? 1 })),
     media: step?.media || [],
     notes: step?.notes || "",
-    type: step?.type || "",
+    types: Array.isArray(step?.types) ? step.types : [],
   };
 }
 
@@ -388,7 +389,6 @@ function StepDialog({ centerId, step, categories, options, onClose, onSaved }) {
   const categoryNames = withCurrent(options.CATEGORY?.length ? options.CATEGORY : distinct(categories.map((c) => c.name)), form.category);
   const subjectNames = withCurrent(options.SUBJECT || [], form.subject);
   const termNames = withCurrent(TERMS, form.term);
-  const typeNames = withCurrent(options.TYPE || [], form.type);
   const stepSearch = useMemo(() => ({ centerId, kind: "step" }), [centerId]);
   const lessonSearch = useMemo(() => ({ centerId, kind: "lesson" }), [centerId]);
 
@@ -457,7 +457,7 @@ function StepDialog({ centerId, step, categories, options, onClose, onSaved }) {
         supplies: form.supplies.filter((s) => String(s.name || "").trim()),
         media: form.media,
         notes: form.notes,
-        type: form.type || null,
+        types: form.types,
       };
       if (step) {
         await apiJson(`/api/v1/lessons/${encodeURIComponent(step.id)}`, { method: "PUT", body: JSON.stringify(payload) });
@@ -543,14 +543,14 @@ function StepDialog({ centerId, step, categories, options, onClose, onSaved }) {
               {STEP_AGE_MONTH_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>
-          <label className={`${label} md:col-span-3`}>
+          {/* One or more curriculum types (client 2026-11-07). */}
+          <div className={`${label} md:col-span-12`}>
             Type (Optional)
-            <select value={form.type} onChange={(e) => set({ type: e.target.value })} className={`${input} mt-1`}>
-              <option value="">{"—"}</option>
-              {typeNames.map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </label>
-          <div className="md:col-span-9">
+            <div className="mt-1">
+              <CurriculumTypePicker value={form.types} onChange={(types) => set({ types })} idPrefix="step-type" />
+            </div>
+          </div>
+          <div className="md:col-span-12">
             <StepPicker label="Related Lesson (Optional)" search={lessonSearch} selectedLesson={step?.linkedLesson} value={form.linkedLessonId} onChange={(id) => set({ linkedLessonId: id || "" })} excludeIds={[]} />
             <p className="mt-1 text-xs text-gray-500">Linking a lesson helps teachers see which lesson supports this step.</p>
           </div>
@@ -683,7 +683,7 @@ async function downloadStepTemplate() {
     buildsOn: "",
     leadsTo: "SP-002",
     relatedLesson: "",
-    type: "",
+    type: "Non-Denominational, Non-Denominational Christian",
     notes: "",
   };
   const sheet = XLSX.utils.aoa_to_sheet([STEP_IMPORT_COLUMNS.map((c) => c.header), STEP_IMPORT_COLUMNS.map((c) => example[c.key])]);

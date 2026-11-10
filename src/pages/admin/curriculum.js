@@ -37,7 +37,7 @@ export default function CurriculumManager() {
         } catch {
           // Storage can be blocked; fall back to the demo center.
         }
-        const pick = arr.find((x) => x.id === remembered) || arr.find((x) => x.name === "Demo Center") || arr[0];
+        const pick = arr.find((x) => x.id === remembered) || arr.find((x) => x.curriculumSource) || arr.find((x) => x.name === "Demo Center") || arr[0];
         if (pick) setCenterId(pick.id);
       } catch (e) {
         setError(e.message || "Failed to load centers");

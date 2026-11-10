@@ -18,6 +18,7 @@ export default function AdminCharacterGuide() {
   const [tab, setTab] = useState("trees");
   const [categories, setCategories] = useState(null);
   const [error, setError] = useState("");
+  const [version, setVersion] = useState(0); // remounts the tabs after an import
 
   const loadCategories = useCallback(async () => {
     try {
@@ -35,6 +36,12 @@ export default function AdminCharacterGuide() {
     <AdminLayout title="Character Guide">
       <div className="space-y-4">
         <h1 className={`text-4xl font-black ${BLUE}`}>Character Guide</h1>
+        <ImportAmerisGuide
+          onImported={async () => {
+            await loadCategories();
+            setVersion((v) => v + 1);
+          }}
+        />
         <div className="flex gap-6 border-b border-gray-200 text-sm font-semibold dark:border-gray-700" role="tablist">
           {[
             ["trees", "Decision Trees"],
@@ -56,12 +63,95 @@ export default function AdminCharacterGuide() {
         {!categories ? (
           <Skeleton className="h-64 w-full" />
         ) : tab === "trees" ? (
-          <DecisionTrees categories={categories} onCategoriesChanged={loadCategories} />
+          <DecisionTrees key={version} categories={categories} onCategoriesChanged={loadCategories} />
         ) : (
-          <Categories categories={categories} setCategories={setCategories} />
+          <Categories key={version} categories={categories} setCategories={setCategories} />
         )}
       </div>
     </AdminLayout>
+  );
+}
+
+// Step D (client 2026-11-07): subscribers with Teacher Training are offered a
+// copy of the Ameris Character Guide. Importing again adds only what's new.
+function ImportAmerisGuide({ onImported }) {
+  const [status, setStatus] = useState(null);
+  const [confirming, setConfirming] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const load = useCallback(() => {
+    apiJson("/api/v1/character-guide/import")
+      .then(setStatus)
+      .catch(() => setStatus(null));
+  }, []);
+  useEffect(load, [load]);
+
+  async function run() {
+    setSaving(true);
+    setError("");
+    try {
+      const result = await apiJson("/api/v1/character-guide/import", { method: "POST" });
+      setMessage(
+        `Imported ${result.behaviorsAdded} behavior${result.behaviorsAdded === 1 ? "" : "s"}` +
+          (result.categoriesAdded ? ` and ${result.categoriesAdded} categor${result.categoriesAdded === 1 ? "y" : "ies"}` : "") +
+          ". They're yours now: edit them like any other behavior.",
+      );
+      setConfirming(false);
+      load();
+      await onImported();
+    } catch (e) {
+      setError(e.message || "Could not import the guide");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (message) {
+    return <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-900/20 dark:text-green-200">{message}</div>;
+  }
+  if (!status || !status.ameris.behaviors || status.reason === "This is the Ameris Character Guide") return null;
+  if (!status.canImport) {
+    if (status.missing === 0) return null;
+    return (
+      <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-300">
+        {status.reason}.{" "}
+        <a href="/admin/subscription" className="font-semibold text-blue-700 underline dark:text-blue-300">
+          See your subscription
+        </a>
+      </div>
+    );
+  }
+  const first = status.imported === 0;
+  return (
+    <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="font-bold">{first ? "Would you like the Ameris Character Guide?" : "The Ameris Character Guide has new behaviors"}</div>
+          <div>
+            {first
+              ? `Import ${status.ameris.behaviors} behaviors in ${status.ameris.categories} categories, with their decision trees, into your guide. You can edit them afterwards.`
+              : `${status.missing} behavior${status.missing === 1 ? "" : "s"} you don't have yet. Behaviors you already imported or edited stay as they are.`}
+          </div>
+        </div>
+        {confirming ? (
+          <div className="flex gap-2">
+            <button type="button" className="rounded-lg border border-blue-700 px-3 py-2 font-bold text-blue-800 dark:border-blue-300 dark:text-blue-100" onClick={() => setConfirming(false)} disabled={saving}>
+              Cancel
+            </button>
+            <button type="button" className="rounded-lg bg-blue-800 px-3 py-2 font-bold text-white hover:bg-blue-900 disabled:opacity-50" onClick={run} disabled={saving}>
+              {saving ? "Importing..." : "Yes, Import"}
+            </button>
+          </div>
+        ) : (
+          <button type="button" className="rounded-lg bg-blue-800 px-4 py-2 font-bold text-white hover:bg-blue-900" onClick={() => setConfirming(true)}>
+            {first ? "Import Ameris Character Guide" : "Import New Behaviors"}
+          </button>
+        )}
+      </div>
+      {error ? <div className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-red-700">{error}</div> : null}
+    </div>
   );
 }
 

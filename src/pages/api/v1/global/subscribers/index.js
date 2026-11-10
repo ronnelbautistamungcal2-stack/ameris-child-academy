@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import prisma from "@/lib/prisma";
 import { parseAccountInput, requireGlobalAdmin } from "@/lib/globalAdmin";
+import { normalizeAgeGroups } from "@/lib/curriculumSource";
 import { nextAccountNumber } from "@/lib/subscriberAccounts";
 
 const LIST_SELECT = {
@@ -76,6 +77,7 @@ export default async function handler(req, res) {
     const body = req.body || {};
     const parsed = parseAccountInput(body, { create: true });
     if (parsed.error) return res.status(400).json({ error: parsed.error });
+    if (parsed.data.curriculumAgeGroups) parsed.data.curriculumAgeGroups = await normalizeAgeGroups(parsed.data.curriculumAgeGroups);
 
     const adminEmail = String(body.adminEmail || "").trim().toLowerCase();
     const adminName = String(body.adminName || "").trim();

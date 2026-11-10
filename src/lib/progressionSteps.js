@@ -1,3 +1,5 @@
+import { normalizeCurriculumTypes } from "@/lib/curriculumTypes";
+
 // A step of progression is stored as a Lesson row. These helpers cover the
 // fields that place a step in a sequence: the age range it is expected in
 // (minimum ageYears/ageMonths, maximum maxAgeYears/maxAgeMonths — client
@@ -83,6 +85,8 @@ export function parseStepDetails(body) {
   if (has("notes")) data.notes = text(body.notes, 2000);
   // Optional Type (Curriculum > Categories), on steps and lessons alike.
   if (has("type")) data.type = text(body.type, 80);
+  // Curriculum types: one or more of the three (client 2026-11-07).
+  if (has("types")) data.types = normalizeCurriculumTypes(body.types);
   return data;
 }
 

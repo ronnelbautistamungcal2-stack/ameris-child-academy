@@ -96,7 +96,8 @@ test.describe("Subscriber accounts @api", () => {
 
     const account = await (await apiGet(request, "/api/v1/account", cookies)).json();
     expect(account.addOns).toEqual(["STEPS_OF_PROGRESSION"]);
-    expect(account.usage).toEqual({ centers: 1, children: 0 });
+    expect(account.usage).toMatchObject({ centers: 1, children: 0 });
+    expect(account.usage.childrenByCenter).toEqual([expect.objectContaining({ children: 0 })]);
 
     const centers = await (await apiGet(request, "/api/v1/centers", cookies)).json();
     expect(centers).toHaveLength(1);
@@ -142,6 +143,14 @@ test.describe("Subscriber accounts @api", () => {
     const second = await apiPost(request, "/api/v1/children", { firstName: "Limit", lastName: "Two", centerId: subCenterId }, cookies);
     expect(second.status()).toBe(409);
     expect((await second.json()).error.code).toBe("CHILD_LIMIT_REACHED");
+
+    // The limit is per center (client 2026-11-07): a second center of the
+    // same account takes its own child.
+    const other = await prisma.center.create({ data: { name: `Second ${stamp}`, subscriberAccountId: accountId } });
+    const admin = await prisma.user.findUnique({ where: { email: subAdminEmail }, select: { id: true } });
+    await prisma.centerUser.create({ data: { userId: admin.id, centerId: other.id, role: "ADMIN" } });
+    const elsewhere = await apiPost(request, "/api/v1/children", { firstName: "Limit", lastName: "Three", centerId: other.id }, cookies);
+    expect(elsewhere.status(), await elsewhere.text()).toBe(201);
   });
 
   test("Global admin changes are saved and logged in Notes", async ({ request }) => {
@@ -149,18 +158,21 @@ test.describe("Subscriber accounts @api", () => {
     const res = await apiPatch(
       request,
       `/api/v1/global/subscribers/${accountId}`,
-      { status: "ACTIVE", addOns: ["STEPS_OF_PROGRESSION", "CURRICULUM"], maxChildren: 5 },
+      { status: "ACTIVE", addOns: ["STEPS_OF_PROGRESSION", "CURRICULUM"], maxChildren: 5, curriculumTypes: ["Faith Based", "OTHER"] },
       cookies,
     );
     expect(res.status()).toBe(200);
     const detail = await res.json();
     expect(detail.status).toBe("ACTIVE");
     expect(detail.activatedAt).toBeTruthy();
-    expect(detail.childCount).toBe(1);
+    // One child at each of its two centers (the limit is per center).
+    expect(detail.childCount).toBe(2);
+    expect(detail.curriculumTypes).toEqual(["NON_DENOMINATIONAL_CHRISTIAN", "OTHER"]);
     const notes = detail.notes.map((n) => n.description).join(" | ");
     expect(notes).toContain("Status changed to Active");
     expect(notes).toContain("Add-ons turned on: Curriculum");
     expect(notes).toContain("Child limit set to 5");
+    expect(notes).toContain("Curriculum types set to Non-Denominational Christian, Other");
 
     const bad = await apiPatch(request, `/api/v1/global/subscribers/${accountId}`, { maxCenters: 0 }, cookies);
     expect(bad.status()).toBe(400);

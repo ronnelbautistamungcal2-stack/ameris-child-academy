@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import GlobalLayout from "@/components/global/GlobalLayout";
 import { apiJson } from "@/lib/api";
 import { ACCOUNT_STATUS_LABELS, ADD_ONS, ADD_ON_LABELS } from "@/lib/addOns";
+import CurriculumTypePicker from "@/components/curriculum/CurriculumTypePicker";
+import { curriculumTypeLabels } from "@/lib/curriculumTypes";
 
 const TABS = [
   { key: "ALL", label: "All" },
@@ -51,6 +53,45 @@ function Row({ label, children }) {
   );
 }
 
+// Age groups (step E): the Ameris curriculum center's classrooms. Loaded once.
+let ageGroupPromise = null;
+function useAgeGroups() {
+  const [groups, setGroups] = useState([]);
+  useEffect(() => {
+    ageGroupPromise ||= apiJson("/api/v1/global/curriculum")
+      .then((d) => d.ageGroups || [])
+      .catch(() => {
+        ageGroupPromise = null;
+        return [];
+      });
+    let live = true;
+    ageGroupPromise.then((g) => live && setGroups(g));
+    return () => {
+      live = false;
+    };
+  }, []);
+  return groups;
+}
+
+function AgeGroupChecks({ value, onChange }) {
+  const groups = useAgeGroups();
+  if (!groups.length) return <p className="text-xs text-gray-500 dark:text-gray-400">The Ameris curriculum center has no age groups (classrooms) yet.</p>;
+  return (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      {groups.map((g) => (
+        <label key={g.id} className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
+          <input
+            type="checkbox"
+            checked={value.includes(g.id)}
+            onChange={(e) => onChange(e.target.checked ? [...value, g.id] : value.filter((k) => k !== g.id))}
+          />
+          {g.name}
+        </label>
+      ))}
+    </div>
+  );
+}
+
 function AddOnChecks({ value, onChange }) {
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -71,6 +112,8 @@ function AddOnChecks({ value, onChange }) {
 function SubscriptionEditor({ detail, onSave, onCancel, saving }) {
   const [form, setForm] = useState(() => ({
     addOns: detail.addOns || [],
+    curriculumTypes: detail.curriculumTypes || [],
+    curriculumAgeGroups: detail.curriculumAgeGroups || [],
     maxCenters: detail.maxCenters,
     maxChildren: detail.maxChildren ?? "",
     startDate: dateInput(detail.startDate),
@@ -84,13 +127,21 @@ function SubscriptionEditor({ detail, onSave, onCancel, saving }) {
         <div className="mb-2 text-sm font-bold text-gray-700 dark:text-gray-200">Add-ons</div>
         <AddOnChecks value={form.addOns} onChange={(addOns) => set({ addOns })} />
       </div>
+      <div>
+        <div className="mb-2 text-sm font-bold text-gray-700 dark:text-gray-200">Curriculum Types</div>
+        <CurriculumTypePicker value={form.curriculumTypes} onChange={(curriculumTypes) => set({ curriculumTypes })} idPrefix="edit-account-type" />
+      </div>
+      <div>
+        <div className="mb-2 text-sm font-bold text-gray-700 dark:text-gray-200">Curriculum Age Groups</div>
+        <AgeGroupChecks value={form.curriculumAgeGroups} onChange={(curriculumAgeGroups) => set({ curriculumAgeGroups })} />
+      </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="text-sm">
           <span className="mb-1 block font-semibold text-gray-700 dark:text-gray-200"># of Centers allowed</span>
           <input className={input} type="number" min="1" value={form.maxCenters} onChange={(e) => set({ maxCenters: e.target.value })} />
         </label>
         <label className="text-sm">
-          <span className="mb-1 block font-semibold text-gray-700 dark:text-gray-200"># of Children allowed (blank = no limit)</span>
+          <span className="mb-1 block font-semibold text-gray-700 dark:text-gray-200"># of Children allowed per center (blank = no limit)</span>
           <input className={input} type="number" min="1" value={form.maxChildren} onChange={(e) => set({ maxChildren: e.target.value })} />
         </label>
         <label className="text-sm">
@@ -128,6 +179,8 @@ function AddSubscriberDialog({ onClose, onCreated }) {
     adminEmail: "",
     adminPassword: "",
     addOns: [],
+    curriculumTypes: [],
+    curriculumAgeGroups: [],
     maxCenters: 1,
     maxChildren: "",
   });
@@ -179,9 +232,17 @@ function AddSubscriberDialog({ onClose, onCreated }) {
           <div className="mb-2 text-sm font-bold text-gray-700 dark:text-gray-200">Add-ons</div>
           <AddOnChecks value={form.addOns} onChange={(addOns) => set({ addOns })} />
         </div>
+        <div>
+          <div className="mb-2 text-sm font-bold text-gray-700 dark:text-gray-200">Curriculum Types</div>
+          <CurriculumTypePicker value={form.curriculumTypes} onChange={(curriculumTypes) => set({ curriculumTypes })} idPrefix="new-account-type" />
+        </div>
+        <div>
+          <div className="mb-2 text-sm font-bold text-gray-700 dark:text-gray-200">Curriculum Age Groups</div>
+          <AgeGroupChecks value={form.curriculumAgeGroups} onChange={(curriculumAgeGroups) => set({ curriculumAgeGroups })} />
+        </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {field("maxCenters", "# of Centers allowed", { type: "number", min: 1, required: true })}
-          {field("maxChildren", "# of Children allowed (blank = no limit)", { type: "number", min: 1 })}
+          {field("maxChildren", "# of Children allowed per center (blank = no limit)", { type: "number", min: 1 })}
         </div>
         <p className="text-xs text-gray-500 dark:text-gray-400">New subscribers start as Pending Approval until you activate them.</p>
         {error ? <div className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-200">{error}</div> : null}
@@ -271,8 +332,11 @@ function Detail({ id, onChanged }) {
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
               <Row label="Plan">Base Program</Row>
-              <Row label="# of Children">
-                {detail.childCount} of {detail.maxChildren ?? "no limit"}
+              <Row label="# of Children (per center)">
+                {detail.centers.length
+                  ? detail.centers.map((c) => `${c.name}: ${c.childCount}`).join(", ")
+                  : "0"}{" "}
+                of {detail.maxChildren ?? "no limit"} each
               </Row>
               <Row label="# of Centers">
                 {detail.centers.length} of {detail.maxCenters}
@@ -280,6 +344,8 @@ function Detail({ id, onChanged }) {
               <Row label="Start Date">{day(detail.startDate)}</Row>
               <Row label="Renewal Date">{day(detail.renewalDate)}</Row>
               <Row label="Auto-Renew">{detail.autoRenew ? "Enabled" : "Off"}</Row>
+              <Row label="Curriculum Types">{curriculumTypeLabels(detail.curriculumTypes) || "None"}</Row>
+              <Row label="Age Groups">{(detail.ageGroupNames || []).join(", ") || "None"}</Row>
             </div>
             <div>
               <div className="mb-1 text-sm font-bold text-gray-700 dark:text-gray-200">Purchased Add-Ons</div>

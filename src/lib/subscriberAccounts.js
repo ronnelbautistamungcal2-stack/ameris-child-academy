@@ -127,23 +127,24 @@ export async function assertCenterLimit(accountId) {
   }
 }
 
-/** Throws 409 when adding `adding` children would pass the account's limit. */
+/**
+ * Throws 409 when adding `adding` children would pass the limit. The account's
+ * child limit applies to each center on its own (client 2026-11-07).
+ */
 export async function assertChildLimit(centerId, adding = 1) {
   if (!centerId) return;
   const center = await prisma.center.findUnique({
     where: { id: centerId },
-    select: { subscriberAccount: { select: { id: true, maxChildren: true } } },
+    select: { name: true, subscriberAccount: { select: { id: true, maxChildren: true } } },
   });
   const account = center?.subscriberAccount;
   if (!account || account.maxChildren == null) return;
-  const current = await prisma.child.count({
-    where: { center: { subscriberAccountId: account.id } },
-  });
+  const current = await prisma.child.count({ where: { centerId } });
   if (current + adding > account.maxChildren) {
     throw apiError(
       409,
       "CHILD_LIMIT_REACHED",
-      `You have reached your limit of ${account.maxChildren} children. ${UPGRADE_HINT}`,
+      `${center.name} has reached its limit of ${account.maxChildren} children. ${UPGRADE_HINT}`,
       { limit: account.maxChildren, current },
     );
   }

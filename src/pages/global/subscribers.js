@@ -3,6 +3,7 @@ import GlobalLayout from "@/components/global/GlobalLayout";
 import { apiJson } from "@/lib/api";
 import { ACCOUNT_STATUS_LABELS, ADD_ONS, ADD_ON_LABELS } from "@/lib/addOns";
 import CurriculumTypePicker from "@/components/curriculum/CurriculumTypePicker";
+import PricingCard from "@/components/global/PricingCard";
 import { curriculumTypeLabels } from "@/lib/curriculumTypes";
 
 const TABS = [
@@ -363,6 +364,8 @@ function Detail({ id, onChanged }) {
           </div>
         )}
       </div>
+
+      <PricingCard detail={detail} saving={saving} onSave={(pricingSelection) => patch({ pricingSelection })} />
 
       <div className={card}>
         <h3 className="mb-2 text-lg font-extrabold text-gray-900 dark:text-gray-100">Centers</h3>

@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 import { clientIp } from "@/lib/terms";
 import { tooManyRequests } from "@/lib/leads";
-import { enrollmentView, parseEnrollment, quoteExpired, refreshSigning, signingRequired, siteOrigin, startCheckout } from "@/lib/subscriberEnrollment";
+import { enrollmentView, finishEnrollment, parseEnrollment, quoteExpired, refreshSigning, signingRequired, siteOrigin, startCheckout } from "@/lib/subscriberEnrollment";
 
 /**
  * /api/v1/solutions/enroll/:token  (public: the quote link)
@@ -20,6 +20,11 @@ export default async function handler(req, res) {
 
   if (req.method === "GET") {
     if (!lead.subscriberAccountId) lead = await refreshSigning(lead).catch((err) => (console.error("enroll signing status", err?.docusign || err), lead));
+    // A bank payment still clearing: ask Stripe again (works without the webhook too).
+    if (!lead.subscriberAccountId && lead.enrollment?.payment?.status === "PROCESSING" && lead.enrollment.checkoutSessionId) {
+      await finishEnrollment(lead.enrollment.checkoutSessionId).catch((err) => console.error("enroll bank status", err?.stripe || err));
+      lead = await prisma.lead.findUnique({ where: { id: lead.id } });
+    }
     return res.status(200).json(await enrollmentView(lead));
   }
 
@@ -27,6 +32,9 @@ export default async function handler(req, res) {
     if (tooManyRequests(req, 10)) return res.status(429).json({ error: "Too many tries. Please wait a few minutes." });
     if (lead.subscriberAccountId) return res.status(409).json({ error: "This quote has already been used to enroll. Please log in." });
     if (quoteExpired(lead)) return res.status(409).json({ error: "This quote has expired. Please contact us for a new one." });
+    if (lead.enrollment?.payment?.status === "PROCESSING") {
+      return res.status(409).json({ error: "Your bank payment is still processing. Your account will be ready once it clears." });
+    }
 
     let enrollment;
     let activity;
@@ -37,7 +45,7 @@ export default async function handler(req, res) {
       if (await prisma.user.findUnique({ where: { email: e.email }, select: { id: true } })) {
         return res.status(409).json({ error: "That email already has an Ameris account. Please contact us to finish your enrollment." });
       }
-      enrollment = { ...e, startedAt: new Date().toISOString() };
+      enrollment = { ...e, payment: undefined, startedAt: new Date().toISOString() };
       activity = `${e.fullName} went to payment after signing in DocuSign.`;
     } else {
       const parsed = await parseEnrollment(req.body || {}, lead);

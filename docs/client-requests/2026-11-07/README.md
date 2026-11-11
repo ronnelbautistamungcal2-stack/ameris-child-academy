@@ -171,7 +171,19 @@ The quote's **Complete Your Enrollment** page, laid out like mockup Home-Pages-0
 - Centers sign with "I agree" for now. DocuSign replaces it once their DocuSign keys are set up.
 - The mockup's **One-Time Setup Fee** isn't in the pricing sheet, so there's none yet. What is it?
 - We added a password to Create Your Account because there's no email service to send a welcome email yet.
-- Card payments only (no bank transfers).
+
+## Bank payments at enrollment (2026-11-11)
+
+Client answer to Q4: accept card and bank payments, and create the account after the bank payment clears.
+- Stripe Checkout now offers **Card** or **US bank account** (ACH). Bank accounts connect through Stripe (instant bank login or manual entry).
+- **After a bank payment:**
+  - The page says **"Your bank payment is processing"** (usually 1–4 business days), and the Ameris team gets a notification.
+  - The quote can't be paid again while the payment is clearing.
+  - When it clears, the account, center and admin login are created, just like a card payment. The subscription then bills the same bank account on the 1st of each month.
+- **If the bank payment fails:** the page says so and they can try again with a bank account or a card. The team is notified and the lead's history records it.
+- **If a payment clears after the 1st it should have billed from:** the subscription starts on the next 1st, and a note on the account tells the team to bill the gap by hand.
+- **Stripe webhook:** also add the events `checkout.session.async_payment_succeeded` and `checkout.session.async_payment_failed`. Without the webhook, the page checks with Stripe again each time it's opened.
+- **No email yet:** the customer isn't emailed when the payment clears. The team lets them know, or they can just log in.
 
 ## Center e-signing with DocuSign (2026-11-11)
 

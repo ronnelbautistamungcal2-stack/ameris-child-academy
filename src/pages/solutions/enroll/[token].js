@@ -17,7 +17,7 @@ const INPUT = "mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-gr
 async function getJson(url, init) {
   const r = await fetch(url, init);
   const body = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(body.error || "Something went wrong");
+  if (!r.ok) throw Object.assign(new Error(body.error || "Something went wrong"), { status: r.status });
   return body;
 }
 
@@ -26,6 +26,22 @@ function Row({ label, children }) {
     <div className="flex justify-between gap-4 py-2.5">
       <dt className="text-gray-700">{label}</dt>
       <dd className="text-right font-semibold text-gray-900">{children}</dd>
+    </div>
+  );
+}
+
+// A bank payment: Checkout is done but the money takes a few days to clear.
+function Processing({ email }) {
+  return (
+    <div className="mt-8 rounded-3xl border border-blue-200 bg-blue-50 p-8 text-center" role="status">
+      <h2 className={`font-serif text-3xl font-bold ${NAVY}`}>Thank you! Your bank payment is processing.</h2>
+      <p className="mt-3 text-lg text-gray-800">Bank payments usually take 1–4 business days to clear. Your account will be created as soon as it does.</p>
+      <p className="mt-2 text-gray-700">
+        Then log in{email ? <> with <strong>{email}</strong></> : ""} and the password you chose. You can come back to this page anytime to check.
+      </p>
+      <p className="mt-4 text-sm text-gray-600">
+        Questions? {SOLUTIONS_INFO.phone} · {SOLUTIONS_INFO.salesEmail}
+      </p>
     </div>
   );
 }
@@ -60,6 +76,8 @@ export default function SolutionsEnroll() {
   const [formError, setFormError] = useState("");
   const [finished, setFinished] = useState(null);
   const [finishing, setFinishing] = useState("");
+  const [bankPending, setBankPending] = useState(false);
+  const [bankFailed, setBankFailed] = useState("");
   const asked = useRef(false);
 
   useEffect(() => {
@@ -88,10 +106,18 @@ export default function SolutionsEnroll() {
         body: JSON.stringify({ sessionId }),
       })
         .then((out) => {
-          setFinished(out);
+          if (out.pending) setBankPending(true);
+          else setFinished(out);
           setFinishing("");
         })
         .catch((e) => {
+          if (e.status === 402) {
+            // The bank payment bounced: show the form again so they can retry.
+            setBankFailed(e.message);
+            setFinishing("");
+            getJson(`/api/v1/solutions/enroll/${encodeURIComponent(token)}`).then(setInfo).catch(() => null);
+            return;
+          }
           if (++tries < 5) setTimeout(attempt, 2000);
           else setFinishing(`${e.message} If you were charged, please contact us at ${SOLUTIONS_INFO.salesEmail}.`);
         });
@@ -160,7 +186,8 @@ export default function SolutionsEnroll() {
   const c = info?.charges;
   const annual = c?.billingCycle === "ANNUAL";
   const agreement = info?.agreement;
-  const canEnroll = info && !info.enrolled && !info.expired && !finished && !finishing;
+  const processing = bankPending || info?.payment === "PROCESSING";
+  const canEnroll = info && !info.enrolled && !info.expired && !finished && !finishing && !processing;
 
   return (
     <SolutionsLayout title="Complete Your Enrollment">
@@ -172,6 +199,8 @@ export default function SolutionsEnroll() {
 
         {error ? (
           <p className="mt-6 rounded-2xl bg-amber-50 p-5 text-amber-900">We couldn&apos;t find this quote. Please contact us at {SOLUTIONS_INFO.salesEmail}.</p>
+        ) : processing && !finished && !info?.enrolled ? (
+          <Processing email={info?.signing?.signer?.email || form.email} />
         ) : finished ? (
           <Done {...finished} />
         ) : finishing ? (
@@ -201,6 +230,10 @@ export default function SolutionsEnroll() {
                     : router.query.event === "signing_complete"
                       ? "Checking your signature with DocuSign..."
                       : "The agreement wasn't signed yet. Click Review & E-Sign Agreement when you're ready."}
+                </div>
+              ) : bankFailed || info.payment === "FAILED" ? (
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-red-900" role="alert">
+                  {bankFailed || "Your bank payment didn't go through."} Nothing was set up. You can try again below with your bank account or a card.
                 </div>
               ) : router.query.canceled ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900">Payment was canceled. Nothing was charged; you can try again below.</div>
@@ -454,7 +487,7 @@ export default function SolutionsEnroll() {
                     <p className="mt-1 text-gray-700">After signing the agreement, continue to complete your secure payment through our trusted provider, Stripe.</p>
                     <div className="mt-4 rounded-2xl bg-blue-50/60 p-4 text-sm text-gray-700">
                       <p className="font-bold text-gray-900">Secure Payment</p>
-                      Card details are entered on Stripe&apos;s secure page; we never see your card number. You&apos;ll pay {money(c.dueToday)} today
+                      Pay by card or US bank account on Stripe&apos;s secure page; we never see your card or bank details. Bank payments take 1–4 business days to clear, and your account is created once it clears. You&apos;ll pay {money(c.dueToday)} today
                       {annual ? ", then each year." : `, then ${money(c.recurringAmount)} on the 1st of each month.`}
                     </div>
                     {formError ? (

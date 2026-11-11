@@ -310,6 +310,13 @@ model User {
   supportTicketsOpened               SupportTicket[]                     @relation("SupportTicketsOpened")
   termsAcceptances                   TermsAcceptance[]
   leadActivities                     LeadActivity[]                      @relation("LeadActivities")
+  // Ameris Solutions team (Global admin > Permissions & Users, client mockup
+  // 2026-11-06): GLOBAL_ADMINISTRATOR | CUSTOMER_SERVICE | DEVELOPER | SALES;
+  // null = Global Administrator (users made global admins before roles).
+  globalTeamRole                     String?
+  // Per-section rights { SECTION: ["VIEW","ADD","EDIT","DELETE"] }; null =
+  // the role's defaults (src/lib/globalPermissions.js).
+  globalPermissions                  Json?
   supportTicketMessages              SupportTicketMessage[]
   supportAccessRequested             SupportAccessGrant[]                @relation("SupportAccessRequested")
   supportAccessAnswered              SupportAccessGrant[]                @relation("SupportAccessAnswered")
@@ -2909,4 +2916,27 @@ model LeadActivity {
   createdAt   DateTime @default(now())
 
   @@index([leadId, createdAt])
+}
+
+// Global admin > Settings > General (client mockup 2026-11-06): company
+// information, email and notification settings, and the subscriber agreement
+// versions, one JSON value per key.
+model GlobalSetting {
+  key         String   @id
+  value       Json
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+}
+
+// Global admin > Settings > Email Templates (Quote Email, Invoice Email, ...).
+// Saved now; sent once an email service is connected.
+model EmailTemplate {
+  id          String   @id @default(uuid())
+  key         String   @unique // QUOTE, INVOICE, PAYMENT_RECEIPT, AGREEMENT, WELCOME, RENEWAL_REMINDER
+  name        String
+  subject     String
+  body        String
+  active      Boolean  @default(true)
+  updatedById String?
+  updatedAt   DateTime @updatedAt
 }

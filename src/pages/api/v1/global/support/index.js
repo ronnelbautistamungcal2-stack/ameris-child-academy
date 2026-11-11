@@ -12,7 +12,7 @@ import {
 
 // Ameris Solutions Customer Support queue: every subscriber's tickets.
 export default async function handler(req, res) {
-  const session = await requireGlobalAdmin(req, res);
+  const session = await requireGlobalAdmin(req, res, "CUSTOMER_SUPPORT");
   if (!session) return;
 
   if (req.method === "GET") {

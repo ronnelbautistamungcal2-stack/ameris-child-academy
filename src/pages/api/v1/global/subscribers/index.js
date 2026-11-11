@@ -22,7 +22,7 @@ const LIST_SELECT = {
  *      its first admin { ...account fields, centerName, adminName, adminEmail, adminPassword }
  */
 export default async function handler(req, res) {
-  const session = await requireGlobalAdmin(req, res);
+  const session = await requireGlobalAdmin(req, res, "SUBSCRIBERS");
   if (!session) return undefined;
 
   if (req.method === "GET") {

@@ -10,7 +10,7 @@ import { TERMS_KINDS } from "@/lib/terms";
  * Global admin > Terms & Agreements (client 2026-11-11).
  */
 export default async function handler(req, res) {
-  const session = await requireGlobalAdmin(req, res);
+  const session = await requireGlobalAdmin(req, res, "SETTINGS");
   if (!session) return undefined;
 
   if (req.method === "GET") {

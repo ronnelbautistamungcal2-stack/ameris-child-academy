@@ -24,7 +24,7 @@ async function detail(id) {
 
 // One ticket for Ameris: read it, reply, change its status, request center access.
 export default async function handler(req, res) {
-  const session = await requireGlobalAdmin(req, res);
+  const session = await requireGlobalAdmin(req, res, "CUSTOMER_SUPPORT");
   if (!session) return;
   const user = session.user;
   const id = String(req.query.id || "");

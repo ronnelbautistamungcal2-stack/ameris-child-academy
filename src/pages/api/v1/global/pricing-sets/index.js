@@ -12,7 +12,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
  * Global admin > Settings > Subscription Pricing (client 2026-11-10).
  */
 export default async function handler(req, res) {
-  const session = await requireGlobalAdmin(req, res);
+  const session = await requireGlobalAdmin(req, res, req.method === "GET" ? ["SETTINGS", "SUBSCRIBERS", "SALES_LEADS"] : "SETTINGS");
   if (!session) return undefined;
 
   if (req.method === "GET") return res.status(200).json({ sets: await listPricingSets() });

@@ -11,7 +11,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
  * Responds { sets } (all sets, as the GET list).
  */
 export default async function handler(req, res) {
-  const session = await requireGlobalAdmin(req, res);
+  const session = await requireGlobalAdmin(req, res, "SETTINGS");
   if (!session) return undefined;
   const id = String(req.query.id || "");
   const set = await prisma.pricingSet.findUnique({ where: { id } });

@@ -1,8 +1,10 @@
 // Ameris Solutions Global Admin navigation (client mockups 2026-11-06). Only
-// pages that exist are listed; Reports and Permissions & Users come later.
+// pages that exist are listed. `section` hides an item from team members
+// without View on it (Permissions & Users); USERS = Global Administrators.
 export const GLOBAL_NAV_ITEMS = [
   {
     href: "/global/subscribers",
+    section: "SUBSCRIBERS",
     label: "Subscribers",
     icon: (
       <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
@@ -12,6 +14,7 @@ export const GLOBAL_NAV_ITEMS = [
   },
   {
     href: "/global/leads",
+    section: "SALES_LEADS",
     label: "Sales & Leads",
     icon: (
       <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
@@ -20,16 +23,8 @@ export const GLOBAL_NAV_ITEMS = [
     ),
   },
   {
-    href: "/global/curriculum",
-    label: "Lesson Bank & SOP Bank",
-    icon: (
-      <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
-        <path d="M10.75 16.82A7.462 7.462 0 0115 15.5c.71 0 1.396.098 2.046.282A.75.75 0 0018 15.06v-11a.75.75 0 00-.546-.721A9.006 9.006 0 0015 3a8.963 8.963 0 00-4.25 1.065V16.82zM9.25 4.065A8.963 8.963 0 005 3c-.85 0-1.673.118-2.454.339A.75.75 0 002 4.06v11a.75.75 0 00.954.721A7.506 7.506 0 015 15.5c1.579 0 3.042.487 4.25 1.32V4.065z" />
-      </svg>
-    ),
-  },
-  {
     href: "/global/support",
+    section: "CUSTOMER_SUPPORT",
     label: "Customer Support",
     icon: (
       <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
@@ -38,7 +33,38 @@ export const GLOBAL_NAV_ITEMS = [
     ),
   },
   {
+    href: "/global/curriculum",
+    section: "LESSON_BANK|SOP_BANK",
+    label: "Lesson Bank & SOP Bank",
+    icon: (
+      <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
+        <path d="M10.75 16.82A7.462 7.462 0 0115 15.5c.71 0 1.396.098 2.046.282A.75.75 0 0018 15.06v-11a.75.75 0 00-.546-.721A9.006 9.006 0 0015 3a8.963 8.963 0 00-4.25 1.065V16.82zM9.25 4.065A8.963 8.963 0 005 3c-.85 0-1.673.118-2.454.339A.75.75 0 002 4.06v11a.75.75 0 00.954.721A7.506 7.506 0 015 15.5c1.579 0 3.042.487 4.25 1.32V4.065z" />
+      </svg>
+    ),
+  },
+  {
+    href: "/global/reports",
+    label: "Reports",
+    section: "REPORTS",
+    icon: (
+      <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
+        <path d="M15.5 2A1.5 1.5 0 0014 3.5v13a1.5 1.5 0 001.5 1.5h1a1.5 1.5 0 001.5-1.5v-13A1.5 1.5 0 0016.5 2h-1zM9.5 6A1.5 1.5 0 008 7.5v9A1.5 1.5 0 009.5 18h1a1.5 1.5 0 001.5-1.5v-9A1.5 1.5 0 0010.5 6h-1zM3.5 10A1.5 1.5 0 002 11.5v5A1.5 1.5 0 003.5 18h1A1.5 1.5 0 006 16.5v-5A1.5 1.5 0 004.5 10h-1z" />
+      </svg>
+    ),
+  },
+  {
+    href: "/global/users",
+    label: "Permissions & Users",
+    section: "USERS",
+    icon: (
+      <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
+        <path d="M10 9a3 3 0 100-6 3 3 0 000 6zM6 8a2 2 0 11-4 0 2 2 0 014 0zM1.49 15.326a.78.78 0 01-.358-.442 3 3 0 014.308-3.516 6.484 6.484 0 00-1.905 3.959c-.023.222-.014.442.025.654a4.97 4.97 0 01-2.07-.655zM16.44 15.98a4.97 4.97 0 002.07-.654.78.78 0 00.357-.442 3 3 0 00-4.308-3.517 6.484 6.484 0 011.907 3.96 2.32 2.32 0 01-.026.654zM18 8a2 2 0 11-4 0 2 2 0 014 0zM5.304 16.19a.844.844 0 01-.277-.71 5 5 0 019.947 0 .843.843 0 01-.277.71A6.975 6.975 0 0110 18a6.974 6.974 0 01-4.696-1.81z" />
+      </svg>
+    ),
+  },
+  {
     href: "/global/terms",
+    section: "SETTINGS",
     label: "Terms & Agreements",
     icon: (
       <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">
@@ -48,6 +74,7 @@ export const GLOBAL_NAV_ITEMS = [
   },
   {
     href: "/global/settings",
+    section: "SETTINGS",
     label: "Settings",
     icon: (
       <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0">

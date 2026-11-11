@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/router";
+import GeneralSettings from "@/components/global/GeneralSettings";
 import GlobalLayout from "@/components/global/GlobalLayout";
 import { apiJson } from "@/lib/api";
 import { DISCOUNT_APPLIES_TO, PRICED_ADD_ONS, validatePricing } from "@/lib/subscriptionPricing";
@@ -302,7 +304,7 @@ function NewSetDialog({ onClose, onCreate }) {
   );
 }
 
-export default function GlobalSettingsPage() {
+function PricingSettings() {
   const [sets, setSets] = useState(null);
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState(null); // { name, effectiveDate, data }
@@ -359,17 +361,11 @@ export default function GlobalSettingsPage() {
   }
 
   return (
-    <GlobalLayout title="Settings">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">Settings</h1>
+    <>
+      <div className="mb-3 flex justify-end">
         <button type="button" className={primary} onClick={save} disabled={!draft || !dirty || saving}>
           {saving ? "Saving..." : "Save Changes"}
         </button>
-      </div>
-      <div className="mb-4 flex gap-1" role="tablist">
-        <span role="tab" aria-selected="true" className="rounded-t-lg bg-[#16305e] px-4 py-2 text-sm font-bold text-white">
-          Subscription Pricing
-        </span>
       </div>
       {error ? <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
       {notice ? <div className="mb-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">{notice}</div> : null}
@@ -437,6 +433,36 @@ export default function GlobalSettingsPage() {
           }}
         />
       ) : null}
+    </>
+  );
+}
+
+const TABS = [
+  { key: "general", label: "General" },
+  { key: "pricing", label: "Subscription Pricing" },
+];
+
+export default function GlobalSettingsPage() {
+  const router = useRouter();
+  const tab = router.query.tab === "pricing" ? "pricing" : "general";
+  return (
+    <GlobalLayout title="Settings">
+      <h1 className="mb-4 text-3xl font-extrabold text-gray-900 dark:text-gray-100">Settings</h1>
+      <div className="mb-4 flex gap-1 border-b border-gray-200 dark:border-gray-700" role="tablist">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.key}
+            onClick={() => router.replace({ pathname: router.pathname, query: t.key === "general" ? {} : { tab: t.key } }, undefined, { shallow: true })}
+            className={`rounded-t-lg px-4 py-2 text-sm font-bold ${tab === t.key ? "bg-[#16305e] text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200"}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {tab === "general" ? <GeneralSettings /> : <PricingSettings />}
     </GlobalLayout>
   );
 }

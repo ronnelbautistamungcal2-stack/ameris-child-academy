@@ -1017,43 +1017,48 @@ model Subscription {
 // A customer of Ameris Solutions (client 2026-11-06). Owns one or more
 // centers; add-ons unlock pages, limits cap centers and children.
 model SubscriberAccount {
-  id                  String                  @id @default(uuid())
-  accountNumber       String                  @unique // "C-1001"
-  name                String
-  status              String                  @default("PENDING") // PENDING | ACTIVE | ON_HOLD | CANCELLED
+  id                      String                  @id @default(uuid())
+  accountNumber           String                  @unique // "C-1001"
+  name                    String
+  status                  String                  @default("PENDING") // PENDING | ACTIVE | ON_HOLD | CANCELLED
   // STEPS_OF_PROGRESSION | CURRICULUM | TEACHER_TRAINING | STAFF_MANAGEMENT
-  addOns              String[]                @default([])
+  addOns                  String[]                @default([])
   // Curriculum types the account pays for (set by the Global admin).
-  curriculumTypes     String[]                @default([])
+  curriculumTypes         String[]                @default([])
   // Age groups the account follows: ids of the curriculum source center's
   // classrooms (each one is an age-group Lesson Planner). Set by Global admin.
-  curriculumAgeGroups String[]                @default([])
-  maxCenters          Int                     @default(1)
-  maxChildren         Int?
-  startDate           DateTime?
-  renewalDate         DateTime?
-  autoRenew           Boolean                 @default(true)
-  contactName         String?
-  contactEmail        String?
-  phone               String?
-  address             String?
-  activatedAt         DateTime?
-  centers             Center[]
-  users               User[]
-  notes               SubscriberAccountNote[]
-  formTemplates       FormTemplate[]
-  policies            PolicyDocument[]
-  parentFaqs          ParentFaq[]
-  supportTickets      SupportTicket[]
-  characterCategories CharacterCategory[]
-  characterBehaviors  CharacterBehavior[]
+  curriculumAgeGroups     String[]                @default([])
+  maxCenters              Int                     @default(1)
+  maxChildren             Int?
+  startDate               DateTime?
+  renewalDate             DateTime?
+  autoRenew               Boolean                 @default(true)
+  contactName             String?
+  contactEmail            String?
+  phone                   String?
+  address                 String?
+  activatedAt             DateTime?
+  centers                 Center[]
+  users                   User[]
+  notes                   SubscriberAccountNote[]
+  formTemplates           FormTemplate[]
+  policies                PolicyDocument[]
+  parentFaqs              ParentFaq[]
+  supportTickets          SupportTicket[]
+  characterCategories     CharacterCategory[]
+  characterBehaviors      CharacterBehavior[]
   // Step G pricing (client 2026-11-10): the choices the price is worked out
   // from: { children, billingCycle, programType, curriculumVersion,
   // ageGroups, homeDaycareProgram, discountIds }. Add-ons come from addOns.
-  pricingSelection    Json?
-  leads               Lead[]
-  createdAt           DateTime                @default(now())
-  updatedAt           DateTime                @updatedAt
+  pricingSelection        Json?
+  leads                   Lead[]
+  // Online enrollment (Stripe Checkout, 2026-11-12).
+  billingCycle            String? // MONTHLY | ANNUAL
+  stripeCustomerId        String?
+  stripeSubscriptionId    String?
+  stripeCheckoutSessionId String?                 @unique
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
 }
 
 model SubscriberAccountNote {
@@ -2896,6 +2901,9 @@ model Lead {
   quoteData           Json?
   quoteDate           DateTime?
   quoteExpiresAt      DateTime?          @db.Date
+  // Complete Your Enrollment: { fullName, email, passwordHash, agreement,
+  // acceptedAt, ipAddress, userAgent, checkoutSessionId, startedAt, paidAt }
+  enrollment          Json?
   subscriberAccount   SubscriberAccount? @relation(fields: [subscriberAccountId], references: [id], onDelete: SetNull)
   subscriberAccountId String?
   activities          LeadActivity[]

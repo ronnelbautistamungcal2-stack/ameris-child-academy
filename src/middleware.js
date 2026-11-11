@@ -74,7 +74,11 @@ export async function middleware(request) {
     return response;
   }
 
-  if (token.mustChangePassword && pathname !== "/settings") {
+  if (token.mustChangePassword) {
+    // The temporary password comes first. On /settings itself, don't also
+    // send them to /terms: with both pending, /settings and /terms used to
+    // redirect to each other forever. Terms follow once the password is set.
+    if (pathname === "/settings") return NextResponse.next();
     const settingsUrl = new URL("/settings", request.url);
     settingsUrl.searchParams.set("forcePasswordChange", "1");
     return NextResponse.redirect(settingsUrl);

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useState } from "react";
 import AmerisLogo from "@/components/ui/AmerisLogo";
+import { useForceLightTheme } from "@/hooks/useForceLightTheme";
 import { SOLUTIONS_INFO, SOLUTIONS_NAV } from "./siteInfo";
 
 // The Ameris Solutions website (client mockups 2026-11-06): the sunrise
@@ -32,6 +33,8 @@ export { Icon };
 export default function SolutionsLayout({ title, description, children, hideQuoteButton = false }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  // The public website is always light, even when this browser's app theme is dark.
+  useForceLightTheme();
   const pageTitle = title ? `${title} | ${SOLUTIONS_INFO.name}` : `${SOLUTIONS_INFO.name} | ${SOLUTIONS_INFO.tagline}`;
   const active = (href) => (href === "/solutions" ? router.pathname === "/solutions" : router.pathname.startsWith(href));
 

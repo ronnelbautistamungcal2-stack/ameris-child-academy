@@ -148,6 +148,31 @@ The client's priority for their conference (Friday 2026-11-13): the Global admin
   - Developer: full Lesson & SOP banks; add and edit Support; view Settings.
 - Email templates are saved but not sent yet (no email service).
 
+## Complete Your Enrollment with Stripe (2026-11-11)
+
+The quote's **Complete Your Enrollment** page, laid out like mockup Home-Pages-07:
+- **Your Personalized Plan** with Your Pricing: the monthly price, what's due today, start date, next payment, and the 12-month initial term.
+- **Subscription & Renewal Details** and the automatic renewal notice.
+- **Review & Sign Your Agreement**: the current Subscriber Agreement from Settings > General (Home Daycare uses the Subscriber Agreement text from Terms & Agreements when one is published), plus an **"I agree"** checkbox. We record the date, time, version and IP address.
+- **Create Your Account**: full name, email and password for the first administrator.
+- **Payment**: **Continue to Secure Payment** opens Stripe's checkout page (cards only, US dollars).
+- After paying, the account, its first center and the administrator are created (status Active, the quote's add-ons and pricing). The lead becomes Won, the Ameris team is notified, and the person can log in right away.
+- **Billing:**
+  - Today they pay the first month: the full month through the 15th, half after it. Annual plans pay the year.
+  - Stripe then charges the monthly price on the 1st of each month (annual: once a year), using the saved card.
+
+**Setup on the server:**
+- `STRIPE_SECRET_KEY` and `STRIPE_PUBLISHABLE_KEY`.
+- A Stripe webhook to `/api/v1/solutions/stripe-webhook` for `checkout.session.completed`, with its secret in `STRIPE_WEBHOOK_SECRET`. The webhook finishes the enrollment even if the person closes the tab before returning; without it, the account is still created when they come back to the page.
+- `PUBLIC_SITE_URL` if it differs from `NEXTAUTH_URL`.
+- Upload the client's Subscriber Agreement under Settings > General. Without it the page can't take enrollments.
+
+**To confirm with the client:**
+- Centers sign with "I agree" for now. DocuSign replaces it once their DocuSign keys are set up.
+- The mockup's **One-Time Setup Fee** isn't in the pricing sheet, so there's none yet. What is it?
+- We added a password to Create Your Account because there's no email service to send a welcome email yet.
+- Card payments only (no bank transfers).
+
 ## Step A — add-on locks (done 2026-11-07)
 
 - Whole pages: `src/lib/addOns.js` (by route). HR and Other Staff get Staff Management on every page except Dashboard, Messages and My Performance (whose tabs lock themselves), read from the sheet's "All Full Pages are locked" row.

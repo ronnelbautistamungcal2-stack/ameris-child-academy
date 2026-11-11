@@ -100,17 +100,25 @@ export default function SolutionsEnroll() {
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
+  // Centers sign in DocuSign (when it's set up) instead of ticking "I agree".
+  const esign = Boolean(info?.signing?.required);
+  const signed = info?.signing?.status === "COMPLETED";
+
   async function pay(e) {
     e.preventDefault();
     setFormError("");
-    if (!agree) return setFormError("Please review and agree to the Subscriber Agreement first.");
-    if (form.password !== form.confirmPassword) return setFormError("The passwords don't match.");
+    if (esign) {
+      if (!signed) return setFormError("Please review and e-sign your agreement first.");
+    } else {
+      if (!agree) return setFormError("Please review and agree to the Subscriber Agreement first.");
+      if (form.password !== form.confirmPassword) return setFormError("The passwords don't match.");
+    }
     setBusy(true);
     try {
       const { url } = await getJson(`/api/v1/solutions/enroll/${encodeURIComponent(token)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, agree, agreementId: info.agreement?.id }),
+        body: JSON.stringify(esign ? {} : { ...form, agree, agreementId: info.agreement?.id }),
       });
       window.location.href = url;
     } catch (err) {
@@ -118,6 +126,35 @@ export default function SolutionsEnroll() {
       setBusy(false);
     }
   }
+
+  async function sign() {
+    setFormError("");
+    if (!form.fullName.trim() || !form.email.trim() || !form.password) return setFormError("Fill in Create Your Account first; the agreement is signed in that name.");
+    if (form.password !== form.confirmPassword) return setFormError("The passwords don't match.");
+    setBusy(true);
+    try {
+      const { url } = await getJson(`/api/v1/solutions/enroll/${encodeURIComponent(token)}/sign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, agreementId: info.agreement?.id }),
+      });
+      window.location.href = url;
+    } catch (err) {
+      setFormError(err.message);
+      setBusy(false);
+    }
+  }
+
+  // Back from DocuSign: it may take a moment to mark the envelope signed.
+  const recheck = useRef(0);
+  useEffect(() => {
+    if (!router.isReady || router.query.event !== "signing_complete" || !info || signed || info.enrolled || recheck.current >= 5) return;
+    const t = setTimeout(() => {
+      recheck.current += 1;
+      getJson(`/api/v1/solutions/enroll/${encodeURIComponent(token)}`).then(setInfo).catch(() => null);
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [router.isReady, router.query.event, info, signed, token]);
 
   const q = quote?.quote;
   const c = info?.charges;
@@ -156,6 +193,14 @@ export default function SolutionsEnroll() {
               ) : info.expired ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900">
                   This quote expired on {day(quote.expiresAt)}. Please contact us at {SOLUTIONS_INFO.phone} or {SOLUTIONS_INFO.salesEmail} for a new one.
+                </div>
+              ) : esign && router.query.signing && !signed ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900" role="status">
+                  {info.signing?.status === "DECLINED"
+                    ? "You declined to sign the agreement. If that was a mistake, sign it again below, or contact us with questions."
+                    : router.query.event === "signing_complete"
+                      ? "Checking your signature with DocuSign..."
+                      : "The agreement wasn't signed yet. Click Review & E-Sign Agreement when you're ready."}
                 </div>
               ) : router.query.canceled ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900">Payment was canceled. Nothing was charged; you can try again below.</div>
@@ -241,6 +286,91 @@ export default function SolutionsEnroll() {
 
               {canEnroll ? (
                 <form onSubmit={pay} className="space-y-6" noValidate>
+                  {esign ? (
+                    <>
+                      {/* Centers: the account first, since the agreement is signed in that name. */}
+                      {signed ? (
+                        <>
+                  <div className={CARD}>
+                    <h2 className={`font-serif text-2xl font-bold ${NAVY}`}>Create Your Account</h2>
+                    <p className="mt-2 text-gray-700">
+                      Your administrator login: <strong>{info.signing.signer?.fullName}</strong> ({info.signing.signer?.email}) with the password you chose.
+                      You&apos;ll log in as soon as your payment goes through.
+                    </p>
+                  </div>
+                        </>
+                      ) : (
+                        <>
+                  {/* Create Your Account */}
+                  <div className={CARD}>
+                    <h2 className={`font-serif text-2xl font-bold ${NAVY}`}>Create Your Account</h2>
+                    <p className="mt-1 text-gray-700">This will be your administrator account for your organization.</p>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <label className="block text-sm font-semibold text-gray-800">
+                        Full Name <span className="text-red-600">*</span>
+                        <input className={INPUT} value={form.fullName} onChange={set("fullName")} autoComplete="name" required />
+                      </label>
+                      <label className="block text-sm font-semibold text-gray-800">
+                        Email Address <span className="text-red-600">*</span>
+                        <input className={INPUT} type="email" value={form.email} onChange={set("email")} autoComplete="email" required />
+                      </label>
+                      <label className="block text-sm font-semibold text-gray-800">
+                        Password <span className="text-red-600">*</span>
+                        <input className={INPUT} type="password" value={form.password} onChange={set("password")} autoComplete="new-password" minLength={8} required />
+                        <span className="mt-1 block text-xs font-normal text-gray-500">At least 8 characters.</span>
+                      </label>
+                      <label className="block text-sm font-semibold text-gray-800">
+                        Confirm Password <span className="text-red-600">*</span>
+                        <input className={INPUT} type="password" value={form.confirmPassword} onChange={set("confirmPassword")} autoComplete="new-password" required />
+                      </label>
+                    </div>
+                    <p className="mt-3 text-sm text-gray-600">You&apos;ll log in with this email and password as soon as your payment goes through.</p>
+                  </div>
+
+                        </>
+                      )}
+                  {/* Review & E-Sign (centers, DocuSign) */}
+                  <div className={CARD}>
+                    <h2 className={`font-serif text-2xl font-bold ${NAVY}`}>Review &amp; Sign Your Agreement</h2>
+                    {agreement ? (
+                      <>
+                        <p className="mt-2 text-gray-700">
+                          Review and electronically sign your Order Form (your plan, pricing and billing terms) and the Ameris Solutions Software Subscription
+                          Agreement, including billing terms, cancellation policies, data protection and account responsibilities.
+                        </p>
+                        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-100 p-4">
+                          <div>
+                            <p className="font-bold text-gray-900">{agreement.name}</p>
+                            <p className="text-sm text-gray-600">
+                              Version {agreement.version}
+                              {agreement.effectiveDate ? ` · effective ${day(agreement.effectiveDate)}` : ""}
+                            </p>
+                          </div>
+                          {signed ? (
+                            <span className="rounded-full bg-green-100 px-4 py-2 text-sm font-bold text-green-800">✓ Signed</span>
+                          ) : (
+                            <button type="button" className={BTN} onClick={sign} disabled={busy}>
+                              {busy ? "Opening DocuSign..." : "Review & E-Sign Agreement"}
+                            </button>
+                          )}
+                        </div>
+                        {signed ? (
+                          <p className="mt-3 text-sm text-gray-700">
+                            Signed in DocuSign by <strong>{info.signing.signer?.fullName}</strong>. A signed copy will be kept on your account.
+                          </p>
+                        ) : (
+                          <p className="mt-3 text-sm text-gray-600">You must complete the electronic signature before proceeding to payment.</p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="mt-3 rounded-2xl bg-amber-50 p-4 text-amber-900">
+                        The Subscriber Agreement isn&apos;t published yet, so online enrollment can&apos;t be finished. Please contact us at {SOLUTIONS_INFO.phone}.
+                      </p>
+                    )}
+                  </div>
+                    </>
+                  ) : (
+                    <>
                   {/* Review & Sign Your Agreement */}
                   <div className={CARD}>
                     <h2 className={`font-serif text-2xl font-bold ${NAVY}`}>Review &amp; Sign Your Agreement</h2>
@@ -315,6 +445,9 @@ export default function SolutionsEnroll() {
                     <p className="mt-3 text-sm text-gray-600">You&apos;ll log in with this email and password as soon as your payment goes through.</p>
                   </div>
 
+                    </>
+                  )}
+
                   {/* Payment */}
                   <div className={CARD}>
                     <h2 className={`font-serif text-2xl font-bold ${NAVY}`}>Payment</h2>
@@ -329,7 +462,7 @@ export default function SolutionsEnroll() {
                         {formError}
                       </p>
                     ) : null}
-                    <button type="submit" disabled={busy || !agreement} className={`${BTN} mt-5 w-full py-3 text-base disabled:opacity-60`}>
+                    <button type="submit" disabled={busy || !agreement || (esign && !signed)} className={`${BTN} mt-5 w-full py-3 text-base disabled:opacity-60`}>
                       {busy ? "Opening secure payment..." : "Continue to Secure Payment →"}
                     </button>
                     <p className="mt-3 text-center text-xs text-gray-500">

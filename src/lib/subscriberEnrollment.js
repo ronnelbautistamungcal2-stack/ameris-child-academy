@@ -14,6 +14,10 @@ import { currentDocuments } from "@/lib/terms";
 import { nextAccountNumber } from "@/lib/subscriberAccounts";
 import { globalAdminIds, notify } from "@/lib/supportTickets";
 import { createCheckoutSession, createProduct, createSubscription, getCheckoutSession } from "@/lib/stripe";
+import fs from "fs";
+import path from "path";
+import { createEnvelope, docusignConfigured, downloadEnvelopeDocument, getEnvelope, signingUrl } from "@/lib/docusign";
+import { DATE_ANCHOR, SIGN_ANCHOR, orderFormHtml } from "@/lib/enrollmentOrderForm";
 
 export const INITIAL_TERM_MONTHS = 12;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -89,8 +93,15 @@ export async function enrollmentView(lead, db = prisma) {
     ? await db.subscriberAccount.findUnique({ where: { id: lead.subscriberAccountId }, select: { accountNumber: true, name: true } })
     : null;
   const agreement = await enrollmentAgreement(sel.programType || lead.quoteData?.programType, db);
+  const signing = lead.enrollment?.signing;
   return {
     enrolled: Boolean(account),
+    // Centers sign in DocuSign (when it's set up); Home Daycare ticks "I agree".
+    signing: {
+      required: signingRequired(lead),
+      status: signing?.status || null,
+      signer: signing ? { fullName: lead.enrollment.fullName, email: lead.enrollment.email } : null,
+    },
     account,
     expired: quoteExpired(lead),
     programType: sel.programType || lead.quoteData?.programType || "CENTER",
@@ -102,7 +113,7 @@ export async function enrollmentView(lead, db = prisma) {
 }
 
 /** Checks the form and returns { data } or { error, status }. */
-export async function parseEnrollment(body, lead, db = prisma) {
+export async function parseEnrollment(body, lead, db = prisma, { signing = false } = {}) {
   const fullName = String(body.fullName || "").trim().slice(0, 150);
   const email = String(body.email || "").trim().toLowerCase().slice(0, 200);
   const password = String(body.password || "");
@@ -113,7 +124,8 @@ export async function parseEnrollment(body, lead, db = prisma) {
   const agreement = await enrollmentAgreement(lead.pricingSelection?.programType || lead.quoteData?.programType, db);
   if (!agreement) return { error: "The Subscriber Agreement isn't published yet. Please contact us to finish your enrollment.", status: 409 };
   if (body.agreementId !== agreement.id) return { error: "The agreement was updated. Please reload the page and review it again.", status: 409 };
-  if (body.agree !== true) return { error: "Please agree to the Subscriber Agreement to continue" };
+  // Signing in DocuSign takes the place of the "I agree" box.
+  if (!signing && body.agree !== true) return { error: "Please agree to the Subscriber Agreement to continue" };
   if (await db.user.findUnique({ where: { email }, select: { id: true } })) {
     return { error: "That email already has an Ameris account. Use a different email for this administrator, or contact us.", status: 409 };
   }
@@ -269,7 +281,9 @@ export async function finishEnrollment(sessionId, db = prisma) {
       const a = e.agreement || {};
       const notes = [
         `Enrolled online from quote ${lead.quoteNumber}; paid ${paid} by card (Stripe). Billing ${c.billingCycle === "ANNUAL" ? "annual" : "monthly"}.`,
-        `${e.fullName} (${e.email}) agreed to "${a.name}" version ${a.version} on ${new Date(e.acceptedAt).toLocaleString("en-US")} from ${e.ipAddress || "unknown IP"}.`,
+        e.signing?.status === "COMPLETED"
+          ? `${e.fullName} (${e.email}) signed the Order Form and "${a.name}" version ${a.version} in DocuSign on ${new Date(e.signing.completedAt).toLocaleString("en-US")} (envelope ${e.signing.envelopeId}).`
+          : `${e.fullName} (${e.email}) agreed to "${a.name}" version ${a.version} on ${new Date(e.acceptedAt).toLocaleString("en-US")} from ${e.ipAddress || "unknown IP"}.`,
         emailTaken
           ? `No administrator was created: ${e.email} already had an Ameris account. Add the administrator by hand.`
           : `Center "${lead.centerName}" and administrator ${e.email} created.`,
@@ -308,6 +322,18 @@ export async function finishEnrollment(sessionId, db = prisma) {
     });
   }
 
+  // Centers: keep the signed agreement and DocuSign's certificate on the account.
+  if (e.signing?.status === "COMPLETED") {
+    try {
+      account = await saveSignedCopies(account, e, db);
+    } catch (err) {
+      console.error("enroll signed copies", err?.docusign || err);
+      await db.subscriberAccountNote.create({
+        data: { accountId: account.id, description: `The signed agreement couldn't be saved from DocuSign (${err.message}). It's in DocuSign as envelope ${e.signing.envelopeId}.` },
+      });
+    }
+  }
+
   if (adminId && e.agreement?.source === "TERMS") {
     await db.termsAcceptance
       .create({
@@ -329,4 +355,122 @@ export async function finishEnrollment(sessionId, db = prisma) {
     link: "/global/subscribers",
   }).catch(() => null);
   return { account };
+}
+
+// ---------------------------------------------------------------------------
+// DocuSign signing for centers (client 2026-11-11, Q5): the center signs the
+// Order Form (services, pricing, billing terms, discount) with the Subscriber
+// Agreement attached, before paying. Home Daycare keeps the "I agree" box.
+// Without DocuSign settings, centers fall back to "I agree" too.
+
+const SIGNED_DIR = path.join(process.cwd(), "storage", "signed-agreements");
+const programTypeOf = (lead) => lead.pricingSelection?.programType || lead.quoteData?.programType || "CENTER";
+
+export function signingRequired(lead) {
+  return programTypeOf(lead) !== "HOME_DAYCARE" && docusignConfigured();
+}
+
+const escHtml = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** The agreement as a DocuSign document: the uploaded file, or the published text. */
+function agreementDocument(agreement) {
+  const name = `${agreement.name} (${agreement.version})`;
+  if (agreement.source === "FILE") {
+    const file = path.basename(String(agreement.url || ""));
+    const bytes = fs.readFileSync(path.join(process.cwd(), "public", "uploads", file));
+    return { name, fileExtension: path.extname(file).slice(1).toLowerCase() || "pdf", base64: bytes.toString("base64") };
+  }
+  const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;font-size:12px;white-space:pre-wrap">${escHtml(agreement.body)}</body></html>`;
+  return { name, fileExtension: "html", base64: Buffer.from(html).toString("base64") };
+}
+
+/**
+ * Creates the envelope for the person filling in Create Your Account and
+ * returns { envelopeId, url } (the DocuSign signing page).
+ */
+export async function startSigning(lead, data, origin) {
+  const agreement = await enrollmentAgreement(programTypeOf(lead));
+  if (!agreement) throw Object.assign(new Error("The Subscriber Agreement isn't published yet."), { status: 409 });
+  const signer = { name: data.fullName, email: data.email, clientUserId: lead.id };
+  const html = orderFormHtml({
+    lead,
+    signer: data,
+    charges: enrollmentCharges(lead.quoteData),
+    agreement,
+    termMonths: INITIAL_TERM_MONTHS,
+    company: "Ameris Solutions",
+  });
+  let agreementDoc;
+  try {
+    agreementDoc = agreementDocument(agreement);
+  } catch {
+    throw Object.assign(new Error("The Subscriber Agreement file is missing on the server. Please contact us."), { status: 409 });
+  }
+  const envelope = await createEnvelope({
+    emailSubject: `Ameris Solutions Subscription Agreement - ${lead.centerName}`,
+    documents: [{ name: `Order Form ${lead.quoteNumber}`, fileExtension: "html", base64: Buffer.from(html).toString("base64") }, agreementDoc],
+    signer,
+    anchors: { sign: SIGN_ANCHOR, date: DATE_ANCHOR },
+    metadata: { leadId: lead.id, quoteNumber: lead.quoteNumber },
+  });
+  const url = await signingUrl(envelope.envelopeId, signer, `${origin}/solutions/enroll/${encodeURIComponent(lead.quoteToken)}?signing=1`);
+  return { envelopeId: envelope.envelopeId, url };
+}
+
+/** Asks DocuSign whether a sent envelope was signed; saves and returns the lead. */
+export async function refreshSigning(lead, db = prisma) {
+  const e = lead.enrollment;
+  if (!e?.signing?.envelopeId || e.signing.status !== "SENT" || !docusignConfigured()) return lead;
+  const envelope = await getEnvelope(e.signing.envelopeId);
+  const status = { completed: "COMPLETED", declined: "DECLINED", voided: "VOIDED" }[envelope.status];
+  if (!status) return lead;
+  const completedAt = envelope.completedDateTime || new Date().toISOString();
+  const enrollment = {
+    ...e,
+    signing: { ...e.signing, status, ...(status === "COMPLETED" ? { completedAt } : {}) },
+    ...(status === "COMPLETED" ? { acceptedAt: completedAt } : {}),
+  };
+  return db.lead.update({
+    where: { id: lead.id },
+    data: {
+      enrollment,
+      activities: {
+        create: {
+          description:
+            status === "COMPLETED"
+              ? `${e.fullName} signed the Order Form and Subscriber Agreement in DocuSign.`
+              : `DocuSign signing was ${status.toLowerCase()} by ${e.fullName}.`,
+        },
+      },
+    },
+  });
+}
+
+/** Downloads the signed PDF and certificate into storage/ and records them on the account. */
+async function saveSignedCopies(account, e, db = prisma) {
+  const dir = path.join(SIGNED_DIR, account.id);
+  await fs.promises.mkdir(dir, { recursive: true });
+  await fs.promises.writeFile(path.join(dir, "agreement.pdf"), await downloadEnvelopeDocument(e.signing.envelopeId, "combined"));
+  await fs.promises.writeFile(path.join(dir, "certificate.pdf"), await downloadEnvelopeDocument(e.signing.envelopeId, "certificate"));
+  return db.subscriberAccount.update({
+    where: { id: account.id },
+    data: {
+      signedAgreement: {
+        envelopeId: e.signing.envelopeId,
+        signedAt: e.signing.completedAt,
+        signerName: e.fullName,
+        signerEmail: e.email,
+        agreementName: e.agreement?.name || null,
+        agreementVersion: e.agreement?.version || null,
+        files: { agreement: "agreement.pdf", certificate: "certificate.pdf" },
+      },
+    },
+  });
+}
+
+/** Path of a saved signed file ("agreement" | "certificate"), or null. */
+export function signedFilePath(account, which) {
+  const name = account?.signedAgreement?.files?.[which];
+  if (!name || !/^[a-z]+\.pdf$/.test(name)) return null;
+  return path.join(SIGNED_DIR, account.id, name);
 }

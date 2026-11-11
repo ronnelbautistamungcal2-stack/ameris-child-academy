@@ -395,6 +395,28 @@ function Detail({ id, onChanged }) {
         )}
       </div>
 
+      {detail.signedAgreement ? (
+        <div className={card}>
+          <h3 className="mb-2 text-lg font-extrabold text-gray-900 dark:text-gray-100">Signed Agreement (DocuSign)</h3>
+          <Row label="Agreement">
+            {detail.signedAgreement.agreementName || "Subscriber Agreement"}
+            {detail.signedAgreement.agreementVersion ? ` (${detail.signedAgreement.agreementVersion})` : ""}
+          </Row>
+          <Row label="Signed by">
+            {detail.signedAgreement.signerName} ({detail.signedAgreement.signerEmail})
+          </Row>
+          <Row label="Signed on">{detail.signedAgreement.signedAt ? new Date(detail.signedAgreement.signedAt).toLocaleString() : "—"}</Row>
+          <div className="mt-2 flex flex-wrap gap-3 text-sm">
+            <a href={`/api/v1/signed-agreements/${detail.id}`} target="_blank" rel="noreferrer" className="font-semibold text-blue-700 underline dark:text-blue-300">
+              Signed agreement (PDF)
+            </a>
+            <a href={`/api/v1/signed-agreements/${detail.id}?file=certificate`} target="_blank" rel="noreferrer" className="font-semibold text-blue-700 underline dark:text-blue-300">
+              Signing certificate
+            </a>
+          </div>
+        </div>
+      ) : null}
+
       <div className={card}>
         <h3 className="mb-2 text-lg font-extrabold text-gray-900 dark:text-gray-100">Notes</h3>
         <div className="mb-3 flex gap-2">

@@ -8,6 +8,8 @@ const { test, expect } = require("@playwright/test");
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 const { getAuthCookie } = require("../helpers/auth");
 const { apiPost } = require("../helpers/api");
 
@@ -46,7 +48,8 @@ test.describe("Complete Your Enrollment @api", () => {
         email: `contact@${domain}`,
         locations: 1,
         addOns: ["STEPS_OF_PROGRESSION"],
-        pricingSelection: { children: 15, billingCycle: "MONTHLY", programType: "CENTER", curriculumVersion: "STANDARD" },
+        // Home Daycare agrees with the "I agree" box; centers e-sign (tested below).
+        pricingSelection: { children: 15, billingCycle: "MONTHLY", programType: "HOME_DAYCARE", homeDaycareProgram: "early-learning", curriculumVersion: "STANDARD" },
       },
     });
     leadId = lead.id;
@@ -59,7 +62,6 @@ test.describe("Complete Your Enrollment @api", () => {
     else await prisma.globalSetting.deleteMany({ where: { key: "agreements" } });
     await prisma.lead.deleteMany({ where: { id: leadId } });
     await prisma.user.deleteMany({ where: { id: globalId } });
-    await prisma.$disconnect();
   });
 
   test("the page shows the charges, the agreement and that they haven't enrolled", async ({ request }) => {
@@ -122,4 +124,125 @@ test.describe("Complete Your Enrollment @api", () => {
     });
     expect(res.status()).toBe(409);
   });
+});
+
+// Centers sign the Order Form and Subscriber Agreement in DocuSign before
+// paying (client 2026-11-11). Signing itself happens on DocuSign's page, so
+// it's checked by hand; skipped when the server has no DocuSign settings.
+test.describe("Complete Your Enrollment: center e-signing @api", () => {
+  const cStamp = `${stamp}c`;
+  const cDomain = `esign-test-${cStamp}.local`;
+  const pdfName = `test-esign-${cStamp}.pdf`;
+  const pdfPath = path.join(__dirname, "..", "..", "public", "uploads", pdfName);
+  let globalId = "";
+  let leadId = "";
+  let token = "";
+  let savedAgreements = null;
+  let agreementId = "";
+  const otherAdminEmail = `other-admin@${cDomain}`;
+
+  test.beforeAll(async ({ request }) => {
+    fs.writeFileSync(pdfPath, minimalPdf("Ameris Solutions Software Subscription Agreement (test)"));
+    const gEmail = `global@${cDomain}`;
+    globalId = (await prisma.user.create({ data: { email: gEmail, name: "E-Sign Global", password: await bcrypt.hash(password, 10), role: "GLOBAL_ADMIN", roles: ["GLOBAL_ADMIN"] } })).id;
+    savedAgreements = await prisma.globalSetting.findUnique({ where: { key: "agreements" } });
+    const global = await getAuthCookie(request, gEmail, password);
+    const added = await (
+      await apiPost(request, "/api/v1/global/settings", { agreement: { name: "Test Subscription Agreement", version: `e-${cStamp}`, effectiveDate: "2026-11-01", fileUrl: `/uploads/${pdfName}` } }, global)
+    ).json();
+    agreementId = added.agreements.find((a) => a.current).id;
+    const lead = await prisma.lead.create({
+      data: {
+        number: `L-S${cStamp}`,
+        source: "QUOTE_REQUEST",
+        centerName: `E-Sign Center ${cStamp}`,
+        contactName: "E-Sign Contact",
+        email: `contact@${cDomain}`,
+        locations: 1,
+        addOns: ["STEPS_OF_PROGRESSION"],
+        pricingSelection: { children: 15, billingCycle: "MONTHLY", programType: "CENTER", curriculumVersion: "STANDARD" },
+      },
+    });
+    leadId = lead.id;
+    token = (await (await apiPost(request, `/api/v1/global/leads/${leadId}`, { generateQuote: true }, global)).json()).quoteToken;
+  });
+
+  test.afterAll(async () => {
+    fs.rmSync(pdfPath, { force: true });
+    if (savedAgreements) await prisma.globalSetting.update({ where: { key: "agreements" }, data: { value: savedAgreements.value } });
+    else await prisma.globalSetting.deleteMany({ where: { key: "agreements" } });
+    await prisma.lead.deleteMany({ where: { id: leadId } });
+    const other = await prisma.user.findUnique({ where: { email: otherAdminEmail } });
+    if (other) await prisma.centerUser.deleteMany({ where: { userId: other.id } });
+    await prisma.user.deleteMany({ where: { OR: [{ id: globalId }, { email: otherAdminEmail }] } });
+  });
+
+  test("a center must e-sign before paying; signing opens DocuSign", async ({ request }) => {
+    const view = await (await request.get(`/api/v1/solutions/enroll/${token}`)).json();
+    test.skip(!view.signing.required, "DocuSign isn't set up on this server");
+    expect(view.signing.status).toBeNull();
+
+    // No payment before signing, and no "I agree" shortcut.
+    const form = { fullName: "E-Sign Admin", email: `admin@${cDomain}`, password: "a-strong-pass", confirmPassword: "a-strong-pass", agree: true, agreementId };
+    const early = await request.post(`/api/v1/solutions/enroll/${token}`, { data: form });
+    expect(early.status()).toBe(409);
+    expect((await early.json()).error).toMatch(/e-sign/i);
+
+    expect((await request.post(`/api/v1/solutions/enroll/${token}/sign`, { data: { ...form, password: "short", confirmPassword: "short" } })).status()).toBe(400);
+    expect((await request.post(`/api/v1/solutions/enroll/${token}/sign`, { data: { ...form, agreementId: "old" } })).status()).toBe(409);
+
+    const res = await request.post(`/api/v1/solutions/enroll/${token}/sign`, { data: form });
+    expect(res.status(), await res.text()).toBe(200);
+    expect((await res.json()).url).toMatch(/^https:\/\/[\w.-]*docusign\.(com|net)\//);
+
+    const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+    const e = /** @type {any} */ (lead?.enrollment);
+    expect(e).toMatchObject({ fullName: "E-Sign Admin", email: `admin@${cDomain}`, signing: { status: "SENT" } });
+    expect(e.signing.envelopeId).toBeTruthy();
+    expect(e.passwordHash).toMatch(/^\$2/);
+    expect(JSON.stringify(e)).not.toContain("a-strong-pass");
+
+    const after = await (await request.get(`/api/v1/solutions/enroll/${token}`)).json();
+    expect(after.signing).toMatchObject({ required: true, status: "SENT", signer: { fullName: "E-Sign Admin" } });
+    expect((await request.post(`/api/v1/solutions/enroll/${token}`, { data: {} })).status()).toBe(409); // still unsigned
+  });
+
+  test("signed copies are only for Ameris staff and the account's own admins", async ({ request }) => {
+    const demo = await prisma.subscriberAccount.findFirst({ where: { accountNumber: "C-1001" } });
+    const other = await prisma.user.create({
+      data: { email: otherAdminEmail, name: "Other Admin", password: await bcrypt.hash(password, 10), role: "ADMIN", roles: ["ADMIN"], subscriberAccountId: null },
+    });
+    const cookie = await getAuthCookie(request, otherAdminEmail, password);
+    // An admin of another (or no) account can't open C-1001's agreement.
+    expect((await request.get(`/api/v1/signed-agreements/${demo?.id}`, { headers: { cookie } })).status()).toBe(403);
+    // A Global admin can, but there's no signed copy on file for the demo account.
+    const global = await getAuthCookie(request, `global@${cDomain}`, password);
+    expect((await request.get(`/api/v1/signed-agreements/${demo?.id}`, { headers: { cookie: global } })).status()).toBe(404);
+    expect(other.id).toBeTruthy();
+  });
+});
+
+function minimalPdf(text) {
+  const content = `BT /F1 14 Tf 72 720 Td (${text}) Tj ET`;
+  const objs = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [];
+  objs.forEach((o, i) => {
+    offsets.push(pdf.length);
+    pdf += `${i + 1} 0 obj\n${o}\nendobj\n`;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("")}`;
+  pdf += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return pdf;
+}
+
+test.afterAll(async () => {
+  await prisma.$disconnect();
 });

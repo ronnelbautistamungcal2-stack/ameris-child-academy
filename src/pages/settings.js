@@ -8,6 +8,9 @@ import { useEffect, useState } from "react";
 import { STAFF_PORTAL_ROLES } from "@/lib/roles";
 
 const STAFF_ROLES = new Set(["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "COACH"]);
+const SETTINGS_ROLES = ["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "PARENT", "COACH", "GLOBAL_ADMIN", "SUBSCRIBER"];
+// Roles that sign in at a center's kiosk with a PIN.
+const KIOSK_ROLES = new Set(["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "PARENT", "COACH"]);
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set([
   "image/jpeg",
@@ -18,10 +21,10 @@ const ALLOWED_IMAGE_TYPES = new Set([
 
 export default function SettingsPage() {
   const toast = useToast();
-  const { session, status, allowed, update } = useRequireRole(
-    ["ADMIN", "TEACHER", ...STAFF_PORTAL_ROLES, "PARENT", "COACH"],
-    "/login",
-  );
+  // Every signed-in role, including the Ameris team (GLOBAL_ADMIN) and
+  // SUBSCRIBER: new Global team members are sent here to change their
+  // temporary password, and a role missing here bounced them to /login.
+  const { session, status, allowed, update } = useRequireRole(SETTINGS_ROLES, "/dashboard");
 
   useShellTitle("Account Settings");
 
@@ -193,6 +196,10 @@ export default function SettingsPage() {
           mustChangePassword: false,
         },
       });
+      // A first-login change: continue into the portal (the middleware sends
+      // them to /terms first if any are pending; /dashboard picks the portal
+      // for their role, e.g. Global admin for the Ameris team).
+      if (mustChangePassword) window.location.assign("/dashboard");
     } catch (e) {
       setPasswordError(e.message || "Failed to change password.");
     } finally {
@@ -376,7 +383,7 @@ export default function SettingsPage() {
         {isParentRole ? preferencesCard : null}
         {/* Parents sign children in and out at the kiosk with a PIN too, so they
             can view it here after entering their password (client sheet 2026-11-07). */}
-        {session?.user?.id ? <KioskPinCard userId={session.user.id} /> : null}
+        {session?.user?.id && KIOSK_ROLES.has(role) ? <KioskPinCard userId={session.user.id} /> : null}
       </div>
     </>
   );

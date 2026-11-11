@@ -173,6 +173,21 @@ The quote's **Complete Your Enrollment** page, laid out like mockup Home-Pages-0
 - We added a password to Create Your Account because there's no email service to send a welcome email yet.
 - Card payments only (no bank transfers).
 
+## Center e-signing with DocuSign (2026-11-11)
+
+Client answer to Q5: centers sign their Subscriber Agreement and Order Form through DocuSign during enrollment, and Home Daycare keeps the "I agree" box.
+- **The center's flow on Complete Your Enrollment:**
+  1. **Create Your Account** (name, email, password).
+  2. **Review & E-Sign Agreement** opens DocuSign. They sign the **Order Form** (their plan, prices, discount, billing terms, start date, 12-month auto-renewing term) with the current **Subscriber Agreement** attached.
+  3. Back on the page, the agreement shows **✓ Signed** and **Continue to Secure Payment** unlocks. Payment can't start before signing.
+- **After payment:** the signed PDF (Order Form + Agreement) and DocuSign's completion certificate are saved on the account, in `storage/signed-agreements/` (not public).
+- **Who sees the signed copies:**
+  - Global admin > Subscribers shows a **Signed Agreement (DocuSign)** card: who signed, when, the version, and both files.
+  - The center's own admins see links on Admin > Ameris Solutions Subscription.
+  - Only Ameris staff who can view Subscribers and that account's admins can open the files.
+- **Setup:** the `DOCUSIGN_*` settings in `.env` (see `.env.example`) and the private key file. Without them, centers fall back to "I agree".
+- **Demo environment for now:** live signing needs DocuSign's go-live review, then the live account's settings.
+
 ## Step A — add-on locks (done 2026-11-07)
 
 - Whole pages: `src/lib/addOns.js` (by route). HR and Other Staff get Staff Management on every page except Dashboard, Messages and My Performance (whose tabs lock themselves), read from the sheet's "All Full Pages are locked" row.

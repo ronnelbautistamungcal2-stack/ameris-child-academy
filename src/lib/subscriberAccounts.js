@@ -87,10 +87,13 @@ export async function accountSummaryForUser(userId) {
       addOns: true,
       maxCenters: true,
       maxChildren: true,
+      signedAgreement: true,
     },
   });
   if (!account) return { account: null, addOns: null };
-  return { account, addOns: normalizeAddOns(account.addOns) };
+  // Only whether there's a signed copy; who signed stays on the admin pages.
+  const { signedAgreement, ...rest } = account;
+  return { account: { ...rest, hasSignedAgreement: Boolean(signedAgreement) }, addOns: normalizeAddOns(account.addOns) };
 }
 
 export function isGlobalAdmin(user) {

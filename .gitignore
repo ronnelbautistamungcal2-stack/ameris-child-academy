@@ -37,3 +37,7 @@ playwright/.cache/
 
 # Client mockup images (~90 MB) - regenerate with scripts/extract-client-mockups.py
 docs/client-requests/*/mockups/
+
+# DocuSign JWT private key (never commit)
+docusign-private.key
+*.key

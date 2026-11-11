@@ -1057,6 +1057,9 @@ model SubscriberAccount {
   stripeCustomerId        String?
   stripeSubscriptionId    String?
   stripeCheckoutSessionId String?                 @unique
+  // DocuSign (centers): { envelopeId, signedAt, signerName, signerEmail,
+  // agreementName, agreementVersion, files: { agreement, certificate } }
+  signedAgreement         Json?
   createdAt               DateTime                @default(now())
   updatedAt               DateTime                @updatedAt
 }

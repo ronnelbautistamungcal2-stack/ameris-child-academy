@@ -69,6 +69,18 @@ export default function AdminSubscriptionPage() {
                 </span>
               </div>
             ))}
+            {account.hasSignedAgreement ? (
+              <div className="mt-4 rounded-xl bg-blue-50 p-3 text-sm dark:bg-blue-900/30">
+                <div className="font-bold text-gray-900 dark:text-gray-100">Signed Subscriber Agreement</div>
+                <a href={`/api/v1/signed-agreements/${account.id}`} target="_blank" rel="noreferrer" className="font-semibold text-blue-700 underline dark:text-blue-300">
+                  View signed agreement (PDF)
+                </a>
+                {" · "}
+                <a href={`/api/v1/signed-agreements/${account.id}?file=certificate`} target="_blank" rel="noreferrer" className="font-semibold text-blue-700 underline dark:text-blue-300">
+                  Signing certificate
+                </a>
+              </div>
+            ) : null}
             <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
               To add an add-on, more centers or more children, contact the Ameris Solutions sales team. Online upgrades and billing are coming soon.
             </p>

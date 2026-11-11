@@ -134,6 +134,20 @@ The client's priority for their conference (Friday 2026-11-13): the Global admin
 - Contact Us subjects: Pricing and plans, Request a demo, Support for my account, Partnership, Other.
 - Lead statuses: New Lead, Contacted, Quote Sent, Follow-Up, Pending Decision, Won, Lost (from the Sales Pipeline report mockup).
 
+## Global admin Reports, Permissions & Users, Settings General (2026-11-11)
+
+- **Reports**: Subscriptions, Revenue, Outstanding, Sales Pipeline, Support, Add-Ons and Activity Log, with a date range, charts, Export CSV and Print. Revenue is the expected monthly amount from each account's pricing. Outstanding stays empty until Stripe payments are built.
+- **Permissions & Users**: Ameris team roles (Global Administrator, Customer Service, Developer, Sales), each with default rights, plus a View/Add/Edit/Delete matrix per person. Only Global Administrators manage users. The menu hides pages a person can't view.
+- **Settings > General**: company information, notifications, email settings, automated notification days, email templates and Subscriber Agreement versions. Subscription Pricing is now its own tab.
+- Migration `20261112090000_global_team_settings`. PR 25 builds on PR 24.
+
+**To confirm with the client:**
+- Default rights per role (our guess). Everyone except Global Administrators can view everything except Settings, and nobody else can edit Settings.
+  - Sales: full Sales & Leads; add Subscribers.
+  - Customer Service: full Customer Support; edit Subscribers.
+  - Developer: full Lesson & SOP banks; add and edit Support; view Settings.
+- Email templates are saved but not sent yet (no email service).
+
 ## Step A — add-on locks (done 2026-11-07)
 
 - Whole pages: `src/lib/addOns.js` (by route). HR and Other Staff get Staff Management on every page except Dashboard, Messages and My Performance (whose tabs lock themselves), read from the sheet's "All Full Pages are locked" row.

@@ -2,9 +2,16 @@ import { getSession } from "@/lib/auth";
 import { ACCOUNT_STATUSES, normalizeAddOns } from "@/lib/addOns";
 import { normalizeCurriculumTypes } from "@/lib/curriculumTypes";
 import { isGlobalAdmin } from "@/lib/subscriberAccounts";
+import { actionForMethod, can } from "@/lib/globalPermissions";
+import prisma from "@/lib/prisma";
 
-/** Session of a global admin signed in as GLOBAL_ADMIN, or null after replying 401/403. */
-export async function requireGlobalAdmin(req, res) {
+/**
+ * Session of a global admin signed in as GLOBAL_ADMIN, or null after replying
+ * 401/403. With `section` (one key or a list, any of which will do) the user
+ * also needs that right (Permissions & Users); the action follows the request
+ * method (GET view, POST add, PUT/PATCH edit, DELETE delete) unless given.
+ */
+export async function requireGlobalAdmin(req, res, section = null, action = null) {
   const session = await getSession(req, res);
   if (!session) {
     res.status(401).json({ error: "Unauthorized" });
@@ -13,6 +20,17 @@ export async function requireGlobalAdmin(req, res) {
   if (session.user.role !== "GLOBAL_ADMIN" || !isGlobalAdmin(session.user)) {
     res.status(403).json({ error: "Only Ameris Solutions global admins can do this" });
     return null;
+  }
+  if (section) {
+    const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { disabled: true, globalTeamRole: true, globalPermissions: true } });
+    const wanted = action || actionForMethod(req.method);
+    const sections = [].concat(section);
+    if (!me || me.disabled || !sections.some((s) => can(me, s, wanted))) {
+      res.status(403).json({ error: "You don't have permission to do this. Ask a Global Administrator (Permissions & Users)." });
+      return null;
+    }
+    session.user.globalTeamRole = me.globalTeamRole;
+    session.user.globalPermissions = me.globalPermissions;
   }
   return session;
 }

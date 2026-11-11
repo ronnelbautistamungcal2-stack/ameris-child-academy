@@ -11,7 +11,7 @@ import { ageGroupOptions, curriculumSourceCenter } from "@/lib/curriculumSource"
  *     Makes another center the curriculum source.
  */
 export default async function handler(req, res) {
-  const session = await requireGlobalAdmin(req, res);
+  const session = await requireGlobalAdmin(req, res, req.method === "GET" ? ["LESSON_BANK", "SOP_BANK"] : "LESSON_BANK");
   if (!session) return undefined;
 
   if (req.method === "GET") {

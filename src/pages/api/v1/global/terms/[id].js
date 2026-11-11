@@ -7,7 +7,7 @@ import { requireGlobalAdmin } from "@/lib/globalAdmin";
  * address and browser. Newest first, at most 1,000 (search narrows it).
  */
 export default async function handler(req, res) {
-  const session = await requireGlobalAdmin(req, res);
+  const session = await requireGlobalAdmin(req, res, "SETTINGS");
   if (!session) return undefined;
   if (req.method !== "GET") {
     res.setHeader("Allow", ["GET"]);

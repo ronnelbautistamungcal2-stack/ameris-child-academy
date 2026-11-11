@@ -8,7 +8,7 @@ import { LEAD_STATUSES, leadInclude, nextLeadNumber, parseLeadInput } from "@/li
  * Global admin > Sales & Leads.
  */
 export default async function handler(req, res) {
-  const session = await requireGlobalAdmin(req, res);
+  const session = await requireGlobalAdmin(req, res, "SALES_LEADS");
   if (!session) return undefined;
 
   if (req.method === "GET") {

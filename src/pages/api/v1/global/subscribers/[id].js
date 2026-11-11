@@ -69,7 +69,7 @@ function describeChanges(before, data) {
  *       Every change is written to the account's Notes. A plain { note } adds a note.
  */
 export default async function handler(req, res) {
-  const session = await requireGlobalAdmin(req, res);
+  const session = await requireGlobalAdmin(req, res, "SUBSCRIBERS");
   if (!session) return undefined;
   const id = String(req.query.id || "");
 

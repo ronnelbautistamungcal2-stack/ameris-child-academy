@@ -18,7 +18,7 @@ async function detail(id) {
  *                                 { generateQuote: true } prices it and saves the quote
  */
 export default async function handler(req, res) {
-  const session = await requireGlobalAdmin(req, res);
+  const session = await requireGlobalAdmin(req, res, "SALES_LEADS");
   if (!session) return undefined;
   const id = String(req.query.id || "");
   const lead = await prisma.lead.findUnique({ where: { id } });

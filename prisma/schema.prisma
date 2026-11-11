@@ -309,6 +309,7 @@ model User {
   subscriberAccountNotes             SubscriberAccountNote[]
   supportTicketsOpened               SupportTicket[]                     @relation("SupportTicketsOpened")
   termsAcceptances                   TermsAcceptance[]
+  leadActivities                     LeadActivity[]                      @relation("LeadActivities")
   supportTicketMessages              SupportTicketMessage[]
   supportAccessRequested             SupportAccessGrant[]                @relation("SupportAccessRequested")
   supportAccessAnswered              SupportAccessGrant[]                @relation("SupportAccessAnswered")
@@ -1043,6 +1044,7 @@ model SubscriberAccount {
   // from: { children, billingCycle, programType, curriculumVersion,
   // ageGroups, homeDaycareProgram, discountIds }. Add-ons come from addOns.
   pricingSelection    Json?
+  leads               Lead[]
   createdAt           DateTime                @default(now())
   updatedAt           DateTime                @updatedAt
 }
@@ -2857,4 +2859,54 @@ model PricingSet {
   updatedAt     DateTime @updatedAt
 
   @@index([effectiveDate])
+}
+
+// Sales & Leads (client mockups 2026-11-06, priority 2026-11-11). A lead comes
+// from the Ameris Solutions website (Request a Quote, Contact Us) or is added
+// by the Ameris team. Its pricing choices use the same shape as
+// SubscriberAccount.pricingSelection; Generate Quote saves a priced snapshot
+// (quoteData) that the public quote page shows by its token.
+model Lead {
+  id                  String             @id @default(uuid())
+  number              String             @unique // "L-1001"
+  status              String             @default("NEW") // NEW | CONTACTED | QUOTE_SENT | FOLLOW_UP | PENDING_DECISION | WON | LOST
+  source              String             @default("MANUAL") // QUOTE_REQUEST | CONTACT_FORM | MANUAL
+  centerName          String
+  contactName         String
+  email               String
+  phone               String?
+  bestTime            String?
+  location            String?
+  about               String?
+  locations           Int?
+  pricingSelection    Json? // { children, billingCycle, programType, curriculumVersion, classrooms, homeDaycareProgram, discountId }
+  addOns              String[]           @default([])
+  notes               String?
+  followUpDate        DateTime?          @db.Date
+  quoteNumber         String?            @unique // "Q-10001"
+  quoteToken          String?            @unique
+  quoteStatus         String? // DRAFT | SENT | ACCEPTED | EXPIRED
+  quoteData           Json?
+  quoteDate           DateTime?
+  quoteExpiresAt      DateTime?          @db.Date
+  subscriberAccount   SubscriberAccount? @relation(fields: [subscriberAccountId], references: [id], onDelete: SetNull)
+  subscriberAccountId String?
+  activities          LeadActivity[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model LeadActivity {
+  id          String   @id @default(uuid())
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  leadId      String
+  staff       User?    @relation("LeadActivities", fields: [staffId], references: [id], onDelete: SetNull)
+  staffId     String?
+  description String
+  createdAt   DateTime @default(now())
+
+  @@index([leadId, createdAt])
 }

@@ -12,7 +12,8 @@ async function rawBody(req) {
 
 /**
  * POST /api/v1/solutions/stripe-webhook  (called by Stripe)
- * Point a Stripe webhook here for "checkout.session.completed" and put its
+ * Point a Stripe webhook here for "checkout.session.completed",
+ * "checkout.session.async_payment_succeeded" and "…async_payment_failed" (bank payments) and put its
  * signing secret in STRIPE_WEBHOOK_SECRET. Creates the account for a paid
  * enrollment even if the person closes the tab before coming back.
  */
@@ -25,7 +26,7 @@ export default async function handler(req, res) {
   const event = verifyWebhook(await rawBody(req), req.headers["stripe-signature"]);
   if (!event) return res.status(400).json({ error: "Bad signature" });
 
-  if (["checkout.session.completed", "checkout.session.async_payment_succeeded"].includes(event.type)) {
+  if (["checkout.session.completed", "checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed"].includes(event.type)) {
     const session = event.data?.object;
     if (session?.metadata?.leadId) {
       try {

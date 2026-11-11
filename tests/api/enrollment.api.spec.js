@@ -113,6 +113,30 @@ test.describe("Complete Your Enrollment @api", () => {
     expect(await prisma.subscriberAccount.count({ where: { stripeCheckoutSessionId: e.checkoutSessionId } })).toBe(0);
   });
 
+  test("a bank payment that's clearing blocks paying twice; a failed one can be retried", async ({ request }) => {
+    const before = await prisma.lead.findUnique({ where: { id: leadId } });
+    const e = /** @type {any} */ (before?.enrollment) || {};
+    // Clearing (1–4 business days): the page shows it and won't start a second payment.
+    await prisma.lead.update({ where: { id: leadId }, data: { enrollment: { ...e, checkoutSessionId: "cs_test_not_a_real_session", payment: { status: "PROCESSING" } } } });
+    expect((await (await request.get(`/api/v1/solutions/enroll/${token}`)).json()).payment).toBe("PROCESSING");
+    const again = await request.post(`/api/v1/solutions/enroll/${token}`, {
+      data: { fullName: "Enroll Admin", email: `admin@${domain}`, password: "a-strong-pass", confirmPassword: "a-strong-pass", agree: true, agreementId },
+    });
+    expect(again.status()).toBe(409);
+    expect((await again.json()).error).toMatch(/processing/i);
+
+    // Bounced: they can pay again.
+    await prisma.lead.update({ where: { id: leadId }, data: { enrollment: { ...e, payment: { status: "FAILED" } } } });
+    expect((await (await request.get(`/api/v1/solutions/enroll/${token}`)).json()).payment).toBe("FAILED");
+    const retry = await request.post(`/api/v1/solutions/enroll/${token}`, {
+      data: { fullName: "Enroll Admin", email: `admin@${domain}`, password: "a-strong-pass", confirmPassword: "a-strong-pass", agree: true, agreementId },
+    });
+    test.skip(retry.status() === 503, "Stripe isn't set up on this server");
+    expect(retry.status(), await retry.text()).toBe(200);
+    const after = /** @type {any} */ ((await prisma.lead.findUnique({ where: { id: leadId } }))?.enrollment);
+    expect(after.payment).toBeUndefined();
+  });
+
   test("the webhook rejects unsigned calls; expired quotes can't enroll", async ({ request }) => {
     const hook = await request.post("/api/v1/solutions/stripe-webhook", { data: { type: "checkout.session.completed" }, headers: { "stripe-signature": "t=1,v1=bad" } });
     expect([400, 503]).toContain(hook.status());

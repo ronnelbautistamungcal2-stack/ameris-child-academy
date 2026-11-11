@@ -19,6 +19,8 @@ export default async function handler(req, res) {
   if (!/^cs_(test|live)_\w+$/.test(sessionId)) return res.status(400).json({ error: "Missing payment reference" });
   try {
     const out = await finishEnrollment(sessionId);
+    if (out.pending) return res.status(202).json({ pending: true });
+    if (out.failed) return res.status(402).json({ failed: true, error: "Your bank payment didn't go through. Nothing was set up; please try again or use a card." });
     if (out.error) return res.status(out.status || 400).json({ error: out.error });
     // Only answer for this quote's own payment.
     const mine = await prisma.lead.findFirst({ where: { id: lead.id, subscriberAccountId: out.account.id }, select: { enrollment: true } });

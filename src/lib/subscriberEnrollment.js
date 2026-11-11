@@ -96,6 +96,8 @@ export async function enrollmentView(lead, db = prisma) {
   const signing = lead.enrollment?.signing;
   return {
     enrolled: Boolean(account),
+    // Bank payments: PROCESSING until it clears, FAILED if it bounced.
+    payment: lead.enrollment?.payment?.status || null,
     // Centers sign in DocuSign (when it's set up); Home Daycare ticks "I agree".
     signing: {
       required: signingRequired(lead),
@@ -163,8 +165,10 @@ export async function startCheckout(lead, enrollment, origin) {
     mode: "payment",
     // Always US dollars: the subscription that follows is billed in USD.
     adaptive_pricing: { enabled: false },
-    // Cards only: bank payments take days to clear and the account is made on payment.
-    payment_method_types: ["card"],
+    // Card or US bank account (client 2026-11-11). A bank payment takes a few
+    // business days to clear; the account is created when it does.
+    payment_method_types: ["card", "us_bank_account"],
+    payment_method_options: { us_bank_account: { verification_method: "automatic" } },
     customer_creation: "always",
     customer_email: enrollment.email,
     client_reference_id: lead.id,
@@ -180,14 +184,18 @@ export async function startCheckout(lead, enrollment, origin) {
       },
     ],
     payment_intent_data: { setup_future_usage: "off_session", metadata, description: `${subscriptionLabel(lead)}: first payment` },
-    custom_text: { submit: { message: `Your card is saved for the subscription: ${then}, renewing automatically every ${INITIAL_TERM_MONTHS} months.` } },
+    custom_text: {
+      submit: {
+        message: `Your payment method is saved for the subscription: ${then}, renewing automatically every ${INITIAL_TERM_MONTHS} months. Bank payments take 1–4 business days to clear; your account is created once it clears.`,
+      },
+    },
     success_url: `${back}?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${back}?canceled=1`,
   });
 }
 
-/** Starts the recurring subscription on the card from the first payment. */
-async function startSubscription(lead, session, c) {
+/** Starts the recurring subscription on the card or bank account from the first payment. */
+async function startSubscription(lead, session, c, anchor) {
   const pi = session.payment_intent;
   const customer = typeof session.customer === "string" ? session.customer : session.customer?.id;
   const paymentMethod = typeof pi?.payment_method === "string" ? pi.payment_method : pi?.payment_method?.id;
@@ -200,7 +208,7 @@ async function startSubscription(lead, session, c) {
       default_payment_method: paymentMethod,
       items: [{ price_data: { currency: "usd", product: product.id, unit_amount: c.recurringAmount, recurring: { interval: c.interval } } }],
       // Today's payment covers the time until then.
-      billing_cycle_anchor: Math.floor(c.nextBillingDate.getTime() / 1000),
+      billing_cycle_anchor: Math.floor(anchor.getTime() / 1000),
       proration_behavior: "none",
       metadata,
     },
@@ -217,6 +225,11 @@ export async function finishEnrollment(sessionId, db = prisma) {
   const session = await getCheckoutSession(sessionId);
   const leadId = session?.metadata?.leadId;
   if (!leadId) return { error: "This payment isn't for an enrollment", status: 404 };
+  // A bank payment: Checkout is complete but the money hasn't cleared (or it failed).
+  if (session.status === "complete" && session.payment_status === "unpaid") {
+    const failed = ["requires_payment_method", "canceled"].includes(session.payment_intent?.status);
+    return markBankPayment(leadId, session, failed ? "FAILED" : "PROCESSING", db);
+  }
   if (session.status !== "complete" || !["paid", "no_payment_required"].includes(session.payment_status)) {
     return { error: "The payment isn't finished yet", status: 409 };
   }
@@ -280,7 +293,7 @@ export async function finishEnrollment(sessionId, db = prisma) {
       }
       const a = e.agreement || {};
       const notes = [
-        `Enrolled online from quote ${lead.quoteNumber}; paid ${paid} by card (Stripe). Billing ${c.billingCycle === "ANNUAL" ? "annual" : "monthly"}.`,
+        `Enrolled online from quote ${lead.quoteNumber}; paid ${paid} by ${e.payment?.status ? "bank account" : "card"} (Stripe). Billing ${c.billingCycle === "ANNUAL" ? "annual" : "monthly"}.`,
         e.signing?.status === "COMPLETED"
           ? `${e.fullName} (${e.email}) signed the Order Form and "${a.name}" version ${a.version} in DocuSign on ${new Date(e.signing.completedAt).toLocaleString("en-US")} (envelope ${e.signing.envelopeId}).`
           : `${e.fullName} (${e.email}) agreed to "${a.name}" version ${a.version} on ${new Date(e.acceptedAt).toLocaleString("en-US")} from ${e.ipAddress || "unknown IP"}.`,
@@ -289,7 +302,8 @@ export async function finishEnrollment(sessionId, db = prisma) {
           : `Center "${lead.centerName}" and administrator ${e.email} created.`,
       ];
       for (const description of notes) await tx.subscriberAccountNote.create({ data: { accountId: created.id, description } });
-      const { passwordHash: _p, ...kept } = e;
+      const { passwordHash: _p, ...rest } = e;
+      const kept = rest.payment ? { ...rest, payment: { ...rest.payment, status: "CLEARED", clearedAt: new Date().toISOString() } } : rest;
       await tx.lead.update({
         where: { id: lead.id },
         data: {
@@ -313,8 +327,27 @@ export async function finishEnrollment(sessionId, db = prisma) {
   // The recurring part. If Stripe refuses, the account still exists (they
   // paid); the Ameris team starts the subscription in Stripe themselves.
   try {
-    const sub = await startSubscription(lead, session, c);
+    // A bank payment can clear after the 1st it was meant to bill from; then
+    // the subscription starts on the following 1st and the team bills the gap.
+    let anchor = c.nextBillingDate;
+    let missed = null;
+    const now = new Date();
+    if (anchor.getTime() <= now.getTime() + 60 * 60 * 1000) {
+      missed = anchor;
+      anchor = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    }
+    const sub = await startSubscription(lead, session, c, anchor);
     account = await db.subscriberAccount.update({ where: { id: account.id }, data: { stripeSubscriptionId: sub.id } });
+    if (missed) {
+      const from = missed.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+      const to = anchor.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+      await db.subscriberAccountNote.create({
+        data: {
+          accountId: account.id,
+          description: `The payment cleared after ${from}, so the subscription starts billing on ${to}. Bill the time from ${from} to ${to} by hand.`,
+        },
+      });
+    }
   } catch (err) {
     console.error("enroll subscription", err?.stripe || err);
     await db.subscriberAccountNote.create({
@@ -473,4 +506,43 @@ export function signedFilePath(account, which) {
   const name = account?.signedAgreement?.files?.[which];
   if (!name || !/^[a-z]+\.pdf$/.test(name)) return null;
   return path.join(SIGNED_DIR, account.id, name);
+}
+
+/**
+ * Bank payment not cleared yet (PROCESSING) or bounced (FAILED): records it on
+ * the lead once, tells the Ameris team, and returns { pending } or { failed }.
+ */
+async function markBankPayment(leadId, session, status, db = prisma) {
+  const lead = await db.lead.findUnique({ where: { id: leadId } });
+  if (!lead) return { error: "Quote not found", status: 404 };
+  if (lead.subscriberAccountId) return { account: await db.subscriberAccount.findUnique({ where: { id: lead.subscriberAccountId } }) };
+  const e = lead.enrollment || {};
+  const amount = dollars(session.amount_total);
+  // Only this session's payment counts; an older, replaced session changes nothing.
+  if (e.checkoutSessionId && e.checkoutSessionId !== session.id) return status === "FAILED" ? { failed: true } : { pending: true };
+  if (e.payment?.status !== status) {
+    await db.lead.update({
+      where: { id: lead.id },
+      data: {
+        enrollment: { ...e, payment: { ...(e.payment || {}), status, sessionId: session.id, method: "us_bank_account", [status === "FAILED" ? "failedAt" : "since"]: new Date().toISOString() } },
+        activities: {
+          create: {
+            description:
+              status === "FAILED"
+                ? `The bank payment of ${amount} didn't go through. They can try again from the enrollment page.`
+                : `Paid ${amount} by bank account; waiting for it to clear (usually 1–4 business days).`,
+          },
+        },
+      },
+    });
+    await notify(await globalAdminIds(db), null, {
+      title: status === "FAILED" ? "Enrollment bank payment failed" : "Enrollment bank payment processing",
+      body:
+        status === "FAILED"
+          ? `${lead.centerName}'s bank payment of ${amount} didn't go through.`
+          : `${lead.centerName} paid ${amount} by bank account. The account is created when it clears.`,
+      link: `/global/leads?lead=${lead.id}`,
+    }).catch(() => null);
+  }
+  return status === "FAILED" ? { failed: true } : { pending: true };
 }

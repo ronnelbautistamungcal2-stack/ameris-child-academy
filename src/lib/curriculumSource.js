@@ -12,6 +12,7 @@
 // way (their own planner and banks).
 
 import prisma from "@/lib/prisma";
+import { ageRangeNames, findPlan } from "@/lib/curriculumPlans";
 
 /** The curriculum source center, or null when none is set. */
 export async function curriculumSourceCenter(db = prisma) {
@@ -22,22 +23,21 @@ export async function curriculumSourceCenter(db = prisma) {
   });
 }
 
-/** The age groups Ameris offers: the source center's classrooms. */
+/**
+ * The age groups Ameris offers: the curriculum center's Age Range list
+ * (Curriculum > Categories; client sheet 10-29, row 3). { id, name } with the
+ * name as id, so stored choices read as the age group itself.
+ */
 export async function ageGroupOptions(db = prisma, source) {
   const center = source === undefined ? await curriculumSourceCenter(db) : source;
   if (!center) return [];
-  const rooms = await db.classRoom.findMany({
-    where: { centerId: center.id },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
-  return rooms;
+  return (await ageRangeNames(center.id, db)).map((name) => ({ id: name, name }));
 }
 
-/** Keeps only ids that are age groups (source classrooms), in option order. */
+/** Keeps only names that are age groups, in option order. */
 export async function normalizeAgeGroups(input, db = prisma) {
-  const wanted = new Set((Array.isArray(input) ? input : []).map(String));
-  return (await ageGroupOptions(db)).filter((o) => wanted.has(o.id)).map((o) => o.id);
+  const wanted = new Set((Array.isArray(input) ? input : []).map((v) => String(v).trim().toLowerCase()));
+  return (await ageGroupOptions(db)).filter((o) => wanted.has(o.id.toLowerCase())).map((o) => o.id);
 }
 
 /**
@@ -76,6 +76,8 @@ export async function classroomCurriculum(classRoomId, db = prisma) {
       id: true,
       centerId: true,
       curriculumAgeGroupId: true,
+      name: true,
+      ageRange: true,
       center: { select: { subscriberAccountId: true, curriculumSource: true } },
     },
   });
@@ -83,7 +85,12 @@ export async function classroomCurriculum(classRoomId, db = prisma) {
   const source = await curriculumSourceCenter(db);
   const accountId = room.center?.subscriberAccountId || null;
   if (room.center?.curriculumSource || !(await accountUsesAmerisCurriculum(accountId, db, source))) {
-    return { mode: "OWN", plannerClassRoomId: room.id, plannerCenterId: room.centerId, types: null };
+    // The center's plan for this classroom's age range (or name); else the
+    // classroom's own planner, as before plans existed.
+    const plan = await findPlan(room.centerId, [room.ageRange, room.name], [], db);
+    return plan
+      ? { mode: "OWN", planId: plan.id, plannerClassRoomId: null, plannerCenterId: room.centerId, types: null }
+      : { mode: "OWN", planId: null, plannerClassRoomId: room.id, plannerCenterId: room.centerId, types: null };
   }
   const account = await db.subscriberAccount.findUnique({
     where: { id: accountId },
@@ -95,16 +102,18 @@ export async function classroomCurriculum(classRoomId, db = prisma) {
   const chosen = account?.curriculumAgeGroups || [];
   const allowed = new Set(chosen.length ? chosen : options.map((o) => o.id));
   const ageGroups = options.filter((o) => allowed.has(o.id));
-  // One age group on the account: every classroom follows it.
-  const ageGroupId =
-    room.curriculumAgeGroupId && allowed.has(room.curriculumAgeGroupId)
-      ? room.curriculumAgeGroupId
-      : ageGroups.length === 1
-        ? ageGroups[0].id
-        : null;
+  // The classroom's chosen age group; else its own age range when Ameris has
+  // it; else the account's only age group.
+  const byName = (name) => ageGroups.find((g) => g.id.toLowerCase() === String(name || "").trim().toLowerCase())?.id;
+  const ageGroupId = byName(room.curriculumAgeGroupId) || byName(room.ageRange) || (ageGroups.length === 1 ? ageGroups[0].id : null);
+  // Ameris's plan for that age group in a type the account has, else "All types".
+  const accountTypes = account?.curriculumTypes || [];
+  // No types chosen on the account yet: any plan for the age group.
+  const plan = ageGroupId ? await findPlan(source.id, [ageGroupId], accountTypes.length ? [...accountTypes, ""] : [], db) : null;
   return {
     mode: "AMERIS",
-    plannerClassRoomId: ageGroupId,
+    planId: plan?.id || null,
+    plannerClassRoomId: null,
     plannerCenterId: source.id,
     // No types chosen yet: every lesson (null = no type filter).
     types: account?.curriculumTypes?.length ? account.curriculumTypes : null,
@@ -121,14 +130,15 @@ export async function classroomCurriculum(classRoomId, db = prisma) {
  */
 export async function plannedLessons(curriculum, days, { buildActiveRows, rowLabel }, db = prisma) {
   const out = { rows: [], theme: "", byDay: {} };
-  if (!curriculum?.plannerClassRoomId) return out;
-  const id = curriculum.plannerClassRoomId;
+  const field = curriculum?.planId ? "planId" : "classRoomId";
+  const id = curriculum?.planId || curriculum?.plannerClassRoomId;
+  if (!id) return out;
   const [planner, rows, cells] = await Promise.all([
-    db.lessonPlanner.findUnique({ where: { classRoomId: id } }),
-    db.lessonPlanRow.findMany({ where: { classRoomId: id } }),
+    field === "planId" ? db.curriculumPlan.findUnique({ where: { id } }) : db.lessonPlanner.findUnique({ where: { classRoomId: id } }),
+    db.lessonPlanRow.findMany({ where: { [field]: id } }),
     days.length
       ? db.lessonPlanCell.findMany({
-          where: { classRoomId: id, day: { in: days } },
+          where: { [field]: id, day: { in: days } },
           include: { lesson: { select: { id: true, title: true, types: true } } },
         })
       : [],

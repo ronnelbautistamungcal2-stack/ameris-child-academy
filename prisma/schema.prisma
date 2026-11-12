@@ -430,6 +430,7 @@ model Center {
   lessonPlanners              LessonPlanner[]
   lessonPlanCells             LessonPlanCell[]
   curriculumOptions           CurriculumOption[]
+  curriculumPlans             CurriculumPlan[]
 
   @@index([subscriberAccountId])
 }
@@ -465,11 +466,10 @@ model ClassRoom {
   lessonCalendarAnchors     LessonCalendarAnchor[]
   lessonPlanner             LessonPlanner?
   lessonPlanCells           LessonPlanCell[]
-  // Subscriber classrooms (client 2026-11-07, step E): the Ameris age-group
-  // planner (a classroom of the curriculum source center) this one follows.
-  curriculumAgeGroup        ClassRoom?                @relation("CurriculumAgeGroup", fields: [curriculumAgeGroupId], references: [id], onDelete: SetNull)
+  // Subscriber classrooms (client 2026-11-07, step E): the Ameris age group
+  // this one follows, by name (an Age Range on the curriculum center's
+  // Categories tab; client sheet 10-29, row 3). Was a source classroom id.
   curriculumAgeGroupId      String?
-  curriculumFollowers       ClassRoom[]               @relation("CurriculumAgeGroup")
 }
 
 model TeacherClass {
@@ -703,21 +703,44 @@ model LessonPlanner {
 }
 
 model LessonPlanCell {
-  id          String    @id @default(uuid())
-  center      Center    @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  id          String          @id @default(uuid())
+  center      Center          @relation(fields: [centerId], references: [id], onDelete: Cascade)
   centerId    String
-  classRoom   ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
-  classRoomId String
+  classRoom   ClassRoom?      @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+  classRoomId String?
+  plan        CurriculumPlan? @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planId      String?
   day         Int
   rowIndex    Int
-  lesson      Lesson?   @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  lesson      Lesson?         @relation(fields: [lessonId], references: [id], onDelete: SetNull)
   lessonId    String?
   title       String
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   @@unique([classRoomId, day, rowIndex])
+  @@unique([planId, day, rowIndex])
   @@index([lessonId])
+}
+
+// Curriculum plan (client sheet 10-29, rows 3/4): the Lesson Planner per age
+// range (from Curriculum > Categories) and type ("" = every type, else a
+// curriculumTypes value). Classrooms follow the plan for their age range;
+// subscribers follow Ameris's plan for the age group and type they have.
+model CurriculumPlan {
+  id        String           @id @default(uuid())
+  center    Center           @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  centerId  String
+  ageRange  String
+  type      String           @default("")
+  theme     String?
+  dayCount  Int              @default(10)
+  rows      LessonPlanRow[]
+  cells     LessonPlanCell[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([centerId, ageRange, type])
 }
 
 // Curriculum > Categories tab (client mockup 2026-10-02): the lists the lesson
@@ -946,20 +969,25 @@ model MilestoneChecklistStaffCompletion {
   @@index([completedById, date])
 }
 
+// A planner category row belongs to a classroom's own planner, or to a
+// curriculum plan (age range + type, client sheet 10-29 rows 3/4).
 model LessonPlanRow {
-  id          String    @id @default(uuid())
-  center      Center    @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  id          String          @id @default(uuid())
+  center      Center          @relation(fields: [centerId], references: [id], onDelete: Cascade)
   centerId    String
-  classRoom   ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
-  classRoomId String
+  classRoom   ClassRoom?      @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+  classRoomId String?
+  plan        CurriculumPlan? @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planId      String?
   rowIndex    Int
-  label       String    @default("")
+  label       String          @default("")
   position    Int?
-  active      Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   @@unique([classRoomId, rowIndex])
+  @@unique([planId, rowIndex])
   @@index([centerId, classRoomId])
 }
 

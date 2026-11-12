@@ -1,7 +1,7 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import CurriculumTabs from "@/components/curriculum/CurriculumTabs";
-import useCurriculumClassroom, { ClassroomPicker } from "@/components/curriculum/useCurriculumClassroom";
+import useCurriculumClassroom from "@/components/curriculum/useCurriculumClassroom";
 import { apiJson } from "@/lib/api";
 import { rowLabel } from "@/lib/lessonPlanRows";
 import { normalizeSubjectForRef } from "@/lib/subjectNormalization.mjs";
@@ -21,6 +21,55 @@ const DAY_COLUMN_PX = 96;
 const FIXED_COLUMNS_PX = 120 + 92;
 const PAGE_SIZE = 20;
 const DRAG_TYPE = "application/x-ameris-lesson";
+const PLAN_STORAGE_KEY = "aca:curriculumPlan";
+const pickerSelect =
+  "rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100";
+
+/** Center (when there is more than one), Age Group and Type for the planner. */
+function PlanPicker({ picker, choices, ageRange, onAgeRange, planType, onPlanType }) {
+  return (
+    <div className="flex flex-wrap items-end gap-3">
+      {picker.centers.length > 1 && (
+        <label className={`text-xs font-semibold ${NAVY}`}>
+          Center
+          <select className={`${pickerSelect} mt-1 block w-48`} value={picker.centerId} onChange={(e) => picker.setCenterId(e.target.value)}>
+            {picker.centers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <label className={`text-xs font-semibold ${NAVY}`}>
+        Age Group
+        <select
+          className={`${pickerSelect} mt-1 block w-48`}
+          value={ageRange}
+          onChange={(e) => onAgeRange(e.target.value)}
+          disabled={!choices.ageRanges.length}
+        >
+          {!choices.ageRanges.length && <option value="">Add age ranges in Categories</option>}
+          {choices.ageRanges.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={`text-xs font-semibold ${NAVY}`}>
+        Type
+        <select className={`${pickerSelect} mt-1 block w-56`} value={planType} onChange={(e) => onPlanType(e.target.value)}>
+          {(choices.types.length ? choices.types : [{ value: "", label: "All types" }]).map((t) => (
+            <option key={t.value || "all"} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}
 const input =
   "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100";
 
@@ -54,7 +103,13 @@ function distinct(entries, key) {
 
 export default function LessonPlannerPage() {
   const picker = useCurriculumClassroom();
-  const { centerId, classRoomId } = picker;
+  const { centerId } = picker;
+  // The planner is per age range (Curriculum > Categories) and type (client
+  // sheet 10-29, rows 3/4); each pair is its own curriculum plan.
+  const [planChoices, setPlanChoices] = useState({ ageRanges: [], types: [], plans: [] });
+  const [ageRange, setAgeRange] = useState("");
+  const [planType, setPlanType] = useState("");
+  const [planId, setPlanId] = useState("");
   const [lessons, setLessons] = useState([]);
   const [rows, setRows] = useState([]);
   const [planner, setPlanner] = useState({ theme: "", dayCount: 10, cells: [], usedLessonIds: [] });
@@ -83,11 +138,11 @@ export default function LessonPlannerPage() {
   const [dropTarget, setDropTarget] = useState("");
 
   const load = useCallback(async () => {
-    if (!centerId || !classRoomId) return;
+    if (!centerId || !planId) return;
     setLoading(true);
     setError("");
     try {
-      const q = new URLSearchParams({ centerId, classRoomId });
+      const q = new URLSearchParams({ centerId, planId });
       const [rowData, plan] = await Promise.all([
         apiJson(`/api/v1/lesson-plan-rows?${q}`),
         apiJson(`/api/v1/lesson-planner?${q}`),
@@ -101,11 +156,50 @@ export default function LessonPlannerPage() {
     } finally {
       setLoading(false);
     }
-  }, [centerId, classRoomId]);
+  }, [centerId, planId]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!centerId) return;
+    let saved = {};
+    try {
+      saved = JSON.parse(window.localStorage.getItem(PLAN_STORAGE_KEY) || "{}");
+    } catch {
+      saved = {};
+    }
+    apiJson(`/api/v1/curriculum-plans?centerId=${encodeURIComponent(centerId)}`)
+      .then((data) => {
+        setPlanChoices(data);
+        setAgeRange(data.ageRanges.includes(saved.ageRange) ? saved.ageRange : data.ageRanges[0] || "");
+        setPlanType(data.types.some((t) => t.value === saved.type) ? saved.type : "");
+      })
+      .catch((e) => setError(e.message || "Could not load the age groups"));
+  }, [centerId]);
+
+  useEffect(() => {
+    setPlanId("");
+    if (!centerId || !ageRange) return;
+    try {
+      window.localStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify({ ageRange, type: planType }));
+    } catch {
+      // Storage blocked: the choice just isn't remembered.
+    }
+    const existing = planChoices.plans.find((p) => p.ageRange === ageRange && p.type === planType);
+    if (existing) {
+      setPlanId(existing.id);
+      return;
+    }
+    // A new age group + type pair starts an empty plan.
+    apiJson("/api/v1/curriculum-plans", { method: "POST", body: JSON.stringify({ centerId, ageRange, type: planType }) })
+      .then((p) => {
+        setPlanChoices((c) => ({ ...c, plans: [...c.plans, { id: p.id, ageRange: p.ageRange, type: p.type, lessons: 0 }] }));
+        setPlanId(p.id);
+      })
+      .catch((e) => setError(e.message || "Could not open this plan"));
+  }, [centerId, ageRange, planType, planChoices.plans]);
 
   useEffect(() => {
     if (!centerId) return;
@@ -120,7 +214,7 @@ export default function LessonPlannerPage() {
     try {
       const plan = await apiJson("/api/v1/lesson-planner", {
         method: "PUT",
-        body: JSON.stringify({ centerId, classRoomId, ...body }),
+        body: JSON.stringify({ centerId, planId, ...body }),
       });
       setPlanner(plan);
       return plan;
@@ -135,8 +229,8 @@ export default function LessonPlannerPage() {
   async function changeRows(method, body) {
     setError("");
     try {
-      await apiJson("/api/v1/lesson-plan-rows", { method, body: JSON.stringify({ centerId, classRoomId, ...body }) });
-      const q = new URLSearchParams({ centerId, classRoomId });
+      await apiJson("/api/v1/lesson-plan-rows", { method, body: JSON.stringify({ centerId, planId, ...body }) });
+      const q = new URLSearchParams({ centerId, planId });
       setRows(await apiJson(`/api/v1/lesson-plan-rows?${q}`));
     } catch (e) {
       setError(e.message || "Could not save the category");
@@ -222,14 +316,21 @@ export default function LessonPlannerPage() {
             entries={bank}
             used={usedSet}
             onDragStart={(e, entry) => dragData(e, { type: "lesson", lessonId: entry.id })}
-            disabled={!classRoomId}
+            disabled={!planId}
           />
 
           <section className="min-w-0 flex-1 rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
             <h2 className={`text-2xl font-black ${NAVY}`}>{"\u{1F4CB}"} Lesson Planner</h2>
             <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
               <div className="flex flex-wrap items-end gap-3">
-                <ClassroomPicker picker={picker} classroomLabel="Age Group" />
+                <PlanPicker
+                  picker={picker}
+                  choices={planChoices}
+                  ageRange={ageRange}
+                  onAgeRange={setAgeRange}
+                  planType={planType}
+                  onPlanType={setPlanType}
+                />
                 <label className={`text-xs font-semibold ${NAVY}`}>
                   Theme
                   <input
@@ -239,7 +340,7 @@ export default function LessonPlannerPage() {
                     onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
                     placeholder="Type a theme, e.g. Fall"
                     maxLength={120}
-                    disabled={!classRoomId}
+                    disabled={!planId}
                     className={`${input} mt-1 block w-52`}
                   />
                 </label>
@@ -313,7 +414,7 @@ export default function LessonPlannerPage() {
                             const plan = await change({ action: "addDay" });
                             if (plan) setFirstDay(Math.max(1, plan.dayCount - visibleDays + 1));
                           }}
-                          disabled={!classRoomId || busy}
+                          disabled={!planId || busy}
                           title="Add a day column"
                           className="rounded border border-blue-600 px-1.5 py-1 font-bold text-blue-700 hover:bg-blue-50 dark:text-blue-300"
                         >
@@ -410,7 +511,7 @@ export default function LessonPlannerPage() {
                               <button
                                 type="button"
                                 onClick={() => setTyping({ day, rowIndex: row.rowIndex, text: "" })}
-                                disabled={!classRoomId}
+                                disabled={!planId}
                                 aria-label={`Add a lesson to ${rowLabel(row)}, Day ${day}`}
                                 className="flex h-full w-full items-center justify-center text-base text-gray-400 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-gray-800"
                               >
@@ -429,7 +530,7 @@ export default function LessonPlannerPage() {
             <button
               type="button"
               onClick={() => changeRows("POST", { label: "New Category" })}
-              disabled={!classRoomId}
+              disabled={!planId}
               className="mt-3 rounded-lg border border-blue-600 px-3 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 dark:text-blue-300"
             >
               + Add Category

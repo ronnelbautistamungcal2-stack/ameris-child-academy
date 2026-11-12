@@ -8,7 +8,7 @@ const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const { getAuthCookie } = require("../helpers/auth");
-const { apiGet, apiPatch, apiPut } = require("../helpers/api");
+const { apiGet, apiPatch, apiPost, apiPut } = require("../helpers/api");
 
 const prisma = new PrismaClient();
 const stamp = Date.now();
@@ -37,7 +37,9 @@ test.describe("Ameris curriculum for subscribers @api", () => {
   const userIds = [];
   const lessonIds = [];
   let source = null;
-  let ageRoomId = "";
+  let ageGroup = ""; // an Age Range of the curriculum center (client sheet 10-29, row 3)
+  let planId = "";
+  let typedPlanId = "";
   let account = null;
   let subCenterId = "";
   let subRoomId = "";
@@ -61,18 +63,20 @@ test.describe("Ameris curriculum for subscribers @api", () => {
     expect(source, "the dev database needs a curriculum source center").toBeTruthy();
     if (!source) return;
 
-    // An age group (a classroom of the curriculum center) with a two-day planner.
-    ageRoomId = (await prisma.classRoom.create({ data: { name: `Age Group ${stamp}`, centerId: source.id } })).id;
+    // An age group (an Age Range on the curriculum center's Categories tab)
+    // with a two-day "All types" plan.
+    ageGroup = `Age Group ${stamp}`;
+    await prisma.curriculumOption.create({ data: { centerId: source.id, kind: "AGE_RANGE", name: ageGroup } });
     ids.nd = (await makeLesson(`ND lesson ${stamp}`, { types: ["NON_DENOMINATIONAL"] })).id;
     ids.ndc = (await makeLesson(`Christian lesson ${stamp}`, { types: ["NON_DENOMINATIONAL_CHRISTIAN"] })).id;
     ids.untyped = (await makeLesson(`Untyped lesson ${stamp}`, {})).id;
-    await prisma.lessonPlanner.create({ data: { centerId: source.id, classRoomId: ageRoomId, theme: "Seasons", dayCount: 2 } });
+    planId = (await prisma.curriculumPlan.create({ data: { centerId: source.id, ageRange: ageGroup, type: "", theme: "Seasons", dayCount: 2 } })).id;
     await prisma.lessonPlanCell.createMany({
       data: [
-        { centerId: source.id, classRoomId: ageRoomId, day: 1, rowIndex: 0, lessonId: ids.nd, title: `ND lesson ${stamp}` },
-        { centerId: source.id, classRoomId: ageRoomId, day: 1, rowIndex: 1, lessonId: ids.ndc, title: `Christian lesson ${stamp}` },
-        { centerId: source.id, classRoomId: ageRoomId, day: 2, rowIndex: 0, lessonId: ids.untyped, title: `Untyped lesson ${stamp}` },
-        { centerId: source.id, classRoomId: ageRoomId, day: 2, rowIndex: 1, title: "Circle time" },
+        { centerId: source.id, planId, day: 1, rowIndex: 0, lessonId: ids.nd, title: `ND lesson ${stamp}` },
+        { centerId: source.id, planId, day: 1, rowIndex: 1, lessonId: ids.ndc, title: `Christian lesson ${stamp}` },
+        { centerId: source.id, planId, day: 2, rowIndex: 0, lessonId: ids.untyped, title: `Untyped lesson ${stamp}` },
+        { centerId: source.id, planId, day: 2, rowIndex: 1, title: "Circle time" },
       ],
     });
     ids.stepNd = (await makeLesson(`ND step ${stamp}`, { isStep: true, types: ["NON_DENOMINATIONAL"] })).id;
@@ -120,10 +124,9 @@ test.describe("Ameris curriculum for subscribers @api", () => {
       await prisma.subscriberAccountNote.deleteMany({ where: { accountId: account.id } });
       await prisma.subscriberAccount.deleteMany({ where: { id: account.id } });
     }
-    if (ageRoomId) {
-      await prisma.lessonPlanCell.deleteMany({ where: { classRoomId: ageRoomId } });
-      await prisma.lessonPlanner.deleteMany({ where: { classRoomId: ageRoomId } });
-      await prisma.classRoom.deleteMany({ where: { id: ageRoomId } });
+    if (ageGroup && source) {
+      await prisma.curriculumPlan.deleteMany({ where: { centerId: source.id, ageRange: ageGroup } }); // cells and rows go with it
+      await prisma.curriculumOption.deleteMany({ where: { centerId: source.id, kind: "AGE_RANGE", name: ageGroup } });
     }
     if (lessonIds.length) await prisma.lesson.deleteMany({ where: { id: { in: lessonIds } } });
     await prisma.$disconnect();
@@ -143,12 +146,12 @@ test.describe("Ameris curriculum for subscribers @api", () => {
     const global = await getAuthCookie(request, globalEmail, password);
     const info = await (await apiGet(request, "/api/v1/global/curriculum", global)).json();
     expect(info.source.id).toBe(source.id);
-    expect(info.ageGroups.map((g) => g.id)).toContain(ageRoomId);
+    expect(info.ageGroups.map((g) => g.id)).toContain(ageGroup);
 
-    const res = await apiPatch(request, `/api/v1/global/subscribers/${account.id}`, { curriculumAgeGroups: [ageRoomId, "not-an-age-group"] }, global);
+    const res = await apiPatch(request, `/api/v1/global/subscribers/${account.id}`, { curriculumAgeGroups: [ageGroup, "not-an-age-group"] }, global);
     expect(res.status(), await res.text()).toBe(200);
     const detail = await res.json();
-    expect(detail.curriculumAgeGroups).toEqual([ageRoomId]);
+    expect(detail.curriculumAgeGroups).toEqual([ageGroup]);
     expect(detail.ageGroupNames).toEqual([`Age Group ${stamp}`]);
     expect(detail.notes.some((n) => n.description === `Age groups set to Age Group ${stamp}.`)).toBe(true);
   });
@@ -163,7 +166,7 @@ test.describe("Ameris curriculum for subscribers @api", () => {
     const cal = await (await apiGet(request, `/api/v1/lesson-calendar?${q}`, sub)).json();
     expect(cal.curriculum.mode).toBe("AMERIS");
     // One age group on the account: the classroom follows it without choosing.
-    expect(cal.curriculum.ageGroupId).toBe(ageRoomId);
+    expect(cal.curriculum.ageGroupId).toBe(ageGroup);
     expect(cal.theme).toBe("Seasons");
     const byDay = Object.fromEntries(Object.values(cal.days).filter((d) => d.day).map((d) => [d.day, d.lessons.map((l) => l.title)]));
     // The Christian lesson and the untyped one aren't on a Standard account.
@@ -171,9 +174,9 @@ test.describe("Ameris curriculum for subscribers @api", () => {
     expect(byDay[2]).toEqual(["Circle time"]);
 
     // The age group must be one on the account.
-    expect((await apiPut(request, "/api/v1/lesson-calendar/age-group", { centerId: subCenterId, classRoomId: subRoomId, ageGroupId: subRoomId }, sub)).status()).toBe(400);
-    expect((await apiPut(request, "/api/v1/lesson-calendar/age-group", { centerId: subCenterId, classRoomId: subRoomId, ageGroupId: ageRoomId }, sub)).status()).toBe(200);
-    expect((await prisma.classRoom.findUnique({ where: { id: subRoomId } }))?.curriculumAgeGroupId).toBe(ageRoomId);
+    expect((await apiPut(request, "/api/v1/lesson-calendar/age-group", { centerId: subCenterId, classRoomId: subRoomId, ageGroupId: "not-an-age-group" }, sub)).status()).toBe(400);
+    expect((await apiPut(request, "/api/v1/lesson-calendar/age-group", { centerId: subCenterId, classRoomId: subRoomId, ageGroupId: ageGroup }, sub)).status()).toBe(200);
+    expect((await prisma.classRoom.findUnique({ where: { id: subRoomId } }))?.curriculumAgeGroupId).toBe(ageGroup);
 
     // Another account's admin can't read this calendar.
     const demo = await getAuthCookie(request, "admin@demo.com", "adminpass");
@@ -181,7 +184,7 @@ test.describe("Ameris curriculum for subscribers @api", () => {
   });
 
   test("Ameris changes show right away, and the teacher's week uses the Ameris planner", async ({ request }) => {
-    await prisma.lessonPlanCell.updateMany({ where: { classRoomId: ageRoomId, day: 1, rowIndex: 1 }, data: { lessonId: ids.nd, title: "Changed by Ameris" } });
+    await prisma.lessonPlanCell.updateMany({ where: { planId, day: 1, rowIndex: 1 }, data: { lessonId: ids.nd, title: "Changed by Ameris" } });
     const teacher = await getAuthCookie(request, teacherEmail, password);
     const start = nextWeekday();
     const monday = (() => {
@@ -198,6 +201,41 @@ test.describe("Ameris curriculum for subscribers @api", () => {
     expect(Object.values(day1.cells).map((c) => c.title).sort()).toEqual([`ND lesson ${stamp}`, "Changed by Ameris"].sort());
     // The teacher can open the lesson (view-only details).
     expect((await apiGet(request, `/api/v1/lessons/${ids.nd}`, teacher)).status()).toBe(200);
+  });
+
+  test("Ameris plans per age group and type; a Standard subscriber follows the Standard plan", async ({ request }) => {
+    // Client sheet 10-29, rows 3/4: the Lesson Planner's Age Group comes from
+    // the Categories age ranges, and each age group can have a plan per Type.
+    const ameris = await getAuthCookie(request, "admin@demo.com", "adminpass"); // admin of the curriculum center
+    const list = await (await apiGet(request, `/api/v1/curriculum-plans?centerId=${source.id}`, ameris)).json();
+    expect(list.ageRanges).toContain(ageGroup);
+    expect(list.types.map((t) => t.value)).toEqual(["", "NON_DENOMINATIONAL", "NON_DENOMINATIONAL_CHRISTIAN", "OTHER"]);
+    expect((await apiPost(request, "/api/v1/curriculum-plans", { centerId: source.id, ageRange: "Not on the list", type: "" }, ameris)).status()).toBe(400);
+
+    const created = await apiPost(request, "/api/v1/curriculum-plans", { centerId: source.id, ageRange: ageGroup, type: "NON_DENOMINATIONAL" }, ameris);
+    expect(created.status(), await created.text()).toBe(200);
+    typedPlanId = (await created.json()).id;
+    expect(typedPlanId).not.toBe(planId);
+
+    const put = (body) => apiPut(request, "/api/v1/lesson-planner", { centerId: source.id, planId: typedPlanId, ...body }, ameris);
+    expect((await put({ action: "setCell", day: 1, rowIndex: 0, lessonId: ids.nd })).status()).toBe(200);
+    const plan = await (await put({ action: "setTheme", theme: "Standard plan" })).json();
+    expect(plan.cells).toEqual([{ day: 1, rowIndex: 0, lessonId: ids.nd, title: `ND lesson ${stamp}` }]);
+    expect(plan.theme).toBe("Standard plan");
+    // The rows API works on plans too.
+    const rows = await (await apiGet(request, `/api/v1/lesson-plan-rows?${new URLSearchParams({ centerId: source.id, planId: typedPlanId })}`, ameris)).json();
+    expect(rows.length).toBeGreaterThan(0);
+    // Subscribers can't change Ameris's plans.
+    const sub = await getAuthCookie(request, subEmail, password);
+    expect((await apiPut(request, "/api/v1/lesson-planner", { centerId: source.id, planId: typedPlanId, action: "addDay" }, sub)).status()).toBe(403);
+
+    // The Standard account now follows the Standard plan instead of "All types".
+    const start = nextWeekday();
+    const q = new URLSearchParams({ centerId: subCenterId, classRoomId: subRoomId, from: start, to: addDays(start, 6) });
+    const cal = await (await apiGet(request, `/api/v1/lesson-calendar?${q}`, sub)).json();
+    expect(cal.theme).toBe("Standard plan");
+    const day1 = Object.values(cal.days).find((d) => d.day === 1);
+    expect(day1.lessons.map((l) => l.title)).toEqual([`ND lesson ${stamp}`]);
   });
 
   test("the Initial Developmental Assessment uses the Ameris steps of the account's types", async ({ request }) => {

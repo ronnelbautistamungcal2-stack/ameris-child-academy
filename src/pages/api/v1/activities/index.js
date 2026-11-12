@@ -1,4 +1,4 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import { sendDirectMessage } from "@/lib/directMessages";
 import prisma from "@/lib/prisma";
 import { emitActivityLog, emitNotification } from "@/lib/socket";
@@ -69,9 +69,8 @@ export default async function handler(req, res) {
         child:
           session.user.role === "TEACHER"
             ? await buildTeacherChildWhere(session.user.id, centerId)
-            : centerId
-              ? { centerId }
-              : undefined,
+            : // No center chosen: only the centers this user can reach.
+              { centerId: await centerIdFilter(session.user.id, centerId) },
       },
       include: { child: true, recordedBy: true },
       orderBy: { createdAt: "desc" },

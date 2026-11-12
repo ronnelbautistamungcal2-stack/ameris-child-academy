@@ -1,4 +1,4 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
 export default async function handler(req, res) {
@@ -24,7 +24,8 @@ export default async function handler(req, res) {
     if (!ok) return res.status(403).json({ error: "Forbidden" });
   }
 
-  const centerFilter = centerId ? { centerId } : {};
+  // No center chosen: every center this user can reach, never every center.
+  const centerFilter = { centerId: await centerIdFilter(session.user.id, centerId) };
   const now = new Date();
 
   // 1. Teachers with their classroom assignments

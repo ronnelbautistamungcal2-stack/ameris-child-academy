@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 // optionally one child. Prints portrait.
 
 export default function MilestoneChangeLog() {
-  const { centers, centerId, setCenterId } = useReportCenters();
+  const { centers, centerId, setCenterId, centerName } = useReportCenters();
   const [range, setRange] = useState(() => monthRange());
   const [childId, setChildId] = useState("");
   const [childSearch, setChildSearch] = useState("");
@@ -56,7 +56,7 @@ export default function MilestoneChangeLog() {
       ) : !data ? (
         <ReportMessage>Loading…</ReportMessage>
       ) : (
-        <ReportSheet title="Milestone Change Log" subtitle={`${longDate(data.from)} – ${longDate(data.to)}`} orientation="portrait" copyright>
+        <ReportSheet heading={centerName} title="Milestone Change Log" subtitle={`${longDate(data.from)} – ${longDate(data.to)}`} orientation="portrait" copyright>
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="bg-[#16305e] text-left text-white">

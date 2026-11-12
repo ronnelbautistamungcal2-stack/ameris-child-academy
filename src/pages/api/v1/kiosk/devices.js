@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import {
   clearDeviceCookieHeader,
   deviceCookieHeader,
@@ -17,8 +17,12 @@ export default async function handler(req, res) {
   if (session.user.role !== "ADMIN") return res.status(403).json({ error: "Only admins can manage kiosks" });
 
   if (req.method === "GET") {
+    const wanted = req.query.centerId ? String(req.query.centerId) : "";
+    if (wanted && !(await hasAccessToCenter(session.user.id, wanted))) return res.status(403).json({ error: "Forbidden" });
+    // Only kiosks at this admin's own centers (client 2026-11-12: a new
+    // subscriber saw Ameris Academy's kiosks).
     const devices = await prisma.kioskDevice.findMany({
-      where: { revokedAt: null, ...(req.query.centerId ? { centerId: String(req.query.centerId) } : {}) },
+      where: { revokedAt: null, centerId: await centerIdFilter(session.user.id, wanted) },
       select: {
         id: true,
         name: true,
@@ -42,6 +46,7 @@ export default async function handler(req, res) {
     const name = String(req.body?.name || "").trim().slice(0, 80) || "Front desk kiosk";
     const center = centerId ? await prisma.center.findUnique({ where: { id: centerId } }) : null;
     if (!center) return res.status(400).json({ error: "Choose a center" });
+    if (!(await hasAccessToCenter(session.user.id, center.id))) return res.status(403).json({ error: "Forbidden" });
 
     // Re-enrolling this browser replaces its previous enrollment.
     const previous = req.cookies?.[DEVICE_COOKIE];
@@ -66,7 +71,9 @@ export default async function handler(req, res) {
   if (req.method === "PATCH") {
     const id = String(req.query.id || "");
     const device = id ? await prisma.kioskDevice.findUnique({ where: { id }, include: { center: { select: { id: true, name: true } } } }) : null;
-    if (!device || device.revokedAt) return res.status(404).json({ error: "Kiosk not found" });
+    if (!device || device.revokedAt || !(await hasAccessToCenter(session.user.id, device.centerId))) {
+      return res.status(404).json({ error: "Kiosk not found" });
+    }
     const previous = req.cookies?.[DEVICE_COOKIE];
     if (previous && hashDeviceToken(previous) !== device.tokenHash) {
       await prisma.kioskDevice.updateMany({ where: { tokenHash: hashDeviceToken(previous), revokedAt: null }, data: { revokedAt: new Date() } });
@@ -80,7 +87,9 @@ export default async function handler(req, res) {
   if (req.method === "DELETE") {
     const id = String(req.query.id || "");
     const device = id ? await prisma.kioskDevice.findUnique({ where: { id } }) : null;
-    if (!device) return res.status(404).json({ error: "Kiosk not found" });
+    if (!device || !(await hasAccessToCenter(session.user.id, device.centerId))) {
+      return res.status(404).json({ error: "Kiosk not found" });
+    }
     await prisma.kioskDevice.update({ where: { id }, data: { revokedAt: new Date() } });
     const currentToken = req.cookies?.[DEVICE_COOKIE];
     if (currentToken && hashDeviceToken(currentToken) === device.tokenHash) {

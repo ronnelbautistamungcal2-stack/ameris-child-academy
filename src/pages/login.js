@@ -20,6 +20,16 @@ export default function Login() {
         ? callbackUrlRaw[0]
         : null;
 
+  // On the Ameris Solutions domain, sign in on the Solutions login page.
+  useEffect(() => {
+    if (!router.isReady) return;
+    const host = window.location.hostname.toLowerCase();
+    if (host === "amerissolutions.com" || host === "www.amerissolutions.com") {
+      const query = window.location.search || "";
+      router.replace(`/solutions/login${query}`);
+    }
+  }, [router, router.isReady]);
+
   useEffect(() => {
     if (router.query?.error === "AccountDisabled") {
       setError("Your account has been disabled. Please contact your center administrator.");

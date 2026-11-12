@@ -1,4 +1,4 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import { normalizeLessonSlot, normalizeTermDaySelections } from "@/lib/lessonScheduling";
 import { LESSON_INCLUDE } from "@/lib/lessonInclude";
 import prisma from "@/lib/prisma";
@@ -36,7 +36,8 @@ export default async function handler(req, res) {
 
     // kind=step: Steps of Progression Bank rows; kind=lesson: Lesson Bank
     // lessons; no kind: both.
-    const where = centerId ? { centerId } : {};
+    // No center chosen: every center this user can reach, never every center.
+    const where = { centerId: await centerIdFilter(session.user.id, centerId) };
     if (kind === "step") where.isStep = true;
     if (kind === "lesson") where.isStep = false;
     try {

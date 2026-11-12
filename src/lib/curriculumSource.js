@@ -90,7 +90,10 @@ export async function classroomCurriculum(classRoomId, db = prisma) {
     select: { curriculumTypes: true, curriculumAgeGroups: true },
   });
   const options = await ageGroupOptions(db, source);
-  const allowed = new Set(account?.curriculumAgeGroups || []);
+  // No age groups chosen on the account yet: offer them all, so a new
+  // subscriber can pick one (client sheet 10-29, row 61).
+  const chosen = account?.curriculumAgeGroups || [];
+  const allowed = new Set(chosen.length ? chosen : options.map((o) => o.id));
   const ageGroups = options.filter((o) => allowed.has(o.id));
   // One age group on the account: every classroom follows it.
   const ageGroupId =
@@ -103,7 +106,8 @@ export async function classroomCurriculum(classRoomId, db = prisma) {
     mode: "AMERIS",
     plannerClassRoomId: ageGroupId,
     plannerCenterId: source.id,
-    types: account?.curriculumTypes || [],
+    // No types chosen yet: every lesson (null = no type filter).
+    types: account?.curriculumTypes?.length ? account.curriculumTypes : null,
     ageGroups,
     ageGroupId,
     chosenAgeGroupId: room.curriculumAgeGroupId || null,

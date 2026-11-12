@@ -31,7 +31,7 @@ const dayHeading = (key) => new Date(`${key}T00:00:00`).toLocaleDateString("en-U
 
 export function InfantFeedingReport() {
   const filters = useReportFilters();
-  const { centers, centerId, setCenterId } = useReportCenters();
+  const { centers, centerId, setCenterId, centerName } = useReportCenters();
   const [children, setChildren] = useState([]);
   const [childId, setChildId] = useState("");
   const [childSearch, setChildSearch] = useState("");
@@ -96,7 +96,7 @@ export function InfantFeedingReport() {
       ) : !data ? (
         <ReportMessage>Loading…</ReportMessage>
       ) : (
-        <ReportSheet title="Individual Infant Feeding Report" subtitle={`${longDate(data.from)} – ${longDate(data.to)}`}>
+        <ReportSheet heading={centerName} title="Individual Infant Feeding Report" subtitle={`${longDate(data.from)} – ${longDate(data.to)}`}>
           <div className="grid gap-x-8 gap-y-1 px-6 pb-3 text-sm sm:grid-cols-3">
             <div><span className="inline-block w-24 text-gray-600">Child</span><b>{data.child.name}</b></div>
             <div><span className="inline-block w-24 text-gray-600">Date of birth</span>{shortDate(data.child.birthDate)}</div>
@@ -139,7 +139,7 @@ export function InfantFeedingReport() {
 }
 
 export function MealProductionReport() {
-  const { centers, centerId, setCenterId } = useReportCenters();
+  const { centers, centerId, setCenterId, centerName } = useReportCenters();
   const [meal, setMeal] = useState("breakfast");
   const [range, setRange] = useState(() => monthRange());
   const [data, setData] = useState(null);
@@ -193,7 +193,7 @@ export function MealProductionReport() {
       ) : !data ? (
         <ReportMessage>Loading…</ReportMessage>
       ) : (
-        <ReportSheet heading="Ameris Solutions" title={`${data.meal.label} - Production Record`} subtitle={`${longDate(data.from)} – ${longDate(data.to)}`}>
+        <ReportSheet heading={centerName} title={`${data.meal.label} - Production Record`} subtitle={`${longDate(data.from)} – ${longDate(data.to)}`}>
           {/* The headings stay in view while scrolling (client request 2026-10-29). */}
           <div className="max-h-[75vh] overflow-auto print:max-h-none print:overflow-visible">
           <table className="w-full min-w-[900px] border-collapse text-sm">
@@ -252,7 +252,7 @@ export function MealProductionReport() {
 export function MealClaimReport() {
   const filters = useReportFilters();
   const enrolledOnly = filters.children !== "ALL";
-  const { centers, centerId, setCenterId } = useReportCenters();
+  const { centers, centerId, setCenterId, centerName } = useReportCenters();
   const [range, setRange] = useState(() => monthRange());
   const [view, setView] = useState("claim");
   const [data, setData] = useState(null);
@@ -344,7 +344,7 @@ export function MealClaimReport() {
       ) : !data ? (
         <ReportMessage>Loading…</ReportMessage>
       ) : view === "summary" ? (
-        <ReportSheet title="Monthly Food Claim Summary" subtitle={`${longDate(data.from)} – ${longDate(data.to)}`}>
+        <ReportSheet heading={centerName} title="Monthly Food Claim Summary" subtitle={`${longDate(data.from)} – ${longDate(data.to)}`}>
           <div className="space-y-1 px-6 pb-4 text-sm">
             <div><span className="inline-block w-56">Reporting period</span>{longDate(data.from)} – {longDate(data.to)}</div>
             <div><span className="inline-block w-56">Children on roster</span><b>{data.summary.childrenOnRoster}</b></div>
@@ -375,7 +375,7 @@ export function MealClaimReport() {
           </table>
         </ReportSheet>
       ) : (
-        <MealClaimSheet data={data} classroom={classroom} />
+        <MealClaimSheet data={data} classroom={classroom} heading={centerName} />
       )}
     </div>
   );
@@ -390,7 +390,7 @@ const SORTS = [
 // Widths of the pinned child columns, so each sticks just right of the last.
 const PIN = [{ left: 0, w: 110 }, { left: 110, w: 110 }, { left: 220, w: 90 }, { left: 310, w: 44 }, { left: 354, w: 120 }];
 
-function MealClaimSheet({ data, classroom = "" }) {
+function MealClaimSheet({ data, classroom = "", heading = "" }) {
   const letters = data.meals;
   const [sort, setSort] = useState({ key: "firstName", dir: 1 });
   const rows = useMemo(() => {
@@ -405,7 +405,7 @@ function MealClaimSheet({ data, classroom = "" }) {
   };
   const cell = "border-l border-gray-200 px-1 py-1 text-center dark:border-gray-700";
   return (
-    <ReportSheet title="Meal Claim" subtitle={`${longDate(data.from)} – ${longDate(data.to)}`}>
+    <ReportSheet heading={heading} title="Meal Claim" subtitle={`${longDate(data.from)} – ${longDate(data.to)}`}>
       {/* Child columns stay put when scrolling across the dates, and the date and
           meal headings stay put when scrolling down (client request 2026-10-29). */}
       <div className="max-h-[75vh] overflow-auto print:max-h-none print:overflow-visible">

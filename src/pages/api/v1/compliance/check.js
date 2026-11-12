@@ -1,4 +1,4 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import { getClockedInTeacherIds } from "@/lib/compliance";
 import prisma from "@/lib/prisma";
 
@@ -27,7 +27,8 @@ export default async function handler(req, res) {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
-  const centerFilter = centerId ? { centerId } : {};
+  // No center chosen: every center this user can reach, never every center.
+  const centerFilter = { centerId: await centerIdFilter(session.user.id, centerId) };
 
   // 1. Missed daily logging: teachers with 0 activity logs in last 24h
   const teachers = await prisma.user.findMany({

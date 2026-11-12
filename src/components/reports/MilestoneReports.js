@@ -185,7 +185,7 @@ function reachedCell(level) {
 export function MilestoneProgressReport() {
   const reportFilters = useReportFilters();
   const enrolledOnly = reportFilters.children !== "ALL";
-  const { centers, centerId, setCenterId } = useReportCenters();
+  const { centers, centerId, setCenterId, centerName } = useReportCenters();
   const [filters, setFilters] = useFilters();
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -211,6 +211,7 @@ export function MilestoneProgressReport() {
         <ReportMessage>Loading…</ReportMessage>
       ) : (
         <ReportSheet
+          heading={centerName}
           title="Milestone Progress Report"
           subtitle="Center Average vs. World Standard"
           orientation="portrait"
@@ -243,7 +244,7 @@ export function MilestoneProgressReport() {
 
 export function ChildStepsReport({ parent = false }) {
   const reportFilters = useReportFilters();
-  const { centers, centerId, setCenterId } = useReportCenters();
+  const { centers, centerId, setCenterId, centerName } = useReportCenters();
   const [children, setChildren] = useState([]);
   const [childId, setChildId] = useState("");
   const [filters, setFilters] = useFilters();
@@ -292,6 +293,7 @@ export function ChildStepsReport({ parent = false }) {
         <ReportMessage>Loading…</ReportMessage>
       ) : (
         <ReportSheet
+          heading={data.center?.name || centerName}
           title="Child Steps of Progression Report"
           subtitle="Milestone Achievement — Center and World Standard"
           copyright

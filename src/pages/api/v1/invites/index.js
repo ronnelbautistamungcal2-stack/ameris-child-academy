@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import crypto from "crypto";
 
@@ -22,6 +22,8 @@ export default async function handler(req, res) {
 
   if (req.method === "GET") {
     const invites = await prisma.centerInvite.findMany({
+      // Only invites for this admin's own centers.
+      where: { centerId: await centerIdFilter(session.user.id, "") },
       include: {
         center: { select: { id: true, name: true } },
         createdBy: { select: { id: true, email: true, name: true } },
@@ -42,6 +44,7 @@ export default async function handler(req, res) {
     }
 
     const center = await prisma.center.findUnique({ where: { id: centerId } });
+    if (center && !(await hasAccessToCenter(session.user.id, center.id))) return res.status(403).json({ error: "Forbidden" });
     if (!center) return res.status(404).json({ error: "Center not found" });
 
     const normalized = code ? normalizeCode(code) : makeCode();

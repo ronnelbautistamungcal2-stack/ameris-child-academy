@@ -527,7 +527,8 @@ export default async function handler(req, res) {
       };
     }
 
-    let where = role === "ADMIN" && !date ? {} : { active: true };
+    const manage = req.query.manage === "1" && ["ADMIN", "COACH"].includes(role) && !date && !staffUserId && (role === "ADMIN" || !!centerId);
+    let where = (role === "ADMIN" || manage) && !date ? {} : { active: true };
     if (centerId) where.centerId = centerId;
     if (category) where.category = category;
     if (classRoomId) {
@@ -571,6 +572,11 @@ export default async function handler(req, res) {
       }))
       .filter((list) => {
         if (date && (!Array.isArray(list.items) || list.items.length === 0)) return false;
+
+        // Checklist Manager (?manage=1): admins and coaches see every checklist
+        // of the center, whatever roles it's for; the roles only decide whose
+        // own checklist page it shows on (client sheet 10-29, rows 63 and 69).
+        if (manage) return true;
 
         if (staffScope) {
           return checklistVisibleToStaff(list, staffScope);

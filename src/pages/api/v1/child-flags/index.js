@@ -1,4 +1,4 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import {
   buildActiveChildFlags,
   createChildFlagSnapshot,
@@ -19,10 +19,12 @@ function normalizeStatus(value) {
   return "open";
 }
 
-async function loadFlagData({ centerId = "", childId = "", teacherWhere = null } = {}) {
+async function loadFlagData({ centerId = "", childId = "", teacherWhere = null, userId = null } = {}) {
+  // No center chosen: only the centers this user can reach, never every center.
+  const centerWhere = centerId ? { centerId } : userId ? { centerId: await centerIdFilter(userId, "") } : {};
   const childWhere = {
     AND: [
-      centerId ? { centerId } : {},
+      centerWhere,
       childId ? { id: childId } : {},
       teacherWhere || {},
     ],
@@ -209,6 +211,7 @@ export default async function handler(req, res) {
       centerId: typeof centerId === "string" ? centerId : "",
       childId: typeof childId === "string" ? childId : "",
       teacherWhere,
+      userId: session.user.id,
     });
 
     let activeFlags = buildActiveChildFlags(data);

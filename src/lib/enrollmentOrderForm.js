@@ -15,6 +15,10 @@ const day = (d) => new Date(d).toLocaleDateString("en-US", { month: "long", day:
 
 export const SIGN_ANCHOR = "/sn1/";
 export const DATE_ANCHOR = "/ds1/";
+// The agreement's own signature page (client 2026-11-12: sign the price page
+// and the agreement).
+export const AGREEMENT_SIGN_ANCHOR = "/sn2/";
+export const AGREEMENT_DATE_ANCHOR = "/ds2/";
 
 /**
  * lead: the Lead (center, contact, quote); signer: { fullName, email };
@@ -73,6 +77,31 @@ ${curriculum ? `<p>Curriculum (${esc(q.curriculumVersion === "FAITH_BASED" ? "Fa
 <table class="sig"><tr>
 <td style="width:60%"><div class="line"><span class="anchor">${SIGN_ANCHOR}</span></div>Signature — ${esc(signer.fullName)}</td>
 <td><div class="line"><span class="anchor">${DATE_ANCHOR}</span></div>Date</td>
+</tr></table>
+</body></html>`;
+}
+
+/**
+ * The signature page added after the Subscriber Agreement, so the agreement
+ * itself is signed too (not only the Order Form with the prices).
+ */
+export function agreementSignaturePageHtml({ lead, signer, agreement }) {
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#1f2937;margin:28px}
+h1{font-size:18px;color:#0b2a5b;margin:0 0 10px}table{width:100%;border-collapse:collapse}
+td{padding:5px 6px;vertical-align:top}.k{color:#6b7280;width:30%}
+.sig td{padding-top:60px}.line{border-bottom:1px solid #111;height:34px}.anchor{color:#ffffff;font-size:10px}
+</style></head><body>
+<h1>${esc(agreement.name)} — Signature Page</h1>
+<p>By signing below, the Subscriber agrees to the <b>${esc(agreement.name)}</b> (version ${esc(agreement.version)}) above, and the signer confirms they are authorized to sign for the Subscriber.</p>
+<table>
+<tr><td class="k">Subscriber</td><td>${esc(lead.centerName)}</td></tr>
+<tr><td class="k">Signer</td><td>${esc(signer.fullName)} (${esc(signer.email)})</td></tr>
+<tr><td class="k">Order</td><td>Quote ${esc(lead.quoteNumber)}</td></tr>
+</table>
+<table class="sig"><tr>
+<td style="width:60%"><div class="line"><span class="anchor">${AGREEMENT_SIGN_ANCHOR}</span></div>Signature — ${esc(signer.fullName)}</td>
+<td><div class="line"><span class="anchor">${AGREEMENT_DATE_ANCHOR}</span></div>Date</td>
 </tr></table>
 </body></html>`;
 }

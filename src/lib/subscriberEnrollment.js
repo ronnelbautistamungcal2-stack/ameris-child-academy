@@ -17,7 +17,7 @@ import { createCheckoutSession, createProduct, createSubscription, getCheckoutSe
 import fs from "fs";
 import path from "path";
 import { createEnvelope, docusignConfigured, downloadEnvelopeDocument, getEnvelope, signingUrl } from "@/lib/docusign";
-import { DATE_ANCHOR, SIGN_ANCHOR, orderFormHtml } from "@/lib/enrollmentOrderForm";
+import { AGREEMENT_DATE_ANCHOR, AGREEMENT_SIGN_ANCHOR, DATE_ANCHOR, SIGN_ANCHOR, agreementSignaturePageHtml, orderFormHtml } from "@/lib/enrollmentOrderForm";
 
 export const INITIAL_TERM_MONTHS = 12;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -441,9 +441,17 @@ export async function startSigning(lead, data, origin) {
   }
   const envelope = await createEnvelope({
     emailSubject: `Ameris Solutions Subscription Agreement - ${lead.centerName}`,
-    documents: [{ name: `Order Form ${lead.quoteNumber}`, fileExtension: "html", base64: Buffer.from(html).toString("base64") }, agreementDoc],
+    documents: [
+      { name: `Order Form ${lead.quoteNumber}`, fileExtension: "html", base64: Buffer.from(html).toString("base64") },
+      agreementDoc,
+      {
+        name: `${agreement.name} - Signature Page`,
+        fileExtension: "html",
+        base64: Buffer.from(agreementSignaturePageHtml({ lead, signer: data, agreement })).toString("base64"),
+      },
+    ],
     signer,
-    anchors: { sign: SIGN_ANCHOR, date: DATE_ANCHOR },
+    anchors: { sign: [SIGN_ANCHOR, AGREEMENT_SIGN_ANCHOR], date: [DATE_ANCHOR, AGREEMENT_DATE_ANCHOR] },
     metadata: { leadId: lead.id, quoteNumber: lead.quoteNumber },
   });
   const url = await signingUrl(envelope.envelopeId, signer, `${origin}/solutions/enroll/${encodeURIComponent(lead.quoteToken)}?signing=1`);

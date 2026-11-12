@@ -71,8 +71,9 @@ async function call(method, route, body, { raw = false } = {}) {
 
 /**
  * Sends an envelope for embedded signing (no email to the signer).
- * documents: [{ name, fileExtension, base64 }]; anchors: { sign, date } text
- * placed in the first document where the signature and date go.
+ * documents: [{ name, fileExtension, base64 }]; anchors: { sign: [text], date: [text] }
+ * (or single strings): text in the documents where signatures and dates go.
+ * Every sign anchor must be found; DocuSign rejects the envelope otherwise.
  */
 export function createEnvelope({ emailSubject, documents, signer, anchors, metadata = {} }) {
   const tab = (anchorString, extra = {}) => ({ anchorString, anchorUnits: "pixels", anchorXOffset: "0", anchorYOffset: "0", anchorIgnoreIfNotPresent: "false", ...extra });
@@ -89,8 +90,8 @@ export function createEnvelope({ emailSubject, documents, signer, anchors, metad
           email: signer.email,
           clientUserId: signer.clientUserId,
           tabs: {
-            signHereTabs: [tab(anchors.sign, { anchorYOffset: "-6" })],
-            dateSignedTabs: [tab(anchors.date)],
+            signHereTabs: [].concat(anchors.sign).map((a) => tab(a, { anchorYOffset: "-6" })),
+            dateSignedTabs: [].concat(anchors.date).map((a) => tab(a)),
           },
         },
       ],

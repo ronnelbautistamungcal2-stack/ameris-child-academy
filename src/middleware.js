@@ -40,8 +40,39 @@ const ROUTE_ROLES = {
   "/coach": ["COACH"],
 };
 
+// The Ameris Solutions domain shows the Solutions website at its front page
+// (client 2026-11-12). Set SOLUTIONS_HOSTS to change the list (comma-separated).
+const SOLUTIONS_HOSTS = String(process.env.SOLUTIONS_HOSTS || "amerissolutions.com,www.amerissolutions.com")
+  .split(",")
+  .map((h) => h.trim().toLowerCase())
+  .filter(Boolean);
+// Academy pages that have a Solutions version on that domain.
+const SOLUTIONS_PAGES = { "/": "/solutions", "/contact": "/solutions/contact", "/about": "/solutions", "/programs": "/solutions/plans" };
+
+// The public host (nginx passes it on), not the app's own localhost:3000.
+function publicHost(request) {
+  return String(request.headers.get("x-forwarded-host") || request.headers.get("host") || "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+}
+
+function solutionsHost(request) {
+  return SOLUTIONS_HOSTS.includes(publicHost(request).replace(/:\d+$/, ""));
+}
+
 export async function middleware(request) {
   const { pathname } = request.nextUrl;
+
+  if (SOLUTIONS_PAGES[pathname] && solutionsHost(request)) {
+    const url = request.nextUrl.clone();
+    url.pathname = SOLUTIONS_PAGES[pathname];
+    // The front page keeps its address; the others go to the Solutions page.
+    if (pathname === "/") return NextResponse.rewrite(url);
+    // Redirect on the public domain, not the app's own address behind nginx.
+    const proto = String(request.headers.get("x-forwarded-proto") || request.nextUrl.protocol.replace(":", "")).split(",")[0].trim();
+    return NextResponse.redirect(new URL(SOLUTIONS_PAGES[pathname], `${proto}://${publicHost(request)}`));
+  }
 
   if (PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
     return NextResponse.next();

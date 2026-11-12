@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { centerIdFilter, getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import {
   attendanceByChildId,
@@ -118,8 +118,9 @@ export default async function handler(req, res) {
       if (!scopedCenterIds.length) return res.status(200).json([]);
 
       where.child = { centerId: { in: scopedCenterIds } };
-    } else if (centerId) {
-      where.child = { centerId };
+    } else {
+      // No center chosen: only the centers this user can reach, never every center.
+      where.child = { centerId: await centerIdFilter(session.user.id, centerId) };
     }
 
     const progress = await prisma.progress.findMany({

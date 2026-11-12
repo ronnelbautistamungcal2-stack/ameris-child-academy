@@ -43,7 +43,9 @@ export function useReportCenters() {
       })
       .catch(() => setCenters([]));
   }, []);
-  return { centers, centerId, setCenterId };
+  // Report headings show the center's own name (client 2026-11-12).
+  const centerName = centers.find((c) => c.id === centerId)?.name || "";
+  return { centers, centerId, setCenterId, centerName };
 }
 
 export function CenterSelect({ centers, centerId, setCenterId }) {
@@ -83,12 +85,12 @@ export function ReportMessage({ children, tone = "gray" }) {
 }
 
 /** The printable sheet: a navy title block, optional facts box, the body and the copyright. */
-export function ReportSheet({ heading = "Ameris Academy", title, subtitle, meta = [], copyright = false, orientation = "landscape", children }) {
+export function ReportSheet({ heading = "", title, subtitle, meta = [], copyright = false, orientation = "landscape", children }) {
   return (
     <div id="report-print-sheet" className="overflow-hidden rounded-2xl border border-gray-200 bg-white text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
       <div className="flex flex-wrap items-start justify-between gap-4 px-6 pb-4 pt-5">
         <div className="flex-1 text-center">
-          <div className={`text-2xl font-black ${NAVY}`} style={{ fontFamily: "Georgia, serif" }}>{heading}</div>
+          {heading ? <div className={`text-2xl font-black ${NAVY}`} style={{ fontFamily: "Georgia, serif" }}>{heading}</div> : null}
           <div className={`text-2xl font-black ${NAVY}`} style={{ fontFamily: "Georgia, serif" }}>{title}</div>
           {subtitle ? <div className={`text-base font-bold ${NAVY}`}>{subtitle}</div> : null}
         </div>

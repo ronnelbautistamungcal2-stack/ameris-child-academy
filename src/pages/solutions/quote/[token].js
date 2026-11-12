@@ -117,11 +117,12 @@ export default function SolutionsQuote() {
             ) : null}
 
             <div className="mt-6 flex flex-col items-end gap-1">
+              {/* Annual plans: the yearly amount they pay is the big number (client sheet 10-29, row 40). */}
               <div className="flex items-center gap-8 rounded-2xl bg-blue-50 px-6 py-4">
-                <span className={`font-serif text-2xl font-bold ${NAVY}`}>Total Due (Monthly):</span>
-                <span className={`font-serif text-3xl font-bold ${NAVY}`}>{money(q.monthly)}</span>
+                <span className={`font-serif text-2xl font-bold ${NAVY}`}>{annual ? "Total Due (Billed Annually):" : "Total Due (Monthly):"}</span>
+                <span className={`font-serif text-3xl font-bold ${NAVY}`}>{money(annual ? q.periodTotal : q.monthly)}</span>
               </div>
-              {annual ? <p className="text-sm text-gray-600">Billed annually: {money(q.periodTotal)} for 12 months</p> : null}
+              {annual ? <p className="text-sm text-gray-600">One payment for 12 months (equal to {money(q.monthly)} a month)</p> : null}
             </div>
 
             <div className="mt-8 border-t border-gray-200 pt-6 text-center">

@@ -1,4 +1,4 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getTeacherClassIds } from "@/lib/teacherScope";
 
@@ -32,7 +32,8 @@ export default async function handler(req, res) {
       if (!teacherClassIds.length) return res.status(200).json([]);
     }
 
-    const where = centerId ? { centerId } : {};
+    // No center chosen: every center this user can reach, never every center.
+    const where = { centerId: await centerIdFilter(session.user.id, centerId) };
     if (session.user.role === "TEACHER" && !transferMode) {
       where.id = { in: teacherClassIds };
     }

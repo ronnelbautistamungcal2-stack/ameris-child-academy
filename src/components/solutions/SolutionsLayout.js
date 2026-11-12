@@ -66,7 +66,7 @@ export default function SolutionsLayout({ title, description, children, hideQuot
                   {item.label}
                 </Link>
               ))}
-              <Link href="/login" className={`border-b-2 border-transparent pb-1 text-[15px] font-semibold ${NAVY} hover:border-blue-300`}>
+              <Link href="/solutions/login" className={`border-b-2 border-transparent pb-1 text-[15px] font-semibold ${NAVY} hover:border-blue-300`}>
                 Login
               </Link>
               {!hideQuoteButton ? (
@@ -87,7 +87,7 @@ export default function SolutionsLayout({ title, description, children, hideQuot
           </div>
           {open ? (
             <nav id="solutions-mobile-nav" aria-label="Main" className="relative mx-4 mb-3 rounded-2xl border border-blue-100 bg-white p-3 shadow md:hidden">
-              {[...SOLUTIONS_NAV, { href: "/login", label: "Login" }, { href: "/solutions/request-quote", label: "Request a Quote" }].map((item) => (
+              {[...SOLUTIONS_NAV, { href: "/solutions/login", label: "Login" }, { href: "/solutions/request-quote", label: "Request a Quote" }].map((item) => (
                 <Link key={item.href} href={item.href} className={`block rounded-lg px-3 py-2 font-semibold ${NAVY} hover:bg-blue-50`}>
                   {item.label}
                 </Link>

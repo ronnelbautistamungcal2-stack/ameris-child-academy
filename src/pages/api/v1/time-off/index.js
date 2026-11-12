@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { isEmployeeRole, isManagerRole, isSelfServiceEmployeeRole } from "@/lib/roles";
 import {
@@ -64,8 +64,8 @@ async function handleGet(req, res, session) {
     if (!allowed) return res.status(403).json({ error: "Forbidden" });
   }
 
-  const where = {};
-  if (centerId) where.centerId = centerId;
+  // No center chosen: only the centers this user can reach, never every center.
+  const where = { centerId: await centerIdFilter(session.user.id, centerId) };
   if (status) where.status = status;
   applyRequestDateRange(where, from, to);
   applySubmittedRange(where, submittedFrom, submittedTo);

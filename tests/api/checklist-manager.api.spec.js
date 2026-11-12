@@ -121,6 +121,24 @@ test.describe("Checklist Manager, checklists and review @api", () => {
     }
   });
 
+  test("Checklist Manager lists every checklist, whatever roles it's for", async ({ request }) => {
+    // Client sheet 10-29, rows 63/69: a checklist for other roles vanished
+    // from the manager. Roles decide whose own checklist page it's on, not
+    // whether the manager shows it.
+    const list = await prisma.dailyChecklist.create({ data: { centerId: center.id, title: "QA Teachers only", roles: ["TEACHER"] } });
+    try {
+      for (const cookies of [await loginAsAdmin(request), await loginAsCoach(request)]) {
+        const managed = await (await apiGet(request, `/api/v1/daily-checklists?centerId=${center.id}&manage=1`, cookies)).json();
+        expect(managed.map((c) => c.title)).toContain("QA Teachers only");
+      }
+      // A coach's own list still follows the roles.
+      const own = await (await apiGet(request, `/api/v1/daily-checklists?centerId=${center.id}`, await loginAsCoach(request))).json();
+      expect(own.map((c) => c.title)).not.toContain("QA Teachers only");
+    } finally {
+      await prisma.dailyChecklist.delete({ where: { id: list.id } });
+    }
+  });
+
   test("a coach can list a center's staff but not parents", async ({ request }) => {
     const coachCookies = await loginAsCoach(request);
     const res = await apiGet(request, `/api/v1/users?centerId=${center.id}&roles=TEACHER,PARENT`, coachCookies);

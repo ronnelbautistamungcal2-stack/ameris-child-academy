@@ -1,4 +1,4 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import { assertChildLimit } from "@/lib/subscriberAccounts";
 import { sendApiError } from "@/lib/api-error";
 import { changeStamps, profileTabData } from "@/lib/childProfile";
@@ -178,7 +178,8 @@ export default async function handler(req, res) {
       }
     }
 
-    const where = centerId ? { centerId } : {};
+    // No center chosen: every center this user can reach, never every center.
+    const where = { centerId: await centerIdFilter(session.user.id, centerId) };
     if (session.user.role === "TEACHER") {
       Object.assign(where, teacherWhere);
     }

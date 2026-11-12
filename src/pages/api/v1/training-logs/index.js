@@ -1,4 +1,4 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import {
   createApiHandler,
@@ -33,8 +33,8 @@ export default createApiHandler(async function handler(req, res) {
       if (!allowed) throw forbidden();
     }
 
-    const where = {};
-    if (centerId) where.centerId = centerId;
+    // No center chosen: only the centers this user can reach, never every center.
+    const where = { centerId: await centerIdFilter(session.user.id, centerId) };
     if (category) where.category = category;
 
     if (isSelfServiceEmployeeRole(session.user.role)) {

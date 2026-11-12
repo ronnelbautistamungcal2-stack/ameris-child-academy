@@ -82,7 +82,10 @@ async function prepareStepScope(child) {
       where: { id: center.subscriberAccountId },
       select: { curriculumTypes: true },
     });
-    stepScopes.set(child, { centerId: source.id, isStep: true, types: { hasSome: account?.curriculumTypes || [] } });
+    // No types chosen on the account yet: every Ameris step (client sheet
+    // 10-29, row 62: a new subscriber's assessment was empty).
+    const types = account?.curriculumTypes || [];
+    stepScopes.set(child, { centerId: source.id, isStep: true, ...(types.length ? { types: { hasSome: types } } : {}) });
   } else {
     stepScopes.set(child, { centerId: child.centerId, isStep: true });
   }

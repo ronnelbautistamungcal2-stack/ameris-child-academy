@@ -56,7 +56,7 @@ function Done({ accountNumber, name, email }) {
       <p className="mt-2 text-gray-700">
         Log in{email ? <> with <strong>{email}</strong></> : ""} and the password you chose. Our team will reach out to help you get set up.
       </p>
-      <Link href="/login" className={`${BTN} mt-6 px-8 py-3 text-base`}>
+      <Link href="/solutions/login" className={`${BTN} mt-6 px-8 py-3 text-base`}>
         Log In
       </Link>
     </div>
@@ -215,7 +215,7 @@ export default function SolutionsEnroll() {
               {info.enrolled ? (
                 <div className="rounded-2xl border border-green-200 bg-green-50 p-5 text-green-900">
                   This quote has already been used to enroll{info.account ? ` (${info.account.name}, ${info.account.accountNumber})` : ""}.{" "}
-                  <Link href="/login" className="font-bold underline">
+                  <Link href="/solutions/login" className="font-bold underline">
                     Log in
                   </Link>
                 </div>

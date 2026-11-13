@@ -49,7 +49,7 @@ const SOLUTIONS_HOSTS = String(process.env.SOLUTIONS_HOSTS || "amerissolutions.c
 // Academy pages that have a Solutions version on that domain.
 // /login too: signing out lands on the Ameris Solutions login, not the old
 // Academy one (client sheet 10-29 (8), row 13).
-const SOLUTIONS_PAGES = { "/": "/solutions", "/contact": "/solutions/contact", "/about": "/solutions", "/programs": "/solutions/plans", "/login": "/solutions/login" };
+const SOLUTIONS_PAGES = { "/": "/solutions", "/contact": "/solutions/contact", "/about": "/solutions", "/programs": "/solutions/plans", "/login": "/solutions/login", "/privacy": "/solutions/privacy" };
 
 // The public host (nginx passes it on), not the app's own localhost:3000.
 function publicHost(request) {

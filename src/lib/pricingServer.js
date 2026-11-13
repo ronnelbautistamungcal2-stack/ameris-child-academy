@@ -2,6 +2,7 @@
 // and a subscriber's price from their saved choices.
 import prisma from "@/lib/prisma";
 import { BILLING_CYCLES, CURRICULUM_VERSIONS, PROGRAM_TYPES, chosenDiscountId, classroomCounts, quote } from "@/lib/subscriptionPricing";
+import { curriculumVersionForType } from "@/lib/curriculumTypes";
 
 const dateKey = (d) => new Date(d).toISOString().slice(0, 10);
 
@@ -26,12 +27,16 @@ export function parsePricingSelection(input) {
   const children = src.children === "" || src.children == null ? null : Number(src.children);
   if (children !== null && (!Number.isInteger(children) || children < 1)) return { error: "Number of children must be a whole number, at least 1" };
   const pick = (value, list, fallback) => (list.some((o) => o.value === value) ? value : fallback);
+  // The curriculum type chosen (Curriculum > Categories > Types; client sheet
+  // 10-29 (8), rows 9/10). Its price column is Standard or Faith Based.
+  const curriculumType = /^[A-Z0-9_]{1,60}$/.test(String(src.curriculumType || "")) ? String(src.curriculumType) : null;
   return {
     data: {
       children,
       billingCycle: pick(src.billingCycle, BILLING_CYCLES, "MONTHLY"),
       programType: pick(src.programType, PROGRAM_TYPES, "CENTER"),
-      curriculumVersion: pick(src.curriculumVersion, CURRICULUM_VERSIONS, "STANDARD"),
+      curriculumType,
+      curriculumVersion: curriculumType ? curriculumVersionForType(curriculumType) : pick(src.curriculumVersion, CURRICULUM_VERSIONS, "STANDARD"),
       // Classrooms per age group, { key: count } (client 2026-11-11).
       classrooms: classroomCounts({ classrooms: src.classrooms, ageGroups: ids(src.ageGroups) }),
       homeDaycareProgram: src.homeDaycareProgram ? String(src.homeDaycareProgram).slice(0, 80) : null,

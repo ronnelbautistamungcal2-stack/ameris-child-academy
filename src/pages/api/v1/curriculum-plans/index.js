@@ -1,7 +1,8 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { hasAnyRole } from "@/lib/roles";
-import { PLAN_TYPES, ageRangeNames, normalizePlanType } from "@/lib/curriculumPlans";
+import { ageRangeNames, normalizePlanType, planTypes } from "@/lib/curriculumPlans";
+import { loadCurriculumTypes } from "@/lib/curriculumTypesServer";
 import { PLAN_VIEW_ROLES } from "@/lib/lessonPlanAccess";
 
 /**
@@ -21,8 +22,9 @@ export default async function handler(req, res) {
     }
 
     if (req.method === "GET") {
-      const [ageRanges, plans] = await Promise.all([
+      const [ageRanges, curriculumTypes, plans] = await Promise.all([
         ageRangeNames(centerId),
+        loadCurriculumTypes(),
         prisma.curriculumPlan.findMany({
           where: { centerId },
           select: { id: true, ageRange: true, type: true, _count: { select: { cells: true } } },
@@ -31,7 +33,7 @@ export default async function handler(req, res) {
       ]);
       return res.status(200).json({
         ageRanges,
-        types: PLAN_TYPES,
+        types: planTypes(curriculumTypes),
         plans: plans.map((p) => ({ id: p.id, ageRange: p.ageRange, type: p.type, lessons: p._count.cells })),
       });
     }
@@ -39,7 +41,7 @@ export default async function handler(req, res) {
     if (req.method === "POST") {
       if (!hasAnyRole(session.user, ["ADMIN"])) return res.status(403).json({ error: "Only admins can change the curriculum" });
       const ageRange = String(req.body?.ageRange || "").trim();
-      const type = normalizePlanType(req.body?.type);
+      const type = normalizePlanType(req.body?.type, await loadCurriculumTypes());
       if (!ageRange) return res.status(400).json({ error: "Choose an age group" });
       if (type === null) return res.status(400).json({ error: "Choose a type" });
       const names = await ageRangeNames(centerId);

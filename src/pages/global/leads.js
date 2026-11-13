@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import GlobalLayout from "@/components/global/GlobalLayout";
 import { apiJson } from "@/lib/api";
-import { BILLING_CYCLES, CURRICULUM_VERSIONS, PRICED_ADD_ONS, PROGRAM_TYPES, chosenDiscountId, classroomCounts, money, quote } from "@/lib/subscriptionPricing";
+import { STANDARD_TYPE, curriculumVersionForType, typeForCurriculumVersion } from "@/lib/curriculumTypes";
+import { useCurriculumTypes } from "@/lib/useCurriculumTypes";
+import { BILLING_CYCLES, PRICED_ADD_ONS, PROGRAM_TYPES, chosenDiscountId, classroomCounts, money, quote } from "@/lib/subscriptionPricing";
 
 // Global admin > Sales & Leads (client mockup 2026-11-06). Leads come from the
 // Ameris Solutions website (Request a Quote, Contact Us) or + Add Lead. The
@@ -57,7 +59,7 @@ function emptyForm() {
     children: "",
     billingCycle: "MONTHLY",
     programType: "CENTER",
-    curriculumVersion: "STANDARD",
+    curriculumType: STANDARD_TYPE,
     classrooms: {},
     homeDaycareProgram: "",
     discountId: "",
@@ -82,7 +84,7 @@ function formFrom(lead) {
     children: s.children ?? "",
     billingCycle: s.billingCycle || "MONTHLY",
     programType: s.programType || "CENTER",
-    curriculumVersion: s.curriculumVersion || "STANDARD",
+    curriculumType: s.curriculumType || typeForCurriculumVersion(s.curriculumVersion),
     classrooms: classroomCounts(s),
     homeDaycareProgram: s.homeDaycareProgram || "",
     discountId: chosenDiscountId(s) || "",
@@ -107,7 +109,10 @@ function bodyFrom(form) {
       children: form.children,
       billingCycle: form.billingCycle,
       programType: form.programType,
-      curriculumVersion: form.curriculumVersion,
+      // The type from Curriculum > Categories > Types (client sheet 10-29 (8),
+      // row 9); its price is Standard or Faith Based.
+      curriculumType: form.curriculumType,
+      curriculumVersion: curriculumVersionForType(form.curriculumType),
       classrooms: form.classrooms,
       homeDaycareProgram: form.homeDaycareProgram || null,
       discountId: form.discountId || null,
@@ -118,6 +123,7 @@ function bodyFrom(form) {
 function LeadForm({ form, set, pricing }) {
   const toggleAddOn = (key) => set({ addOns: form.addOns.includes(key) ? form.addOns.filter((k) => k !== key) : [...form.addOns, key] });
   const curriculum = form.addOns.includes("CURRICULUM");
+  const { types: curriculumTypes } = useCurriculumTypes();
   return (
     <>
       <section className="border-b border-gray-100 p-4 dark:border-gray-800">
@@ -190,12 +196,13 @@ function LeadForm({ form, set, pricing }) {
             </label>
             <label className={lbl}>
               Curriculum Type
-              <select className={input} value={form.curriculumVersion} onChange={(e) => set({ curriculumVersion: e.target.value })}>
-                {CURRICULUM_VERSIONS.map((o) => (
+              <select className={input} value={form.curriculumType} onChange={(e) => set({ curriculumType: e.target.value })}>
+                {curriculumTypes.map((o) => (
                   <option key={o.value} value={o.value}>
-                    {o.label === "Standard" ? "Non-Denominational (Standard)" : "Non-Denominational Christian (Faith Based)"}
+                    {o.label}
                   </option>
                 ))}
+                {!curriculumTypes.some((o) => o.value === form.curriculumType) && <option value={form.curriculumType}>(removed type)</option>}
               </select>
             </label>
           </div>

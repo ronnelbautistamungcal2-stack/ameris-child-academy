@@ -9,12 +9,14 @@ import { hasAnyRole } from "@/lib/roles";
 import { CURRICULUM_TYPES } from "@/lib/curriculumTypes";
 import { PLAN_VIEW_ROLES, classroomAccess } from "@/lib/lessonPlanAccess";
 
-/** The Type choices on the planner: every type, or one curriculum type. */
-export const PLAN_TYPES = [{ value: "", label: "All types" }, ...CURRICULUM_TYPES.map(({ value, label }) => ({ value, label }))];
+/** The Type choices on the planner: every type, or one curriculum type (from `types`). */
+export function planTypes(types = CURRICULUM_TYPES) {
+  return [{ value: "", label: "All types" }, ...types.map(({ value, label }) => ({ value, label }))];
+}
 
-export function normalizePlanType(value) {
+export function normalizePlanType(value, types = CURRICULUM_TYPES) {
   const v = String(value ?? "").trim();
-  return PLAN_TYPES.some((t) => t.value === v) ? v : null;
+  return planTypes(types).some((t) => t.value === v) ? v : null;
 }
 
 /** The center's Age Range list (Curriculum > Categories), in a natural order. */

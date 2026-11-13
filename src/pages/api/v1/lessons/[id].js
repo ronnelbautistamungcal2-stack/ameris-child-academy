@@ -1,3 +1,4 @@
+import { loadCurriculumTypes } from "@/lib/curriculumTypesServer";
 import { getSession } from "@/lib/auth";
 import { normalizeLessonSlot, normalizeTermDaySelections } from "@/lib/lessonScheduling";
 import prisma from "@/lib/prisma";
@@ -146,7 +147,7 @@ export default async function handler(req, res) {
             Object.prototype.hasOwnProperty.call(req.body, "nextStepId")
               ? nextStepId || null
               : undefined,
-          ...parseStepDetails(req.body),
+          ...parseStepDetails(req.body, await loadCurriculumTypes()),
         },
         include: LESSON_INCLUDE,
       });

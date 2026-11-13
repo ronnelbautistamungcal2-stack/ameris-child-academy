@@ -743,6 +743,17 @@ model CurriculumPlan {
   @@unique([centerId, ageRange, type])
 }
 
+// Curriculum types (client sheet 10-29 (8), rows 8-10): one list for every
+// center, kept on Curriculum > Categories > Types by the Ameris curriculum
+// admins. `value` is what lessons, plans and accounts store, so renaming a
+// type (label) changes nothing else.
+model CurriculumType {
+  value     String   @id
+  label     String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
 // Curriculum > Categories tab (client mockup 2026-10-02): the lists the lesson
 // and step forms offer in their dropdowns. Removing an entry only removes it
 // from the dropdowns; lessons that already use it keep their value.

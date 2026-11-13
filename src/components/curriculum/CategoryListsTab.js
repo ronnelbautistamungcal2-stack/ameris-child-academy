@@ -1,11 +1,19 @@
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { apiJson } from "@/lib/api";
 import { OPTION_LISTS } from "@/lib/curriculumOptions";
+import { refreshCurriculumTypes, useCurriculumTypes } from "@/lib/useCurriculumTypes";
 import { useCallback, useEffect, useState } from "react";
 
 // Curriculum > Categories (client mockup 2026-10-02): four lists side by side
 // (Categories, Subjects, Age Ranges, Type) that feed the dropdowns on the
 // New Lesson and Add Step forms. Type a name in the blank row to add one.
+//
+// Types (client sheet 10-29 (8), rows 8-10) is one list for every center: the
+// curriculum types on lessons and steps, the Lesson Planner's Type, and the
+// Global admin's Sales & Leads and Subscribers choices. Only the Ameris
+// curriculum admins change it; everyone else sees it read-only.
+
+const TYPES_LIST = { kind: "CURRICULUM_TYPE", title: "Types", column: "Type", search: "Search types...", icon: "🏷" };
 
 const NAVY = "text-[#0b2a5b] dark:text-blue-100";
 
@@ -57,8 +65,26 @@ export default function CategoryListsTab({ centerId }) {
     }
   }
 
+  const { types, canEdit: canEditTypes, loaded: typesLoaded } = useCurriculumTypes();
+
+  async function saveType(method, query, body) {
+    setError("");
+    try {
+      await apiJson(`/api/v1/curriculum-types${query}`, { method, ...(body ? { body: JSON.stringify(body) } : {}) });
+      await refreshCurriculumTypes();
+      return true;
+    } catch (e) {
+      setError(e.message || "Could not save the type");
+      return false;
+    }
+  }
+
   async function remove(row) {
     setRemoving(null);
+    if (row.kind === TYPES_LIST.kind) {
+      await saveType("DELETE", `?value=${encodeURIComponent(row.id)}`);
+      return;
+    }
     setError("");
     try {
       await apiJson(`/api/v1/curriculum-options?id=${encodeURIComponent(row.id)}`, { method: "DELETE" });
@@ -83,7 +109,19 @@ export default function CategoryListsTab({ centerId }) {
             onRemove={(row) => setRemoving({ ...row, kind: list.kind, listTitle: list.title })}
           />
         ))}
+        <OptionList
+          list={TYPES_LIST}
+          rows={typesLoaded ? types.map((t) => ({ id: t.value, name: t.label })) : []}
+          loading={!typesLoaded}
+          readOnly={!canEditTypes}
+          onAdd={(label) => saveType("POST", "", { label })}
+          onRename={(row, label) => saveType("PATCH", `?value=${encodeURIComponent(row.id)}`, { label })}
+          onRemove={(row) => setRemoving({ ...row, kind: TYPES_LIST.kind, listTitle: TYPES_LIST.title })}
+        />
       </div>
+      <p className="text-xs text-gray-500">
+        Types are the curriculum types for every center: the Type boxes on lessons and steps, the Lesson Planner&apos;s Type, and the curriculum type a subscriber is quoted and given. Renaming a type renames it everywhere; a type can only be removed when nothing uses it.
+      </p>
       <p className="text-xs text-gray-500">
         These lists fill the dropdowns on the New Lesson and Add Step forms. Renaming an entry renames it on the lessons and categories that use it. Removing an entry takes it off the dropdowns; lessons that already use it keep it.
       </p>
@@ -100,7 +138,7 @@ export default function CategoryListsTab({ centerId }) {
   );
 }
 
-function OptionList({ list, rows, loading, onAdd, onRename, onRemove }) {
+function OptionList({ list, rows, loading, readOnly = false, onAdd, onRename, onRemove }) {
   const [editing, setEditing] = useState(null); // { id, name }
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
@@ -132,7 +170,7 @@ function OptionList({ list, rows, loading, onAdd, onRename, onRemove }) {
         <thead className="sticky top-0">
           <tr className={`bg-blue-50 text-left font-bold dark:bg-gray-800 ${NAVY}`}>
             <th className="px-2 py-1.5">{list.column}</th>
-            <th className="w-20 px-2 py-1.5 text-center">Actions</th>
+            {!readOnly && <th className="w-20 px-2 py-1.5 text-center">Actions</th>}
           </tr>
         </thead>
         <tbody>
@@ -161,6 +199,7 @@ function OptionList({ list, rows, loading, onAdd, onRename, onRemove }) {
                   row.name
                 )}
               </td>
+              {!readOnly && (
               <td className="whitespace-nowrap px-2 py-1.5 text-center">
                 {editing?.id === row.id ? (
                   <>
@@ -178,6 +217,7 @@ function OptionList({ list, rows, loading, onAdd, onRename, onRemove }) {
                   </>
                 )}
               </td>
+              )}
             </tr>
           ))}
           {!loading && q && !shown.length && (
@@ -185,6 +225,7 @@ function OptionList({ list, rows, loading, onAdd, onRename, onRemove }) {
               <td colSpan={2} className="px-2 py-3 text-center text-xs text-gray-500">No matches.</td>
             </tr>
           )}
+          {!readOnly && (
           <tr>
             <td className="px-2 py-1.5">
               <input
@@ -204,6 +245,7 @@ function OptionList({ list, rows, loading, onAdd, onRename, onRemove }) {
               </button>
             </td>
           </tr>
+          )}
         </tbody>
       </table>
       </div>

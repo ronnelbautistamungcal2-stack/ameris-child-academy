@@ -33,7 +33,7 @@ export default function SolutionsRequestQuote() {
     addOns: [],
     classrooms: {},
     homeDaycareProgram: "",
-    curriculumVersion: "",
+    curriculumType: "",
     website: "",
   });
   const [state, setState] = useState({ sending: false, sent: false, error: "" });
@@ -56,7 +56,7 @@ export default function SolutionsRequestQuote() {
 
   async function submit(e) {
     e.preventDefault();
-    if (curriculum && !form.curriculumVersion) {
+    if (curriculum && !form.curriculumType) {
       setState({ sending: false, sent: false, error: "Select a curriculum type" });
       return;
     }
@@ -75,7 +75,8 @@ export default function SolutionsRequestQuote() {
         pricingSelection: {
           children: form.children,
           programType: form.programType === "HOME_DAYCARE" ? "HOME_DAYCARE" : "CENTER",
-          curriculumVersion: form.curriculumVersion || "STANDARD",
+          // Curriculum > Categories > Types (client sheet 10-29 (8), row 9).
+          curriculumType: form.curriculumType || null,
           classrooms: curriculum && form.programType !== "HOME_DAYCARE" ? form.classrooms : {},
           homeDaycareProgram: curriculum && form.programType === "HOME_DAYCARE" ? form.homeDaycareProgram : null,
         },
@@ -236,10 +237,13 @@ export default function SolutionsRequestQuote() {
                       )}
                       <label className={label}>
                         Curriculum Type *
-                        <select className={field} value={form.curriculumVersion} onChange={(e) => set({ curriculumVersion: e.target.value })}>
+                        <select className={field} value={form.curriculumType} onChange={(e) => set({ curriculumType: e.target.value })}>
                           <option value="">Select a curriculum type</option>
-                          <option value="STANDARD">Standard (Non-Denominational)</option>
-                          <option value="FAITH_BASED">Faith Based (Non-Denominational Christian)</option>
+                          {(options?.curriculumTypes || []).map((t) => (
+                            <option key={t.value} value={t.value}>
+                              {t.label}
+                            </option>
+                          ))}
                         </select>
                       </label>
                     </div>

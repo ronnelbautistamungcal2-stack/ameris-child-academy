@@ -73,7 +73,7 @@ export const STEP_CRITERIA_LEVELS = [
  * Add Step pop-up extras: the Exposure / Competency / Mastery criteria and
  * Additional Notes. Fields left out of the body stay undefined (unchanged).
  */
-export function parseStepDetails(body) {
+export function parseStepDetails(body, types) {
   const has = (key) => Object.prototype.hasOwnProperty.call(body || {}, key);
   const text = (value, max) => String(value ?? "").trim().slice(0, max) || null;
   const data = {};
@@ -85,8 +85,8 @@ export function parseStepDetails(body) {
   if (has("notes")) data.notes = text(body.notes, 2000);
   // Optional Type (Curriculum > Categories), on steps and lessons alike.
   if (has("type")) data.type = text(body.type, 80);
-  // Curriculum types: one or more of the three (client 2026-11-07).
-  if (has("types")) data.types = normalizeCurriculumTypes(body.types);
+  // Curriculum types: one or more from Curriculum > Categories > Types.
+  if (has("types")) data.types = normalizeCurriculumTypes(body.types, types);
   return data;
 }
 

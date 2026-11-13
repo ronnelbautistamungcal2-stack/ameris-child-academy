@@ -4,6 +4,8 @@ import crypto from "crypto";
 import prisma from "@/lib/prisma";
 import { currentPricingSet, parsePricingSelection } from "@/lib/pricingServer";
 import { PRICED_ADD_ONS, classroomCounts, quote } from "@/lib/subscriptionPricing";
+import { curriculumTypeLabel, typeForCurriculumVersion } from "@/lib/curriculumTypes";
+import { loadCurriculumTypes } from "@/lib/curriculumTypesServer";
 import { globalAdminIds, notify } from "@/lib/supportTickets";
 
 export const LEAD_STATUSES = [
@@ -114,6 +116,9 @@ export async function generateQuote(lead, actor, db = prisma) {
     billingCycle: sel.billingCycle || "MONTHLY",
     programType: sel.programType || "CENTER",
     curriculumVersion: sel.curriculumVersion || "STANDARD",
+    // The type's name as it was when quoted (client sheet 10-29 (8), row 9).
+    curriculumType: sel.curriculumType || typeForCurriculumVersion(sel.curriculumVersion),
+    curriculumTypeLabel: curriculumTypeLabel(sel.curriculumType || typeForCurriculumVersion(sel.curriculumVersion), await loadCurriculumTypes(db)),
     curriculumDetails:
       sel.programType === "HOME_DAYCARE"
         ? (set.data.homeDaycare || []).filter((p) => p.key === sel.homeDaycareProgram).map((p) => ({ label: p.label }))

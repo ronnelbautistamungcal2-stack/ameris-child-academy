@@ -1,3 +1,4 @@
+import { loadCurriculumTypes } from "@/lib/curriculumTypesServer";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { normalizeCurriculumTypes } from "@/lib/curriculumTypes";
@@ -141,7 +142,7 @@ export default async function handler(req, res) {
   }
   // Curriculum types: Non-Denominational, Non-Denominational Christian, Other (client 2026-11-07).
   if (Object.prototype.hasOwnProperty.call(req.body || {}, "types")) {
-    await prisma.lesson.update({ where: { id: lesson.id }, data: { types: normalizeCurriculumTypes(types) } });
+    await prisma.lesson.update({ where: { id: lesson.id }, data: { types: normalizeCurriculumTypes(types, await loadCurriculumTypes()) } });
   }
 
   const maxGoal = await prisma.lessonGoal.aggregate({

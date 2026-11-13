@@ -1,7 +1,7 @@
 // The lists on Curriculum > Categories, used by the lesson and step forms.
-// TYPE stays a valid kind for lists saved before, but Type is now a fixed
-// choice of curriculum types (src/lib/curriculumTypes.js, client 2026-11-07),
-// so its list is no longer shown.
+// TYPE stays a valid kind for lists saved before, but it is no longer shown:
+// the Types card on that tab is the curriculum types list instead
+// (CurriculumType table, /api/v1/curriculum-types; client sheet 10-29 (8), row 8).
 export const OPTION_KINDS = ["CATEGORY", "SUBJECT", "AGE_RANGE", "TYPE"];
 
 export const OPTION_LISTS = [

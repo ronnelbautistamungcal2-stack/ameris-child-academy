@@ -65,7 +65,14 @@ test.describe("Time sheets and audit @api", () => {
     expect(created.status()).toBe(201);
     const rowId = (await created.json()).id;
 
-    expect((await apiPost(request, base, { timeIn: localTime(2, 9, 0) }, admin)).status()).toBe(409);
+    // A second sign-in session on the same day is allowed now (client sheet
+    // 10-29 (8), row 15); it's its own row.
+    const second = await apiPost(request, base, { timeIn: localTime(2, 17, 0), timeOut: localTime(2, 17, 30) }, admin);
+    expect(second.status()).toBe(201);
+    const secondId = (await second.json()).id;
+    expect(secondId).not.toBe(rowId);
+    // The time out must be on the same day as the time in.
+    expect((await apiPost(request, base, { timeIn: localTime(2, 23, 0), timeOut: localTime(3, 1, 0) }, admin)).status()).toBe(400);
     expect((await apiPost(request, base, { timeIn: localTime(3, 9, 0), timeOut: localTime(3, 8, 0) }, admin)).status()).toBe(400);
 
     const sheet = await (await apiGet(request, base, admin)).json();
@@ -95,7 +102,10 @@ test.describe("Time sheets and audit @api", () => {
     expect(new Date(deletion.originalOut).toISOString()).toBe(newOut);
     expect(deletion.originalOutBy).toBe("AU");
 
-    expect((await (await apiGet(request, base, admin)).json()).rows).toHaveLength(0);
+    // Only the day's second session is left.
+    expect((await (await apiGet(request, base, admin)).json()).rows.map((r) => r.id)).toEqual([secondId]);
+    // Leave the time sheet empty for the next test.
+    expect((await apiDelete(request, `${base}/${secondId}`, admin)).status()).toBe(204);
   });
 
   test("the report date range limits the rows", async ({ request }) => {
@@ -175,7 +185,10 @@ test.describe("Time sheets and audit @api", () => {
     expect(new Date(entries[1].newValue).toISOString()).toBe(newOut);
 
     // The time sheet's By columns show who changed each time.
-    const row = (await (await apiGet(request, `/api/v1/time-sheets/staff/${staffer.id}`, admin)).json()).rows.find((r) => r.id === recordId);
+    // Time sheet rows are sign-in sessions now (client sheet 10-29 (8), row 16): find that day's.
+    const row = (await (await apiGet(request, `/api/v1/time-sheets/staff/${staffer.id}`, admin)).json()).rows.find(
+      (r) => new Date(r.day).toDateString() === new Date(`${date}T00:00:00`).toDateString(),
+    );
     expect(row.inBy).toBe("AU");
     expect(row.outBy).toBe("AU");
   });

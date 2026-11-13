@@ -1,6 +1,7 @@
 import { startOfDay } from "@/lib/attendance-classroom";
 import { deviceFromRequest, initialsOf, isEmployeeAt, readActionToken, staffStatusFor } from "@/lib/kiosk";
 import prisma from "@/lib/prisma";
+import { signIn, signOut } from "@/lib/attendanceSessions";
 
 // Kiosk employee screen: Clock In / Clock Out. Writes today's StaffAttendance
 // row (one per person per day) with the person's initials in the By columns.
@@ -37,26 +38,16 @@ export default async function handler(req, res) {
     if (existing?.clockIn && !existing.clockOut) {
       return res.status(409).json({ error: "You are already clocked in.", status: await staffStatusFor(prisma, user, device.centerId) });
     }
-    if (existing) {
-      await prisma.staffAttendance.update({
-        where: { id: existing.id },
-        data: existing.clockIn
-          ? { clockOut: null, clockOutBy: null }
-          : { clockIn: now, clockInBy: initials, centerId: device.centerId },
-      });
-    } else {
-      await prisma.staffAttendance.create({
-        data: { userId: user.id, centerId: device.centerId, date, clockIn: now, clockInBy: initials, status: "PRESENT" },
-      });
-    }
+    // Each clock-in is its own session; earlier ins and outs today stay on
+    // the time sheet (client sheet 10-29 (8), row 16).
+    await prisma.$transaction((tx) =>
+      signIn(tx, "staff", { day: existing, createData: { userId: user.id, centerId: device.centerId, date, status: "PRESENT" } }, now, initials),
+    );
   } else {
     if (!existing?.clockIn || existing.clockOut) {
       return res.status(409).json({ error: "You are not clocked in.", status: await staffStatusFor(prisma, user, device.centerId) });
     }
-    await prisma.staffAttendance.update({
-      where: { id: existing.id },
-      data: { clockOut: now, clockOutBy: initials },
-    });
+    await prisma.$transaction((tx) => signOut(tx, "staff", existing, now, initials));
   }
 
   return res.status(200).json({ at: now, status: await staffStatusFor(prisma, user, device.centerId) });

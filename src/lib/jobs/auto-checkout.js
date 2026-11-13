@@ -53,6 +53,14 @@ async function runAutoCheckout({ now = new Date() } = {}) {
         where: { id: record.id, checkedOutAt: null },
         data: { checkedOutAt: cutoff, checkOutBy: AUTO_CHECKOUT_BY },
       });
+      // The day's open sign-in session closes at the same time (several
+      // sign-ins a day, client sheet 10-29 (8), row 15).
+      if (result.count) {
+        await prisma.attendanceSession.updateMany({
+          where: { attendanceId: record.id, checkedOutAt: null, checkedInAt: { lt: cutoff } },
+          data: { checkedOutAt: cutoff, checkOutBy: AUTO_CHECKOUT_BY },
+        });
+      }
       checkedOut += result.count;
     }
   }

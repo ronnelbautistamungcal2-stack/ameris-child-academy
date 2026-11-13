@@ -1,6 +1,7 @@
 import { accessibleCenterIds } from "@/lib/auth";
 import { personInitials } from "@/lib/personNames";
 import { roleLabel } from "@/lib/roles";
+import { SESSION_KINDS, syncDaySummary } from "@/lib/attendanceSessions";
 
 // Child and employee time sheets (client request 2026-10-02, Student List and
 // Staff List sheets). Both are views over the daily attendance tables with the
@@ -135,9 +136,15 @@ function serializeRow(kind, config, row, positions) {
   };
 }
 
-/** Time sheet rows, oldest first, optionally limited to [from, to] (local days). */
+/**
+ * Time sheet rows, oldest first, optionally limited to [from, to] (local
+ * days). One row per sign-in session, so several ins and outs on a day all
+ * show (client sheet 10-29 (8), rows 15/16); a day with no sessions shows its
+ * own times.
+ */
 export async function listRows(prisma, kind, subject, { from, to } = {}) {
   const config = TIME_SHEET_KINDS[kind];
+  const sk = SESSION_KINDS[kind];
   const where = { [config.subjectField]: subject.id };
   if (from || to) {
     where[config.dayField] = {};
@@ -148,26 +155,44 @@ export async function listRows(prisma, kind, subject, { from, to } = {}) {
       where[config.dayField].lt = end;
     }
   }
-  const rows = await prisma[config.model].findMany({
+  const days = await prisma[config.model].findMany({
     where,
-    include: kind === "child" ? { classRoom: { select: { name: true } } } : undefined,
+    include: {
+      ...(kind === "child" ? { classRoom: { select: { name: true } } } : {}),
+      sessions: { orderBy: { [sk.inField]: "asc" } },
+    },
     orderBy: { [config.dayField]: "asc" },
   });
 
   const positions = new Map();
-  if (kind === "staff" && rows.length) {
+  if (kind === "staff" && days.length) {
     const shifts = await prisma.shiftSchedule.findMany({
-      where: { userId: subject.id, date: { gte: rows[0].date, lte: rows[rows.length - 1].date } },
+      where: { userId: subject.id, date: { gte: days[0].date, lte: days[days.length - 1].date } },
       select: { date: true, position: true },
     });
     for (const shift of shifts) positions.set(startOfLocalDay(shift.date).getTime(), shift.position);
     const fallback = roleLabel(subject.role);
-    for (const row of rows) {
-      const key = startOfLocalDay(row.date).getTime();
+    for (const day of days) {
+      const key = startOfLocalDay(day.date).getTime();
       if (!positions.has(key)) positions.set(key, fallback);
     }
   }
-  return rows.map((row) => serializeRow(kind, config, row, positions));
+  const rows = [];
+  for (const day of days) {
+    if (!day.sessions.length) {
+      rows.push(serializeRow(kind, config, day, positions));
+      continue;
+    }
+    for (const session of day.sessions) {
+      rows.push({ ...serializeRow(kind, config, { ...day, ...pickTimes(sk, session) }, positions), id: session.id });
+    }
+  }
+  return rows;
+}
+
+/** A session's in/out/by fields, under the day row's field names. */
+function pickTimes(sk, session) {
+  return { [sk.inField]: session[sk.inField], [sk.outField]: session[sk.outField], [sk.inBy]: session[sk.inBy], [sk.outBy]: session[sk.outBy] };
 }
 
 export class TimeSheetError extends Error {
@@ -190,27 +215,32 @@ export async function createRow(prisma, kind, access, { timeIn, timeOut, editor 
   if (!parsedIn) throw new TimeSheetError(400, "Enter the date and time in");
   validateTimes(parsedIn, parsedOut);
 
-  const day = startOfLocalDay(parsedIn);
-  const existing = await prisma[config.model].findUnique({
-    where: { [config.uniqueKey]: { [config.subjectField]: subject.id, [config.dayField]: day } },
-  });
-  if (existing) throw new TimeSheetError(409, "There is already a time sheet row for that day. Edit it instead.");
-
-  const data = {
-    [config.subjectField]: subject.id,
-    [config.dayField]: day,
-    [config.inField]: parsedIn,
-    [config.inByField]: editor,
-    [config.outField]: parsedOut,
-    [config.outByField]: parsedOut ? editor : null,
-  };
-  if (kind === "child") {
-    data.centerId = subject.centerId;
-    data.classRoomId = subject.classRoomId || null;
-  } else {
-    data.centerId = centerIds[0];
+  if (parsedOut && !sameTime(startOfLocalDay(parsedOut), startOfLocalDay(parsedIn))) {
+    throw new TimeSheetError(400, "The time out must be on the same day as the time in");
   }
-  return prisma[config.model].create({ data });
+  const sk = SESSION_KINDS[kind];
+  const day = startOfLocalDay(parsedIn);
+  // A day can have several sessions now: a new row adds one to the day.
+  return prisma.$transaction(async (tx) => {
+    let dayRow = await tx[config.model].findUnique({
+      where: { [config.uniqueKey]: { [config.subjectField]: subject.id, [config.dayField]: day } },
+    });
+    if (!dayRow) {
+      const data = { [config.subjectField]: subject.id, [config.dayField]: day };
+      if (kind === "child") {
+        data.centerId = subject.centerId;
+        data.classRoomId = subject.classRoomId || null;
+      } else {
+        data.centerId = centerIds[0];
+      }
+      dayRow = await tx[config.model].create({ data });
+    }
+    const session = await tx[sk.session].create({
+      data: { [sk.fk]: dayRow.id, [sk.inField]: parsedIn, [sk.inBy]: editor, [sk.outField]: parsedOut, [sk.outBy]: parsedOut ? editor : null },
+    });
+    await syncDaySummary(tx, kind, dayRow.id);
+    return { ...session, id: session.id };
+  });
 }
 
 async function loadRow(prisma, config, subject, recordId) {
@@ -264,6 +294,8 @@ export function timeChangeAudits(kind, row, { nextIn, nextOut }, { editor, edito
  */
 export async function updateRow(prisma, kind, access, recordId, { timeIn, timeOut, editor, editorUserId }) {
   const { config, subject } = access;
+  const session = await loadSession(prisma, kind, config, subject, recordId);
+  if (session) return updateSession(prisma, kind, config, session, { timeIn, timeOut, editor, editorUserId });
   const row = await loadRow(prisma, config, subject, recordId);
   const nextIn = timeIn === undefined ? row[config.inField] : parseDateTime(timeIn);
   const nextOut = timeOut === undefined ? row[config.outField] : parseDateTime(timeOut);
@@ -295,6 +327,8 @@ export async function updateRow(prisma, kind, access, recordId, { timeIn, timeOu
 /** Deletes a row and records it on the audit report. */
 export async function deleteRow(prisma, kind, access, recordId, { editor, editorUserId }) {
   const { config, subject } = access;
+  const session = await loadSession(prisma, kind, config, subject, recordId);
+  if (session) return deleteSession(prisma, kind, config, session, { editor, editorUserId });
   const row = await loadRow(prisma, config, subject, recordId);
   await prisma.$transaction([
     prisma.timeSheetAudit.create({
@@ -302,6 +336,67 @@ export async function deleteRow(prisma, kind, access, recordId, { editor, editor
     }),
     prisma[config.model].delete({ where: { id: row.id } }),
   ]);
+}
+
+/** The sign-in session with this id for this subject, or null when the id is a day row. */
+async function loadSession(prisma, kind, config, subject, recordId) {
+  const sk = SESSION_KINDS[kind];
+  const session = await prisma[sk.session].findUnique({ where: { id: String(recordId) }, include: { [sk.day]: true } });
+  if (!session) return null;
+  if (session[sk.day][config.subjectField] !== subject.id) throw new TimeSheetError(404, "Time sheet row not found");
+  return session;
+}
+
+/** The session's times as a day-shaped row, for the audit entries. */
+function sessionAsRow(kind, session) {
+  const sk = SESSION_KINDS[kind];
+  return { ...session[sk.day], id: session.id, ...pickTimes(sk, session) };
+}
+
+async function updateSession(prisma, kind, config, session, { timeIn, timeOut, editor, editorUserId }) {
+  const sk = SESSION_KINDS[kind];
+  const day = session[sk.day];
+  const row = sessionAsRow(kind, session);
+  const nextIn = timeIn === undefined ? session[sk.inField] : parseDateTime(timeIn);
+  const nextOut = timeOut === undefined ? session[sk.outField] : parseDateTime(timeOut);
+  validateTimes(nextIn, nextOut);
+  if (!nextIn) throw new TimeSheetError(400, "A row needs a time in. Delete the row instead.");
+  if (!sameTime(startOfLocalDay(nextIn), day[config.dayField])) {
+    throw new TimeSheetError(400, "The time in must stay on the same day. Delete the row and add the right day instead.");
+  }
+  const data = {};
+  if (!sameTime(nextIn, session[sk.inField])) {
+    data[sk.inField] = nextIn;
+    data[sk.inBy] = editor;
+  }
+  if (!sameTime(nextOut, session[sk.outField])) {
+    data[sk.outField] = nextOut;
+    data[sk.outBy] = nextOut ? editor : null;
+  }
+  if (!Object.keys(data).length) return row;
+  const audits = timeChangeAudits(kind, row, { nextIn, nextOut }, { editor, editorUserId });
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx[sk.session].update({ where: { id: session.id }, data });
+    for (const entry of audits) await tx.timeSheetAudit.create({ data: entry });
+    await syncDaySummary(tx, kind, day.id);
+    return updated;
+  });
+}
+
+/** Deletes a session (and the day when it was the last one); audited. */
+async function deleteSession(prisma, kind, config, session, { editor, editorUserId }) {
+  const sk = SESSION_KINDS[kind];
+  const day = session[sk.day];
+  const row = sessionAsRow(kind, session);
+  await prisma.$transaction(async (tx) => {
+    await tx.timeSheetAudit.create({
+      data: { ...auditBase(kind, config, row, { id: day[config.subjectField] }, editorUserId, editor), action: "DELETED", newValue: null },
+    });
+    await tx[sk.session].delete({ where: { id: session.id } });
+    const left = await tx[sk.session].count({ where: { [sk.fk]: day.id } });
+    if (left) await syncDaySummary(tx, kind, day.id);
+    else await tx[config.model].delete({ where: { id: day.id } });
+  });
 }
 
 export async function listAudit(prisma, kind, subject) {

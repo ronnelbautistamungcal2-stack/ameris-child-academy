@@ -1,5 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { signIn, signOut } from "@/lib/attendanceSessions";
 import { startOfDay } from "@/lib/attendance-classroom";
 import { teacherCanAccessChild } from "@/lib/teacherScope";
 import { isChildLinkedToParent } from "@/lib/child-parent-links";
@@ -50,11 +51,10 @@ export default async function handler(req, res) {
     where: { childId_day: { childId: child.id, day } },
   });
 
+  // Closes today's open sign-in (client sheet 10-29 (8), row 15); already
+  // signed out leaves the day as it is.
   const record = existing
-    ? await prisma.attendance.update({
-        where: { id: existing.id },
-        data: { checkedOutAt: now, checkOutBy: by },
-      })
+    ? (await prisma.$transaction((tx) => signOut(tx, "child", existing, now, by))).day
     : await prisma.attendance.create({
         data: {
           childId: child.id,

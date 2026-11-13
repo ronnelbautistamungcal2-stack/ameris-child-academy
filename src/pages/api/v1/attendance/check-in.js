@@ -1,5 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { signIn, signOut } from "@/lib/attendanceSessions";
 import { startOfDay } from "@/lib/attendance-classroom";
 import { teacherCanAccessChild } from "@/lib/teacherScope";
 import { isChildLinkedToParent } from "@/lib/child-parent-links";
@@ -50,30 +51,20 @@ export default async function handler(req, res) {
     where: { childId_day: { childId: child.id, day } },
   });
 
-  const record = existing
-    ? await prisma.attendance.update({
-        where: { id: existing.id },
-        data: {
-          checkedInAt: now,
-          checkInBy: by,
-          checkedOutAt: null,
-          checkOutBy: null,
-          classRoomId:
-            existing.classRoomId !== undefined && existing.classRoomId !== null
-              ? existing.classRoomId
-              : child.classRoomId || null,
-        },
-      })
-    : await prisma.attendance.create({
-        data: {
-          childId: child.id,
-          centerId: child.centerId,
-          day,
-          classRoomId: child.classRoomId || null,
-          checkedInAt: now,
-          checkInBy: by,
-        },
-      });
+  // Each sign-in is its own session, so earlier ins and outs today stay on
+  // the time sheet (client sheet 10-29 (8), row 15).
+  const { day: record } = await prisma.$transaction(async (tx) => {
+    if (existing && !existing.classRoomId && child.classRoomId) {
+      await tx.attendance.update({ where: { id: existing.id }, data: { classRoomId: child.classRoomId } });
+    }
+    return signIn(
+      tx,
+      "child",
+      { day: existing, createData: { childId: child.id, centerId: child.centerId, day, classRoomId: child.classRoomId || null } },
+      now,
+      by,
+    );
+  });
 
   return res.status(200).json(record);
 }

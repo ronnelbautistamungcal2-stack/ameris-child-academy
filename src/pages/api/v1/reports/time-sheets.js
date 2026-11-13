@@ -83,7 +83,8 @@ export default async function handler(req, res) {
   for (const subject of subjects) {
     const rows = await listRows(prisma, kind, subject, { from: `${from}T00:00:00`, to: `${to}T00:00:00` });
     const hours = roundHours(rows.reduce((sum, r) => sum + hoursBetween(r.timeIn, r.timeOut), 0));
-    const days = rows.filter((r) => r.timeIn).length;
+    // Distinct days: a day can have several sign-in sessions (client sheet 10-29 (8), rows 15/16).
+    const days = new Set(rows.filter((r) => r.timeIn).map((r) => new Date(r.day).toDateString())).size;
     const info = describeSubject(kind, subject);
     if (overview) {
       people.push({ ...info, days, hours, current: kind === "child" ? !subject.enrollmentEndDate || subject.enrollmentEndDate >= start : subject.employmentStatus === "CURRENTLY_EMPLOYED" });

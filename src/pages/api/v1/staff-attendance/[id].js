@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { sessionsFromDaySummary } from "@/lib/attendanceSessions";
 import { editorInitials, timeChangeAudits } from "@/lib/timeSheets";
 
 export default async function handler(req, res) {
@@ -47,6 +48,8 @@ export default async function handler(req, res) {
       }),
       ...audits.map((entry) => prisma.timeSheetAudit.create({ data: entry })),
     ]);
+    // The day's clock-in/out sessions follow the edited times.
+    await prisma.$transaction((tx) => sessionsFromDaySummary(tx, "staff", updated));
 
     return res.status(200).json(updated);
   } catch (e) {

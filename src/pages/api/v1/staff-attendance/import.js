@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { sessionsFromDaySummary } from "@/lib/attendanceSessions";
 import XLSX from "xlsx";
 import { STAFF_PORTAL_ROLES } from "@/lib/roles";
 import { editorInitials, timeChangeAudits } from "@/lib/timeSheets";
@@ -312,7 +313,7 @@ export default async function handler(req, res) {
         ? timeChangeAudits("staff", existing, { nextIn: clockIn, nextOut: clockOut }, { editor: importerInitials, editorUserId: session.user.id })
         : [];
       if (audits.length) await prisma.timeSheetAudit.createMany({ data: audits });
-      await prisma.staffAttendance.upsert({
+      const saved = await prisma.staffAttendance.upsert({
         where: {
           userId_date: {
             userId: matchedUser.id,
@@ -339,6 +340,8 @@ export default async function handler(req, res) {
           recordedById: session.user.id,
         },
       });
+      // The day's clock-in/out sessions follow the imported times.
+      await prisma.$transaction((tx) => sessionsFromDaySummary(tx, "staff", saved));
 
       if (existing) updatedCount += 1;
       else createdCount += 1;

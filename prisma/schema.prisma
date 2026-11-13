@@ -851,13 +851,13 @@ model ActivityLog {
 }
 
 model Attendance {
-  id           String     @id @default(uuid())
+  id           String              @id @default(uuid())
   day          DateTime
-  center       Center     @relation(fields: [centerId], references: [id])
+  center       Center              @relation(fields: [centerId], references: [id])
   centerId     String
-  child        Child      @relation(fields: [childId], references: [id])
+  child        Child               @relation(fields: [childId], references: [id])
   childId      String
-  classRoom    ClassRoom? @relation(fields: [classRoomId], references: [id])
+  classRoom    ClassRoom?          @relation(fields: [classRoomId], references: [id])
   classRoomId  String?
   checkedInAt  DateTime?
   checkedOutAt DateTime?
@@ -865,8 +865,12 @@ model Attendance {
   checkInBy    String?
   checkOutBy   String?
   notes        String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  // Every sign-in/out pair of the day (client sheet 10-29 (8), row 15). The
+  // fields above summarize them: first sign-in, last sign-out (empty while
+  // the child is still in).
+  sessions     AttendanceSession[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
 
   @@unique([childId, day])
   @@index([centerId, day])
@@ -1792,10 +1796,10 @@ model TeacherPerformanceSnapshot {
 }
 
 model StaffAttendance {
-  id           String                @id @default(uuid())
-  user         User                  @relation("StaffAttendances", fields: [userId], references: [id], onDelete: Cascade)
+  id           String                   @id @default(uuid())
+  user         User                     @relation("StaffAttendances", fields: [userId], references: [id], onDelete: Cascade)
   userId       String
-  center       Center                @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  center       Center                   @relation(fields: [centerId], references: [id], onDelete: Cascade)
   centerId     String
   date         DateTime
   clockIn      DateTime?
@@ -1803,16 +1807,49 @@ model StaffAttendance {
   // Initials of whoever recorded the clock-in / clock-out (time sheets).
   clockInBy    String?
   clockOutBy   String?
-  status       StaffAttendanceStatus @default(PRESENT)
-  lateMinutes  Int                   @default(0)
+  status       StaffAttendanceStatus    @default(PRESENT)
+  lateMinutes  Int                      @default(0)
   notes        String?
-  recordedBy   User?                 @relation("StaffAttendancesRecorded", fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedBy   User?                    @relation("StaffAttendancesRecorded", fields: [recordedById], references: [id], onDelete: SetNull)
   recordedById String?
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
+  // Every clock-in/out pair of the day (client sheet 10-29 (8), row 16). The
+  // fields above summarize them: first clock-in, last clock-out.
+  sessions     StaffAttendanceSession[]
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
 
   @@unique([userId, date])
   @@index([centerId, date])
+}
+
+// One clock-in/out pair of a staff member's day.
+model StaffAttendanceSession {
+  id                String          @id @default(uuid())
+  staffAttendance   StaffAttendance @relation(fields: [staffAttendanceId], references: [id], onDelete: Cascade)
+  staffAttendanceId String
+  clockIn           DateTime
+  clockOut          DateTime?
+  clockInBy         String?
+  clockOutBy        String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([staffAttendanceId, clockIn])
+}
+
+// One sign-in/out pair of a child's day.
+model AttendanceSession {
+  id           String     @id @default(uuid())
+  attendance   Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  attendanceId String
+  checkedInAt  DateTime
+  checkedOutAt DateTime?
+  checkInBy    String?
+  checkOutBy   String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([attendanceId, checkedInAt])
 }
 
 model TimeOffRequest {

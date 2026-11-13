@@ -1,6 +1,7 @@
 import { startOfDay } from "@/lib/attendance-classroom";
 import { childrenFor, deviceFromRequest, initialsOf, readActionToken } from "@/lib/kiosk";
 import prisma from "@/lib/prisma";
+import { signIn, signOut } from "@/lib/attendanceSessions";
 
 // Kiosk parent screen: sign one or more children in or out. Only children this
 // person may pick up at the device's center are accepted. Writes today's
@@ -44,29 +45,17 @@ export default async function handler(req, res) {
   await prisma.$transaction(async (tx) => {
     for (const child of kids) {
       const existing = await tx.attendance.findUnique({ where: { childId_day: { childId: child.id, day } } });
+      // Every sign-in and sign-out is kept (client sheet 10-29 (8), row 15).
       if (action === "in") {
-        if (existing?.checkedInAt && !existing.checkedOutAt) continue; // already signed in
-        if (existing) {
-          await tx.attendance.update({
-            where: { id: existing.id },
-            data: existing.checkedInAt
-              ? { checkedOutAt: null, checkOutBy: null }
-              : { checkedInAt: now, checkInBy: initials },
-          });
-        } else {
-          await tx.attendance.create({
-            data: {
-              childId: child.id,
-              centerId: child.centerId,
-              day,
-              classRoomId: child.classRoomId || null,
-              checkedInAt: now,
-              checkInBy: initials,
-            },
-          });
-        }
-      } else if (existing?.checkedInAt && !existing.checkedOutAt) {
-        await tx.attendance.update({ where: { id: existing.id }, data: { checkedOutAt: now, checkOutBy: initials } });
+        await signIn(
+          tx,
+          "child",
+          { day: existing, createData: { childId: child.id, centerId: child.centerId, day, classRoomId: child.classRoomId || null } },
+          now,
+          initials,
+        );
+      } else {
+        await signOut(tx, "child", existing, now, initials);
       }
     }
   });

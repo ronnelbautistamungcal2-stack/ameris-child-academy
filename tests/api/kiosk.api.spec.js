@@ -126,6 +126,20 @@ test.describe("Front-desk kiosk @api", () => {
     expect(row.clockInBy).toBe("KQS");
     expect(row.clockOutBy).toBe("KQS");
 
+    // A second clock-in and out the same day: both pairs stay on the time
+    // sheet (client sheet 10-29 (8), row 16).
+    expect((await kiosk.post("/api/v1/kiosk/clock", { data: { token: identity.token, action: "in" } })).status()).toBe(200);
+    expect((await kiosk.post("/api/v1/kiosk/clock", { data: { token: identity.token, action: "out" } })).status()).toBe(200);
+    const sheet = await (await apiGet(request, `/api/v1/time-sheets/staff/${user.id}?from=${day(-1)}&to=${day(1)}`, admin)).json();
+    const sessions = (sheet.rows || []).filter((r) => r.timeIn);
+    expect(sessions).toHaveLength(2);
+    expect(sessions.every((r) => r.timeOut && r.inBy === "KQS" && r.outBy === "KQS")).toBe(true);
+    // The day still reads as the first clock-in and the last clock-out.
+    const summary = (await (await apiGet(request, `/api/v1/staff-attendance?centerId=${centerId}&from=${day(-1)}&to=${day(1)}`, admin)).json());
+    const daily = (Array.isArray(summary) ? summary : summary.records || []).find((r) => r.userId === user.id);
+    expect(new Date(daily.clockIn).getTime()).toBe(new Date(sessions[0].timeIn).getTime());
+    expect(new Date(daily.clockOut).getTime()).toBe(new Date(sessions[1].timeOut).getTime());
+
     // A tampered or foreign pass is refused.
     expect((await kiosk.post("/api/v1/kiosk/clock", { data: { token: `${identity.token}x`, action: "in" } })).status()).toBe(401);
   });
@@ -171,6 +185,27 @@ test.describe("Front-desk kiosk @api", () => {
       data: { token: identity.token, childIds: [child.id], action: "out" },
     });
     expect((await signOut.json()).children[0].signedIn).toBe(false);
+
+    // Signed in and out again the same day: the time sheet keeps both
+    // (client sheet 10-29 (8), row 15), and an edit or delete touches one.
+    await kiosk.post("/api/v1/kiosk/children", { data: { token: identity.token, childIds: [child.id], action: "in" } });
+    const back = await kiosk.post("/api/v1/kiosk/children", { data: { token: identity.token, childIds: [child.id], action: "out" } });
+    expect((await back.json()).children[0].signedIn).toBe(false);
+    const day = (offset) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
+    const sheetUrl = `/api/v1/time-sheets/child/${child.id}`;
+    let sheet = await (await apiGet(request, `${sheetUrl}?from=${day(-1)}&to=${day(1)}`, admin)).json();
+    expect(sheet.rows.filter((r) => r.timeIn && r.timeOut)).toHaveLength(2);
+    const [first, second] = sheet.rows;
+    // Admins add a third session by hand on the same day (no longer refused).
+    const added = await apiPost(request, sheetUrl, { timeIn: second.timeOut, timeOut: second.timeOut }, admin);
+    expect(added.status(), await added.text()).toBeLessThan(300);
+    sheet = await (await apiGet(request, `${sheetUrl}?from=${day(-1)}&to=${day(1)}`, admin)).json();
+    expect(sheet.rows).toHaveLength(3);
+    // Deleting one session leaves the others and the day.
+    expect((await apiDelete(request, `${sheetUrl}/${second.id}`, admin)).status()).toBeLessThan(300);
+    sheet = await (await apiGet(request, `${sheetUrl}?from=${day(-1)}&to=${day(1)}`, admin)).json();
+    expect(sheet.rows.map((r) => r.id)).not.toContain(second.id);
+    expect(sheet.rows.map((r) => r.id)).toContain(first.id);
   });
 
   test("wrong PINs lock the device after five tries", async () => {

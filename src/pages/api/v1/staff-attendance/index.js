@@ -1,5 +1,6 @@
 import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { sessionsFromDaySummary } from "@/lib/attendanceSessions";
 import { isSelfServiceEmployeeRole, STAFF_PORTAL_ROLES } from "@/lib/roles";
 import { editorInitials, timeChangeAudits } from "@/lib/timeSheets";
 
@@ -139,6 +140,8 @@ async function handlePost(req, res, session) {
     },
   });
   const [record] = await prisma.$transaction([upsert, ...audits.map((data) => prisma.timeSheetAudit.create({ data }))]);
+  // The day's clock-in/out sessions follow the times entered here.
+  await prisma.$transaction((tx) => sessionsFromDaySummary(tx, "staff", record));
 
   return res.status(201).json(record);
 }

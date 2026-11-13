@@ -47,7 +47,9 @@ const SOLUTIONS_HOSTS = String(process.env.SOLUTIONS_HOSTS || "amerissolutions.c
   .map((h) => h.trim().toLowerCase())
   .filter(Boolean);
 // Academy pages that have a Solutions version on that domain.
-const SOLUTIONS_PAGES = { "/": "/solutions", "/contact": "/solutions/contact", "/about": "/solutions", "/programs": "/solutions/plans" };
+// /login too: signing out lands on the Ameris Solutions login, not the old
+// Academy one (client sheet 10-29 (8), row 13).
+const SOLUTIONS_PAGES = { "/": "/solutions", "/contact": "/solutions/contact", "/about": "/solutions", "/programs": "/solutions/plans", "/login": "/solutions/login" };
 
 // The public host (nginx passes it on), not the app's own localhost:3000.
 function publicHost(request) {
@@ -71,7 +73,9 @@ export async function middleware(request) {
     if (pathname === "/") return NextResponse.rewrite(url);
     // Redirect on the public domain, not the app's own address behind nginx.
     const proto = String(request.headers.get("x-forwarded-proto") || request.nextUrl.protocol.replace(":", "")).split(",")[0].trim();
-    return NextResponse.redirect(new URL(SOLUTIONS_PAGES[pathname], `${proto}://${publicHost(request)}`));
+    const target = new URL(SOLUTIONS_PAGES[pathname], `${proto}://${publicHost(request)}`);
+    target.search = request.nextUrl.search; // keep ?callbackUrl= and ?error=
+    return NextResponse.redirect(target);
   }
 
   if (PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {

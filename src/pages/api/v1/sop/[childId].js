@@ -78,7 +78,9 @@ export default async function handler(req, res) {
       req.query.view === "assessment"
         ? await loadAssessmentSteps(child, {
             category: req.query.category ? String(req.query.category) : "",
-            all: req.query.all === "1",
+            // Every age only for admins; the page no longer offers it (client
+            // sheet 10-29 (8), rows 3/11).
+            all: req.query.all === "1" && session.user.role === "ADMIN",
             q: req.query.q ? String(req.query.q) : "",
           })
         : null;

@@ -69,7 +69,7 @@ export default function TermsPage() {
           <div className="w-44">
             <AmerisLogo size="lg" showText={false} className="max-w-full" />
           </div>
-          <button type="button" onClick={() => signOut({ callbackUrl: "/login" })} className="text-sm font-semibold text-blue-800 underline dark:text-blue-200">
+          <button type="button" onClick={() => signOut({ redirect: false }).then(() => window.location.assign("/login"))} className="text-sm font-semibold text-blue-800 underline dark:text-blue-200">
             Sign out
           </button>
         </div>

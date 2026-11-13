@@ -436,7 +436,7 @@ export default function AppShell({
                 ) : null}
 
                 <button
-                  onClick={() => signOut({ callbackUrl: "/login" })}
+                  onClick={() => signOut({ redirect: false }).then(() => window.location.assign("/login"))}
                   className="rounded-2xl bg-gradient-to-r from-red-500 to-red-600 px-2.5 py-2 text-xs font-extrabold text-white shadow-sm transition-all hover:shadow-md hover:from-red-600 hover:to-red-700 sm:px-4 sm:text-sm"
                 >
                   <span className="hidden sm:inline">Sign Out</span>

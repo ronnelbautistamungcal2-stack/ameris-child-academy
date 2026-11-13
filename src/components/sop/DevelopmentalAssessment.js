@@ -44,7 +44,9 @@ export default function DevelopmentalAssessment() {
   const [open, setOpen] = useState({});
   const [dismissed, setDismissed] = useState({});
   const [search, setSearch] = useState("");
-  const [allAges, setAllAges] = useState(false);
+  // "Show steps for every age" was removed (client sheet 10-29 (8), rows 3/11):
+  // the assessment shows the steps for the child's age.
+  const allAges = false;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -276,10 +278,6 @@ export default function DevelopmentalAssessment() {
               ))}
             </select>
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search goals, questions or notes..." aria-label="Search the assessment" className="w-64 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800" />
-            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-              <input type="checkbox" checked={allAges} onChange={(e) => setAllAges(e.target.checked)} />
-              Show steps for every age
-            </label>
           </div>
         </div>
         <div className="flex gap-2">

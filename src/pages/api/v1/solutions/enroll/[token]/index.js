@@ -38,7 +38,7 @@ export default async function handler(req, res) {
 
     let enrollment;
     let activity;
-    if (signingRequired(lead)) {
+    if (await signingRequired(lead)) {
       lead = await refreshSigning(lead).catch(() => lead);
       const e = lead.enrollment;
       if (e?.signing?.status !== "COMPLETED") return res.status(409).json({ error: "Please review and e-sign your agreement first." });

@@ -338,6 +338,22 @@ export default function GeneralSettings() {
               ))}
             </select>
           </label>
+          <label className="mt-3 flex items-start gap-2 text-sm text-gray-800 dark:text-gray-200">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={general.signing.docusignForCenters}
+              onChange={(e) => set("signing", { docusignForCenters: e.target.checked })}
+            />
+            <span>
+              Centers e-sign the Order Form and agreement in DocuSign
+              <span className="block text-xs text-gray-500">
+                {general.signing.docusignForCenters && !data.docusignReady
+                  ? "DocuSign isn't set up on the server yet, so centers still use the \"I agree\" checkbox."
+                  : "When off, centers tick \"I agree\" like Home Daycare. The date, time, user and agreement version are recorded."}
+              </span>
+            </span>
+          </label>
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" className={button} onClick={() => setUploading(true)}>
               Upload New Agreement

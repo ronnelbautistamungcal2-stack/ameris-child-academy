@@ -1,12 +1,13 @@
 import crypto from "crypto";
 import { requireGlobalAdmin } from "@/lib/globalAdmin";
 import prisma from "@/lib/prisma";
+import { docusignConfigured } from "@/lib/docusign";
 import { NOTIFICATION_LABELS, getAgreements, getGeneral, saveAgreements, validateGeneral } from "@/lib/globalSettings";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
- * GET   /api/v1/global/settings -> { general, notificationLabels, templates, agreements }
+ * GET   /api/v1/global/settings -> { general, notificationLabels, templates, agreements, docusignReady }
  * PUT   /api/v1/global/settings { general }            Save Changes (General tab)
  * POST  /api/v1/global/settings { agreement: { name, version, effectiveDate, fileUrl } }
  *       Upload New Agreement (becomes the current one)
@@ -23,7 +24,7 @@ export default async function handler(req, res) {
       prisma.emailTemplate.findMany({ orderBy: { name: "asc" } }),
       getAgreements(),
     ]);
-    return res.status(200).json({ general, notificationLabels: NOTIFICATION_LABELS, templates, agreements });
+    return res.status(200).json({ general, notificationLabels: NOTIFICATION_LABELS, templates, agreements, docusignReady: docusignConfigured() });
   }
 
   if (req.method === "PUT") {

@@ -9,7 +9,7 @@ import bcrypt from "bcryptjs";
 import prisma from "@/lib/prisma";
 import { currentPricingSet } from "@/lib/pricingServer";
 import { FULL_MONTH_THROUGH_DAY, rangeFor } from "@/lib/subscriptionPricing";
-import { getAgreements } from "@/lib/globalSettings";
+import { getAgreements, getGeneral } from "@/lib/globalSettings";
 import { currentDocuments } from "@/lib/terms";
 import { nextAccountNumber } from "@/lib/subscriberAccounts";
 import { globalAdminIds, notify } from "@/lib/supportTickets";
@@ -100,7 +100,7 @@ export async function enrollmentView(lead, db = prisma) {
     payment: lead.enrollment?.payment?.status || null,
     // Centers sign in DocuSign (when it's set up); Home Daycare ticks "I agree".
     signing: {
-      required: signingRequired(lead),
+      required: await signingRequired(lead, db),
       status: signing?.status || null,
       signer: signing ? { fullName: lead.enrollment.fullName, email: lead.enrollment.email } : null,
     },
@@ -394,13 +394,18 @@ export async function finishEnrollment(sessionId, db = prisma) {
 // DocuSign signing for centers (client 2026-11-11, Q5): the center signs the
 // Order Form (services, pricing, billing terms, discount) with the Subscriber
 // Agreement attached, before paying. Home Daycare keeps the "I agree" box.
-// Without DocuSign settings, centers fall back to "I agree" too.
+// Without DocuSign settings, or with it turned off in Settings > General,
+// centers tick "I agree" too.
 
 const SIGNED_DIR = path.join(process.cwd(), "storage", "signed-agreements");
 const programTypeOf = (lead) => lead.pricingSelection?.programType || lead.quoteData?.programType || "CENTER";
 
-export function signingRequired(lead) {
-  return programTypeOf(lead) !== "HOME_DAYCARE" && docusignConfigured();
+/** Centers sign in DocuSign only when Settings > General turns it on and DocuSign is set up. */
+export async function signingRequired(lead, db = prisma) {
+  if (programTypeOf(lead) === "HOME_DAYCARE" || !docusignConfigured()) return false;
+  // Already signed before it was turned off: keep the signed copy.
+  if (lead.enrollment?.signing?.status === "COMPLETED") return true;
+  return (await getGeneral(db)).signing.docusignForCenters;
 }
 
 const escHtml = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

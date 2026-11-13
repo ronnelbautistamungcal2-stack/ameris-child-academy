@@ -162,6 +162,7 @@ test.describe("Complete Your Enrollment: center e-signing @api", () => {
   let leadId = "";
   let token = "";
   let savedAgreements = null;
+  let savedGeneral = null;
   let agreementId = "";
   const otherAdminEmail = `other-admin@${cDomain}`;
 
@@ -170,6 +171,10 @@ test.describe("Complete Your Enrollment: center e-signing @api", () => {
     const gEmail = `global@${cDomain}`;
     globalId = (await prisma.user.create({ data: { email: gEmail, name: "E-Sign Global", password: await bcrypt.hash(password, 10), role: "GLOBAL_ADMIN", roles: ["GLOBAL_ADMIN"] } })).id;
     savedAgreements = await prisma.globalSetting.findUnique({ where: { key: "agreements" } });
+    // Centers e-sign only with Settings > General's DocuSign switch on.
+    savedGeneral = await prisma.globalSetting.findUnique({ where: { key: "general" } });
+    const general = { ...(savedGeneral?.value || {}), signing: { docusignForCenters: true } };
+    await prisma.globalSetting.upsert({ where: { key: "general" }, create: { key: "general", value: general }, update: { value: general } });
     const global = await getAuthCookie(request, gEmail, password);
     const added = await (
       await apiPost(request, "/api/v1/global/settings", { agreement: { name: "Test Subscription Agreement", version: `e-${cStamp}`, effectiveDate: "2026-11-01", fileUrl: `/uploads/${pdfName}` } }, global)
@@ -195,6 +200,8 @@ test.describe("Complete Your Enrollment: center e-signing @api", () => {
     fs.rmSync(pdfPath, { force: true });
     if (savedAgreements) await prisma.globalSetting.update({ where: { key: "agreements" }, data: { value: savedAgreements.value } });
     else await prisma.globalSetting.deleteMany({ where: { key: "agreements" } });
+    if (savedGeneral) await prisma.globalSetting.update({ where: { key: "general" }, data: { value: savedGeneral.value } });
+    else await prisma.globalSetting.deleteMany({ where: { key: "general" } });
     await prisma.lead.deleteMany({ where: { id: leadId } });
     const other = await prisma.user.findUnique({ where: { email: otherAdminEmail } });
     if (other) await prisma.centerUser.deleteMany({ where: { userId: other.id } });

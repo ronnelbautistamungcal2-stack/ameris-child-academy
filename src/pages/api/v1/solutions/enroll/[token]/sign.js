@@ -21,7 +21,7 @@ export default async function handler(req, res) {
   if (tooManyRequests(req, 10)) return res.status(429).json({ error: "Too many tries. Please wait a few minutes." });
   if (lead.subscriberAccountId) return res.status(409).json({ error: "This quote has already been used to enroll. Please log in." });
   if (quoteExpired(lead)) return res.status(409).json({ error: "This quote has expired. Please contact us for a new one." });
-  if (!signingRequired(lead)) return res.status(409).json({ error: "This plan is agreed to with the \"I agree\" box." });
+  if (!(await signingRequired(lead))) return res.status(409).json({ error: "This plan is agreed to with the \"I agree\" box." });
   if (lead.enrollment?.signing?.status === "COMPLETED") return res.status(409).json({ error: "The agreement is already signed. Continue to payment." });
 
   const parsed = await parseEnrollment(req.body || {}, lead, prisma, { signing: true });

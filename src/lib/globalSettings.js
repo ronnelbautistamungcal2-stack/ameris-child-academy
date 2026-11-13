@@ -14,6 +14,9 @@ export const GENERAL_DEFAULTS = {
   email: { fromName: "Ameris Solutions", fromEmail: "no-reply@amerissolutions.com", replyTo: "support@amerissolutions.com" },
   notifications: { newLeads: true, supportMessages: true, payments: true, agreements: true, systemUpdates: false },
   automated: { paymentReminderDaysBefore: 3, pastDueDaysAfter: 1, suspensionDaysAfter: 10, renewalReminderDaysBefore: 30 },
+  // Centers e-sign in DocuSign when on (and DocuSign is set up); otherwise they
+  // tick "I agree" like Home Daycare (client 2026-11-14: "I agree" for now).
+  signing: { docusignForCenters: false },
 };
 
 export const NOTIFICATION_LABELS = {
@@ -55,7 +58,8 @@ export function validateGeneral(input) {
     if (!Number.isInteger(n) || n < 0 || n > 365) return { error: "Automated notification days must be whole numbers from 0 to 365" };
     automated[k] = n;
   }
-  return { data: { company, email, notifications, automated } };
+  const signing = { docusignForCenters: Boolean(v.signing.docusignForCenters) };
+  return { data: { company, email, notifications, automated, signing } };
 }
 
 /** Subscriber agreement versions: [{ id, name, version, effectiveDate, fileUrl, current }] (newest first). */

@@ -2,7 +2,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import CurriculumTabs from "@/components/curriculum/CurriculumTabs";
 import BulkTypesDialog from "@/components/curriculum/BulkTypesDialog";
 import CurriculumTypePicker from "@/components/curriculum/CurriculumTypePicker";
-import { CURRICULUM_TYPES } from "@/lib/curriculumTypes";
+import { useCurriculumTypes } from "@/lib/useCurriculumTypes";
 import ProtectedLessonViewer from "@/components/lessons/ProtectedLessonViewer";
 import ResourceLinks, { resourceLabel } from "@/components/lessons/ResourceLinks";
 import { apiJson } from "@/lib/api";
@@ -1128,6 +1128,7 @@ export default function AdminLessons() {
   }, [search, age, category, term, subject, typeFilter, pageSize]);
 
   // Type filter choices, counted per lesson (a lesson can have several rows).
+  const { types: curriculumTypes } = useCurriculumTypes();
   const typeOptions = useMemo(() => {
     const byLesson = new Map();
     for (const r of records) if (!byLesson.has(r.lessonId)) byLesson.set(r.lessonId, r);
@@ -1135,10 +1136,10 @@ export default function AdminLessons() {
     const old = [...new Set(list.map((r) => r.type.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     return [
       { value: "NONE", label: "No type ticked", count: list.filter((r) => !r.types.length).length },
-      ...CURRICULUM_TYPES.map((t) => ({ value: t.value, label: t.label, count: list.filter((r) => r.types.includes(t.value)).length })),
+      ...curriculumTypes.map((t) => ({ value: t.value, label: t.label, count: list.filter((r) => r.types.includes(t.value)).length })),
       ...old.map((o) => ({ value: `OLD:${o}`, label: `Old Type: ${o}`, count: list.filter((r) => r.type.trim() === o).length })),
     ];
-  }, [records]);
+  }, [records, curriculumTypes]);
   const filteredLessonIds = useMemo(() => [...new Set(filtered.map((r) => r.lessonId).filter(Boolean))], [filtered]);
 
   useEffect(() => {

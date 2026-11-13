@@ -112,7 +112,7 @@ export default function SolutionsQuote() {
                     </li>
                   ))}
                 </ul>
-                <p className="font-bold text-gray-900">{q.curriculumVersion === "FAITH_BASED" ? "Non-Denominational Christian" : "Non-Denominational"}</p>
+                <p className="font-bold text-gray-900">{q.curriculumTypeLabel || (q.curriculumVersion === "FAITH_BASED" ? "Non-Denominational Christian" : "Non-Denominational")}</p>
               </div>
             ) : null}
 

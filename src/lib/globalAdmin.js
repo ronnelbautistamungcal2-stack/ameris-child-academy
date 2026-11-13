@@ -60,7 +60,7 @@ function limit(value, { min, allowNull }) {
  * Validates the editable account fields. Returns { data } or { error }.
  * Fields left out of `body` are left out of `data`.
  */
-export function parseAccountInput(body = {}, { create = false } = {}) {
+export function parseAccountInput(body = {}, { create = false, types } = {}) {
   const data = {};
   const name = text(body.name, 200);
   if (create && !name) return { error: "Center or business name is required" };
@@ -74,7 +74,7 @@ export function parseAccountInput(body = {}, { create = false } = {}) {
   }
   if (body.addOns !== undefined) data.addOns = normalizeAddOns(body.addOns);
   // The curriculum types the subscriber pays for (client 2026-11-07).
-  if (body.curriculumTypes !== undefined) data.curriculumTypes = normalizeCurriculumTypes(body.curriculumTypes);
+  if (body.curriculumTypes !== undefined) data.curriculumTypes = normalizeCurriculumTypes(body.curriculumTypes, types);
   // Age groups (step E): source classroom ids; checked against the database
   // by normalizeAgeGroups in the route.
   if (body.curriculumAgeGroups !== undefined) {

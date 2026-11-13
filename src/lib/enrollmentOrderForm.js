@@ -59,7 +59,7 @@ ${lead.location ? `<tr><td class="k">Location</td><td>${esc(lead.location)}</td>
 <table>${rows}
 <tr class="tot"><td>${annual ? "Annual" : "Monthly"} subscription</td><td class="r">${money(charges.recurringAmount)}</td></tr>
 </table>
-${curriculum ? `<p>Curriculum (${esc(q.curriculumVersion === "FAITH_BASED" ? "Faith Based" : "Standard")}): ${curriculum}</p>` : ""}
+${curriculum ? `<p>Curriculum (${esc(q.curriculumTypeLabel || (q.curriculumVersion === "FAITH_BASED" ? "Faith Based" : "Standard"))}): ${curriculum}</p>` : ""}
 
 <h2>Billing Terms</h2>
 <table>

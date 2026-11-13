@@ -1,3 +1,4 @@
+import { loadCurriculumTypes } from "@/lib/curriculumTypesServer";
 import prisma from "@/lib/prisma";
 import { ACCOUNT_STATUS_LABELS, ADD_ON_LABELS } from "@/lib/addOns";
 import { curriculumTypeLabels } from "@/lib/curriculumTypes";
@@ -36,7 +37,7 @@ async function loadDetail(id) {
   };
 }
 
-function describeChanges(before, data) {
+function describeChanges(before, data, curriculumTypes) {
   const out = [];
   if (data.status && data.status !== before.status) {
     out.push(`Status changed to ${ACCOUNT_STATUS_LABELS[data.status] || data.status}.`);
@@ -49,7 +50,7 @@ function describeChanges(before, data) {
   }
   if (data.curriculumTypes) {
     const same = data.curriculumTypes.length === (before.curriculumTypes || []).length && data.curriculumTypes.every((t) => before.curriculumTypes.includes(t));
-    if (!same) out.push(`Curriculum types set to ${curriculumTypeLabels(data.curriculumTypes) || "none"}.`);
+    if (!same) out.push(`Curriculum types set to ${curriculumTypeLabels(data.curriculumTypes, curriculumTypes) || "none"}.`);
   }
   if (data.curriculumAgeGroups) {
     const before_ = before.curriculumAgeGroups || [];
@@ -83,7 +84,8 @@ export default async function handler(req, res) {
     const before = await prisma.subscriberAccount.findUnique({ where: { id } });
     if (!before) return res.status(404).json({ error: "Subscriber not found" });
     const body = req.body || {};
-    const parsed = parseAccountInput(body);
+    const curriculumTypes = await loadCurriculumTypes();
+    const parsed = parseAccountInput(body, { types: curriculumTypes });
     if (parsed.error) return res.status(400).json({ error: parsed.error });
     const data = parsed.data;
     let ageGroupNames = [];
@@ -99,7 +101,7 @@ export default async function handler(req, res) {
       data.pricingSelection = pricing.data;
     }
 
-    const notes = describeChanges(before, { ...data, ageGroupNames });
+    const notes = describeChanges(before, { ...data, ageGroupNames }, curriculumTypes);
     if (data.pricingSelection) {
       const q = await accountQuote({ ...before, ...data });
       notes.push(q && !q.error ? `Pricing updated: ${money(q.monthly)} a month (${data.pricingSelection.children} children, ${data.pricingSelection.billingCycle === "ANNUAL" ? "annual" : "monthly"}).` : "Pricing choices updated.");

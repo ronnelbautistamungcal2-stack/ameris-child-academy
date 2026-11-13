@@ -1,3 +1,4 @@
+import { loadCurriculumTypes } from "@/lib/curriculumTypesServer";
 import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import { normalizeLessonSlot, normalizeTermDaySelections } from "@/lib/lessonScheduling";
 import { LESSON_INCLUDE } from "@/lib/lessonInclude";
@@ -106,7 +107,7 @@ export default async function handler(req, res) {
         maxAgeMonths: age.data.maxAgeMonths ?? null,
         priorStepId: priorStepId || null,
         nextStepId: nextStepId || null,
-        ...parseStepDetails(req.body),
+        ...parseStepDetails(req.body, await loadCurriculumTypes()),
         supplies: supplies && Array.isArray(supplies) && supplies.length
           ? {
               create: supplies.map((s) => ({

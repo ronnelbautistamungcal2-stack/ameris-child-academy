@@ -22,11 +22,11 @@ export function matchesTypeFilter(item, filter) {
 }
 
 /** Options for the Type filter, from the rows' types and old Type values. */
-export function typeFilterOptions(items) {
+export function typeFilterOptions(items, types = CURRICULUM_TYPES) {
   const old = [...new Set(items.map((i) => (i.oldType || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   return [
     { value: "NONE", label: "No type ticked", count: items.filter((i) => !(i.types || []).length).length },
-    ...CURRICULUM_TYPES.map((t) => ({ value: t.value, label: t.label, count: items.filter((i) => (i.types || []).includes(t.value)).length })),
+    ...types.map((t) => ({ value: t.value, label: t.label, count: items.filter((i) => (i.types || []).includes(t.value)).length })),
     ...old.map((o) => ({ value: `OLD:${o}`, label: `Old Type: ${o}`, count: items.filter((i) => (i.oldType || "").trim() === o).length })),
   ];
 }

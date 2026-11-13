@@ -9,6 +9,7 @@ import bcrypt from "bcryptjs";
 import prisma from "@/lib/prisma";
 import { currentPricingSet } from "@/lib/pricingServer";
 import { FULL_MONTH_THROUGH_DAY, rangeFor } from "@/lib/subscriptionPricing";
+import { typeForCurriculumVersion } from "@/lib/curriculumTypes";
 import { getAgreements } from "@/lib/globalSettings";
 import { currentDocuments } from "@/lib/terms";
 import { nextAccountNumber } from "@/lib/subscriberAccounts";
@@ -261,6 +262,11 @@ export async function finishEnrollment(sessionId, db = prisma) {
           status: "ACTIVE",
           addOns: lead.addOns || [],
           pricingSelection: lead.pricingSelection || undefined,
+          // The curriculum type on their quote, so their lesson calendar shows
+          // that type's lessons (client sheet 10-29 (8), row 7).
+          curriculumTypes: (lead.addOns || []).includes("CURRICULUM")
+            ? [lead.pricingSelection?.curriculumType || typeForCurriculumVersion(lead.pricingSelection?.curriculumVersion)]
+            : [],
           maxCenters: lead.locations || 1,
           maxChildren,
           startDate: c.startDate,

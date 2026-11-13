@@ -5,6 +5,7 @@ import { ACCOUNT_STATUS_LABELS, ADD_ONS, ADD_ON_LABELS } from "@/lib/addOns";
 import CurriculumTypePicker from "@/components/curriculum/CurriculumTypePicker";
 import PricingCard from "@/components/global/PricingCard";
 import { curriculumTypeLabels } from "@/lib/curriculumTypes";
+import { useCurriculumTypes } from "@/lib/useCurriculumTypes";
 
 const TABS = [
   { key: "ALL", label: "All" },
@@ -261,6 +262,7 @@ function AddSubscriberDialog({ onClose, onCreated }) {
 }
 
 function Detail({ id, onChanged }) {
+  const { types: curriculumTypes } = useCurriculumTypes();
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
@@ -345,7 +347,7 @@ function Detail({ id, onChanged }) {
               <Row label="Start Date">{day(detail.startDate)}</Row>
               <Row label="Renewal Date">{day(detail.renewalDate)}</Row>
               <Row label="Auto-Renew">{detail.autoRenew ? "Enabled" : "Off"}</Row>
-              <Row label="Curriculum Types">{curriculumTypeLabels(detail.curriculumTypes) || "None"}</Row>
+              <Row label="Curriculum Types">{curriculumTypeLabels(detail.curriculumTypes, curriculumTypes) || "None"}</Row>
               <Row label="Age Groups">{(detail.ageGroupNames || []).join(", ") || "None"}</Row>
             </div>
             <div>

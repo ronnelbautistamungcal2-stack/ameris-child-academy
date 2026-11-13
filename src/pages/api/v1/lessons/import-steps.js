@@ -1,3 +1,4 @@
+import { loadCurriculumTypes } from "@/lib/curriculumTypesServer";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { normalizeStepTerm, parseStepAge, STEP_CRITERIA_LEVELS } from "@/lib/progressionSteps";
@@ -68,6 +69,7 @@ export default async function handler(req, res) {
     }
 
     // Categories are LessonCategory rows, matched by name (ignoring case).
+    const curriculumTypes = await loadCurriculumTypes();
     const categories = await prisma.lessonCategory.findMany({ where: { centerId }, select: { id: true, name: true, ageRange: true } });
     const categoryIds = new Map();
     for (const c of [...categories].sort((a, b) => Number(Boolean(a.ageRange)) - Number(Boolean(b.ageRange)))) {
@@ -136,7 +138,7 @@ export default async function handler(req, res) {
         description: String(raw.description ?? "").trim().slice(0, 2000) || null,
         criteria,
         notes: String(raw.notes ?? "").trim().slice(0, 2000) || null,
-        types: normalizeCurriculumTypes(raw.type),
+        types: normalizeCurriculumTypes(raw.type, curriculumTypes),
       };
       const related = relatedLessonFor(row);
       if (related.warning) warnings.push({ line: row.line, reason: related.warning });

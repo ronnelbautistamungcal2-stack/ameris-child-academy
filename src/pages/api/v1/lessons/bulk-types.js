@@ -1,9 +1,9 @@
+import { loadCurriculumTypes } from "@/lib/curriculumTypesServer";
 import { getSession, hasAccessToCenter } from "@/lib/auth";
-import { CURRICULUM_TYPES, normalizeCurriculumTypes } from "@/lib/curriculumTypes";
+import { normalizeCurriculumTypes } from "@/lib/curriculumTypes";
 import prisma from "@/lib/prisma";
 import { filterStepRows, stepBankRows } from "@/lib/stepsBankQuery";
 
-const ORDER = CURRICULUM_TYPES.map((t) => t.value);
 const BATCH = 5000; // ids per statement, well under Postgres's bind limit
 
 /**
@@ -31,7 +31,9 @@ export default async function handler(req, res) {
     if (!(await hasAccessToCenter(session.user.id, String(centerId)))) return res.status(403).json({ error: "Forbidden" });
     if (!["lesson", "step"].includes(kind)) return res.status(400).json({ error: "kind must be lesson or step" });
     if (!["add", "remove", "set"].includes(action)) return res.status(400).json({ error: "action must be add, remove or set" });
-    const types = normalizeCurriculumTypes(req.body?.types || []);
+    const allTypes = await loadCurriculumTypes();
+    const ORDER = allTypes.map((t) => t.value);
+    const types = normalizeCurriculumTypes(req.body?.types || [], allTypes);
     if (!types.length && action !== "set") return res.status(400).json({ error: "Choose at least one type" });
 
     let targetIds;

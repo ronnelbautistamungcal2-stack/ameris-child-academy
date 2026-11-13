@@ -1,3 +1,4 @@
+import { loadCurriculumTypes } from "@/lib/curriculumTypesServer";
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { FILTER_KEYS, filterStepRows, stepBankRows, typeFilterOptions } from "@/lib/stepsBankQuery";
@@ -46,7 +47,7 @@ export default async function handler(req, res) {
     const rows = await stepBankRows(centerId);
     const facets = Object.fromEntries(FILTER_KEYS.map((k) => [k, distinct(rows.map((r) => r[k]))]));
     // Type filter (no type, a curriculum type, or an old Type value).
-    facets.type = typeFilterOptions(rows);
+    facets.type = typeFilterOptions(rows, await loadCurriculumTypes());
     const visible = filterStepRows(rows, req.query);
     const key = sortKey === "age" ? "ageSort" : sortKey;
     visible.sort((a, b) => {

@@ -2,6 +2,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import BulkTypesDialog from "@/components/curriculum/BulkTypesDialog";
 import CurriculumTypePicker from "@/components/curriculum/CurriculumTypePicker";
 import { curriculumTypeLabels } from "@/lib/curriculumTypes";
+import { useCurriculumTypes } from "@/lib/useCurriculumTypes";
 import { GoalEditor, MediaPreview, StepPicker } from "@/components/curriculum/stepParts";
 import { apiJson } from "@/lib/api";
 import {
@@ -60,6 +61,7 @@ const EMPTY_FACETS = { category: [], subject: [], age: [], term: [], type: [] };
 const NO_FILTERS = { category: "", subject: "", age: "", term: "", type: "" };
 
 export default function StepsOfProgressionBank({ centerId }) {
+  const { types: curriculumTypes } = useCurriculumTypes();
   // One page of steps at a time: the server filters, sorts and pages, since a
   // center can hold tens of thousands of steps.
   const [result, setResult] = useState({ items: [], total: 0, page: 1, facets: EMPTY_FACETS });
@@ -292,7 +294,7 @@ export default function StepsOfProgressionBank({ centerId }) {
                   <td className="px-3 py-1.5">{r.subject || "—"}</td>
                   <td className="px-3 py-1.5">{r.age || "—"}</td>
                   <td className="px-3 py-1.5">{r.term || "—"}</td>
-                  <td className="px-3 py-1.5 text-xs">{curriculumTypeLabels(r.lesson.types) || <span className="text-amber-700">None</span>}</td>
+                  <td className="px-3 py-1.5 text-xs">{curriculumTypeLabels(r.lesson.types, curriculumTypes) || <span className="text-amber-700">None</span>}</td>
                   <td className="whitespace-nowrap px-3 py-1.5 text-center">
                     <button type="button" onClick={() => setEditing(r.lesson)} title="Edit" aria-label={`Edit ${r.title}`} className="rounded px-1.5 text-[#0b2a5b] hover:bg-blue-50 dark:text-blue-200">
                       &#9998;

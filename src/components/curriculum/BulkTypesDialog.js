@@ -1,6 +1,7 @@
 import { useState } from "react";
 import CurriculumTypePicker from "@/components/curriculum/CurriculumTypePicker";
 import { curriculumTypeLabels } from "@/lib/curriculumTypes";
+import { useCurriculumTypes } from "@/lib/useCurriculumTypes";
 
 // Set Types on many lessons or steps at once (client 2026-11-10: the imported
 // banks have no types ticked, and subscribers only see the types they pay for).
@@ -17,7 +18,8 @@ export default function BulkTypesDialog({ count, noun = "lessons", onApply, onCl
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const verb = ACTIONS.find((a) => a.value === action);
-  const typesText = curriculumTypeLabels(types) || "no type";
+  const { types: allTypes } = useCurriculumTypes();
+  const typesText = curriculumTypeLabels(types, allTypes) || "no type";
   const summary =
     action === "add"
       ? `Add ${typesText} to ${count.toLocaleString()} ${noun}`

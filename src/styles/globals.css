@@ -618,9 +618,12 @@ main {
   body.printing-menu .menu-print-area table { min-width: 0; }
 }
 
-/* Protected curriculum lesson files never go to the printer. */
+/* Protected curriculum lesson files and the Initial Development Assessment
+   never go to the printer; the assessment prints a notice instead. */
 @media print {
   .protected-lesson { display: none !important; }
+  .protected-content > * { display: none !important; }
+  .protected-content::after { content: "This page can't be printed."; display: block; padding: 2rem; font-size: 1rem; }
 }
 
 /* Printed reports keep their colours: the milestone and grade bars are

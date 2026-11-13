@@ -19,7 +19,12 @@ export const periodOf = (key) => String(key).slice(0, 7);
 
 /** Admins see every center; coaches the centers they belong to. */
 export async function billingAccess(user, centerId) {
-  if (user.role === "ADMIN") return { ok: true, canVerify: true };
+  // Admins only for their own account's centers (client sheet 10-29 (8), row 14:
+  // a subscriber's billing showed in Ameris Academy's account).
+  if (user.role === "ADMIN") {
+    if (!centerId || !(await hasAccessToCenter(user.id, centerId))) return { ok: false, status: 403, error: "Forbidden" };
+    return { ok: true, canVerify: true };
+  }
   if (user.role === "COACH" && centerId && (await hasAccessToCenter(user.id, centerId))) return { ok: true, canVerify: false };
   return { ok: false, status: 403, error: "Forbidden" };
 }

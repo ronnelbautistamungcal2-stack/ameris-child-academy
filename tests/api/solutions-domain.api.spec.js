@@ -26,8 +26,13 @@ test.describe("Ameris Solutions domain @api", () => {
     expect(contact.headers().location).toBe("https://amerissolutions.com/solutions/contact");
     const programs = await request.get("/programs", { headers: solutions, maxRedirects: 0 });
     expect(programs.headers().location).toBe("https://amerissolutions.com/solutions/plans");
-    // The Academy domain keeps its own pages, and login works on both.
+    // The Academy domain keeps its own pages.
     expect((await request.get("/contact", { headers: academy, maxRedirects: 0 })).status()).toBe(200);
-    expect((await request.get("/login", { headers: solutions, maxRedirects: 0 })).status()).toBe(200);
+    expect((await request.get("/login", { headers: academy, maxRedirects: 0 })).status()).toBe(200);
+    // Signing out lands on /login: on amerissolutions.com that's the new
+    // Solutions login, keeping the query (client sheet 10-29 (8), row 13).
+    const login = await request.get("/login?callbackUrl=%2Fdashboard", { headers: solutions, maxRedirects: 0 });
+    expect(login.status()).toBe(307);
+    expect(login.headers().location).toBe("https://amerissolutions.com/solutions/login?callbackUrl=%2Fdashboard");
   });
 });

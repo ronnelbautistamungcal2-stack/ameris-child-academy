@@ -79,6 +79,20 @@ test.describe("Subscriber data isolation @api", () => {
     return out;
   }
 
+  test("billing stays inside each account", async ({ request }) => {
+    // Client sheet 10-29 (8), row 14: a subscriber's billing showed in Ameris
+    // Academy's account. Admins could read any center's billing by its id.
+    const academy = await prisma.center.findFirst({ where: { subscriberAccount: { accountNumber: "C-1001" } }, select: { id: true } });
+    const month = new Date().toISOString().slice(0, 7);
+    const lists = (id) => [`/api/v1/billing/parents?centerId=${id}`, `/api/v1/billing/charges?centerId=${id}`, `/api/v1/billing/invoices?centerId=${id}&month=${month}`];
+    const academyAdmin = await getAuthCookie(request, "admin@demo.com", "adminpass");
+    for (const url of lists(centerId)) expect((await request.get(url, { headers: { cookie: academyAdmin } })).status(), url).toBe(403);
+    const subAdmin = await getAuthCookie(request, adminEmail, password);
+    for (const url of lists(academy?.id)) expect((await request.get(url, { headers: { cookie: subAdmin } })).status(), url).toBe(403);
+    // Their own center still works.
+    expect((await request.get(lists(centerId)[0], { headers: { cookie: subAdmin } })).status()).toBe(200);
+  });
+
   for (const [who, email, lists] of [
     ["admin", adminEmail, [...LISTS, ...ADMIN_ONLY]],
     ["coach", coachEmail, LISTS],

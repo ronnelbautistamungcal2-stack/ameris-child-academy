@@ -231,8 +231,11 @@ test.describe.serial("Admin Teachers Page", () => {
     await page.getByRole("button", { name: fixture.teacherName }).click();
     await expect(page.getByText(fixture.teacherEmail).first()).toBeVisible();
 
-    await page.getByRole("link", { name: /View Profile/i }).click();
+    // Staff Positions (client 10-29 requests) has no View Profile link; the
+    // staff profile page still opens on its own address.
+    await page.goto(`/coach/teachers/${teacher.id}`);
     await expect(page).toHaveURL(new RegExp(`/coach/teachers/${teacher.id}$`));
+    await expect(page.getByText(fixture.teacherEmail).first()).toBeVisible();
   });
 
   test("removes out-of-scope classrooms when center assignments change", async ({ page, request }) => {

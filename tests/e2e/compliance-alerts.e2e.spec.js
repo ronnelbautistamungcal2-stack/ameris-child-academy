@@ -68,10 +68,12 @@ test.describe("Compliance Alerts and Form Renewals pages", () => {
     await expect(newRow).toContainText("Quarterly");
     await expect(newRow).toContainText("Upcoming");
 
-    await overdueRow.getByRole("checkbox").click();
-    await expect(overdueRow.getByRole("checkbox")).toBeChecked();
-    await expect(overdueRow).toContainText("Completed");
-    await expect(overdueRow).toContainText("1/1");
+    await overdueRow.getByRole("checkbox", { name: `Mark QA Fire Drill ${stamp} complete` }).click();
+    // It is marked done, and a monthly requirement gets its next one.
+    const doneBox = page.getByRole("checkbox", { name: `Mark QA Fire Drill ${stamp} not done` });
+    await expect(doneBox).toBeChecked();
+    await expect(page.getByRole("row").filter({ has: doneBox })).toContainText("Completed");
+    await expect(page.getByRole("checkbox", { name: `Mark QA Fire Drill ${stamp} complete` })).toBeVisible();
   });
 
   test("Form Renewals lists each child's renewing form and saves a note", async ({ page, request }) => {

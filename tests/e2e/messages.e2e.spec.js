@@ -53,13 +53,13 @@ test.describe("Messages for staff and coaches", () => {
     await page.goto("/coach/messages");
     await waitForLoadingDone(page);
     await expect(page.getByRole("button", { name: /Open Points/ })).toBeVisible();
-    await expect(page.getByRole("tab", { name: /^Current/ })).toBeVisible();
+    // Shared Messages layout: Inbox / Sent / Archive folders.
+    await expect(page.getByRole("tab", { name: /^Inbox/ })).toBeVisible();
     await page.getByRole("button", { name: new RegExp(title) }).click();
     const pane = page.getByRole("region", { name: "Conversation", exact: true });
     await pane.getByRole("button", { name: /Mark as Completed/ }).click();
     await expect(pane.getByRole("button", { name: /Mark as Completed/ })).toHaveCount(0);
     await expect(pane.getByText(/Completed by/)).toBeVisible();
-    await page.getByRole("tab", { name: /^Past/ }).click();
     await expect(page.getByRole("button", { name: new RegExp(title) })).toBeVisible();
   });
 

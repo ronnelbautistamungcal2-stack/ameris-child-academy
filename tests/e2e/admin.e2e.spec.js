@@ -10,7 +10,8 @@ test.describe("Admin Workflows", () => {
     await page.goto("/admin/children");
     await waitForLoadingDone(page);
     await expect(page).toHaveURL(/\/admin\/children/);
-    await expect(page.getByRole("heading", { name: "Children" })).toBeVisible();
+    // The page is the Student List now (client mockup, 10-29 requests).
+    await expect(page.getByRole("heading", { name: "Student List" })).toBeVisible();
   });
 
   test("children page has search and filter", async ({ page }) => {
@@ -18,7 +19,7 @@ test.describe("Admin Workflows", () => {
     await waitForLoadingDone(page);
 
     // Search input should be present
-    await expect(page.locator('input[placeholder*="Search"]')).toBeVisible();
+    await expect(page.getByLabel("Search student name")).toBeVisible();
     // Age filter should be present
     await expect(page.locator("select").first()).toBeVisible();
   });

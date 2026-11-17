@@ -142,7 +142,7 @@ test.describe("Parent Workflows", () => {
     await expect(page.getByRole("heading", { name: "Messages", exact: true })).toBeVisible();
     await expect(page.getByRole("tab", { name: /^Inbox/ })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Sent" })).toBeVisible();
-    await expect(page.getByRole("tab", { name: "Archived" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Archive" })).toBeVisible();
     await expect(page.getByRole("region", { name: "Conversation", exact: true })).toBeVisible();
   });
 

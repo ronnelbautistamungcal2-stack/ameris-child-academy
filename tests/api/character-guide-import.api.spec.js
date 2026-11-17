@@ -1,8 +1,9 @@
 // @ts-check
 // Character Guide per account and the Ameris guide Import (client 2026-11-07,
 // step D). Each subscriber has its own guide; one with Teacher Training can
-// copy the Ameris Character Guide into it, and importing again adds only new
-// Ameris behaviors.
+// copy the Ameris Character Guide into it, and importing again adds new Ameris
+// behaviors and brings in Ameris changes to ones imported before (client
+// 2026-11-11).
 const { test, expect } = require("@playwright/test");
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
@@ -137,5 +138,43 @@ test.describe("Character Guide import @api", () => {
     expect(names).toContain("Hitting (our wording)");
     expect(names).toContain(`Ameris Biting ${stamp}`);
     expect(names).not.toContain(`Ameris Hitting ${stamp}`);
+  });
+
+  test("importing again brings in Ameris changes, replacing the copy", async ({ request }) => {
+    const sub = await getAuthCookie(request, subEmail, password);
+    const [hitting, biting] = amerisBehaviorIds;
+    // The Hitting copy was imported a minute ago and then reworded here (the
+    // earlier test renamed it within the same second, so date the import back).
+    await prisma.characterBehavior.updateMany({
+      where: { importedFromId: hitting, subscriberAccount: { accountNumber: `G-TT-${stamp}` } },
+      data: { importedAt: new Date(Date.now() - 60000), updatedAt: new Date(Date.now() - 30000) },
+    });
+    // Ameris rewords both behaviors; the subscriber had changed its Hitting copy.
+    await prisma.characterBehavior.update({ where: { id: hitting }, data: { name: `Ameris Hitting v2 ${stamp}`, level: 3 } });
+    await prisma.characterBehavior.update({ where: { id: biting }, data: { description: "Biting, updated by Ameris" } });
+
+    const status = await (await apiGet(request, "/api/v1/character-guide/import", sub)).json();
+    expect(status.canImport).toBe(true);
+    expect(status.updated).toBeGreaterThanOrEqual(2);
+    expect(status.editedHere).toBeGreaterThanOrEqual(1);
+
+    const res = await apiPost(request, "/api/v1/character-guide/import", {}, sub);
+    expect(res.status(), await res.text()).toBe(200);
+    expect((await res.json()).behaviorsUpdated).toBeGreaterThanOrEqual(2);
+
+    const mine = await (await apiGet(request, "/api/v1/character-guide/behaviors", sub)).json();
+    const hit = mine.find((b) => b.name === `Ameris Hitting v2 ${stamp}`);
+    expect(hit?.level).toBe(3);
+    expect(mine.map((b) => b.name)).not.toContain("Hitting (our wording)");
+    expect(mine.find((b) => b.name === `Ameris Biting ${stamp}`)?.description).toBe("Biting, updated by Ameris");
+    // Still one copy of each, not duplicates.
+    expect(mine.filter((b) => b.name.startsWith("Ameris Hitting")).length).toBe(1);
+
+    // Up to date now: nothing of these two is offered again.
+    const after = await (await apiGet(request, "/api/v1/character-guide/import", sub)).json();
+    const copies = await prisma.characterBehavior.findMany({ where: { importedFromId: { in: [hitting, biting] }, subscriberAccount: { accountNumber: `G-TT-${stamp}` } } });
+    expect(copies).toHaveLength(2);
+    for (const c of copies) expect(c.importedAt).toBeTruthy();
+    expect(after.updated).toBe(0);
   });
 });

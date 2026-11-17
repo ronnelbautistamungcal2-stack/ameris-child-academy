@@ -8,6 +8,7 @@ const crypto = require("crypto");
 const { getAuthCookie } = require("../helpers/auth");
 const { apiGet, apiPost, apiPut, apiPatch } = require("../helpers/api");
 
+const { acquireSettingLock, SETTING_LOCK_WAIT_MS } = require("../helpers/settingLock");
 const prisma = new PrismaClient();
 const stamp = Date.now();
 // Test-only people and settings; removed or restored in afterAll.
@@ -23,7 +24,11 @@ test.describe("Global admin pages @api", () => {
   let savedAgreements = null;
   let quoteTemplate = null;
 
-  test.beforeAll(async () => {
+  let releaseAgreements = () => {};
+  test.beforeAll(async ({}, testInfo) => {
+    // The agreements setting is shared with enrollment; take turns.
+    testInfo.setTimeout(testInfo.timeout + SETTING_LOCK_WAIT_MS);
+    releaseAgreements = await acquireSettingLock("agreements");
     userIds.push(
       (await prisma.user.create({ data: { email: adminEmail, name: "GAP Admin", password: await bcrypt.hash(password, 10), role: "GLOBAL_ADMIN", roles: ["GLOBAL_ADMIN"] } })).id,
     );
@@ -39,6 +44,7 @@ test.describe("Global admin pages @api", () => {
     };
     await restore("general", savedGeneral);
     await restore("agreements", savedAgreements);
+    releaseAgreements();
     if (quoteTemplate) await prisma.emailTemplate.update({ where: { id: quoteTemplate.id }, data: { name: quoteTemplate.name, subject: quoteTemplate.subject, body: quoteTemplate.body, active: quoteTemplate.active } });
     await prisma.user.deleteMany({ where: { OR: [{ id: { in: userIds } }, { email: salesEmail }] } });
     await prisma.$disconnect();

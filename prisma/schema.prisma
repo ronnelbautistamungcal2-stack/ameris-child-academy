@@ -2888,8 +2888,11 @@ model CharacterBehavior {
   // Same account as its category (step D), kept here for simple filtering.
   subscriberAccount   SubscriberAccount? @relation(fields: [subscriberAccountId], references: [id], onDelete: Cascade)
   subscriberAccountId String?
-  // The Ameris behavior this one was imported from, so a second import skips it.
+  // The Ameris behavior this one was imported from, and when it was last
+  // copied: Import again brings in Ameris changes made after that (client
+  // 2026-11-11).
   importedFromId      String?
+  importedAt          DateTime?
   updatedById         String?
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt

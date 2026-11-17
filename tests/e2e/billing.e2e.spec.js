@@ -22,7 +22,7 @@ test.describe("Billing pages", () => {
     await prisma.centerUser.create({ data: { userId: coach.id, centerId: center.id, role: "COACH" } });
     child = await prisma.child.create({ data: { firstName: "Emma", lastName: "Billing", centerId: center.id, parentId: parent.id } });
     const res = await apiPost(request, "/api/v1/billing/charges", {
-      centerId: center.id, parentId: parent.id, date: dateKey, rows: [{ childId: child.id, description: "QA School Shirt", amount: 10 }],
+      centerId: center.id, parentId: parent.id, date: dateKey, rows: [{ childId: child.id, description: "QA School Shirt", amount: 10, chargeType: "SUPPLIES" }],
     }, await loginAsCoach(request));
     expect(res.status(), await res.text()).toBe(201);
   });

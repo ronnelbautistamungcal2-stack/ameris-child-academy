@@ -13,6 +13,7 @@ const path = require("path");
 const { getAuthCookie } = require("../helpers/auth");
 const { apiPost } = require("../helpers/api");
 
+const { acquireSettingLock, SETTING_LOCK_WAIT_MS } = require("../helpers/settingLock");
 const prisma = new PrismaClient();
 const stamp = Date.now();
 const domain = `enroll-test-${stamp}.local`;
@@ -28,7 +29,11 @@ test.describe("Complete Your Enrollment @api", () => {
   let savedAgreements = null;
   let agreementId = "";
 
-  test.beforeAll(async ({ request }) => {
+  let releaseAgreements = () => {};
+  test.beforeAll(async ({ request }, testInfo) => {
+    // The agreements setting is shared with global-admin-pages; take turns.
+    testInfo.setTimeout(testInfo.timeout + SETTING_LOCK_WAIT_MS);
+    releaseAgreements = await acquireSettingLock("agreements");
     globalId = (
       await prisma.user.create({ data: { email: globalEmail, name: "Enroll Global", password: await bcrypt.hash(password, 10), role: "GLOBAL_ADMIN", roles: ["GLOBAL_ADMIN"] } })
     ).id;
@@ -60,6 +65,7 @@ test.describe("Complete Your Enrollment @api", () => {
   test.afterAll(async () => {
     if (savedAgreements) await prisma.globalSetting.update({ where: { key: "agreements" }, data: { value: savedAgreements.value } });
     else await prisma.globalSetting.deleteMany({ where: { key: "agreements" } });
+    releaseAgreements();
     await prisma.lead.deleteMany({ where: { id: leadId } });
     await prisma.user.deleteMany({ where: { id: globalId } });
   });
@@ -165,7 +171,11 @@ test.describe("Complete Your Enrollment: center e-signing @api", () => {
   let agreementId = "";
   const otherAdminEmail = `other-admin@${cDomain}`;
 
-  test.beforeAll(async ({ request }) => {
+  let releaseAgreements = () => {};
+  test.beforeAll(async ({ request }, testInfo) => {
+    // The agreements setting is shared with global-admin-pages; take turns.
+    testInfo.setTimeout(testInfo.timeout + SETTING_LOCK_WAIT_MS);
+    releaseAgreements = await acquireSettingLock("agreements");
     fs.writeFileSync(pdfPath, minimalPdf("Ameris Solutions Software Subscription Agreement (test)"));
     const gEmail = `global@${cDomain}`;
     globalId = (await prisma.user.create({ data: { email: gEmail, name: "E-Sign Global", password: await bcrypt.hash(password, 10), role: "GLOBAL_ADMIN", roles: ["GLOBAL_ADMIN"] } })).id;
@@ -195,6 +205,7 @@ test.describe("Complete Your Enrollment: center e-signing @api", () => {
     fs.rmSync(pdfPath, { force: true });
     if (savedAgreements) await prisma.globalSetting.update({ where: { key: "agreements" }, data: { value: savedAgreements.value } });
     else await prisma.globalSetting.deleteMany({ where: { key: "agreements" } });
+    releaseAgreements();
     await prisma.lead.deleteMany({ where: { id: leadId } });
     const other = await prisma.user.findUnique({ where: { email: otherAdminEmail } });
     if (other) await prisma.centerUser.deleteMany({ where: { userId: other.id } });

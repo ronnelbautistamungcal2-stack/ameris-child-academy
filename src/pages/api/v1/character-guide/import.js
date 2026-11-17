@@ -5,10 +5,10 @@ import { hasAnyRole } from "@/lib/roles";
 /**
  * GET  /api/v1/character-guide/import
  *      { canImport, reason, ameris: { categories, behaviors }, missing, imported }
- * POST /api/v1/character-guide/import   -> { categoriesAdded, behaviorsAdded }
+ * POST /api/v1/character-guide/import   -> { categoriesAdded, behaviorsAdded, behaviorsUpdated }
  *      Copies the Ameris Character Guide into the admin's account (step D).
- *      Needs the Teacher Training add-on. Running it again only adds Ameris
- *      behaviors not imported before; the account's own edits are kept.
+ *      Needs the Teacher Training add-on. Running it again adds new Ameris
+ *      behaviors and brings in Ameris changes to ones imported before.
  */
 export default async function handler(req, res) {
   const session = await getSession(req, res);
@@ -19,7 +19,7 @@ export default async function handler(req, res) {
 
   if (req.method === "POST") {
     const status = await importStatus(session.user);
-    if (!status.canImport) return res.status(status.missing === 0 && status.ameris.behaviors ? 409 : 403).json({ error: status.reason });
+    if (!status.canImport) return res.status(status.missing + status.updated === 0 && status.ameris.behaviors ? 409 : 403).json({ error: status.reason });
     const result = await importAmerisGuide(await guideAccountId(session.user), session.user.id);
     return res.status(200).json(result);
   }

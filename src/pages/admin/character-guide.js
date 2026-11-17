@@ -73,7 +73,8 @@ export default function AdminCharacterGuide() {
 }
 
 // Step D (client 2026-11-07): subscribers with Teacher Training are offered a
-// copy of the Ameris Character Guide. Importing again adds only what's new.
+// copy of the Ameris Character Guide. Importing again adds new behaviors and
+// brings in Ameris's changes to ones imported before (client 2026-11-11).
 function ImportAmerisGuide({ onImported }) {
   const [status, setStatus] = useState(null);
   const [confirming, setConfirming] = useState(false);
@@ -93,11 +94,12 @@ function ImportAmerisGuide({ onImported }) {
     setError("");
     try {
       const result = await apiJson("/api/v1/character-guide/import", { method: "POST" });
-      setMessage(
-        `Imported ${result.behaviorsAdded} behavior${result.behaviorsAdded === 1 ? "" : "s"}` +
-          (result.categoriesAdded ? ` and ${result.categoriesAdded} categor${result.categoriesAdded === 1 ? "y" : "ies"}` : "") +
-          ". They're yours now: edit them like any other behavior.",
-      );
+      const parts = [
+        result.behaviorsAdded ? plural(result.behaviorsAdded, "new behavior") : "",
+        result.behaviorsUpdated ? plural(result.behaviorsUpdated, "updated behavior") : "",
+        result.categoriesAdded ? plural(result.categoriesAdded, "category", "categories") : "",
+      ].filter(Boolean);
+      setMessage(`Imported ${parts.join(", ") || "nothing new"}. They're yours now: edit them like any other behavior.`);
       setConfirming(false);
       load();
       await onImported();
@@ -113,7 +115,7 @@ function ImportAmerisGuide({ onImported }) {
   }
   if (!status || !status.ameris.behaviors || status.reason === "This is the Ameris Character Guide") return null;
   if (!status.canImport) {
-    if (status.missing === 0) return null;
+    if (status.missing + status.updated === 0) return null;
     return (
       <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-300">
         {status.reason}.{" "}
@@ -124,15 +126,16 @@ function ImportAmerisGuide({ onImported }) {
     );
   }
   const first = status.imported === 0;
+  const news = [status.missing ? plural(status.missing, "new behavior") : "", status.updated ? plural(status.updated, "behavior") + " Ameris has updated" : ""].filter(Boolean).join(" and ");
   return (
     <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="font-bold">{first ? "Would you like the Ameris Character Guide?" : "The Ameris Character Guide has new behaviors"}</div>
+          <div className="font-bold">{first ? "Would you like the Ameris Character Guide?" : "The Ameris Character Guide has changes"}</div>
           <div>
             {first
               ? `Import ${status.ameris.behaviors} behaviors in ${status.ameris.categories} categories, with their decision trees, into your guide. You can edit them afterwards.`
-              : `${status.missing} behavior${status.missing === 1 ? "" : "s"} you don't have yet. Behaviors you already imported or edited stay as they are.`}
+              : `${news}.${status.updated ? " Ameris's updates replace your copy of those behaviors." : ""}${status.editedHere ? ` You changed ${status.editedHere} of them yourself; your wording for those will be replaced.` : ""} Behaviors you added yourself stay as they are.`}
           </div>
         </div>
         {confirming ? (
@@ -146,13 +149,17 @@ function ImportAmerisGuide({ onImported }) {
           </div>
         ) : (
           <button type="button" className="rounded-lg bg-blue-800 px-4 py-2 font-bold text-white hover:bg-blue-900" onClick={() => setConfirming(true)}>
-            {first ? "Import Ameris Character Guide" : "Import New Behaviors"}
+            {first ? "Import Ameris Character Guide" : "Import Ameris Changes"}
           </button>
         )}
       </div>
       {error ? <div className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-red-700">{error}</div> : null}
     </div>
   );
+}
+
+function plural(count, word, many = `${word}s`) {
+  return `${count} ${count === 1 ? word : many}`;
 }
 
 function DecisionTrees({ categories, onCategoriesChanged }) {

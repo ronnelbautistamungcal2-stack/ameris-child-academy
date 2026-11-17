@@ -65,7 +65,11 @@ test.describe("Billing: parent fees, invoices and payments (Phase 7b) @api", () 
 
     const parentCookies = await loginAsParent(request);
     const ledger = await (await apiGet(request, "/api/v1/billing/ledger", parentCookies)).json();
-    const statement = ledger.statements.find((s) => s.dueDate === "2026-09-15" && s.amountCents === 2000);
+    // This center's invoice: the demo parent can have others with the same due
+    // date and amount (left by an earlier run that didn't clean up).
+    const mine = await prisma.billingInvoice.findFirst({ where: { centerId: center.id, parentId: parent.id } });
+    const statement = ledger.statements.find((s) => s.invoiceId === mine?.id);
+    expect(statement).toMatchObject({ dueDate: "2026-09-15", amountCents: 2000 });
     expect(statement).toMatchObject({ appliesTo: ["Jacob Anders"], status: "Open" });
     invoiceId = statement.invoiceId;
     const invoice = await (await apiGet(request, `/api/v1/billing/invoices/${invoiceId}`, parentCookies)).json();

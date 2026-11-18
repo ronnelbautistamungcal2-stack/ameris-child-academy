@@ -37,7 +37,7 @@ test.describe("Student Performance Report @api", () => {
     const climb = await step("Climbs on low furniture", "SP-2", 2, 0); // expected 24 months: on track
     const run = await step("Runs", "SP-4", 1, 6); // mastered, so no longer worked on
     const dev = await (await apiPost(request, "/api/v1/lesson-categories", { centerId, name: "Development" }, admin)).json();
-    devStep = (await (await apiPost(request, "/api/v1/lessons", { centerId, isStep: true, title: "Stacks blocks", reference: "SP-3", categoryId: dev.id, ageYears: 2, ageMonths: 6 }, admin)).json()).id;
+    devStep = (await (await apiPost(request, "/api/v1/lessons", { centerId, isStep: true, title: "Stacks blocks", reference: "SP-3", categoryId: dev.id, ageYears: 2, ageMonths: 6, criteria: { exposure: "Stacks 2 blocks with help", competency: "Stacks 3 blocks", mastery: "Stacks 5 blocks alone" } }, admin)).json()).id;
     await apiPut(
       request,
       `/api/v1/sop/${childId}`,
@@ -90,6 +90,13 @@ test.describe("Student Performance Report @api", () => {
     expect(r.milestones.map((m) => m.name)).toEqual(["General", "Development"]);
     expect(r.milestones[0]).toMatchObject({ name: "General", distribution: { CRITICAL: 33, ON_TRACK: 67 } });
     expect(r.milestones[0].goals.map((g) => g.title).sort()).toEqual(["Climbs on low furniture", "Walks independently"]);
+    // Each goal carries its step's own level wording (client sheet 10-29 (9), row 6).
+    expect(r.milestones[1].goals.find((g) => g.title === "Stacks blocks")?.criteria).toEqual({
+      exposure: "Stacks 2 blocks with help",
+      competency: "Stacks 3 blocks",
+      mastery: "Stacks 5 blocks alone",
+    });
+    expect(r.milestones[0].goals[0].criteria).toEqual({ exposure: "", competency: "", mastery: "" });
     // Milestones % counts only the goals being worked on (mastered Runs is
     // left out): (40 + 100 + 100) / 3.
     expect(r.milestonePct).toBe(80);

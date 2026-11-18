@@ -6,10 +6,29 @@ import { useState } from "react";
 // The Student Performance Report's Milestones section, laid out like SOP
 // Tracking (client request 2026-10-23): the Milestones % at the top, then per
 // category its status mix and "N Active Goals"; opening a category shows a
-// slider per active goal. canTrack: "ALL" (staff), "GENERAL" (parents mark off
+// slider per active goal, with that step's own Exposure / Competence / Mastery
+// wording from the Steps of Progression Bank under it (client sheet 10-29 (9),
+// row 6; the generic level hints are gone). canTrack: "ALL" (staff), "GENERAL" (parents mark off
 // General goals only) or null (read only).
 
 const NAVY = "text-[#0b2a5b] dark:text-blue-100";
+
+/** The step's wording under the Exposure, Competence and Mastery columns (none under Not Started). */
+function StepCriteria({ criteria }) {
+  const c = criteria || {};
+  if (!c.exposure && !c.competency && !c.mastery) return null;
+  return (
+    <>
+      <div />
+      <div className="-mt-1 mb-1 grid grid-cols-4 gap-1 border-b border-gray-100 pb-2 text-center text-[11px] leading-snug text-gray-600 dark:border-gray-800 dark:text-gray-300">
+        <div />
+        <div>{c.exposure}</div>
+        <div>{c.competency}</div>
+        <div>{c.mastery}</div>
+      </div>
+    </>
+  );
+}
 
 export default function MilestonesTracker({ childId, milestones, percent, canTrack, onSaved, heading }) {
   const [open, setOpen] = useState({});
@@ -74,7 +93,6 @@ export default function MilestonesTracker({ childId, milestones, percent, canTra
                           <div key={l.value} className="px-1">
                             <span className={`mx-auto block h-2.5 w-2.5 rounded-full ${l.dot}`} />
                             <div className={`text-xs font-bold ${NAVY}`}>{l.label === "Competency" ? "Competence" : l.label}</div>
-                            <div className="text-[10px] text-gray-500">{l.hint}</div>
                           </div>
                         ))}
                       </div>
@@ -108,6 +126,7 @@ export default function MilestonesTracker({ childId, milestones, percent, canTra
                                 className="milestone-slider relative w-full disabled:cursor-default"
                               />
                             </div>
+                            <StepCriteria criteria={g.criteria} />
                           </div>
                         );
                       })}

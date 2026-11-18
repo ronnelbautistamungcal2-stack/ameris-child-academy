@@ -93,6 +93,19 @@ test.describe("Subscriber data isolation @api", () => {
     expect((await request.get(lists(centerId)[0], { headers: { cookie: subAdmin } })).status()).toBe(200);
   });
 
+  test("Staff Professional Development stays inside each account", async ({ request }) => {
+    // Client sheet 10-29 (9), row 7: a subscriber's Staff Progress showed Ameris
+    // Academy's employees. Admins could read any center's training by its id.
+    const academy = await prisma.center.findFirst({ where: { subscriberAccount: { accountNumber: "C-1001" } }, select: { id: true } });
+    const urls = (id) => [`/api/v1/training/progress?centerId=${id}`, `/api/v1/training/items?centerId=${id}`, `/api/v1/training/pathways?centerId=${id}`];
+    const subAdmin = await getAuthCookie(request, adminEmail, password);
+    for (const url of urls(academy?.id)) expect((await request.get(url, { headers: { cookie: subAdmin } })).status(), url).toBe(403);
+    const academyAdmin = await getAuthCookie(request, "admin@demo.com", "adminpass");
+    for (const url of urls(centerId)) expect((await request.get(url, { headers: { cookie: academyAdmin } })).status(), url).toBe(403);
+    // Their own center still works.
+    expect((await request.get(urls(centerId)[0], { headers: { cookie: subAdmin } })).status()).toBe(200);
+  });
+
   for (const [who, email, lists] of [
     ["admin", adminEmail, [...LISTS, ...ADMIN_ONLY]],
     ["coach", coachEmail, LISTS],

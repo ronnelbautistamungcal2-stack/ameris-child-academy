@@ -33,10 +33,12 @@ export default function useSyncedCenterId(
   useEffect(() => {
     if (!router.isReady) return;
     if (typeof window === "undefined") return;
+    // Wait for the user's own centers: a center remembered in this browser (or
+    // in the address) may belong to another account, e.g. Ameris Academy after
+    // signing in as its admin (client sheet 10-29 (9), row 7).
+    if (!validCenterIds.size) return;
     const storedCenterId = window.localStorage.getItem(storageKey) || "";
-    const storedIsValid =
-      !!storedCenterId &&
-      (!validCenterIds.size || validCenterIds.has(String(storedCenterId)));
+    const storedIsValid = !!storedCenterId && validCenterIds.has(String(storedCenterId));
 
     if (blankScopeSelected) {
       if (normalizedCenterId) {
@@ -46,8 +48,7 @@ export default function useSyncedCenterId(
     }
 
     if (queryCenterId) {
-      const queryIsValid =
-        !validCenterIds.size || validCenterIds.has(String(queryCenterId));
+      const queryIsValid = validCenterIds.has(String(queryCenterId));
       if (!queryIsValid) {
         if (!normalizedCenterId && storedIsValid) {
           setCenterId(storedCenterId);
@@ -91,7 +92,7 @@ export default function useSyncedCenterId(
     if (!router.isReady) return;
     if (!normalizedCenterId) return;
     if (typeof window === "undefined") return;
-    if (validCenterIds.size && !validCenterIds.has(normalizedCenterId)) return;
+    if (!validCenterIds.has(normalizedCenterId)) return;
 
     window.localStorage.setItem(storageKey, normalizedCenterId);
   }, [
@@ -103,6 +104,9 @@ export default function useSyncedCenterId(
 
   useEffect(() => {
     if (!router.isReady) return;
+    // Leave the address alone until the centers are known (see above), so a
+    // linked ?centerId= is not dropped while they load.
+    if (!validCenterIds.size) return;
     const userClearedSelection =
       !!blankQueryValue &&
       !normalizedCenterId &&
@@ -130,6 +134,7 @@ export default function useSyncedCenterId(
     normalizedCenterId,
     rawQueryCenterId,
     router,
+    validCenterIds,
   ]);
 
   useEffect(() => {

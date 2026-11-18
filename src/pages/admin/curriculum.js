@@ -1,4 +1,4 @@
-import AdminLayout from "@/components/admin/AdminLayout";
+import { useCurriculumScope } from "@/components/curriculum/CurriculumScope";
 import CategoryListsTab from "@/components/curriculum/CategoryListsTab";
 import CurriculumTabs from "@/components/curriculum/CurriculumTabs";
 import StepsOfProgressionBank from "@/components/curriculum/StepsOfProgressionBank";
@@ -16,9 +16,12 @@ const TABS = [
 ];
 const TAB_KEYS = ["categories", "lessons", "remediations"];
 
-export default function CurriculumManager() {
+export default function CurriculumManager({ defaultTab = "categories" }) {
   const router = useRouter();
-  const tab = TAB_KEYS.includes(router.query.tab) ? router.query.tab : "categories";
+  // Admin portal, or Global admin > Lesson Bank & SOP (client sheet 10-29 (9), row 4).
+  const scope = useCurriculumScope();
+  const Layout = scope.Layout;
+  const tab = TAB_KEYS.includes(router.query.tab) ? router.query.tab : defaultTab;
   const setTab = (key) => router.replace({ pathname: router.pathname, query: { ...router.query, tab: key } }, undefined, { shallow: true });
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
@@ -28,7 +31,7 @@ export default function CurriculumManager() {
   useEffect(() => {
     (async () => {
       try {
-        const c = await apiJson("/api/v1/centers");
+        const c = scope.centers || (await apiJson("/api/v1/centers"));
         const arr = (Array.isArray(c) ? c : []).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
         setCenters(arr);
         let remembered = "";
@@ -50,7 +53,7 @@ export default function CurriculumManager() {
   const heading = tab === "categories" ? "Categories" : tab === "remediations" ? "Remediations" : "Steps of Progression Bank";
 
   return (
-    <AdminLayout title="Curriculum">
+    <Layout title="Curriculum">
       <div className="space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <h1 className="text-3xl font-black text-[#0b2a5b] dark:text-blue-100">{heading}</h1>
@@ -106,7 +109,7 @@ export default function CurriculumManager() {
           !loading && <p className="text-sm text-gray-500">There are no centers yet.</p>
         )}
       </div>
-    </AdminLayout>
+    </Layout>
   );
 }
 

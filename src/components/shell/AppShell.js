@@ -12,12 +12,14 @@ import { LockedPage, useAddOns } from "@/components/subscription/AddOnGate";
 // Greys out and locks the pages the subscriber's add-ons don't include.
 const AMERIS_CURRICULUM_PATHS = ["/admin/lessons", "/admin/curriculum", "/admin/curriculum/planner"];
 
-function AmerisCurriculumPage() {
+function AmerisCurriculumPage({ owner = false }) {
   return (
     <div className="mx-auto max-w-xl rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-sm dark:border-gray-700 dark:bg-gray-900">
-      <h2 className="text-xl font-extrabold text-gray-900 dark:text-gray-100">Provided by Ameris Solutions</h2>
+      <h2 className="text-xl font-extrabold text-gray-900 dark:text-gray-100">{owner ? "Edited in Global Admin" : "Provided by Ameris Solutions"}</h2>
       <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-        Your lessons and Steps of Progression come from the Ameris Solutions curriculum. You can see every planned lesson on your Lesson Calendar.
+        {owner
+          ? "The Lesson Planner, Lesson Bank, Categories and Steps of Progression Bank are under Global Admin > Lesson Bank & SOP. You can see every planned lesson on your Lesson Calendar."
+          : "Your lessons and Steps of Progression come from the Ameris Solutions curriculum. You can see every planned lesson on your Lesson Calendar."}
       </p>
       <Link href="/admin/curriculum/calendar" className="mt-4 inline-block rounded-xl bg-blue-800 px-4 py-2 text-sm font-bold text-white hover:bg-blue-900">
         Open Lesson Calendar
@@ -113,9 +115,11 @@ export default function AppShell({
   const pageMissing = missingAddOns(pageNeeds, addOns);
   // Subscribers follow the Ameris Solutions curriculum (step E): the banks
   // and the planner belong to Ameris, so those pages aren't theirs.
-  const amerisOnly = account?.amerisCurriculum && AMERIS_CURRICULUM_PATHS.includes(activePath);
+  // Ameris Academy (curriculumOwner) edits them under Global admin instead
+  // (client sheet 10-29 (9), rows 4/5).
+  const amerisOnly = (account?.amerisCurriculum || account?.curriculumOwner) && AMERIS_CURRICULUM_PATHS.includes(activePath);
   const children = amerisOnly ? (
-    <AmerisCurriculumPage />
+    <AmerisCurriculumPage owner={Boolean(account?.curriculumOwner)} />
   ) : pageMissing.length ? (
     <LockedPage missing={pageMissing} />
   ) : pageNeeds.length && !addOnsLoaded ? (

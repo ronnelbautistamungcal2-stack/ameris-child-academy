@@ -1,4 +1,4 @@
-import AdminLayout from "@/components/admin/AdminLayout";
+import { useCurriculumScope } from "@/components/curriculum/CurriculumScope";
 import CurriculumTabs from "@/components/curriculum/CurriculumTabs";
 import BulkTypesDialog from "@/components/curriculum/BulkTypesDialog";
 import CurriculumTypePicker from "@/components/curriculum/CurriculumTypePicker";
@@ -762,6 +762,9 @@ function SupplyRowsEditor({ rows, setRows, disabled }) {
 }
 
 export default function AdminLessons() {
+  // Admin portal, or Global admin > Lesson Bank & SOP (client sheet 10-29 (9), row 4).
+  const scope = useCurriculumScope();
+  const Layout = scope.Layout;
   const [centers, setCenters] = useState([]);
   const [lessons, setLessons] = useState([]);
   const [lessonCategories, setLessonCategories] = useState([]);
@@ -848,7 +851,7 @@ export default function AdminLessons() {
     setLoadingCenters(true);
     setError("");
     try {
-      const data = await apiJson("/api/v1/centers");
+      const data = scope.centers || (await apiJson("/api/v1/centers"));
       setCenters(Array.isArray(data) ? data : []);
     } catch (e) {
       setCenters([]);
@@ -1454,7 +1457,7 @@ export default function AdminLessons() {
   const activeFilterCount = [age, category, term, subject, typeFilter].filter(Boolean).length;
 
   return (
-    <AdminLayout title="Curriculum">
+    <Layout title="Curriculum">
       <div className="space-y-5">
         <CurriculumTabs active="bank" />
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -2682,6 +2685,6 @@ export default function AdminLessons() {
           onClose={() => setToast(null)}
         />
       ) : null}
-    </AdminLayout>
+    </Layout>
   );
 }

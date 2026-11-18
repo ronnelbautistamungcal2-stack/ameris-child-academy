@@ -1,4 +1,4 @@
-import AdminLayout from "@/components/admin/AdminLayout";
+import { useCurriculumScope } from "@/components/curriculum/CurriculumScope";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import CurriculumTabs from "@/components/curriculum/CurriculumTabs";
 import useCurriculumClassroom from "@/components/curriculum/useCurriculumClassroom";
@@ -102,6 +102,8 @@ function distinct(entries, key) {
 }
 
 export default function LessonPlannerPage() {
+  // Admin portal, or Global admin > Lesson Bank & SOP (client sheet 10-29 (9), row 4).
+  const { Layout } = useCurriculumScope();
   const picker = useCurriculumClassroom();
   const { centerId } = picker;
   // The planner is per age range (Curriculum > Categories) and type (client
@@ -302,7 +304,7 @@ export default function LessonPlannerPage() {
   }
 
   return (
-    <AdminLayout title="Curriculum">
+    <Layout title="Curriculum">
       <div className="space-y-4">
         <h1 className={`text-3xl font-black ${NAVY}`}>Lesson Planner</h1>
         <CurriculumTabs active="planner" />
@@ -568,7 +570,7 @@ export default function LessonPlannerPage() {
         }}
         onCancel={() => setDeleteRow(null)}
       />
-    </AdminLayout>
+    </Layout>
   );
 }
 

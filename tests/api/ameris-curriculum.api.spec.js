@@ -211,6 +211,37 @@ test.describe("Ameris curriculum for subscribers @api", () => {
     }
   });
 
+  test("Global admin edits the Ameris curriculum on Lesson Bank & SOP; Ameris Academy keeps only the calendar", async ({ request }) => {
+    // Client sheet 10-29 (9), rows 4/5: the Lesson Planner, Lesson Bank,
+    // Categories and Steps of Progression Bank moved under Global admin. The
+    // Global admin uses the same APIs, signed in as Global admin.
+    const global = await getAuthCookie(request, globalEmail, password);
+    const made = await apiPost(request, "/api/v1/lessons", { centerId: source.id, title: `QA Global lesson ${stamp}` }, global);
+    expect(made.status(), await made.text()).toBe(201);
+    lessonIds.push((await made.json()).id);
+    expect((await apiGet(request, `/api/v1/curriculum-options?centerId=${source.id}`, global)).status()).toBe(200);
+    const plans = await apiGet(request, `/api/v1/curriculum-plans?centerId=${source.id}`, global);
+    expect(plans.status()).toBe(200);
+    expect((await plans.json()).ageRanges).toContain(ageGroup);
+    // Only the curriculum center: a subscriber's center stays closed.
+    expect((await apiPost(request, "/api/v1/lessons", { centerId: subCenterId, title: `QA not here ${stamp}` }, global)).status()).toBe(403);
+
+    // A Global team member without Lesson Bank / SOP Bank edit rights can look but not change.
+    const salesEmail = `curr-sales-${stamp}@curriculum-test.local`;
+    await makeUser(salesEmail, { role: "GLOBAL_ADMIN", roles: ["GLOBAL_ADMIN"], globalTeamRole: "SALES" });
+    const sales = await getAuthCookie(request, salesEmail, password);
+    expect((await apiGet(request, `/api/v1/lessons?centerId=${source.id}&kind=lesson`, sales)).status()).toBe(200);
+    expect((await apiPost(request, "/api/v1/lessons", { centerId: source.id, title: `QA sales ${stamp}` }, sales)).status()).toBe(403);
+
+    // Ameris Academy's account is the curriculum owner: its Admin portal keeps
+    // only the Lesson Calendar.
+    const demo = await getAuthCookie(request, "admin@demo.com", "adminpass");
+    const mine = await (await apiGet(request, "/api/v1/account", demo)).json();
+    expect(mine.account.curriculumOwner).toBe(true);
+    const sub = await getAuthCookie(request, subEmail, password);
+    expect((await (await apiGet(request, "/api/v1/account", sub)).json()).account.curriculumOwner).toBe(false);
+  });
+
   test("Ameris changes show right away, and the teacher's week uses the Ameris planner", async ({ request }) => {
     await prisma.lessonPlanCell.updateMany({ where: { planId, day: 1, rowIndex: 1 }, data: { lessonId: ids.nd, title: "Changed by Ameris" } });
     const teacher = await getAuthCookie(request, teacherEmail, password);

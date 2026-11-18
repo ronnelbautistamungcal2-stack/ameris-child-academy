@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth-options";
+import { actionForMethod, can } from "@/lib/globalPermissions";
 import { hasAnyRole } from "@/lib/roles";
 
 /**
@@ -9,7 +10,51 @@ export async function getSession(req, res) {
   const session = await getServerSession(req, res, authOptions);
   // Sessions of users disabled after signing in stop working at their next refresh.
   if (!session || session.user?.disabled) return null;
+  if (session.user?.role === "GLOBAL_ADMIN" && isCurriculumApi(req)) return (await curriculumAdminSession(session, req)) || session;
   return session;
+}
+
+// The curriculum editors' APIs (Lesson Planner, Lesson Bank, Categories, Steps
+// of Progression Bank). Global admin > Lesson Bank & SOP edits the Ameris
+// curriculum through them (client sheet 10-29 (9), rows 4/5).
+const CURRICULUM_APIS = [
+  "/api/v1/lessons",
+  "/api/v1/lesson-categories",
+  "/api/v1/curriculum-options",
+  "/api/v1/curriculum-plans",
+  "/api/v1/lesson-plan-rows",
+  "/api/v1/lesson-planner",
+  "/api/v1/curriculum/",
+  "/api/v1/remediations",
+  "/api/v1/import/steps-library",
+  "/api/v1/upload",
+];
+
+function isCurriculumApi(req) {
+  const path = String(req?.url || "").split("?")[0];
+  return CURRICULUM_APIS.some((p) => path === p || path.startsWith(p.endsWith("/") ? p : `${p}/`) || (p === "/api/v1/upload" && path === "/api/v1/uploads"));
+}
+
+/**
+ * On the curriculum APIs a Global admin with Lesson Bank or SOP Bank rights
+ * (Permissions & Users) acts as an admin. Which centers they reach is still
+ * checked as usual: for Global admins that is the Ameris curriculum center
+ * (plus any center that granted them support access). Null when they lack the
+ * right, so the request is refused as before.
+ */
+async function curriculumAdminSession(session, req) {
+  const { default: prisma } = await import("@/lib/prisma");
+  const me = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { disabled: true, globalTeamRole: true, globalPermissions: true },
+  });
+  const action = actionForMethod(req.method);
+  if (!me || me.disabled || !(can(me, "LESSON_BANK", action) || can(me, "SOP_BANK", action))) return null;
+  const roles = Array.isArray(session.user.roles) ? session.user.roles : [];
+  return {
+    ...session,
+    user: { ...session.user, role: "ADMIN", roles: [...new Set([...roles, "ADMIN"])], curriculumAsGlobalAdmin: true },
+  };
 }
 
 /**

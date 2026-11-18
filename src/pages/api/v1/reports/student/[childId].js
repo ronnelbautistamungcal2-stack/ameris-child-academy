@@ -12,6 +12,13 @@ import { canUseChild } from "@/lib/sopServer";
 const LOG_DAYS = 400; // Citizenship, highlights and corrections the cards can filter
 const ACTIVITY_LIMIT = 50;
 
+/** A step's Exposure / Competency / Mastery wording: { exposure, competency, mastery } (blank when not set). */
+function stepCriteria(value) {
+  const c = value && typeof value === "object" ? value : {};
+  const text = (v) => (typeof v === "string" ? v.trim() : "");
+  return { exposure: text(c.exposure), competency: text(c.competency), mastery: text(c.mastery) };
+}
+
 function dayKey(date) {
   const d = new Date(date);
   const pad = (n) => String(n).padStart(2, "0");
@@ -75,7 +82,7 @@ export default async function handler(req, res) {
           status: true,
           active: true,
           assessedAt: true,
-          lesson: { select: { id: true, title: true, description: true, subCategory: true, ageYears: true, ageMonths: true, maxAgeYears: true, maxAgeMonths: true, category: { select: { name: true } } } },
+          lesson: { select: { id: true, title: true, description: true, criteria: true, subCategory: true, ageYears: true, ageMonths: true, maxAgeYears: true, maxAgeMonths: true, category: { select: { name: true } } } },
         },
       }),
       prisma.activityLog.findMany({
@@ -118,7 +125,15 @@ export default async function handler(req, res) {
         distribution: mix(list, child.birthDate),
         goals: list
           .filter((g) => g.active)
-          .map((g) => ({ id: g.step.id, title: g.step.title, question: g.step.description || "", level: g.level })),
+          .map((g) => ({
+            id: g.step.id,
+            title: g.step.title,
+            question: g.step.description || "",
+            level: g.level,
+            // What Exposure / Competency / Mastery mean for this step, from the
+            // Steps of Progression Bank (client sheet 10-29 (9), row 6).
+            criteria: stepCriteria(g.step.criteria),
+          })),
       }));
     // Parents mark off goals in the General category only; staff who track
     // the child can mark every category (client request 2026-10-23).

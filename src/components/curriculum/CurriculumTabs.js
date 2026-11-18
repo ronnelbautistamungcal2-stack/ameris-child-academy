@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useCurriculumScope } from "@/components/curriculum/CurriculumScope";
 import { useAddOns } from "@/components/subscription/AddOnGate";
 
 // The Curriculum tabs from the client's mockups (2026-10-02). Each tab is its
@@ -12,9 +13,16 @@ export const CURRICULUM_TABS = [
 ];
 
 export default function CurriculumTabs({ active }) {
-  // Subscribers on the Ameris curriculum only get the calendar (step E).
   const { account } = useAddOns();
-  const tabs = account?.amerisCurriculum ? CURRICULUM_TABS.filter((t) => t.key === "calendar") : CURRICULUM_TABS;
+  const scope = useCurriculumScope();
+  // Global admin > Lesson Bank & SOP edits the banks and planner (client sheet
+  // 10-29 (9), rows 4/5). In the Admin portal, subscribers (step E) and Ameris
+  // Academy itself only get the Lesson Calendar.
+  const tabs = scope.global
+    ? CURRICULUM_TABS.filter((t) => scope.tabHrefs[t.key]).map((t) => ({ ...t, href: scope.tabHrefs[t.key] }))
+    : account?.amerisCurriculum || account?.curriculumOwner
+      ? CURRICULUM_TABS.filter((t) => t.key === "calendar")
+      : CURRICULUM_TABS;
   if (tabs.length === 1) return null;
   return (
     <nav aria-label="Curriculum" className="overflow-x-auto">

@@ -1,5 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { canEditCurriculumCenter } from "@/lib/curriculumAccess";
 import { OPTION_KINDS } from "@/lib/curriculumOptions";
 import { hasAnyRole } from "@/lib/roles";
 
@@ -101,6 +102,7 @@ export default async function handler(req, res) {
       const [name] = clean([req.body?.name]);
       if (!centerId || !OPTION_KINDS.includes(kind)) return res.status(400).json({ error: "centerId and a list are required" });
       if (!name) return res.status(400).json({ error: "Enter a name" });
+      if (!(await canEditCurriculumCenter(user, centerId))) return res.status(403).json({ error: "Forbidden" });
       const exists = await prisma.curriculumOption.findFirst({
         where: { centerId: String(centerId), kind, name: { equals: name, mode: "insensitive" } },
       });
@@ -113,6 +115,7 @@ export default async function handler(req, res) {
       const id = String(req.query.id || "");
       const row = await prisma.curriculumOption.findUnique({ where: { id } });
       if (!row || !OPTION_KINDS.includes(row.kind)) return res.status(404).json({ error: "Not found" });
+      if (!(await canEditCurriculumCenter(user, row.centerId))) return res.status(403).json({ error: "Forbidden" });
       const [name] = clean([req.body?.name]);
       if (!name) return res.status(400).json({ error: "Enter a name" });
       if (name === row.name) return res.status(200).json({ id: row.id, kind: row.kind, name: row.name });
@@ -137,6 +140,7 @@ export default async function handler(req, res) {
       const id = String(req.query.id || "");
       const row = await prisma.curriculumOption.findUnique({ where: { id } });
       if (!row || !OPTION_KINDS.includes(row.kind)) return res.status(404).json({ error: "Not found" });
+      if (!(await canEditCurriculumCenter(user, row.centerId))) return res.status(403).json({ error: "Forbidden" });
       await prisma.curriculumOption.delete({ where: { id } });
       return res.status(204).end();
     }

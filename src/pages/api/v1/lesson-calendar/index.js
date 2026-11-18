@@ -60,6 +60,7 @@ export default async function handler(req, res) {
         curriculum: curriculum
           ? {
               mode: curriculum.mode,
+              chooseAgeGroup: Boolean(curriculum.chooseAgeGroup),
               ageGroupId: curriculum.ageGroupId || null,
               chosenAgeGroupId: curriculum.chosenAgeGroupId || null,
               ageGroups: curriculum.ageGroups || [],

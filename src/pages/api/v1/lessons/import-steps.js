@@ -1,3 +1,4 @@
+import { canEditCurriculumCenter } from "@/lib/curriculumAccess";
 import { loadCurriculumTypes } from "@/lib/curriculumTypesServer";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
@@ -37,6 +38,7 @@ export default async function handler(req, res) {
     if (!(await prisma.center.findUnique({ where: { id: centerId }, select: { id: true } }))) {
       return res.status(404).json({ error: "Center not found" });
     }
+    if (!(await canEditCurriculumCenter(session.user, centerId))) return res.status(403).json({ error: "Forbidden" });
 
     const skipped = [];
     const warnings = [];

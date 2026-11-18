@@ -91,7 +91,10 @@ export default function LessonCalendarPage() {
   }
 
   const futureClosed = (data?.closedDays || []).filter((d) => d >= today);
-  const ameris = data?.curriculum?.mode === "AMERIS" ? data.curriculum : null;
+  // Subscribers and Ameris Academy pick the age group a classroom follows
+  // (client sheet 10-29 (9), row 3).
+  const ameris = data?.curriculum?.chooseAgeGroup ? data.curriculum : null;
+  const ownCenter = data?.curriculum?.mode !== "AMERIS";
 
   async function openLesson(lessonId) {
     setViewLesson({ id: lessonId });
@@ -189,7 +192,9 @@ export default function LessonCalendarPage() {
           )}
           {ameris && !ameris.ageGroups.length && (
             <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              Your subscription has no curriculum age groups yet. Contact Ameris Solutions to add them.
+              {ownCenter
+                ? "There are no age groups yet. Add Age Ranges on the Categories tab."
+                : "Your subscription has no curriculum age groups yet. Contact Ameris Solutions to add them."}
             </p>
           )}
           {ameris && ameris.ageGroups.length > 0 && !ameris.ageGroupId && (

@@ -1,3 +1,4 @@
+import { canEditCurriculumCenter } from "@/lib/curriculumAccess";
 import path from "path";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
@@ -37,9 +38,10 @@ export default async function handler(req, res) {
     "StepsofProgressionLibrary.xlsx",
   );
 
-  const centers = centerId
-    ? await prisma.center.findMany({ where: { id: centerId } })
-    : await prisma.center.findMany({ orderBy: { createdAt: "asc" } });
+  // One of the admin's own centers; it no longer runs on every center.
+  if (!centerId) return res.status(400).json({ error: "centerId is required" });
+  if (!(await canEditCurriculumCenter(session.user, centerId))) return res.status(403).json({ error: "Forbidden" });
+  const centers = await prisma.center.findMany({ where: { id: String(centerId) } });
 
   if (!centers.length) return res.status(404).json({ error: "Center not found" });
 

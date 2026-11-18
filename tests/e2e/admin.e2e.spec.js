@@ -48,7 +48,9 @@ test.describe("Admin Workflows", () => {
   test("can navigate to curriculum page", async ({ page }) => {
     await page.goto("/admin/curriculum");
     await waitForLoadingDone(page);
-    await expect(page.getByText(/curriculum|lessons/i).first()).toBeVisible();
+    // Ameris Academy edits its banks under Global admin now (client sheet 10-29 (9), rows 4/5).
+    await expect(page.getByText("Edited in Global Admin")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open Lesson Calendar" })).toBeVisible();
   });
 
   test("sidebar navigation works with groups", async ({ page }) => {

@@ -1,3 +1,4 @@
+import { useCurriculumScope } from "@/components/curriculum/CurriculumScope";
 import { apiJson } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 
@@ -24,6 +25,7 @@ function remember(value) {
  * Planner tabs. The last classroom chosen is remembered across the tabs.
  */
 export default function useCurriculumClassroom() {
+  const scope = useCurriculumScope();
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterIdState] = useState("");
   const [classRoomId, setClassRoomIdState] = useState("");
@@ -33,7 +35,7 @@ export default function useCurriculumClassroom() {
   useEffect(() => {
     (async () => {
       try {
-        const data = await apiJson("/api/v1/centers");
+        const data = scope.centers || (await apiJson("/api/v1/centers"));
         const list = (Array.isArray(data) ? data : []).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
         setCenters(list);
         const saved = remembered();

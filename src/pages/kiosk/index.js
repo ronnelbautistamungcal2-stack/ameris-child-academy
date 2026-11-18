@@ -45,6 +45,10 @@ export default function KioskPage() {
   const [busy, setBusy] = useState(false);
   const [person, setPerson] = useState(null); // identify response
   const [done, setDone] = useState(null); // { kind, action, at }
+  // Staff who also have children here stay on their screen after clocking in
+  // or out, so they can sign their children in without their PIN again
+  // (client sheet 10-29 (9), row 9). { action, at }
+  const [clocked, setClocked] = useState(null);
   const [selected, setSelected] = useState([]);
   const [registration, setRegistration] = useState({ code: "", name: "", pin: "" });
   const idleTimer = useRef(null);
@@ -64,6 +68,7 @@ export default function KioskPage() {
     setPerson(null);
     setDone(null);
     setSelected([]);
+    setClocked(null);
     setRegistration({ code: "", name: "", pin: "" });
   }, []);
 
@@ -111,7 +116,19 @@ export default function KioskPage() {
     setError("");
     try {
       const data = await post("/api/v1/kiosk/clock", { token: person.token, action });
-      setDone({ kind: "employee", action, at: new Date(data.at) });
+      const at = new Date(data.at);
+      if (person.parent) {
+        setPerson((current) => ({
+          ...current,
+          employee:
+            action === "in"
+              ? { ...current.employee, clockedIn: true, clockIn: at.toISOString() }
+              : { ...current.employee, clockedIn: false, clockOut: at.toISOString() },
+        }));
+        setClocked({ action, at });
+        return;
+      }
+      setDone({ kind: "employee", action, at });
       goTo("done");
     } catch (e) {
       setError(e.message);
@@ -121,13 +138,17 @@ export default function KioskPage() {
     }
   }
 
-  async function signChildren(childIds, action) {
+  /** Signs the picked children in and/or out, then shows the done screen. */
+  async function signSelected(inIds, outIds) {
     setBusy(true);
     setError("");
     try {
-      const data = await post("/api/v1/kiosk/children", { token: person.token, childIds, action });
+      let data = null;
+      if (inIds.length) data = await post("/api/v1/kiosk/children", { token: person.token, childIds: inIds, action: "in" });
+      if (outIds.length) data = await post("/api/v1/kiosk/children", { token: person.token, childIds: outIds, action: "out" });
       setPerson((current) => ({ ...current, parent: { children: data.children } }));
-      setDone({ kind: "parent", action, at: new Date(data.at) });
+      setSelected([]);
+      setDone({ kind: "parent", action: inIds.length && outIds.length ? "both" : inIds.length ? "in" : "out", at: new Date(data.at) });
       goTo("done");
     } catch (e) {
       setError(e.message);
@@ -261,18 +282,38 @@ export default function KioskPage() {
             Clock Out &#10148;
           </KioskButton>
         </div>
+        {clocked ? (
+          <div role="status" className="mt-6 w-full max-w-3xl rounded-2xl border border-green-200 bg-green-50 px-8 py-4 text-center text-xl font-bold text-green-800">
+            {clocked.action === "in" ? "You’re Clocked In" : "You’re Clocked Out"} at {formatKioskTime(clocked.at)}
+          </div>
+        ) : null}
         <KioskError message={error} />
-        <BackRow onBack={() => (person.parent ? goTo("choose") : resetToStart())} />
+        {person.parent ? (
+          <div className="mt-6 grid w-full max-w-3xl grid-cols-2 gap-6">
+            <KioskButton variant="secondary" onClick={clocked ? resetToStart : () => goTo("choose")}>
+              {clocked ? "Done" : "‹ Back"}
+            </KioskButton>
+            <KioskButton onClick={() => goTo("parent")}>Sign My Children In / Out ›</KioskButton>
+          </div>
+        ) : (
+          <BackRow onBack={resetToStart} />
+        )}
       </KioskFrame>
     );
   }
 
   if (screen === "parent") {
     const kids = person.parent?.children || [];
+    // Client sheet 10-29 (9), row 8: no check boxes. Tapping a child's Sign In
+    // (or Sign Out) button picks them without leaving this screen; tapping it
+    // again un-picks them. The button at the bottom then signs every picked
+    // child in (or out) at once.
     const selectedKids = kids.filter((k) => selected.includes(k.id));
-    const bulkAction = selectedKids.length && selectedKids.every((k) => k.signedIn) ? "out" : "in";
-    const bulkIds = selectedKids.filter((k) => (bulkAction === "in" ? !k.signedIn : k.signedIn)).map((k) => k.id);
+    const inIds = selectedKids.filter((k) => !k.signedIn).map((k) => k.id);
+    const outIds = selectedKids.filter((k) => k.signedIn).map((k) => k.id);
+    const bulkLabel = inIds.length && outIds.length ? "Sign In / Out Selected" : outIds.length ? "Sign Out Selected" : "Sign In Selected";
     const allSelected = kids.length > 0 && selected.length === kids.length;
+    const toggle = (id) => setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
     return (
       <KioskFrame showClock={false} topLeft={null}>
         <div className="flex w-full max-w-4xl items-end justify-between">
@@ -280,29 +321,15 @@ export default function KioskPage() {
           <div className="text-lg font-semibold text-[#1e4b8f]">{person.name}</div>
         </div>
         <div className="mt-6 w-full max-w-4xl overflow-hidden rounded-2xl border border-sky-200 bg-white shadow-sm">
-          <div className="grid grid-cols-[44px_minmax(0,1fr)_150px_130px] lg:grid-cols-[56px_minmax(0,1fr)_220px_170px] items-center bg-sky-50 px-4 py-3 text-base font-bold text-[#0b2f6b]">
-            <input
-              type="checkbox"
-              aria-label="Select all children"
-              className="h-6 w-6"
-              checked={allSelected}
-              onChange={(e) => setSelected(e.target.checked ? kids.map((k) => k.id) : [])}
-            />
+          <div className="grid grid-cols-[minmax(0,1fr)_150px_170px] lg:grid-cols-[minmax(0,1fr)_220px_200px] items-center bg-sky-50 px-4 py-3 text-base font-bold text-[#0b2f6b]">
             <span>Child</span>
             <span>Current Status</span>
-            <span>Action</span>
+            <button type="button" className="justify-self-start text-left text-sm font-bold text-[#1d5fd1] underline" onClick={() => setSelected(allSelected ? [] : kids.map((k) => k.id))}>
+              {allSelected ? "Clear All" : "Select All"}
+            </button>
           </div>
           {kids.map((kid) => (
-            <div key={kid.id} className="grid grid-cols-[44px_minmax(0,1fr)_150px_130px] lg:grid-cols-[56px_minmax(0,1fr)_220px_170px] items-center border-t border-sky-100 px-4 py-3">
-              <input
-                type="checkbox"
-                aria-label={`Select ${kid.firstName}`}
-                className="h-6 w-6"
-                checked={selected.includes(kid.id)}
-                onChange={(e) =>
-                  setSelected((cur) => (e.target.checked ? [...cur, kid.id] : cur.filter((id) => id !== kid.id)))
-                }
-              />
+            <div key={kid.id} className={`grid grid-cols-[minmax(0,1fr)_150px_170px] lg:grid-cols-[minmax(0,1fr)_220px_200px] items-center border-t border-sky-100 px-4 py-3 ${selected.includes(kid.id) ? "bg-sky-50" : ""}`}>
               <div className="flex min-w-0 items-center gap-3 lg:gap-4">
                 {kid.photoUrl ? (
                   <img src={kid.photoUrl} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover lg:h-14 lg:w-14" />
@@ -334,26 +361,28 @@ export default function KioskPage() {
                 </div>
               </div>
               <KioskButton
-                variant={kid.signedIn ? "danger" : "primary"}
+                variant={selected.includes(kid.id) ? "success" : kid.signedIn ? "danger" : "primary"}
                 className="px-4 py-2.5 text-base"
                 disabled={busy}
-                onClick={() => signChildren([kid.id], kid.signedIn ? "out" : "in")}
+                aria-pressed={selected.includes(kid.id)}
+                aria-label={`${kid.signedIn ? "Sign Out" : "Sign In"} ${kid.firstName}`}
+                onClick={() => toggle(kid.id)}
               >
-                {kid.signedIn ? "Sign Out" : "Sign In"}
+                {selected.includes(kid.id) ? (kid.signedIn ? "✓ Signing Out" : "✓ Signing In") : kid.signedIn ? "Sign Out" : "Sign In"}
               </KioskButton>
             </div>
           ))}
         </div>
         <div className="mt-4 w-full max-w-4xl rounded-xl border border-sky-200 bg-sky-50 px-5 py-3 text-[#1e4b8f]">
-          &#9432; The time will be recorded for all selected children.
+          &#9432; Tap Sign In (or Sign Out) for each child, then tap the button below. The time will be recorded for all selected children.
         </div>
         <KioskError message={error} />
         <div className="mt-6 grid w-full max-w-4xl grid-cols-2 gap-6">
           <KioskButton variant="secondary" onClick={() => (person.employee ? goTo("choose") : resetToStart())}>
             Cancel
           </KioskButton>
-          <KioskButton disabled={busy || !bulkIds.length} onClick={() => signChildren(bulkIds, bulkAction)}>
-            {bulkAction === "out" ? "Sign Out Selected" : "Sign In Selected"}
+          <KioskButton disabled={busy || !selectedKids.length} onClick={() => signSelected(inIds, outIds)}>
+            {busy ? "Saving..." : bulkLabel}
           </KioskButton>
         </div>
       </KioskFrame>
@@ -366,7 +395,9 @@ export default function KioskPage() {
         ? done.action === "in" ? "You’re Clocked In" : "You’re Clocked Out"
         : done.action === "in"
           ? "Your child(ren) have been successfully signed in."
-          : "Your child(ren) have been successfully signed out.";
+          : done.action === "both"
+            ? "Your child(ren) have been successfully signed in and out."
+            : "Your child(ren) have been successfully signed out.";
     return (
       <KioskFrame>
         <h1 className={`max-w-2xl text-center font-serif text-5xl font-black leading-tight ${NAVY}`}>{message}</h1>

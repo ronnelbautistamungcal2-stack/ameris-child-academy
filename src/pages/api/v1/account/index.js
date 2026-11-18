@@ -1,7 +1,7 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { accountSummaryForUser } from "@/lib/subscriberAccounts";
-import { accountUsesAmerisCurriculum } from "@/lib/curriculumSource";
+import { accountUsesAmerisCurriculum, curriculumSourceCenter } from "@/lib/curriculumSource";
 
 /**
  * GET /api/v1/account -> { account, addOns, usage }
@@ -21,8 +21,17 @@ export default async function handler(req, res) {
   const { addOns } = summary;
   // amerisCurriculum: the account follows the Ameris Solutions curriculum, so
   // it gets the Lesson Calendar but not the banks or planner (step E).
+  // curriculumOwner: the account holds the Ameris curriculum center (Ameris
+  // Academy); its banks and planner are edited under Global admin > Lesson
+  // Bank & SOP, so the Admin portal keeps only the Lesson Calendar (client
+  // sheet 10-29 (9), rows 4/5).
+  const source = summary.account ? await curriculumSourceCenter() : null;
   const account = summary.account
-    ? { ...summary.account, amerisCurriculum: await accountUsesAmerisCurriculum(summary.account.id) }
+    ? {
+        ...summary.account,
+        amerisCurriculum: await accountUsesAmerisCurriculum(summary.account.id, undefined, source),
+        curriculumOwner: Boolean(source && source.subscriberAccountId === summary.account.id),
+      }
     : null;
   let usage = null;
   if (account && session.user.role === "ADMIN") {

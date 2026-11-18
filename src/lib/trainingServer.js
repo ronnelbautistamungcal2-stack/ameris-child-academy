@@ -11,7 +11,9 @@ import { appliesTo, pathwayProgress, TRAINING_ROLES } from "@/lib/training";
 export async function trainingAccess(session, centerId) {
   if (!session || !centerId) return { ok: false, status: 400, error: "centerId is required" };
   if (!isEmployeeRole(session.user.role)) return { ok: false, status: 403, error: "Forbidden" };
-  if (session.user.role !== "ADMIN" && !(await hasAccessToCenter(session.user.id, centerId))) {
+  // Admins too: a subscriber's admin only sees their own centers (client sheet
+  // 10-29 (9), row 7: Staff Progress showed Ameris Academy's employees).
+  if (!(await hasAccessToCenter(session.user.id, centerId))) {
     return { ok: false, status: 403, error: "Forbidden" };
   }
   return { ok: true, canManage: session.user.role === "ADMIN", canTrack: ["ADMIN", "COACH", "HR_STAFF"].includes(session.user.role) };

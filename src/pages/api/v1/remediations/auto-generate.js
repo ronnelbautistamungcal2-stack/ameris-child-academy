@@ -1,3 +1,4 @@
+import { canEditCurriculumCenter } from "@/lib/curriculumAccess";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import {
@@ -25,6 +26,7 @@ export default async function handler(req, res) {
 
   const center = await prisma.center.findUnique({ where: { id: centerId } });
   if (!center) return res.status(404).json({ error: "Center not found" });
+  if (!(await canEditCurriculumCenter(session.user, centerId))) return res.status(403).json({ error: "Forbidden" });
 
   const isDryRun = dryRun !== false; // default to dry-run for safety
 

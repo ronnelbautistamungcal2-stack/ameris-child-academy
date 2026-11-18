@@ -1,3 +1,4 @@
+import { canEditCurriculumCenter } from "@/lib/curriculumAccess";
 import { loadCurriculumTypes } from "@/lib/curriculumTypesServer";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
@@ -41,6 +42,8 @@ export default async function handler(req, res) {
 
   const goalId = String(req.query?.id || "");
   if (!goalId) return res.status(400).json({ error: "id is required" });
+  const owner = await prisma.lessonGoal.findUnique({ where: { id: goalId }, select: { lesson: { select: { centerId: true } } } });
+  if (owner && !(await canEditCurriculumCenter(session.user, owner.lesson?.centerId))) return res.status(403).json({ error: "Forbidden" });
 
   if (req.method === "DELETE") {
     const existing = await prisma.lessonGoal.findUnique({ where: { id: goalId } });

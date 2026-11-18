@@ -1,3 +1,4 @@
+import { canEditCurriculumCenter } from "@/lib/curriculumAccess";
 import { getSession } from "@/lib/auth";
 import { attachLessonCountsToCategories } from "@/lib/lessonCategoryCounts";
 import { lessonsForCategoryCounts } from "@/lib/lessonCategoryCountsServer";
@@ -18,6 +19,7 @@ export default async function handler(req, res) {
     include: { _count: { select: { lessons: true } } },
   });
   if (!category) return res.status(404).json({ error: "Category not found" });
+  if (!(await canEditCurriculumCenter(session.user, category.centerId))) return res.status(403).json({ error: "Forbidden" });
 
   async function getCategoryWithLessonCount() {
     const lessons = await lessonsForCategoryCounts({ centerId: category.centerId });

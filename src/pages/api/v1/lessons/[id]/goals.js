@@ -1,3 +1,4 @@
+import { canEditCurriculumCenter, canReadCurriculumCenter } from "@/lib/curriculumAccess";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
@@ -13,6 +14,7 @@ export default async function handler(req, res) {
 
   const lesson = await prisma.lesson.findUnique({ where: { id: lessonId } });
   if (!lesson) return res.status(404).json({ error: "Lesson not found" });
+  if (!(await (req.method === "GET" ? canReadCurriculumCenter : canEditCurriculumCenter)(session.user, lesson.centerId))) return res.status(403).json({ error: "Forbidden" });
 
   if (req.method === "GET") {
     const goals = await prisma.lessonGoal.findMany({

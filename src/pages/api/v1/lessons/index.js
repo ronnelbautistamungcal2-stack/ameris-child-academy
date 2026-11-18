@@ -1,3 +1,4 @@
+import { canEditCurriculumCenter } from "@/lib/curriculumAccess";
 import { loadCurriculumTypes } from "@/lib/curriculumTypesServer";
 import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import { normalizeLessonSlot, normalizeTermDaySelections } from "@/lib/lessonScheduling";
@@ -80,6 +81,7 @@ export default async function handler(req, res) {
     } = req.body;
     if (!title || !cId)
       return res.status(400).json({ error: "Title and centerId required" });
+    if (!(await canEditCurriculumCenter(session.user, cId))) return res.status(403).json({ error: "Forbidden" });
 
     const age = parseStepAge(req.body);
     if (age.error) return res.status(400).json({ error: age.error });

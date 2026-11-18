@@ -6,7 +6,8 @@ import { classroomCurriculum } from "@/lib/curriculumSource";
 /**
  * PUT /api/v1/lesson-calendar/age-group { centerId, classRoomId, ageGroupId }
  * Admin only (step E). Which Ameris age group a subscriber classroom follows;
- * it must be one of the age groups on the account. Blank clears it.
+ * it must be one of the age groups on the account. Blank clears it. Ameris
+ * Academy's own classrooms choose too (client sheet 10-29 (9), row 3).
  */
 export default async function handler(req, res) {
   try {
@@ -21,7 +22,7 @@ export default async function handler(req, res) {
     if (access.error) return res.status(access.status).json({ error: access.error });
 
     const curriculum = await classroomCurriculum(classRoomId);
-    if (curriculum?.mode !== "AMERIS") {
+    if (!curriculum?.chooseAgeGroup) {
       return res.status(400).json({ error: "This classroom uses its own Lesson Planner" });
     }
     const id = ageGroupId ? String(ageGroupId) : null;

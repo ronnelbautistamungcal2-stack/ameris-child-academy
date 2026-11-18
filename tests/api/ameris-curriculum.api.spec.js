@@ -183,6 +183,34 @@ test.describe("Ameris curriculum for subscribers @api", () => {
     expect((await apiGet(request, `/api/v1/lesson-calendar?${q}`, demo)).status()).toBe(403);
   });
 
+  test("Ameris Academy's own classrooms choose the age group they follow too", async ({ request }) => {
+    // Client sheet 10-29 (9), row 3: the Follows Age Group field on Ameris
+    // Academy's Lesson Calendar, like subscribers have. Every lesson type shows.
+    const room = await prisma.classRoom.create({ data: { name: `QA Ameris Room ${stamp}`, centerId: source.id } });
+    try {
+      const demo = await getAuthCookie(request, "admin@demo.com", "adminpass");
+      const start = nextWeekday();
+      expect((await apiPut(request, "/api/v1/lesson-calendar", { centerId: source.id, classRoomId: room.id, startDate: start, dayNumber: 1, closedDays: [] }, demo)).status()).toBe(200);
+      const q = new URLSearchParams({ centerId: source.id, classRoomId: room.id, from: start, to: addDays(start, 6) });
+      const before = await (await apiGet(request, `/api/v1/lesson-calendar?${q}`, demo)).json();
+      expect(before.curriculum.chooseAgeGroup).toBe(true);
+      expect(before.curriculum.ageGroupId).toBeNull();
+      expect(before.curriculum.ageGroups.map((g) => g.id)).toContain(ageGroup);
+
+      expect((await apiPut(request, "/api/v1/lesson-calendar/age-group", { centerId: source.id, classRoomId: room.id, ageGroupId: "not-an-age-group" }, demo)).status()).toBe(400);
+      expect((await apiPut(request, "/api/v1/lesson-calendar/age-group", { centerId: source.id, classRoomId: room.id, ageGroupId: ageGroup }, demo)).status()).toBe(200);
+      const cal = await (await apiGet(request, `/api/v1/lesson-calendar?${q}`, demo)).json();
+      expect(cal.curriculum.ageGroupId).toBe(ageGroup);
+      expect(cal.theme).toBe("Seasons");
+      const byDay = Object.fromEntries(Object.values(cal.days).filter((d) => d.day).map((d) => [d.day, d.lessons.map((l) => l.title).sort()]));
+      expect(byDay[1]).toEqual([`Christian lesson ${stamp}`, `ND lesson ${stamp}`].sort());
+      expect(byDay[2]).toEqual(["Circle time", `Untyped lesson ${stamp}`].sort());
+    } finally {
+      await prisma.lessonCalendarAnchor.deleteMany({ where: { classRoomId: room.id } });
+      await prisma.classRoom.delete({ where: { id: room.id } }).catch(() => {});
+    }
+  });
+
   test("Ameris changes show right away, and the teacher's week uses the Ameris planner", async ({ request }) => {
     await prisma.lessonPlanCell.updateMany({ where: { planId, day: 1, rowIndex: 1 }, data: { lessonId: ids.nd, title: "Changed by Ameris" } });
     const teacher = await getAuthCookie(request, teacherEmail, password);

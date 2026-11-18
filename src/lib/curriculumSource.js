@@ -84,7 +84,30 @@ export async function classroomCurriculum(classRoomId, db = prisma) {
   if (!room) return null;
   const source = await curriculumSourceCenter(db);
   const accountId = room.center?.subscriberAccountId || null;
-  if (room.center?.curriculumSource || !(await accountUsesAmerisCurriculum(accountId, db, source))) {
+  if (room.center?.curriculumSource) {
+    // Ameris Academy (the curriculum center) picks an age group for each
+    // classroom on the Lesson Calendar too, like subscribers do (client sheet
+    // 10-29 (9), row 3): any of its own Age Ranges, every lesson type. With
+    // none chosen it follows the plan named after its age range or name, as
+    // before, else the classroom's own planner.
+    const ageGroups = await ageGroupOptions(db, source);
+    const byName = (name) => ageGroups.find((g) => g.id.toLowerCase() === String(name || "").trim().toLowerCase())?.id;
+    const chosen = byName(room.curriculumAgeGroupId);
+    const plan = await findPlan(room.centerId, chosen ? [chosen] : [room.ageRange, room.name], [], db);
+    const ageGroupId = chosen || (plan ? byName(plan.ageRange) || plan.ageRange : null);
+    return {
+      mode: "OWN",
+      planId: plan?.id || null,
+      plannerClassRoomId: plan ? null : room.id,
+      plannerCenterId: room.centerId,
+      types: null,
+      chooseAgeGroup: true,
+      ageGroups,
+      ageGroupId,
+      chosenAgeGroupId: room.curriculumAgeGroupId || null,
+    };
+  }
+  if (!(await accountUsesAmerisCurriculum(accountId, db, source))) {
     // The center's plan for this classroom's age range (or name); else the
     // classroom's own planner, as before plans existed.
     const plan = await findPlan(room.centerId, [room.ageRange, room.name], [], db);
@@ -112,6 +135,7 @@ export async function classroomCurriculum(classRoomId, db = prisma) {
   const plan = ageGroupId ? await findPlan(source.id, [ageGroupId], accountTypes.length ? [...accountTypes, ""] : [], db) : null;
   return {
     mode: "AMERIS",
+    chooseAgeGroup: true,
     planId: plan?.id || null,
     plannerClassRoomId: null,
     plannerCenterId: source.id,

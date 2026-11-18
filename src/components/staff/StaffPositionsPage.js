@@ -1,6 +1,7 @@
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { isStaffPortalRole, roleLabel } from "@/lib/roles";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 /**
@@ -352,6 +353,13 @@ export default function StaffPositionsPage({ Layout, showTeam = false }) {
                     {selectedStaffMember.email}
                   </div>
                 </div>
+                {/* Client 2026-11-18: coaches (and admins) open the staff profile from here. */}
+                <Link
+                  href={"/coach/teachers/" + encodeURIComponent(selectedStaffMember.id)}
+                  className="flex-shrink-0 rounded-lg border border-blue-700 px-3 py-1.5 text-xs font-bold text-blue-800 hover:bg-blue-50"
+                >
+                  View Profile
+                </Link>
               </div>
 
               {/* Centers */}

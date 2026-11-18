@@ -231,9 +231,8 @@ test.describe.serial("Admin Teachers Page", () => {
     await page.getByRole("button", { name: fixture.teacherName }).click();
     await expect(page.getByText(fixture.teacherEmail).first()).toBeVisible();
 
-    // Staff Positions (client 10-29 requests) has no View Profile link; the
-    // staff profile page still opens on its own address.
-    await page.goto(`/coach/teachers/${teacher.id}`);
+    // View Profile is back on Staff Positions (client 2026-11-18).
+    await page.getByRole("link", { name: /View Profile/i }).click();
     await expect(page).toHaveURL(new RegExp(`/coach/teachers/${teacher.id}$`));
     await expect(page.getByText(fixture.teacherEmail).first()).toBeVisible();
   });

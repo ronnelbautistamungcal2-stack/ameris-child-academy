@@ -8,7 +8,7 @@ export const GENERAL_DEFAULTS = {
     name: "Ameris Solutions",
     dba: "Kingston Laboratories LLC",
     email: "info@amerissolutions.com",
-    phone: "(801) 555-1234",
+    phone: "(801) 327-8747",
     website: "www.amerissolutions.com",
   },
   email: { fromName: "Ameris Solutions", fromEmail: "no-reply@amerissolutions.com", replyTo: "support@amerissolutions.com" },
@@ -31,6 +31,20 @@ const str = (v, max = 200) => String(v ?? "").trim().slice(0, max);
 function withDefaults(saved) {
   const v = saved && typeof saved === "object" ? saved : {};
   return Object.fromEntries(Object.entries(GENERAL_DEFAULTS).map(([k, d]) => [k, { ...d, ...(v[k] || {}) }]));
+}
+
+// The placeholder number the settings started with (client 2026-11-19: the
+// real one is 801-327-8747). A saved placeholder counts as not set.
+const PLACEHOLDER_PHONE = "(801) 555-1234";
+
+/**
+ * What the public website shows from Settings > General (client 2026-11-19):
+ * { phone, email }. No sign-in needed, so only these two fields.
+ */
+export async function publicSiteInfo(db = prisma) {
+  const { company } = await getGeneral(db);
+  const phone = company.phone && company.phone !== PLACEHOLDER_PHONE ? company.phone : GENERAL_DEFAULTS.company.phone;
+  return { phone, email: company.email || GENERAL_DEFAULTS.company.email };
 }
 
 export async function getGeneral(db = prisma) {

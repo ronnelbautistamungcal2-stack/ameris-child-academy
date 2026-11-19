@@ -1,3 +1,4 @@
+import useSiteInfo from "./useSiteInfo";
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -31,6 +32,7 @@ function Icon({ name, className = "h-5 w-5" }) {
 export { Icon };
 
 export default function SolutionsLayout({ title, description, children, hideQuoteButton = false }) {
+  const siteInfo = useSiteInfo();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   // The public website is always light, even when this browser's app theme is dark.
@@ -114,8 +116,8 @@ export default function SolutionsLayout({ title, description, children, hideQuot
               </li>
               <li className="flex items-center gap-3">
                 <Icon name="phone" />
-                <a href={`tel:${SOLUTIONS_INFO.phone.replace(/\D/g, "")}`} className="hover:underline">
-                  {SOLUTIONS_INFO.phone}
+                <a href={`tel:${siteInfo.phone.replace(/\D/g, "")}`} className="hover:underline">
+                  {siteInfo.phone}
                 </a>
               </li>
               <li className="flex items-center gap-3">

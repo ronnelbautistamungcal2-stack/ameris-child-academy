@@ -1,5 +1,5 @@
+import useSiteInfo from "@/components/solutions/useSiteInfo";
 import SolutionsLayout, { NAVY } from "@/components/solutions/SolutionsLayout";
-import { SOLUTIONS_INFO } from "@/components/solutions/siteInfo";
 import { currentDocuments } from "@/lib/terms";
 
 // Ameris Solutions website: Terms of Service. Shows the Website Terms of
@@ -13,6 +13,7 @@ export async function getServerSideProps() {
 }
 
 export default function SolutionsTerms({ doc }) {
+  const siteInfo = useSiteInfo();
   return (
     <SolutionsLayout title="Terms of Service">
       <section className="mx-auto max-w-3xl px-4 pb-14 pt-2 sm:px-6">
@@ -23,7 +24,7 @@ export default function SolutionsTerms({ doc }) {
             <div className="mt-6 whitespace-pre-wrap leading-relaxed text-gray-800">{doc.body}</div>
           </>
         ) : (
-          <p className="mt-6 text-gray-700">Our terms are being prepared. Questions? Contact us at {SOLUTIONS_INFO.email}.</p>
+          <p className="mt-6 text-gray-700">Our terms are being prepared. Questions? Contact us at {siteInfo.email}.</p>
         )}
       </section>
     </SolutionsLayout>

@@ -1,3 +1,4 @@
+import useSiteInfo from "@/components/solutions/useSiteInfo";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
@@ -12,6 +13,7 @@ const day = (v) => (v ? new Date(v).toLocaleDateString("en-US", { month: "short"
 const longDay = (v) => (v ? new Date(v).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }) : "");
 
 export default function SolutionsQuote() {
+  const siteInfo = useSiteInfo();
   const router = useRouter();
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -47,8 +49,8 @@ export default function SolutionsQuote() {
                 <p className={`font-serif text-2xl font-bold ${NAVY}`}>Ameris Solutions</p>
                 <p className="text-xs font-bold uppercase tracking-widest text-[#0b2a5b]">{SOLUTIONS_INFO.tagline}</p>
                 <p className="mt-3">{SOLUTIONS_INFO.shortLocation}</p>
-                <p>{SOLUTIONS_INFO.phone}</p>
-                <p>{SOLUTIONS_INFO.email}</p>
+                <p>{siteInfo.phone}</p>
+                <p>{siteInfo.email}</p>
               </div>
               <div className="sm:border-l sm:border-gray-200 sm:pl-8">
                 <h1 className={`font-serif text-5xl font-bold ${NAVY}`}>Quote</h1>

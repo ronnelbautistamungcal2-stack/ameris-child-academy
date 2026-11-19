@@ -125,6 +125,14 @@ test.describe("Global admin pages @api", () => {
     expect(ok.status(), await ok.text()).toBe(200);
     expect((await ok.json()).general.automated.renewalReminderDaysBefore).toBe(45);
 
+    // The website's phone and email come from here (client 2026-11-19); the
+    // old placeholder number counts as not set.
+    const site = (body) => apiPut(request, "/api/v1/global/settings", { general: { ...data.general, company: { ...data.general.company, ...body } } }, admin);
+    expect((await site({ phone: "(801) 555-1234" })).status()).toBe(200);
+    expect((await (await request.get("/api/v1/solutions/site-info")).json()).phone).toBe("(801) 327-8747");
+    expect((await site({ phone: "(801) 327-0000", email: "hello@amerissolutions.com" })).status()).toBe(200);
+    expect(await (await request.get("/api/v1/solutions/site-info")).json()).toEqual({ phone: "(801) 327-0000", email: "hello@amerissolutions.com" });
+
     const t = data.templates.find((x) => x.key === "QUOTE");
     const saved = await (await apiPut(request, `/api/v1/global/email-templates/${t.id}`, { subject: "Thanks from Ameris", active: false }, admin)).json();
     expect(saved).toMatchObject({ subject: "Thanks from Ameris", active: false });

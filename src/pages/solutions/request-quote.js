@@ -1,3 +1,4 @@
+import useSiteInfo from "@/components/solutions/useSiteInfo";
 import Image from "next/image";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
@@ -18,6 +19,7 @@ const field =
 const label = `block text-sm font-bold ${NAVY}`;
 
 export default function SolutionsRequestQuote() {
+  const siteInfo = useSiteInfo();
   const router = useRouter();
   const [options, setOptions] = useState({ ageGroups: [], homeDaycarePrograms: [], bestTimes: [] });
   const [form, setForm] = useState({
@@ -271,7 +273,7 @@ export default function SolutionsRequestQuote() {
           <ul className="mt-4 space-y-3 text-sm text-gray-800">
             <li className="flex items-center gap-3">
               <Icon name="phone" className="h-5 w-5 text-[#0b2a5b]" />
-              {SOLUTIONS_INFO.phone}
+              {siteInfo.phone}
             </li>
             <li className="flex items-center gap-3">
               <Icon name="mail" className="h-5 w-5 text-[#0b2a5b]" />

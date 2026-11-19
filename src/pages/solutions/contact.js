@@ -1,3 +1,4 @@
+import useSiteInfo from "@/components/solutions/useSiteInfo";
 import { useState } from "react";
 import SolutionsLayout, { BTN, Icon, NAVY } from "@/components/solutions/SolutionsLayout";
 import { SOLUTIONS_INFO } from "@/components/solutions/siteInfo";
@@ -12,6 +13,7 @@ const field =
 const label = `block text-sm font-bold ${NAVY}`;
 
 export default function SolutionsContact() {
+  const siteInfo = useSiteInfo();
   const [form, setForm] = useState({ contactName: "", email: "", phone: "", centerName: "", subject: "", message: "", website: "" });
   const [state, setState] = useState({ sending: false, sent: false, error: "" });
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
@@ -49,14 +51,14 @@ export default function SolutionsContact() {
               </li>
               <li className="flex items-center gap-4 py-4">
                 <Icon name="phone" className="h-6 w-6 text-[#0b2a5b]" />
-                <a href={`tel:${SOLUTIONS_INFO.phone.replace(/\D/g, "")}`} className="hover:underline">
-                  {SOLUTIONS_INFO.phone}
+                <a href={`tel:${siteInfo.phone.replace(/\D/g, "")}`} className="hover:underline">
+                  {siteInfo.phone}
                 </a>
               </li>
               <li className="flex items-center gap-4 py-4">
                 <Icon name="mail" className="h-6 w-6 text-[#0b2a5b]" />
-                <a href={`mailto:${SOLUTIONS_INFO.email}`} className="hover:underline">
-                  {SOLUTIONS_INFO.email}
+                <a href={`mailto:${siteInfo.email}`} className="hover:underline">
+                  {siteInfo.email}
                 </a>
               </li>
             </ul>

@@ -1,3 +1,4 @@
+import useSiteInfo from "@/components/solutions/useSiteInfo";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useRef, useState } from "react";
@@ -32,6 +33,7 @@ function Row({ label, children }) {
 
 // A bank payment: Checkout is done but the money takes a few days to clear.
 function Processing({ email }) {
+  const siteInfo = useSiteInfo();
   return (
     <div className="mt-8 rounded-3xl border border-blue-200 bg-blue-50 p-8 text-center" role="status">
       <h2 className={`font-serif text-3xl font-bold ${NAVY}`}>Thank you! Your bank payment is processing.</h2>
@@ -40,7 +42,7 @@ function Processing({ email }) {
         Then log in{email ? <> with <strong>{email}</strong></> : ""} and the password you chose. You can come back to this page anytime to check.
       </p>
       <p className="mt-4 text-sm text-gray-600">
-        Questions? {SOLUTIONS_INFO.phone} · {SOLUTIONS_INFO.salesEmail}
+        Questions? {siteInfo.phone} · {SOLUTIONS_INFO.salesEmail}
       </p>
     </div>
   );
@@ -64,6 +66,7 @@ function Done({ accountNumber, name, email }) {
 }
 
 export default function SolutionsEnroll() {
+  const siteInfo = useSiteInfo();
   const router = useRouter();
   const token = router.query.token;
   const [quote, setQuote] = useState(null);
@@ -221,7 +224,7 @@ export default function SolutionsEnroll() {
                 </div>
               ) : info.expired ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900">
-                  This quote expired on {day(quote.expiresAt)}. Please contact us at {SOLUTIONS_INFO.phone} or {SOLUTIONS_INFO.salesEmail} for a new one.
+                  This quote expired on {day(quote.expiresAt)}. Please contact us at {siteInfo.phone} or {SOLUTIONS_INFO.salesEmail} for a new one.
                 </div>
               ) : esign && router.query.signing && !signed ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900" role="status">
@@ -397,7 +400,7 @@ export default function SolutionsEnroll() {
                       </>
                     ) : (
                       <p className="mt-3 rounded-2xl bg-amber-50 p-4 text-amber-900">
-                        The Subscriber Agreement isn&apos;t published yet, so online enrollment can&apos;t be finished. Please contact us at {SOLUTIONS_INFO.phone}.
+                        The Subscriber Agreement isn&apos;t published yet, so online enrollment can&apos;t be finished. Please contact us at {siteInfo.phone}.
                       </p>
                     )}
                   </div>
@@ -447,7 +450,7 @@ export default function SolutionsEnroll() {
                       </>
                     ) : (
                       <p className="mt-3 rounded-2xl bg-amber-50 p-4 text-amber-900">
-                        The Subscriber Agreement isn&apos;t published yet, so online enrollment can&apos;t be finished. Please contact us at {SOLUTIONS_INFO.phone}.
+                        The Subscriber Agreement isn&apos;t published yet, so online enrollment can&apos;t be finished. Please contact us at {siteInfo.phone}.
                       </p>
                     )}
                   </div>
@@ -515,7 +518,7 @@ export default function SolutionsEnroll() {
                 </p>
                 <h3 className={`mt-4 font-serif text-lg font-bold ${NAVY}`}>We&apos;re Here to Help</h3>
                 <p className="mt-1 text-sm text-gray-700">
-                  {SOLUTIONS_INFO.phone}
+                  {siteInfo.phone}
                   <br />
                   <a href={`mailto:${SOLUTIONS_INFO.salesEmail}`} className="underline">
                     {SOLUTIONS_INFO.salesEmail}

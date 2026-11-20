@@ -9,9 +9,13 @@ export default async function handler(req, res) {
     return res.status(405).end();
   }
   const device = await deviceFromRequest(prisma, req);
-  if (!device) return res.status(200).json({ enrolled: false });
+  // serverTime: the kiosk clock shows the server's time, which is the time
+  // that gets recorded (client 2026-11-20: they didn't match the device).
+  const serverTime = new Date().toISOString();
+  if (!device) return res.status(200).json({ enrolled: false, serverTime });
   return res.status(200).json({
     enrolled: true,
+    serverTime,
     device: { id: device.id, name: device.name },
     center: device.center,
   });

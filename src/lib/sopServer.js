@@ -176,8 +176,8 @@ const LEAN_SELECT = {
 /**
  * One tab of the Initial Developmental Assessment: the category's steps the
  * page shows, not the whole bank. By default that is each sub category's
- * steps for the child's age (stepsForAge); with `all` or a search, every step
- * in the category (matching the search). Always added: steps the child has a
+ * steps for the child's age (stepsForAge), matching the search when there
+ * is one; with `all` (admins only), every step in the category. Always added: steps the child has a
  * level on, and the steps up to CHAIN_DEPTH links before and after the shown
  * ones, which the page pulls in when a step is marked Not Started or
  * Competency. Returns { category, tabs, steps }.
@@ -203,7 +203,7 @@ export async function loadAssessmentSteps(child, { category, all = false, q = ""
   const touched = (s) => progress.has(s.id);
 
   let start;
-  if (all || search) {
+  if (all) {
     start = lean;
   } else {
     const groups = new Map();

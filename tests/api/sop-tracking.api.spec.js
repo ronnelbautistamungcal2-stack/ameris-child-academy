@@ -78,6 +78,33 @@ test.describe("SOP Tracking @api", () => {
     expect(data.status).toBe("CRITICAL");
   });
 
+  test("the assessment shows only steps for the child's actual age", async ({ request }) => {
+    // Client 2026-11-20: a child of 1 year 9 months sees nothing that ends at
+    // 1 year 8 months or starts at 1 year 10 months. This child is 20 months.
+    const admin = await loginAsAdmin(request);
+    const ranged = async (ref, title, min, max) => {
+      const res = await apiPost(
+        request,
+        "/api/v1/lessons",
+        { centerId, isStep: true, title, reference: ref, subCategory: "Fine Motor - Ranges", ageYears: Math.floor(min / 12), ageMonths: min % 12, maxAgeYears: Math.floor(max / 12), maxAgeMonths: max % 12 },
+        admin,
+      );
+      expect(res.status(), await res.text()).toBe(201);
+    };
+    await ranged("SP-r-early", "Stacks two blocks", 12, 19);
+    await ranged("SP-r-now", "Stacks three blocks", 18, 22);
+    await ranged("SP-r-later", "Stacks five blocks", 21, 30);
+    const url = `/api/v1/sop/${childId}?view=assessment`;
+    const refs = async (q = "") =>
+      (await (await apiGet(request, q ? `${url}&q=${encodeURIComponent(q)}` : url, admin)).json()).steps.map((x) => x.reference).filter((r) => r.startsWith("SP-r-"));
+    expect(await refs()).toEqual(["SP-r-now"]);
+    // A search stays within the child's age too.
+    expect(await refs("Stacks")).toEqual(["SP-r-now"]);
+    // Admins can still see every age.
+    const all = (await (await apiGet(request, `${url}&all=1`, admin)).json()).steps.map((x) => x.reference).filter((r) => r.startsWith("SP-r-"));
+    expect(all.sort()).toEqual(["SP-r-early", "SP-r-later", "SP-r-now"]);
+  });
+
   test("tracking: reaching Competency brings in the next goal; Mastery retires the goal", async ({ request }) => {
     const admin = await loginAsAdmin(request);
     const url = `/api/v1/sop/${childId}`;

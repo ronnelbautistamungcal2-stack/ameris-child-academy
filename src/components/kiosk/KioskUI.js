@@ -9,11 +9,29 @@ import { useEffect, useState } from "react";
 export const NAVY = "text-[#0b2f6b]";
 export const PIN_LENGTH = 6;
 
+// How far the server's clock is ahead of this device's, in ms. Sign-ins are
+// recorded at the server's time, so the kiosk clock shows that time too
+// (client 2026-11-20: the times didn't match the device).
+let clockOffsetMs = 0;
+
+/** Sets the offset from the server time a response carried and when it was asked for. */
+export function syncKioskClock(serverTime, requestedAt, receivedAt = Date.now()) {
+  const server = new Date(serverTime).getTime();
+  if (!Number.isFinite(server)) return;
+  // The server read its clock about halfway through the round trip.
+  clockOffsetMs = server - (requestedAt + receivedAt) / 2;
+}
+
+/** The current time on the server's clock. */
+export function kioskNow() {
+  return new Date(Date.now() + clockOffsetMs);
+}
+
 function useNow() {
   const [now, setNow] = useState(null);
   useEffect(() => {
-    setNow(new Date());
-    const timer = setInterval(() => setNow(new Date()), 1000);
+    setNow(kioskNow());
+    const timer = setInterval(() => setNow(kioskNow()), 1000);
     return () => clearInterval(timer);
   }, []);
   return now;

@@ -9,6 +9,7 @@ import {
   NAVY,
   PIN_LENGTH,
   PinBoxes,
+  syncKioskClock,
 } from "@/components/kiosk/KioskUI";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -54,10 +55,23 @@ export default function KioskPage() {
   const idleTimer = useRef(null);
 
   useEffect(() => {
+    const requestedAt = Date.now();
     fetch("/api/v1/kiosk/device")
       .then((r) => r.json())
-      .then(setDevice)
+      .then((data) => {
+        if (data?.serverTime) syncKioskClock(data.serverTime, requestedAt);
+        setDevice(data);
+      })
       .catch(() => setDevice({ enrolled: false }));
+    // A kiosk stays open all day: check the server's clock again every 15 minutes.
+    const timer = setInterval(() => {
+      const askedAt = Date.now();
+      fetch("/api/v1/kiosk/device")
+        .then((r) => r.json())
+        .then((data) => data?.serverTime && syncKioskClock(data.serverTime, askedAt))
+        .catch(() => {});
+    }, 15 * 60 * 1000);
+    return () => clearInterval(timer);
   }, []);
 
   const resetToStart = useCallback(() => {

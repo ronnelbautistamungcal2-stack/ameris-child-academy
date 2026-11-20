@@ -198,23 +198,27 @@ const stepMaxMonths = (s) =>
  * The steps a sub category group starts with in the Initial Developmental
  * Assessment: those for the child's current age, not the first infant steps
  * (client request 2026-10-29). Steps already assessed (isTouched) stay;
- * earlier or later steps come in through Not Started / Competency. Without an
- * age match it starts at the closest step below the child's age. Shared by
- * the page and the API, which uses it to send only these steps.
+ * earlier or later steps come in through Not Started / Competency. Nothing
+ * outside the child's actual age shows otherwise (client 2026-11-20: a child
+ * of 1 year 9 months sees no step that ends at 1 year 8 months or starts at
+ * 1 year 10 months), so a group with no step for that age starts empty.
+ * A step with only a minimum age covers the child from then until the next
+ * such step starts, so the latest one they have reached shows. Steps with no
+ * age set always show. Shared by the page and the API, which
+ * uses it to send only these steps.
  */
 export function stepsForAge(list, ageMonths, isTouched) {
   if (ageMonths == null) return list;
+  const hasMax = (s) => !(s.maxAgeYears == null && s.maxAgeMonths == null);
   const inRange = list.filter((s) => {
     const min = stepMinMonths(s);
-    const max = stepMaxMonths(s);
-    return min == null || (min <= ageMonths && ageMonths <= (max ?? min));
+    if (min == null) return true;
+    return hasMax(s) && min <= ageMonths && ageMonths <= stepMaxMonths(s);
   });
-  let start = inRange;
-  if (!start.length) {
-    const below = list.filter((s) => stepMinMonths(s) != null && stepMinMonths(s) <= ageMonths).sort((a, b) => stepMinMonths(b) - stepMinMonths(a));
-    start = below.length ? [below[0]] : list.slice(0, 1);
-  }
-  const ids = new Set(start.map((s) => s.id));
+  // Minimum-age-only steps: the latest one the child has reached.
+  const started = list.filter((s) => !hasMax(s) && stepMinMonths(s) != null && stepMinMonths(s) <= ageMonths);
+  const latest = Math.max(-1, ...started.map(stepMinMonths));
+  const ids = new Set([...inRange, ...started.filter((s) => stepMinMonths(s) === latest)].map((s) => s.id));
   return list.filter((s) => ids.has(s.id) || isTouched(s));
 }
 

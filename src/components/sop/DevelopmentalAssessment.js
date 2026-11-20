@@ -143,7 +143,8 @@ export default function DevelopmentalAssessment() {
       map.get(s.subCategory).push(s);
     }
     const entries = [...map.entries()];
-    if (allAges || q) return entries;
+    // A search stays within the child's age too (client 2026-11-20).
+    if (allAges) return entries;
     return entries.map(([sub, list]) => [sub, stepsForAge(list, childMonths, (s) => Boolean(s.level || edits[s.id]))]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [steps, currentTab, search, edits, allAges, childMonths]);

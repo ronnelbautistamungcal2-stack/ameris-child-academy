@@ -8,8 +8,10 @@
 // the teacher's weekly plan show that planner's lessons, live, limited to the
 // curriculum types the account pays for.
 //
-// Centers in the account that owns the source center keep working the old
-// way (their own planner and banks).
+// Every center in the account that owns the source center (Ameris Academy)
+// follows the source center's age-group planners too, with every lesson type
+// (client sheet 10-29 (10), row 8: its other centers only showed their old
+// classroom planner).
 
 import prisma from "@/lib/prisma";
 import { ageRangeNames, findPlan } from "@/lib/curriculumPlans";
@@ -84,22 +86,24 @@ export async function classroomCurriculum(classRoomId, db = prisma) {
   if (!room) return null;
   const source = await curriculumSourceCenter(db);
   const accountId = room.center?.subscriberAccountId || null;
-  if (room.center?.curriculumSource) {
-    // Ameris Academy (the curriculum center) picks an age group for each
-    // classroom on the Lesson Calendar too, like subscribers do (client sheet
-    // 10-29 (9), row 3): any of its own Age Ranges, every lesson type. With
-    // none chosen it follows the plan named after its age range or name, as
-    // before, else the classroom's own planner.
+  const ownsSource = Boolean(room.center?.curriculumSource || (source && accountId && source.subscriberAccountId === accountId));
+  if (ownsSource) {
+    // Ameris Academy picks an age group for each classroom on the Lesson
+    // Calendar too, like subscribers do (client sheet 10-29 (9), row 3): any
+    // of the source center's Age Ranges, every lesson type. This holds for
+    // all of its centers, not only the source one (sheet 10-29 (10), row 8).
+    // With none chosen it follows the plan named after its age range or
+    // name, else the classroom's own planner, as before.
     const ageGroups = await ageGroupOptions(db, source);
     const byName = (name) => ageGroups.find((g) => g.id.toLowerCase() === String(name || "").trim().toLowerCase())?.id;
     const chosen = byName(room.curriculumAgeGroupId);
-    const plan = await findPlan(room.centerId, chosen ? [chosen] : [room.ageRange, room.name], [], db);
+    const plan = await findPlan(source.id, chosen ? [chosen] : [room.ageRange, room.name], [], db);
     const ageGroupId = chosen || (plan ? byName(plan.ageRange) || plan.ageRange : null);
     return {
       mode: "OWN",
       planId: plan?.id || null,
       plannerClassRoomId: plan ? null : room.id,
-      plannerCenterId: room.centerId,
+      plannerCenterId: plan ? source.id : room.centerId,
       types: null,
       chooseAgeGroup: true,
       ageGroups,

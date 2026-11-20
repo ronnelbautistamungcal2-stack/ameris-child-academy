@@ -211,6 +211,39 @@ test.describe("Ameris curriculum for subscribers @api", () => {
     }
   });
 
+  test("Ameris Academy's other centers follow the Ameris age-group planners too", async ({ request }) => {
+    // Client sheet 10-29 (10), row 8: on Ameris Academy only one planner came
+    // over. Its centers other than the curriculum center looked for planners
+    // in their own center, which has none.
+    const other = await prisma.center.findFirst({
+      where: { subscriberAccountId: source.subscriberAccountId, curriculumSource: false, name: "Demo Center 2" },
+    });
+    expect(other, "the dev database needs Demo Center 2 in the curriculum center's account").toBeTruthy();
+    const room = await prisma.classRoom.create({ data: { name: `QA Ameris Other Room ${stamp}`, centerId: other.id } });
+    try {
+      const demo = await getAuthCookie(request, "admin@demo.com", "adminpass");
+      const start = nextWeekday();
+      expect((await apiPut(request, "/api/v1/lesson-calendar", { centerId: other.id, classRoomId: room.id, startDate: start, dayNumber: 1, closedDays: [] }, demo)).status()).toBe(200);
+      const q = new URLSearchParams({ centerId: other.id, classRoomId: room.id, from: start, to: addDays(start, 6) });
+      const before = await (await apiGet(request, `/api/v1/lesson-calendar?${q}`, demo)).json();
+      expect(before.curriculum.chooseAgeGroup).toBe(true);
+      expect(before.curriculum.ageGroups.map((g) => g.id)).toContain(ageGroup);
+      expect((await apiPut(request, "/api/v1/lesson-calendar/age-group", { centerId: other.id, classRoomId: room.id, ageGroupId: ageGroup }, demo)).status()).toBe(200);
+      const cal = await (await apiGet(request, `/api/v1/lesson-calendar?${q}`, demo)).json();
+      expect(cal.curriculum.ageGroupId).toBe(ageGroup);
+      expect(cal.theme).toBe("Seasons");
+      const byDay = Object.fromEntries(Object.values(cal.days).filter((d) => d.day).map((d) => [d.day, d.lessons.map((l) => l.title).sort()]));
+      expect(byDay[1]).toEqual([`Christian lesson ${stamp}`, `ND lesson ${stamp}`].sort());
+      // The teacher's weekly plan reads the same planner.
+      const week = await apiGet(request, `/api/v1/lesson-planner/week?centerId=${other.id}&classRoomId=${room.id}&start=${start}`, demo);
+      expect(week.status(), await week.text()).toBe(200);
+      expect(JSON.stringify(await week.json())).toContain(`ND lesson ${stamp}`);
+    } finally {
+      await prisma.lessonCalendarAnchor.deleteMany({ where: { classRoomId: room.id } });
+      await prisma.classRoom.delete({ where: { id: room.id } }).catch(() => {});
+    }
+  });
+
   test("Global admin edits the Ameris curriculum on Lesson Bank & SOP; Ameris Academy keeps only the calendar", async ({ request }) => {
     // Client sheet 10-29 (9), rows 4/5: the Lesson Planner, Lesson Bank,
     // Categories and Steps of Progression Bank moved under Global admin. The

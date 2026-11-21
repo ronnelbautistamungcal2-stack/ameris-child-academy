@@ -208,6 +208,70 @@ test.describe("Front-desk kiosk @api", () => {
     expect(sheet.rows.map((r) => r.id)).toContain(first.id);
   });
 
+  test("an employee who is an authorized pickup signs the children out with their own PIN", async ({ request }) => {
+    const admin = await loginAsAdmin(request);
+    const last = `Sibling${Date.now()}`;
+    const created = await apiPost(
+      request,
+      "/api/v1/users",
+      { email: `kiosk-sib-${Date.now()}@example.com`, name: `Sam ${last}`, middleInitial: "K", password: "password123", roles: ["TEACHER"], centerId },
+      admin,
+    );
+    expect(created.status()).toBe(201);
+    const user = await created.json();
+    cleanup.users.push(user.id);
+
+    const kids = [];
+    for (const firstName of ["Older", "Younger"]) {
+      const res = await apiPost(request, "/api/v1/children", { firstName, lastName: last, centerId }, admin);
+      expect(res.status()).toBe(201);
+      kids.push(await res.json());
+      cleanup.children.push(kids[kids.length - 1].id);
+    }
+
+    // Set up the old way first: a separate pickup person with the employee's
+    // name on the older sibling (not linked to their account).
+    const old = await json(
+      await apiPost(request, `/api/v1/children/${kids[0].id}/pickup-people`, { firstName: "Sam", middleInitial: "K", lastName: last }, admin),
+    );
+    cleanup.pickups.push(old[0].id);
+    expect(old[0].linkedUser).toBeNull();
+
+    // The search still offers the employee's account next to that record.
+    const found = await (await apiGet(request, `/api/v1/pickup-people?centerId=${centerId}&q=${last}`, admin)).json();
+    const userRow = found.find((r) => r.source === "USER");
+    expect(userRow?.userId).toBe(user.id);
+
+    // Picking the account on the younger sibling links the existing record.
+    const res = await apiPost(request, `/api/v1/children/${kids[1].id}/pickup-people`, { userId: user.id }, admin);
+    expect(res.status()).toBe(200);
+    const linked = await res.json();
+    expect(linked).toHaveLength(1);
+    expect(linked[0].id).toBe(old[0].id);
+    expect(linked[0].linkedUser.id).toBe(user.id);
+
+    // A user outside the center can't be picked.
+    const outsider = await apiPost(request, `/api/v1/children/${kids[1].id}/pickup-people`, { userId: "no-such-user" }, admin);
+    expect(outsider.status()).toBe(400);
+
+    // Their staff PIN now offers the clock and both siblings.
+    const { code } = await json(await apiPost(request, `/api/v1/users/${user.id}/pin-reset`, {}, admin));
+    const { pin } = await registerPin(code);
+    const identity = await json(await kiosk.post("/api/v1/kiosk/identify", { data: { pin } }));
+    expect(identity.employee).not.toBeNull();
+    expect(identity.parent.children.map((c) => c.id).sort()).toEqual(kids.map((k) => k.id).sort());
+
+    const signIn = await kiosk.post("/api/v1/kiosk/children", {
+      data: { token: identity.token, childIds: kids.map((k) => k.id), action: "in" },
+    });
+    expect(signIn.status()).toBe(200);
+    const signOut = await kiosk.post("/api/v1/kiosk/children", {
+      data: { token: identity.token, childIds: kids.map((k) => k.id), action: "out" },
+    });
+    expect(signOut.status()).toBe(200);
+    expect((await signOut.json()).children.every((c) => !c.signedIn)).toBe(true);
+  });
+
   test("wrong PINs lock the device after five tries", async () => {
     // Runs last: it locks this test device, which afterAll then revokes.
     const statuses = [];

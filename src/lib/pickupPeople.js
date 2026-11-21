@@ -3,13 +3,47 @@ import { isChildLinkedToParent, linkedParentAccountsInclude } from "@/lib/child-
 import { pinStatusOf } from "@/lib/kioskPins";
 import { normalizeMiddleInitial } from "@/lib/personNames";
 
-export const PICKUP_PERSON_INCLUDE = { kioskCredential: true };
+export const PICKUP_PERSON_INCLUDE = {
+  kioskCredential: true,
+  user: { select: { id: true, name: true, email: true } },
+};
 
-/** API shape of a pickup person: never the PIN or its hashes. */
+/**
+ * API shape of a pickup person: never the PIN or its hashes. `linkedUser` is
+ * the staff member or parent they are; they sign in with that account's PIN.
+ */
 export function serializePickupPerson(person) {
   if (!person) return person;
-  const { kioskCredential, ...rest } = person;
-  return { ...rest, pinStatus: pinStatusOf(kioskCredential) };
+  const { kioskCredential, user, ...rest } = person;
+  return {
+    ...rest,
+    linkedUser: user ? { id: user.id, name: user.name, email: user.email } : null,
+    pinStatus: pinStatusOf(kioskCredential),
+  };
+}
+
+/** Users who can be picked as a pickup person at a center: its staff and its children's parents. */
+export function pickupUserScope(centerId) {
+  return {
+    OR: [
+      { centers: { some: { centerId } } },
+      { children: { some: { centerId } } },
+      { guardianships: { some: { child: { centerId } } } },
+    ],
+  };
+}
+
+/** First name, middle initial and last name from a user's full name. */
+export function splitUserName(user) {
+  const parts = String(user?.name || "").trim().split(/\s+/).filter(Boolean);
+  const firstName = parts[0] || "";
+  const lastName = parts.length > 1 ? parts[parts.length - 1] : "";
+  const fromName = parts.length > 2 && /^[A-Za-z]\.?$/.test(parts[1]) ? parts[1].replace(".", "") : "";
+  return {
+    firstName: firstName.slice(0, 100),
+    middleInitial: normalizeMiddleInitial(user?.middleInitial || fromName) || null,
+    lastName: lastName.slice(0, 100),
+  };
 }
 
 /** Validates the name fields of a new or edited pickup person. */

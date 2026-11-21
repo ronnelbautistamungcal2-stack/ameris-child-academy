@@ -94,10 +94,16 @@ export async function classroomCurriculum(classRoomId, db = prisma) {
     // all of its centers, not only the source one (sheet 10-29 (10), row 8).
     // With none chosen it follows the plan named after its age range or
     // name, else the classroom's own planner, as before.
+    // Which type's plan: the owning account's Curriculum Types, in order
+    // (Ameris Academy = Other, client 2026-11-21), else "All types", else any.
     const ageGroups = await ageGroupOptions(db, source);
     const byName = (name) => ageGroups.find((g) => g.id.toLowerCase() === String(name || "").trim().toLowerCase())?.id;
     const chosen = byName(room.curriculumAgeGroupId);
-    const plan = await findPlan(source.id, chosen ? [chosen] : [room.ageRange, room.name], [], db);
+    const ownerAccountId = source?.subscriberAccountId || accountId;
+    const owner = ownerAccountId
+      ? await db.subscriberAccount.findUnique({ where: { id: ownerAccountId }, select: { curriculumTypes: true } })
+      : null;
+    const plan = await findPlan(source.id, chosen ? [chosen] : [room.ageRange, room.name], owner?.curriculumTypes || [], db);
     const ageGroupId = chosen || (plan ? byName(plan.ageRange) || plan.ageRange : null);
     return {
       mode: "OWN",

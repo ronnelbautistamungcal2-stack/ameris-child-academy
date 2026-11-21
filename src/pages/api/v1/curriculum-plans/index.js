@@ -1,4 +1,4 @@
-import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { accessibleCenterIds, getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { hasAnyRole } from "@/lib/roles";
 import { ageRangeNames, normalizePlanType, planTypes } from "@/lib/curriculumPlans";
@@ -22,19 +22,33 @@ export default async function handler(req, res) {
     }
 
     if (req.method === "GET") {
-      const [ageRanges, curriculumTypes, plans] = await Promise.all([
+      const centerIds = await accessibleCenterIds(session.user.id);
+      const [ageRanges, curriculumTypes, plans, rooms] = await Promise.all([
         ageRangeNames(centerId),
         loadCurriculumTypes(),
         prisma.curriculumPlan.findMany({
           where: { centerId },
-          select: { id: true, ageRange: true, type: true, _count: { select: { cells: true } } },
+          select: { id: true, ageRange: true, type: true, dayCount: true, _count: { select: { cells: true } } },
           orderBy: [{ ageRange: "asc" }, { type: "asc" }],
         }),
+        // The classrooms (in centers this person can see) that follow each age group.
+        prisma.classRoom.findMany({
+          where: { curriculumAgeGroupId: { not: null }, ...(centerIds ? { centerId: { in: centerIds } } : {}) },
+          select: { name: true, curriculumAgeGroupId: true, center: { select: { name: true } } },
+          orderBy: [{ name: "asc" }],
+        }),
       ]);
+      const multiCenter = new Set(rooms.map((r) => r.center?.name)).size > 1;
+      const followers = {};
+      for (const r of rooms) {
+        const key = r.curriculumAgeGroupId.trim().toLowerCase();
+        (followers[key] ||= []).push(multiCenter ? `${r.name} (${r.center?.name})` : r.name);
+      }
       return res.status(200).json({
         ageRanges,
         types: planTypes(curriculumTypes),
-        plans: plans.map((p) => ({ id: p.id, ageRange: p.ageRange, type: p.type, lessons: p._count.cells })),
+        plans: plans.map((p) => ({ id: p.id, ageRange: p.ageRange, type: p.type, dayCount: p.dayCount, lessons: p._count.cells })),
+        followers,
       });
     }
 

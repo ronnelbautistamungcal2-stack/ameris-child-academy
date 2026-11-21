@@ -8,7 +8,7 @@ const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const { getAuthCookie } = require("../helpers/auth");
-const { apiGet, apiPatch, apiPost, apiPut } = require("../helpers/api");
+const { apiDelete, apiGet, apiPatch, apiPost, apiPut } = require("../helpers/api");
 
 const prisma = new PrismaClient();
 const stamp = Date.now();
@@ -293,6 +293,63 @@ test.describe("Ameris curriculum for subscribers @api", () => {
     expect(Object.values(day1.cells).map((c) => c.title).sort()).toEqual([`ND lesson ${stamp}`, "Changed by Ameris"].sort());
     // The teacher can open the lesson (view-only details).
     expect((await apiGet(request, `/api/v1/lessons/${ids.nd}`, teacher)).status()).toBe(200);
+  });
+
+  test("Ameris Academy follows its own account's type, and an empty planner never hides a filled one", async ({ request }) => {
+    // Client 2026-11-21: Ameris Academy's 2 Year Olds calendar was blank. The
+    // lessons were in typed plans; opening the planner had made an empty
+    // "All types" plan, which the calendar picked. Ameris Academy = Other.
+    const group = `Typed Group ${stamp}`;
+    await prisma.curriculumOption.create({ data: { centerId: source.id, kind: "AGE_RANGE", name: group } });
+    const owner = await prisma.subscriberAccount.findUnique({ where: { id: source.subscriberAccountId } });
+    const room = await prisma.classRoom.create({ data: { name: `QA Typed Room ${stamp}`, centerId: source.id, curriculumAgeGroupId: group } });
+    const makePlan = async (type, title) => {
+      const plan = await prisma.curriculumPlan.create({ data: { centerId: source.id, ageRange: group, type, dayCount: 1 } });
+      if (title) await prisma.lessonPlanCell.create({ data: { centerId: source.id, planId: plan.id, day: 1, rowIndex: 0, title } });
+      return plan;
+    };
+    try {
+      const empty = await makePlan(""); // what opening the planner used to create
+      await makePlan("NON_DENOMINATIONAL_CHRISTIAN", "Christian day one");
+      await makePlan("OTHER", "Other day one");
+
+      const demo = await getAuthCookie(request, "admin@demo.com", "adminpass");
+      const start = nextWeekday();
+      expect((await apiPut(request, "/api/v1/lesson-calendar", { centerId: source.id, classRoomId: room.id, startDate: start, dayNumber: 1, closedDays: [] }, demo)).status()).toBe(200);
+      const q = new URLSearchParams({ centerId: source.id, classRoomId: room.id, from: start, to: start });
+      const day1 = async () => Object.values((await (await apiGet(request, `/api/v1/lesson-calendar?${q}`, demo)).json()).days).find((d) => d.day === 1);
+
+      // Every type on the account: the first type with lessons, not the empty "All types".
+      await prisma.subscriberAccount.update({ where: { id: owner.id }, data: { curriculumTypes: ["NON_DENOMINATIONAL", "NON_DENOMINATIONAL_CHRISTIAN", "OTHER"] } });
+      expect((await day1()).lessons.map((l) => l.title)).toEqual(["Christian day one"]);
+      // Only Other on the account: the Other planner.
+      await prisma.subscriberAccount.update({ where: { id: owner.id }, data: { curriculumTypes: ["OTHER"] } });
+      expect((await day1()).lessons.map((l) => l.title)).toEqual(["Other day one"]);
+
+      // The Planners list shows each planner, its lessons and who follows it.
+      const list = await (await apiGet(request, `/api/v1/curriculum-plans?centerId=${source.id}`, demo)).json();
+      const mine = list.plans.filter((p) => p.ageRange === group);
+      expect(mine.map((p) => [p.type, p.lessons, p.dayCount])).toEqual([
+        ["", 0, 1],
+        ["NON_DENOMINATIONAL_CHRISTIAN", 1, 1],
+        ["OTHER", 1, 1],
+      ]);
+      expect(list.followers[group.toLowerCase()].join(" ")).toContain(`QA Typed Room ${stamp}`);
+
+      // Only an empty planner can be deleted.
+      const filled = mine.find((p) => p.type === "OTHER");
+      expect((await apiDelete(request, `/api/v1/curriculum-plans/${filled.id}?centerId=${source.id}`, demo)).status()).toBe(409);
+      const teacher = await getAuthCookie(request, teacherEmail, password);
+      expect((await apiDelete(request, `/api/v1/curriculum-plans/${empty.id}?centerId=${source.id}`, teacher)).status()).toBe(403);
+      expect((await apiDelete(request, `/api/v1/curriculum-plans/${empty.id}?centerId=${source.id}`, demo)).status()).toBe(200);
+      expect(await prisma.curriculumPlan.findUnique({ where: { id: empty.id } })).toBeNull();
+    } finally {
+      await prisma.subscriberAccount.update({ where: { id: owner.id }, data: { curriculumTypes: owner.curriculumTypes } });
+      await prisma.lessonCalendarAnchor.deleteMany({ where: { classRoomId: room.id } });
+      await prisma.classRoom.delete({ where: { id: room.id } }).catch(() => {});
+      await prisma.curriculumPlan.deleteMany({ where: { centerId: source.id, ageRange: group } });
+      await prisma.curriculumOption.deleteMany({ where: { centerId: source.id, kind: "AGE_RANGE", name: group } });
+    }
   });
 
   test("Ameris plans per age group and type; a Standard subscriber follows the Standard plan", async ({ request }) => {

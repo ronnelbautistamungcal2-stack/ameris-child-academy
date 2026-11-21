@@ -70,6 +70,82 @@ function PlanPicker({ picker, choices, ageRange, onAgeRange, planType, onPlanTyp
     </div>
   );
 }
+function typeLabel(types, value) {
+  return (types || []).find((t) => t.value === value)?.label || (value ? value : "All types");
+}
+
+/**
+ * Every planner saved for this center, with how much is filled in and which
+ * classrooms follow its age group (client 2026-11-21). Open switches the
+ * planner above to it; an empty planner can be deleted.
+ */
+function PlannersList({ choices, current, busy, onOpen, onDelete }) {
+  const plans = choices.plans || [];
+  const followers = choices.followers || {};
+  return (
+    <section className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+      <h2 className={`text-xl font-black ${NAVY}`}>Planners</h2>
+      <p className="mt-1 text-xs text-gray-500">
+        Each age group and type has its own planner. Classrooms choose their age group on the Lesson Calendar (Follows Age Group); changing it there
+        only switches which planner they read, nothing is copied.
+      </p>
+      {plans.length === 0 ? (
+        <p className="mt-3 text-sm text-gray-500">No planners yet.</p>
+      ) : (
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-gray-200 text-xs uppercase text-gray-500 dark:border-gray-700">
+                <th className="py-2 pr-3">Age Group</th>
+                <th className="py-2 pr-3">Type</th>
+                <th className="py-2 pr-3">Days</th>
+                <th className="py-2 pr-3">Lessons</th>
+                <th className="py-2 pr-3">Followed by</th>
+                <th className="py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {plans.map((plan) => {
+                const rooms = followers[plan.ageRange.toLowerCase()] || [];
+                const empty = !plan.lessons;
+                return (
+                  <tr key={plan.id} className={`border-b border-gray-100 dark:border-gray-800 ${plan.id === current ? "bg-blue-50 dark:bg-gray-800" : ""}`}>
+                    <td className={`py-2 pr-3 font-semibold ${NAVY}`}>{plan.ageRange}</td>
+                    <td className="py-2 pr-3">{typeLabel(choices.types, plan.type)}</td>
+                    <td className="py-2 pr-3">{plan.dayCount ?? "—"}</td>
+                    <td className="py-2 pr-3">{empty ? <span className="text-amber-700 dark:text-amber-300">Empty</span> : plan.lessons}</td>
+                    <td className="py-2 pr-3 text-xs text-gray-600 dark:text-gray-300">{rooms.length ? rooms.join(", ") : "—"}</td>
+                    <td className="whitespace-nowrap py-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => onOpen(plan)}
+                        disabled={plan.id === current}
+                        className="rounded-lg border border-gray-300 px-3 py-1 text-xs font-semibold text-[#0b2a5b] hover:bg-gray-50 disabled:opacity-40 dark:border-gray-600 dark:text-blue-100"
+                      >
+                        {plan.id === current ? "Open" : "Edit"}
+                      </button>
+                      {empty ? (
+                        <button
+                          type="button"
+                          onClick={() => onDelete(plan)}
+                          disabled={busy}
+                          className="ml-2 rounded-lg border border-red-200 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-40"
+                        >
+                          Delete
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 const input =
   "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100";
 
@@ -134,6 +210,7 @@ export default function LessonPlannerPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [deleteDay, setDeleteDay] = useState(null);
+  const [deletePlanTarget, setDeletePlanTarget] = useState(null);
   const [deleteRow, setDeleteRow] = useState(null);
   const [typing, setTyping] = useState(null); // { day, rowIndex, text }
   const [editingRow, setEditingRow] = useState(null); // { rowIndex, text }
@@ -160,9 +237,17 @@ export default function LessonPlannerPage() {
     }
   }, [centerId, planId]);
 
+  // The Planners list's lesson counts, refreshed after a planner opens.
+  const refreshPlans = useCallback(() => {
+    if (!centerId) return;
+    apiJson(`/api/v1/curriculum-plans?centerId=${encodeURIComponent(centerId)}`)
+      .then((data) => setPlanChoices((c) => ({ ...c, plans: data.plans, followers: data.followers })))
+      .catch(() => {});
+  }, [centerId]);
+
   useEffect(() => {
-    load();
-  }, [load]);
+    load().then(refreshPlans);
+  }, [load, refreshPlans]);
 
   useEffect(() => {
     if (!centerId) return;
@@ -194,14 +279,46 @@ export default function LessonPlannerPage() {
       setPlanId(existing.id);
       return;
     }
-    // A new age group + type pair starts an empty plan.
-    apiJson("/api/v1/curriculum-plans", { method: "POST", body: JSON.stringify({ centerId, ageRange, type: planType }) })
-      .then((p) => {
-        setPlanChoices((c) => ({ ...c, plans: [...c.plans, { id: p.id, ageRange: p.ageRange, type: p.type, lessons: 0 }] }));
-        setPlanId(p.id);
-      })
-      .catch((e) => setError(e.message || "Could not open this plan"));
+    // No planner for this age group + type yet: the page offers "Create this
+    // planner" instead of making an empty one just by being opened (empty
+    // "All types" plans hid the real ones on the Lesson Calendar, 2026-11-21).
+    setRows([]);
+    setPlanner({ theme: "", dayCount: 0, cells: [], usedLessonIds: [] });
+    setThemeDraft("");
   }, [centerId, ageRange, planType, planChoices.plans]);
+
+  function createPlan() {
+    setBusy(true);
+    setError("");
+    apiJson("/api/v1/curriculum-plans", { method: "POST", body: JSON.stringify({ centerId, ageRange, type: planType }) })
+      .then((p) =>
+        setPlanChoices((c) => ({
+          ...c,
+          plans: [...c.plans, { id: p.id, ageRange: p.ageRange, type: p.type, dayCount: p.dayCount, lessons: 0, daysWithLessons: 0 }],
+        })),
+      )
+      .catch((e) => setError(e.message || "Could not create this planner"))
+      .finally(() => setBusy(false));
+  }
+
+  function openPlan(plan) {
+    setAgeRange(plan.ageRange);
+    setPlanType(plan.type);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function deletePlan(plan) {
+    setBusy(true);
+    setError("");
+    try {
+      await apiJson(`/api/v1/curriculum-plans/${encodeURIComponent(plan.id)}?centerId=${encodeURIComponent(centerId)}`, { method: "DELETE" });
+      setPlanChoices((c) => ({ ...c, plans: c.plans.filter((p) => p.id !== plan.id) }));
+    } catch (e) {
+      setError(e.message || "Could not delete this planner");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
     if (!centerId) return;
@@ -367,6 +484,23 @@ export default function LessonPlannerPage() {
               </div>
             </div>
 
+            {!planId && ageRange ? (
+              <div className="mt-4 rounded-xl border border-dashed border-gray-300 p-6 text-center dark:border-gray-600">
+                <p className={`text-sm font-semibold ${NAVY}`}>
+                  There is no planner for {ageRange} – {typeLabel(planChoices.types, planType)} yet.
+                </p>
+                <button
+                  type="button"
+                  onClick={createPlan}
+                  disabled={busy}
+                  className="mt-3 rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800 disabled:opacity-50"
+                >
+                  Create this planner
+                </button>
+              </div>
+            ) : null}
+            {planId ? (
+            <>
             <div className="mt-4 overflow-x-auto" ref={gridRef}>
               <table className={`w-full table-fixed border-collapse text-xs ${loading || busy ? "opacity-70" : ""}`}>
                 <thead>
@@ -540,9 +674,37 @@ export default function LessonPlannerPage() {
             <p className="mt-2 text-xs text-gray-500">
               Drag lessons from the Lesson Bank into a day, or click + to type one. Drag a lesson to move it. Click a category to rename it.
             </p>
+            </>
+            ) : null}
           </section>
         </div>
+
+        <PlannersList
+          choices={planChoices}
+          current={planId}
+          busy={busy}
+          onOpen={openPlan}
+          onDelete={(plan) => setDeletePlanTarget(plan)}
+        />
       </div>
+
+      <ConfirmDialog
+        open={Boolean(deletePlanTarget)}
+        title="Delete this planner?"
+        message={
+          deletePlanTarget
+            ? `The planner "${deletePlanTarget.ageRange} – ${typeLabel(planChoices.types, deletePlanTarget.type)}" has no lessons. Deleting it can't be undone.`
+            : ""
+        }
+        confirmLabel="Delete Planner"
+        variant="danger"
+        onConfirm={() => {
+          const plan = deletePlanTarget;
+          setDeletePlanTarget(null);
+          deletePlan(plan);
+        }}
+        onCancel={() => setDeletePlanTarget(null)}
+      />
 
       <ConfirmDialog
         open={deleteDay !== null}

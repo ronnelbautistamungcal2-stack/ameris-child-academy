@@ -28,20 +28,31 @@ export async function ageRangeNames(centerId, db = prisma) {
 /**
  * The plan a classroom or age group follows: for each name in `ageRanges`
  * (first match wins), the plan of one of `types` (in order), else the
- * "All types" plan. Null when there is none.
+ * "All types" plan; with no `types`, any plan. A plan with lessons wins over
+ * an empty one, so an empty "All types" plan (opening the planner used to
+ * create one) never hides the filled typed plans (client 2026-11-21). Null
+ * when there is none.
  */
 export async function findPlan(centerId, ageRanges, types = [], db = prisma) {
   const names = [...new Set((ageRanges || []).map((n) => String(n || "").trim()).filter(Boolean))];
   if (!centerId || !names.length) return null;
-  const plans = await db.curriculumPlan.findMany({ where: { centerId, ageRange: { in: names, mode: "insensitive" } } });
+  const plans = await db.curriculumPlan.findMany({
+    where: { centerId, ageRange: { in: names, mode: "insensitive" } },
+    include: { _count: { select: { cells: true } } },
+    orderBy: [{ type: "asc" }, { createdAt: "asc" }],
+  });
+  const strip = (p) => {
+    if (!p) return null;
+    const { _count, ...plan } = p;
+    return plan;
+  };
   for (const name of names) {
     const forName = plans.filter((p) => p.ageRange.toLowerCase() === name.toLowerCase());
     if (!forName.length) continue;
-    for (const type of types || []) {
-      const hit = forName.find((p) => p.type === type);
-      if (hit) return hit;
-    }
-    return forName.find((p) => p.type === "") || (types?.length ? null : forName[0]);
+    const order = [...new Set([...(types || []), ""])];
+    const candidates = order.map((type) => forName.find((p) => p.type === type)).filter(Boolean);
+    if (!types?.length) candidates.push(...forName.filter((p) => !candidates.includes(p)));
+    return strip(candidates.find((p) => p._count.cells > 0) || candidates[0] || null);
   }
   return null;
 }

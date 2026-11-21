@@ -1,6 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { PICKUP_PERSON_INCLUDE, serializePickupPerson } from "@/lib/pickupPeople";
+import { PICKUP_PERSON_INCLUDE, pickupUserScope, serializePickupPerson, splitUserName } from "@/lib/pickupPeople";
 
 // "Search for Existing Person" on the Authorized Pickup tab.
 export default async function handler(req, res) {
@@ -37,11 +37,7 @@ export default async function handler(req, res) {
   const users = terms.length
     ? await prisma.user.findMany({
         where: {
-          OR: [
-            { centers: { some: { centerId } } },
-            { children: { some: { centerId } } },
-            { guardianships: { some: { child: { centerId } } } },
-          ],
+          ...pickupUserScope(centerId),
           AND: terms.map((term) => ({
             OR: [{ name: { contains: term, mode: "insensitive" } }, { email: { contains: term, mode: "insensitive" } }],
           })),
@@ -51,15 +47,11 @@ export default async function handler(req, res) {
         take: 20,
       })
     : [];
-  const listed = new Set(people.map((p) => `${p.firstName} ${p.lastName}`.toLowerCase()));
+  // A user already linked to one of the pickup people above shows only once.
+  const linked = new Set(people.map((p) => p.userId).filter(Boolean));
   const userRows = users
-    .map((u) => {
-      const parts = String(u.name || "").trim().split(/\s+/).filter(Boolean);
-      const firstName = parts[0] || "";
-      const lastName = parts.length > 1 ? parts[parts.length - 1] : "";
-      const fromName = parts.length > 2 && /^[A-Za-z]\.?$/.test(parts[1]) ? parts[1].replace(".", "") : "";
-      return { id: `user:${u.id}`, source: "USER", firstName, lastName, middleInitial: u.middleInitial || fromName || "", phone: null, email: u.email };
-    })
-    .filter((u) => u.firstName && u.lastName && !listed.has(`${u.firstName} ${u.lastName}`.toLowerCase()));
+    .filter((u) => !linked.has(u.id))
+    .map((u) => ({ id: `user:${u.id}`, userId: u.id, source: "USER", ...splitUserName(u), phone: null, email: u.email }))
+    .filter((u) => u.firstName && u.lastName);
   return res.status(200).json([...people.map(serializePickupPerson), ...userRows]);
 }

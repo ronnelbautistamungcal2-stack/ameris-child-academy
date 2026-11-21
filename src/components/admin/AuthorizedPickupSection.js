@@ -11,7 +11,8 @@ function blockEnter(e) {
   if (e.key === "Enter") e.preventDefault();
 }
 
-function pinSummary(status) {
+function pinSummary(status, person) {
+  if (person?.linkedUser) return "Uses their own account's kiosk PIN";
   if (status?.registrationPending) return "Registration number issued";
   if (status?.hasPin) return "PIN set";
   return "No PIN yet";
@@ -77,24 +78,15 @@ export default function AuthorizedPickupSection({ childId, centerId, otherChildr
       return data;
     });
 
-  // Someone already in the system (a staff member or parent): added as a
-  // pickup person; without a middle initial their name fills the form below.
-  const addUser = (user) => {
-    if (!user.middleInitial) {
-      setNewPerson({ firstName: user.firstName, middleInitial: "", lastName: user.lastName, phone: "" });
-      setError("Add their middle initial below, then Add Person.");
-      return;
-    }
+  // Someone already in the system (a staff member or parent): linked to their
+  // account, so their own kiosk PIN signs this child in and out.
+  const addUser = (user) =>
     run(async () => {
-      const data = await apiJson(listUrl, {
-        method: "POST",
-        body: JSON.stringify({ firstName: user.firstName, middleInitial: user.middleInitial, lastName: user.lastName }),
-      });
+      const data = await apiJson(listUrl, { method: "POST", body: JSON.stringify({ userId: user.userId }) });
       setQuery("");
       setResults([]);
       return data;
     });
-  };
 
   const addNew = () =>
     run(async () => {
@@ -122,7 +114,7 @@ export default function AuthorizedPickupSection({ childId, centerId, otherChildr
       return apiJson(listUrl);
     });
 
-  const listedIds = new Set(people.map((p) => p.id));
+  const listedIds = new Set(people.flatMap((p) => [p.id, p.linkedUser ? `user:${p.linkedUser.id}` : null]).filter(Boolean));
   const canAddNew = newPerson.firstName.trim() && newPerson.middleInitial.trim() && newPerson.lastName.trim();
 
   return (
@@ -224,11 +216,14 @@ export default function AuthorizedPickupSection({ childId, centerId, otherChildr
                 <span style={{ flex: 1, fontWeight: 600 }}>
                   {pickupPersonName(person)}
                   {person.phone ? <span style={mutedStyle}> · {person.phone}</span> : null}
+                  {person.linkedUser ? <span style={mutedStyle}> · {person.linkedUser.email} (user)</span> : null}
                 </span>
-                <span style={mutedStyle}>{pinSummary(person.pinStatus)}</span>
-                <button type="button" style={smallButton} disabled={busy} onClick={() => resetPin(person)}>
-                  Reset PIN
-                </button>
+                <span style={mutedStyle}>{pinSummary(person.pinStatus, person)}</span>
+                {person.linkedUser ? null : (
+                  <button type="button" style={smallButton} disabled={busy} onClick={() => resetPin(person)}>
+                    Reset PIN
+                  </button>
+                )}
                 <button type="button" style={dangerButton} disabled={busy} onClick={() => remove(person)} title="Remove">
                   Remove
                 </button>

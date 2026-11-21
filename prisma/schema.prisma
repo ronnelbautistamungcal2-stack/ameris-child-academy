@@ -228,7 +228,8 @@ model User {
   employmentStatusEntries            EmploymentStatusEntry[]
   timeSheetSignatures                TimeSheetSignature[]
   kioskCredential                    KioskCredential?
-  directedCenters                    Center[]                            @relation("CenterDirector")
+  pickupPersonLinks                  PickupPerson[]                      @relation("PickupPersonUser")
+  directedCenters                   Center[]                            @relation("CenterDirector")
   pictureUrl                         String?
   role                               Role                                @default(PARENT)
   roles                              Role[]                              @default([])
@@ -2768,12 +2769,17 @@ model PickupPerson {
   middleInitial   String?
   lastName        String
   phone           String?
+  // A staff member or parent who is also an authorized pickup: they sign the
+  // children in and out at the kiosk with their own PIN.
+  user            User?               @relation("PickupPersonUser", fields: [userId], references: [id], onDelete: SetNull)
+  userId          String?
   children        ChildPickupPerson[]
   kioskCredential KioskCredential?
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
   @@index([centerId, lastName])
+  @@index([userId])
 }
 
 model ChildPickupPerson {

@@ -157,7 +157,14 @@ function ageLabel(birthDate) {
 export async function childrenFor(prisma, credential, centerId) {
   let where;
   if (credential.user) {
-    where = buildParentLinkedChildWhere(credential.user.id, { centerId });
+    // Their own children, plus children they are an authorized pickup for
+    // (e.g. an employee picking up siblings).
+    where = {
+      OR: [
+        buildParentLinkedChildWhere(credential.user.id, { centerId }),
+        { centerId, pickupPeople: { some: { pickupPerson: { userId: credential.user.id } } } },
+      ],
+    };
   } else {
     where = { centerId, pickupPeople: { some: { pickupPersonId: credential.pickupPerson.id } } };
   }

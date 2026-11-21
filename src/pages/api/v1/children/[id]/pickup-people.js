@@ -4,7 +4,9 @@ import {
   loadChildPickupAccess,
   parsePickupPersonInput,
   PICKUP_PERSON_INCLUDE,
+  pickupUserScope,
   serializePickupPerson,
+  splitUserName,
 } from "@/lib/pickupPeople";
 
 // A child's authorized pickup list (Edit Child > Authorized Pickup tab).
@@ -32,7 +34,43 @@ export default async function handler(req, res) {
   if (!access.canManage) return res.status(403).json({ error: "Only admins can change authorized pickups" });
 
   if (req.method === "POST") {
-    const { pickupPersonId, copyFromChildId } = req.body || {};
+    const { pickupPersonId, copyFromChildId, userId } = req.body || {};
+
+    if (userId) {
+      // A staff member or parent already in the system: they use their own
+      // kiosk PIN. Reuses the pickup person already linked to them, or one
+      // with the same name that isn't linked to anyone yet (so the children
+      // that person is already on, e.g. siblings, come along).
+      const user = await prisma.user.findFirst({
+        where: { id: String(userId), ...pickupUserScope(child.centerId) },
+        select: { id: true, name: true, middleInitial: true },
+      });
+      if (!user) return res.status(400).json({ error: "Choose a staff member or parent at this child's center" });
+      const names = splitUserName(user);
+      if (!names.firstName || !names.lastName) {
+        return res.status(400).json({ error: "This person's account needs a first and last name first" });
+      }
+      const person =
+        (await prisma.pickupPerson.findFirst({ where: { centerId: child.centerId, userId: user.id }, orderBy: { createdAt: "asc" } })) ||
+        (await prisma.pickupPerson.findFirst({
+          where: {
+            centerId: child.centerId,
+            userId: null,
+            firstName: { equals: names.firstName, mode: "insensitive" },
+            lastName: { equals: names.lastName, mode: "insensitive" },
+          },
+          orderBy: { createdAt: "asc" },
+        }));
+      const linked = person
+        ? await prisma.pickupPerson.update({ where: { id: person.id }, data: { userId: user.id } })
+        : await prisma.pickupPerson.create({ data: { ...names, centerId: child.centerId, userId: user.id } });
+      await prisma.childPickupPerson.upsert({
+        where: { childId_pickupPersonId: { childId: child.id, pickupPersonId: linked.id } },
+        update: {},
+        create: { childId: child.id, pickupPersonId: linked.id },
+      });
+      return res.status(200).json(await listForChild(child.id));
+    }
 
     if (copyFromChildId) {
       // "Copy from another child", e.g. siblings with the same pickup people.

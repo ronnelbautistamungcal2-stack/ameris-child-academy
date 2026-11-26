@@ -127,6 +127,21 @@ test.describe("Student profile and Edit Child tabs (Phase 7b) @api", () => {
     expect(after.family.parents[0].phone).toBe("(555) 000-1111");
     expect(after.emergency.contacts[0].name).toBe("Grandma Linda");
     expect(after.about).toMatchObject({ strengths: "Kind, helpful", languages: "English" });
+
+    // Schedule, Health & Safety and Care Plan too (client sheet 10-29 (11), row 19).
+    const weekday = { attends: true, dropOff: "07:30", pickUp: "15:30" };
+    const tabs = await apiPut(request, `/api/v1/children/${childId}/family`, {
+      schedule: { MONDAY: weekday, TUESDAY: weekday },
+      healthInfo: { allergies: ["Strawberries"], conditions: [], pediatrician: { name: "Dr. Kay", phone: "(555) 222-3333" } },
+      carePlan: { comfortItems: "Blue blanket" },
+    }, parentCookies);
+    expect(tabs.status(), await tabs.text()).toBe(200);
+    const row = await prisma.child.findUnique({ where: { id: childId } });
+    expect(row.schedule.MONDAY).toMatchObject({ attends: true, dropOff: "07:30" });
+    expect(row.healthInfo.allergies).toEqual(["Strawberries"]);
+    expect(row.allergies).toBe("Strawberries");
+    expect(row.allergiesUpdatedAt).toBeTruthy();
+    expect(row.carePlan.comfortItems).toBe("Blue blanket");
   });
 
   test("a child already linked to a staff account can still be saved", async ({ request }) => {

@@ -8,6 +8,8 @@
 // Character Highlight tree:
 //   { intro, question: { title, prompt },
 //     branches: [{ id, title, prompt, praisePrompt, rewards: [string] }] }
+// Every branch has its own level (1-4) and a tree can list the ages it is for
+// (tree.ages; none = every age), client sheet 10-29 (11), rows 30/31.
 
 export const COURSE_CORRECTION = "COURSE_CORRECTION";
 export const CHARACTER_HIGHLIGHT = "CHARACTER_HIGHLIGHT";
@@ -65,10 +67,29 @@ export function emptyTree(type, name = "") {
 }
 
 const str = (v, max = 500) => String(v ?? "").trim().slice(0, max);
+const branchLevel = (v, fallback) => (BEHAVIOR_LEVELS.includes(Number(v)) ? Number(v) : fallback);
+
+/** The ages a behavior is for ([] = every age). */
+export function behaviorAges(behavior) {
+  return Array.isArray(behavior?.tree?.ages) ? behavior.tree.ages : [];
+}
+
+/** True when the behavior is for one of these ages (case-insensitive), or for every age. */
+export function behaviorFitsAges(behavior, ages) {
+  const own = behaviorAges(behavior).map((a) => a.toLowerCase());
+  const wanted = (ages || []).map((a) => String(a || "").trim().toLowerCase()).filter(Boolean);
+  if (!own.length || !wanted.length) return true;
+  return wanted.some((a) => own.includes(a));
+}
+
+/** A branch's level, falling back to the behavior's (trees saved before levels moved to branches). */
+export function levelOfBranch(behavior, branch) {
+  return branchLevel(branch?.level, behavior?.level || 1);
+}
 const list = (v, max = 300) => (Array.isArray(v) ? v.map((s) => str(s, max)).filter(Boolean) : []);
 
 /** Cleans a tree from the editor; drops empty boxes. */
-export function normalizeTree(type, tree = {}) {
+export function normalizeTree(type, tree = {}, defaultLevel = 1) {
   const ids = new Set();
   const id = (value, prefix) => {
     let next = str(value, 40) || newId(prefix);
@@ -79,13 +100,14 @@ export function normalizeTree(type, tree = {}) {
   const base = {
     intro: str(tree.intro),
     question: { title: str(tree.question?.title, 200), prompt: str(tree.question?.prompt) },
+    ages: [...new Set(list(tree.ages, 60))].slice(0, 30),
   };
   const branches = (Array.isArray(tree.branches) ? tree.branches : []).slice(0, 12);
   if (type === CHARACTER_HIGHLIGHT) {
     return {
       ...base,
       branches: branches
-        .map((b) => ({ id: id(b.id, "b"), title: str(b.title, 120), prompt: str(b.prompt), praisePrompt: str(b.praisePrompt), rewards: list(b.rewards, 120).slice(0, 20) }))
+        .map((b) => ({ id: id(b.id, "b"), title: str(b.title, 120), level: branchLevel(b.level, defaultLevel), prompt: str(b.prompt), praisePrompt: str(b.praisePrompt), rewards: list(b.rewards, 120).slice(0, 20) }))
         .filter((b) => b.title),
     };
   }
@@ -95,6 +117,7 @@ export function normalizeTree(type, tree = {}) {
       .map((b) => ({
         id: id(b.id, "b"),
         title: str(b.title, 120),
+        level: branchLevel(b.level, defaultLevel),
         prompt: str(b.prompt),
         offenses: (Array.isArray(b.offenses) ? b.offenses : [])
           .slice(0, 10)
@@ -114,10 +137,11 @@ export function parseBehavior(body = {}) {
   if (!body.categoryId) return { error: "Choose a category" };
   const description = str(body.description, 1000);
   if (!description) return { error: "Description is required" };
-  const level = Number(body.level);
-  if (!BEHAVIOR_LEVELS.includes(level)) return { error: "Choose a level" };
-  const tree = normalizeTree(type, body.tree);
+  // The level is on each branch now (client sheet 10-29 (11), row 30); the
+  // behavior keeps its first branch's level for the reports that read it.
+  const tree = normalizeTree(type, body.tree, branchLevel(body.level, 1));
   if (!tree.branches.length) return { error: "Add at least one branch with a title" };
+  const level = tree.branches[0].level;
   if (type === COURSE_CORRECTION && tree.branches.some((b) => !b.offenses.length)) return { error: "Every branch needs at least one offense with steps" };
   return { data: { type, name, categoryId: String(body.categoryId), description, level, tree } };
 }

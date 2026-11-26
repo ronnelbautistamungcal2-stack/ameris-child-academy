@@ -228,7 +228,15 @@ export default function DailyLogForm({ childPicker = "list", onLogged }) {
   const [notes, setNotes] = useState("");
   const [dailyGrade, setDailyGrade] = useState("");
   // Course Correction from the Character Guide, and Request / Log IPP.
-  const guide = useCourseCorrectionGuide();
+  // Only the behaviors for the age of the picked children's classrooms (or the
+  // classroom filter), client sheet 10-29 (11), row 31.
+  const guideAges = useMemo(() => {
+    const roomIds = new Set(
+      bulkChildIds.length ? children.filter((c) => bulkChildIds.includes(c.id)).map((c) => c.classRoomId).filter(Boolean) : classId ? [classId] : [],
+    );
+    return [...new Set(classes.filter((c) => roomIds.has(c.id)).flatMap((c) => [c.curriculumAgeGroupId, c.ageRange]).filter(Boolean))];
+  }, [bulkChildIds, children, classId, classes]);
+  const guide = useCourseCorrectionGuide(guideAges);
   const [courseCorrection, setCourseCorrection] = useState(EMPTY_COURSE_CORRECTION);
   const [ippForm, setIppForm] = useState(EMPTY_IPP);
   const ippChildId = bulkChildIds.length === 1 ? bulkChildIds[0] : "";

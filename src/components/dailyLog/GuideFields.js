@@ -1,5 +1,5 @@
 import { apiJson } from "@/lib/api";
-import { COURSE_CORRECTION, offenseLabel } from "@/lib/characterGuide";
+import { COURSE_CORRECTION, behaviorFitsAges, levelOfBranch, offenseLabel } from "@/lib/characterGuide";
 import { IPP_REQUEST_FIELDS } from "@/lib/dailyLogOptions";
 import { useEffect, useMemo, useState } from "react";
 
@@ -26,9 +26,17 @@ export const IPP_AREAS = [
 export const EMPTY_COURSE_CORRECTION = { categoryId: "", behaviorId: "", branchId: "", offenseIndex: 0, location: "" };
 export const EMPTY_IPP = { mode: "REQUEST", primaryConcern: "", areaOfConcern: "", previousSupports: "", strengths: "", planId: "", goalId: "", tactic: "", tacticOther: "", observation: "" };
 
-/** The Character Guide's Course Correction behaviors and their categories. */
-export function useCourseCorrectionGuide() {
-  const [behaviors, setBehaviors] = useState(null);
+/**
+ * The Character Guide's Course Correction behaviors and their categories;
+ * with `ages`, only those for these classroom ages (client sheet 10-29 (11), row 31).
+ */
+export function useCourseCorrectionGuide(ages = []) {
+  const [allBehaviors, setBehaviors] = useState(null);
+  const ageKey = ages.join("|");
+  const behaviors = useMemo(
+    () => (allBehaviors ? allBehaviors.filter((b) => behaviorFitsAges(b, ageKey ? ageKey.split("|") : [])) : allBehaviors),
+    [allBehaviors, ageKey],
+  );
   const [error, setError] = useState("");
   useEffect(() => {
     apiJson(`/api/v1/character-guide/behaviors?type=${COURSE_CORRECTION}`)
@@ -57,7 +65,8 @@ export function courseCorrectionDetails(value, behaviors) {
     categoryId: behavior.categoryId,
     behaviorId: behavior.id,
     behaviorName: behavior.name,
-    behaviorLevel: String(behavior.level || 1),
+    // The branch's own level (client sheet 10-29 (11), row 30).
+    behaviorLevel: String(levelOfBranch(behavior, branch)),
     branchId: branch.id,
     branchTitle: branch.title,
     offense: value.offenseIndex + 1,

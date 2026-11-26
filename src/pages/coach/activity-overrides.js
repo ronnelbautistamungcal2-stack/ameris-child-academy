@@ -1,3 +1,4 @@
+import DailyLogPhotos from "@/components/dailyLog/DailyLogPhotos";
 import CoachLayout from "@/components/coach/CoachLayout";
 import ActivityPhotos from "@/components/reports/ActivityPhotos";
 import DailyLogForm from "@/components/dailyLog/DailyLogForm";
@@ -1486,6 +1487,13 @@ export default function AdminActivityOverrides() {
           </div>
         )}
       </Panel>
+
+      {/* Photos from the Daily Log, by classroom and dates (client sheet 10-29 (11), row 22). */}
+      {centerId ? (
+        <Panel style={{ marginTop: 16 }}>
+          <DailyLogPhotos centerId={centerId} classrooms={classrooms} />
+        </Panel>
+      ) : null}
 
       {detailSummary ? (
         <div style={drawerBackdropStyle} onClick={() => setDetailChildId("")}>

@@ -14,7 +14,9 @@ export default async function handler(req, res) {
   if (req.method === "GET") {
     const status = String(req.query.status || "");
     const q = String(req.query.q || "").trim();
+    // Contact Us messages are on Website Messages (client sheet 10-29 (11), row 53).
     const where = {
+      source: { not: "CONTACT_FORM" },
       ...(LEAD_STATUSES.some((s) => s.value === status) ? { status } : {}),
       ...(q
         ? {
@@ -45,7 +47,7 @@ export default async function handler(req, res) {
           updatedAt: true,
         },
       }),
-      prisma.lead.groupBy({ by: ["status"], _count: { _all: true } }),
+      prisma.lead.groupBy({ by: ["status"], where: { source: { not: "CONTACT_FORM" } }, _count: { _all: true } }),
     ]);
     const counts = Object.fromEntries(LEAD_STATUSES.map((s) => [s.value, 0]));
     for (const g of grouped) counts[g.status] = g._count._all;

@@ -7,8 +7,9 @@ export const CONTACT_SUBJECTS = ["Pricing and plans", "Request a demo", "Support
  * POST /api/v1/solutions/contact  (public, no sign-in)
  * The Ameris Solutions website's Contact Us form:
  *   { contactName, email, phone?, centerName?, subject, message }
- * Saved as a lead (source Contact Us) so the Ameris team can follow up from
- * Sales & Leads; the team gets an in-app notification.
+ * Saved as a lead with source CONTACT_FORM, listed on Global admin > Website
+ * Messages (client sheet 10-29 (11), row 53), where it can be moved to Sales &
+ * Leads; the team gets an in-app notification.
  */
 export default async function handler(req, res) {
   if (req.method !== "POST") {

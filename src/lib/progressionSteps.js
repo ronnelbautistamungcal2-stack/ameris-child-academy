@@ -125,7 +125,8 @@ export const STEP_IMPORT_COLUMNS = [
   { key: "buildsOn", header: "Builds On (Ref ID)", aliases: ["buildson", "buildsonrefid", "buildsonpreviousstep", "previousstep", "priorstep"] },
   { key: "leadsTo", header: "Leads To (Ref ID)", aliases: ["leadsto", "leadstorefid", "leadstonextstep", "nextstep"] },
   { key: "relatedLesson", header: "Related Lesson", aliases: ["relatedlesson", "relatedlessonrefid", "relatedlessonoptional", "linkedlesson"] },
-  { key: "type", header: "Type", aliases: ["type", "typeoptional"] },
+  // "Types" / "Curriculum Type" too (client sheet 10-29 (11), row 45).
+  { key: "type", header: "Type", aliases: ["type", "types", "typeoptional", "typesoptional", "curriculumtype", "curriculumtypes", "lessontype", "lessontypes"] },
   { key: "notes", header: "Notes", aliases: ["notes", "additionalnotes"] },
 ];
 

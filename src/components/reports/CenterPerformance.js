@@ -87,7 +87,7 @@ function ageLabel(birthDate) {
 function Collapsible({ title, open, onToggle, children }) {
   return (
     <section className={card}>
-      <button type="button" onClick={onToggle} aria-expanded={open} className={`flex w-full items-center gap-2 text-left text-2xl font-black ${NAVY}`}>
+      <button type="button" onClick={onToggle} aria-expanded={open} className={`print-keep flex w-full items-center gap-2 text-left text-2xl font-black ${NAVY}`}>
         {title}
         <span aria-hidden className="text-base">{open ? "▴" : "▾"}</span>
       </button>

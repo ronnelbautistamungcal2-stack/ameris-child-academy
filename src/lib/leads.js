@@ -154,7 +154,7 @@ export async function notifyNewLead(lead, kind) {
   await notify(await globalAdminIds(), null, {
     title: kind === "CONTACT_FORM" ? "New message from the website" : "New quote request",
     body: `${lead.centerName} (${lead.contactName}, ${lead.email})`,
-    link: `/global/leads?lead=${lead.id}`,
+    link: kind === "CONTACT_FORM" ? `/global/website-messages?message=${lead.id}` : `/global/leads?lead=${lead.id}`,
   });
 }
 

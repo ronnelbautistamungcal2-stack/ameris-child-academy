@@ -142,6 +142,9 @@ export default function GlobalReportsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
+  // Activity Log filters (client sheet 10-29 (11), row 43).
+  const [area, setArea] = useState("");
+  const [account, setAccount] = useState("");
 
   useEffect(() => {
     apiJson("/api/v1/global/reports")
@@ -163,6 +166,8 @@ export default function GlobalReportsPage() {
         if (!current) return;
         setReport(r);
         setPage(1);
+        setArea("");
+        setAccount("");
       })
       .catch((e) => current && setError(e.message || "Could not load the report"))
       .finally(() => current && setLoading(false));
@@ -171,8 +176,16 @@ export default function GlobalReportsPage() {
     };
   }, [router.isReady, key, from, to]);
 
-  const pages = Math.max(1, Math.ceil((report?.rows.length || 0) / PAGE));
-  const shown = useMemo(() => (report ? report.rows.slice((page - 1) * PAGE, page * PAGE) : []), [report, page]);
+  const isActivity = report?.columns?.some((c) => c.key === "area");
+  const areas = useMemo(() => (isActivity ? [...new Set(report.rows.map((r) => r.area).filter(Boolean))].sort() : []), [report, isActivity]);
+  const accounts = useMemo(() => (isActivity ? [...new Set(report.rows.map((r) => r.account).filter(Boolean))].sort() : []), [report, isActivity]);
+  const rows = useMemo(
+    () => (report ? report.rows.filter((r) => (!area || r.area === area) && (!account || r.account === account)) : []),
+    [report, area, account],
+  );
+  useEffect(() => setPage(1), [area, account]);
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE));
+  const shown = useMemo(() => rows.slice((page - 1) * PAGE, page * PAGE), [rows, page]);
 
   return (
     <GlobalLayout title="Reports">
@@ -196,7 +209,7 @@ export default function GlobalReportsPage() {
           </ul>
         </nav>
 
-        <section className={`${card} p-5`}>
+        <section id="global-report-print" className={`${card} p-5`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-serif text-2xl font-bold text-[#0b2a5b] dark:text-blue-100">{report?.label || list.find((r) => r.key === key)?.label || "Report"}</h2>
             <div className="flex flex-wrap items-center gap-2 print:hidden">
@@ -212,13 +225,35 @@ export default function GlobalReportsPage() {
               <button type="button" className={button} onClick={() => window.print()} disabled={!report}>
                 Print
               </button>
-              <button type="button" className={button} onClick={() => exportCsv(report)} disabled={!report?.rows.length}>
+              <button type="button" className={button} onClick={() => exportCsv({ ...report, rows })} disabled={!rows.length}>
                 Export
               </button>
             </div>
             <p className="hidden w-full text-sm text-gray-600 print:block">
               {from} to {to}
+              {area ? ` · Area: ${area}` : ""}
+              {account ? ` · Account: ${account}` : ""}
             </p>
+            {isActivity ? (
+              <div className="flex w-full flex-wrap gap-2 print:hidden">
+                <select className={button} value={area} onChange={(e) => setArea(e.target.value)} aria-label="Area">
+                  <option value="">All areas</option>
+                  {areas.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+                <select className={button} value={account} onChange={(e) => setAccount(e.target.value)} aria-label="Account">
+                  <option value="">All accounts</option>
+                  {accounts.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
           </div>
           {error ? <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
           {!report ? (
@@ -253,7 +288,7 @@ export default function GlobalReportsPage() {
                       ))}
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="print:hidden">
                     {shown.map((r, i) => (
                       <tr key={i} className="border-t border-gray-100 dark:border-gray-800">
                         {report.columns.map((c) => (
@@ -263,7 +298,7 @@ export default function GlobalReportsPage() {
                         ))}
                       </tr>
                     ))}
-                    {!report.rows.length ? (
+                    {!rows.length ? (
                       <tr>
                         <td colSpan={report.columns.length} className="px-3 py-8 text-center text-gray-500">
                           Nothing to show for this range.
@@ -271,7 +306,19 @@ export default function GlobalReportsPage() {
                       </tr>
                     ) : null}
                   </tbody>
-                  {report.totals && report.rows.length ? (
+                  {/* Printing lists every row, not just this page (client sheet 10-29 (11), row 42). */}
+                  <tbody className="hidden print:table-row-group">
+                    {rows.map((r, i) => (
+                      <tr key={i} className="border-t border-gray-200">
+                        {report.columns.map((c) => (
+                          <td key={c.key} className={`px-2 py-1 ${c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : ""}`}>
+                            {show(r[c.key], c.money)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                  {report.totals && rows.length && !area && !account ? (
                     <tfoot className="bg-blue-50 font-bold text-gray-900 dark:bg-gray-800 dark:text-gray-100">
                       <tr>
                         {report.columns.map((c) => (
@@ -286,7 +333,7 @@ export default function GlobalReportsPage() {
               </div>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-gray-600 dark:text-gray-300">
                 <span>
-                  Showing {report.rows.length ? (page - 1) * PAGE + 1 : 0} – {Math.min(page * PAGE, report.rows.length)} of {report.rows.length}
+                  Showing {rows.length ? (page - 1) * PAGE + 1 : 0} – {Math.min(page * PAGE, rows.length)} of {rows.length}
                 </span>
                 {pages > 1 ? (
                   <span className="flex gap-1 print:hidden">
@@ -307,6 +354,37 @@ export default function GlobalReportsPage() {
           )}
         </section>
       </div>
+      {/* Print only the report (client sheet 10-29 (11), row 42). */}
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: landscape;
+            margin: 10mm;
+          }
+          body * {
+            visibility: hidden;
+          }
+          #global-report-print,
+          #global-report-print * {
+            visibility: visible;
+          }
+          #global-report-print {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            border: 0;
+            box-shadow: none;
+          }
+          #global-report-print .overflow-x-auto {
+            overflow: visible !important;
+          }
+          #global-report-print table {
+            min-width: 0 !important;
+            font-size: 11px;
+          }
+        }
+      `}</style>
     </GlobalLayout>
   );
 }

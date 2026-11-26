@@ -87,6 +87,29 @@ test.describe("SOP Tracking @api", () => {
     expect(data.status).toBe("CRITICAL");
   });
 
+  test("an active goal opens the lesson set on its step", async ({ request }) => {
+    // Client sheet 10-29 (11), row 49. Walking is the active goal after the test above.
+    const admin = await loginAsAdmin(request);
+    const lesson = await apiPost(request, "/api/v1/lessons", { centerId, title: "Walking practice" }, admin);
+    expect(lesson.status(), await lesson.text()).toBe(201);
+    const lessonId = (await lesson.json()).id;
+    expect((await apiPut(request, `/api/v1/lessons/${steps.walk}`, { title: "Walks independently", media: [], linkedLessonId: lessonId }, admin)).status()).toBe(200);
+    const report = await (await apiGet(request, `/api/v1/reports/student/${childId}`, admin)).json();
+    expect(report.activeGoals.find((g) => g.id === steps.walk)).toMatchObject({ lessonId });
+    // Student Support at the center can open it; someone with no access to the center can't.
+    const email = `qa-support-${Date.now()}@sop-test.local`;
+    const made = await apiPost(request, "/api/v1/users", { email, name: "QA Support", middleInitial: "S", password: "Passw0rd!x", roles: ["STUDENT_SUPPORT"], centerId }, admin);
+    expect(made.status(), await made.text()).toBe(201);
+    const supportId = (await made.json()).id;
+    try {
+      const { getAuthCookie } = require("../helpers/auth");
+      expect((await apiGet(request, `/api/v1/lessons/${lessonId}`, await getAuthCookie(request, email, "Passw0rd!x"))).status()).toBe(200);
+      expect((await apiGet(request, `/api/v1/lessons/${lessonId}`, await loginAsStudentSupport(request))).status()).toBe(404);
+    } finally {
+      await apiDelete(request, `/api/v1/users/${supportId}`, admin);
+    }
+  });
+
   test("the assessment shows only steps for the child's actual age", async ({ request }) => {
     // Client 2026-11-20: a child of 1 year 9 months sees nothing that ends at
     // 1 year 8 months or starts at 1 year 10 months. This child is 20 months.

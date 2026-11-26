@@ -1,3 +1,4 @@
+import CenterFilter, { useCenterFilter } from "@/components/ui/CenterFilter";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { isStaffPortalRole, roleLabel } from "@/lib/roles";
@@ -17,6 +18,8 @@ export default function StaffPositionsPage({ Layout, showTeam = false }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  // Center filter (client sheet 10-29 (11), row 26).
+  const [centerFilter, setCenterFilter] = useCenterFilter();
   const [toast, setToast] = useState("");
 
   const [selectedTeacherId, setSelectedTeacherId] = useState("");
@@ -85,6 +88,7 @@ export default function StaffPositionsPage({ Layout, showTeam = false }) {
 
   const sortedStaff = useMemo(() => {
     let list = [...staff].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    if (centerFilter) list = list.filter((s) => (s.centers || []).some((cu) => cu.centerId === centerFilter));
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter(
@@ -94,7 +98,7 @@ export default function StaffPositionsPage({ Layout, showTeam = false }) {
       );
     }
     return list;
-  }, [staff, search]);
+  }, [staff, search, centerFilter]);
 
   const availableClassIds = useMemo(() => {
     if (!selectedCenterIds.length) return [];
@@ -204,6 +208,8 @@ export default function StaffPositionsPage({ Layout, showTeam = false }) {
                 Click a staff member to manage their assignments.
               </p>
             </div>
+            <div className="flex flex-wrap items-center gap-2">
+            <CenterFilter centers={centers} value={centerFilter} onChange={setCenterFilter} className="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
             <div className="relative">
               <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
@@ -213,6 +219,7 @@ export default function StaffPositionsPage({ Layout, showTeam = false }) {
                 placeholder="Search staff…"
                 className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-9 pr-4 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 sm:w-64"
               />
+            </div>
             </div>
           </div>
 

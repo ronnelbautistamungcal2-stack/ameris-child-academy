@@ -108,6 +108,29 @@ export default function ReportsHub({ categories, selectedKey, hrefFor, children 
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className={`text-3xl font-black ${NAVY}`}>Reports</h1>
+        <div className="flex flex-wrap items-center gap-2">
+        {/* Center for every report (client sheet 10-29 (11), row 28): the
+            reports follow ?centerId= (useSyncedCenterId). */}
+        {centers.length > 1 ? (
+          <select
+            aria-label="Report center"
+            value={centers.some((c) => c.id === router.query.centerId) ? router.query.centerId : ""}
+            onChange={(e) => {
+              const query = { ...router.query };
+              if (e.target.value) query.centerId = e.target.value;
+              else delete query.centerId;
+              router.replace({ pathname: router.pathname, query }, undefined, { shallow: true });
+            }}
+            className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm font-bold text-blue-700 dark:bg-gray-900"
+          >
+            <option value="">Choose a center…</option>
+            {centers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
         <div ref={filterRef} className="relative">
           <button
             type="button"
@@ -140,6 +163,7 @@ export default function ReportsHub({ categories, selectedKey, hrefFor, children 
               </fieldset>
             </div>
           ) : null}
+        </div>
         </div>
       </div>
 
@@ -175,7 +199,7 @@ export default function ReportsHub({ categories, selectedKey, hrefFor, children 
                     {cat.reports.map((r) => (
                       <li key={r.key}>
                         <Link
-                          href={hrefFor(r.key)}
+                          href={typeof router.query.centerId === "string" ? { pathname: hrefFor(r.key), query: { centerId: router.query.centerId } } : hrefFor(r.key)}
                           aria-current={r.key === selectedKey ? "page" : undefined}
                           className={`flex items-center justify-between rounded-md px-2 py-1.5 text-sm ${
                             r.key === selectedKey ? "bg-blue-100 font-bold text-blue-800 dark:bg-gray-700 dark:text-blue-100" : "text-[#0b2a5b] hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"

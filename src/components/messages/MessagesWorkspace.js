@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import { MESSAGES_CHANGED_EVENT } from "@/components/shell/PortalShell";
+import CenterFilter, { useCenterFilter } from "@/components/ui/CenterFilter";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Skeleton from "@/components/ui/Skeleton";
 import { useToast } from "@/contexts/ToastContext";
@@ -194,6 +195,15 @@ export default function MessagesWorkspace({ variant: variantProp } = {}) {
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
+  // Center filter (client sheet 10-29 (11), row 29): a conversation's center
+  // is the one it was sent in; ones with none show only under All centers.
+  const [centerFilter, setCenterFilter] = useCenterFilter();
+  const [myCenters, setMyCenters] = useState([]);
+  useEffect(() => {
+    apiJson("/api/v1/centers")
+      .then((rows) => setMyCenters(Array.isArray(rows) ? rows : []))
+      .catch(() => setMyCenters([]));
+  }, []);
   const [readFilter, setReadFilter] = useState("all");
   const [activeId, setActiveId] = useState(queryThreadId);
   const [activeThread, setActiveThread] = useState(null);
@@ -339,8 +349,10 @@ export default function MessagesWorkspace({ variant: variantProp } = {}) {
 
   const visibleRows = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const centerOf = new Map(threads.map((t) => [t.id, t.centerId || ""]));
     return rows.filter((row) => {
       if (!row.folders.has(tab)) return false;
+      if (centerFilter && myCenters.some((c) => c.id === centerFilter) && centerOf.get(row.id) !== centerFilter) return false;
       if (readFilter === "unread" && !row.unread) return false;
       if (readFilter === "read" && row.unread) return false;
       if (readFilter === "attachments" && !row.hasAttachment) return false;
@@ -349,7 +361,7 @@ export default function MessagesWorkspace({ variant: variantProp } = {}) {
       if (!q) return true;
       return `${row.name} ${row.subject} ${row.preview}`.toLowerCase().includes(q);
     });
-  }, [rows, tab, search, readFilter, typeFilter, statusFilter]);
+  }, [rows, threads, tab, search, readFilter, typeFilter, statusFilter, centerFilter, myCenters]);
 
   // Coach/admin summary tiles: what is still open (not completed or archived), by kind.
   const tiles = useMemo(() => {
@@ -545,6 +557,7 @@ export default function MessagesWorkspace({ variant: variantProp } = {}) {
                 );
               })}
             </div>
+            <CenterFilter centers={myCenters} value={centerFilter} onChange={setCenterFilter} className={FIELD} />
             <div className="relative">
               <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
               <input

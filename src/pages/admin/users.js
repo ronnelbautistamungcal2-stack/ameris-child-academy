@@ -1,4 +1,5 @@
 import AdminLayout from "@/components/admin/AdminLayout";
+import CenterFilter, { useCenterFilter } from "@/components/ui/CenterFilter";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import { useSession } from "next-auth/react";
@@ -60,6 +61,10 @@ export default function AdminUsers() {
   const [password, setPassword] = useState("");
   const [roles, setRoles] = useState(["PARENT"]);
   const [centerId, setCenterId] = useState("");
+  // Editing: the user's centers, changeable (client sheet 10-29 (11), row 48).
+  const [editCenterIds, setEditCenterIds] = useState([]);
+  // The list's center filter (client sheet 10-29 (11), row 23).
+  const [centerFilter, setCenterFilter] = useCenterFilter();
   const [dob, setDob] = useState("");
   const [hireDate, setHireDate] = useState("");
   const [aboutMe, setAboutMe] = useState("");
@@ -105,6 +110,7 @@ export default function AdminUsers() {
 
   const sorted = useMemo(() => {
     let filtered = roleTab === "ALL" ? users : users.filter((u) => userRoles(u).includes(roleTab));
+    if (centerFilter) filtered = filtered.filter((u) => (u.centers || []).some((c) => c.centerId === centerFilter));
     if (statusFilter !== "ALL") {
       filtered = filtered.filter((u) => (statusFilter === "INACTIVE") === Boolean(u.disabled));
     }
@@ -119,13 +125,13 @@ export default function AdminUsers() {
     return [...filtered].sort((a, b) =>
       (a.name || a.email || "").localeCompare(b.name || b.email || ""),
     );
-  }, [users, roleTab, search, statusFilter]);
+  }, [users, roleTab, search, statusFilter, centerFilter]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const paged = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   // Reset page when filters change
-  useEffect(() => { setPage(0); }, [roleTab, search, statusFilter]);
+  useEffect(() => { setPage(0); }, [roleTab, search, statusFilter, centerFilter]);
 
   const roleCounts = useMemo(() => {
     const counts = { ALL: users.length };
@@ -177,6 +183,7 @@ export default function AdminUsers() {
     setPinReset(null);
     setEmail(user.email || "");
     setRoles(userRoles(user));
+    setEditCenterIds((user.centers || []).map((c) => c.centerId));
     setPassword("");
     setCenterId("");
     setDob(user.dob ? String(user.dob).slice(0, 10) : "");
@@ -302,6 +309,7 @@ export default function AdminUsers() {
           aboutMe: employeeProfileNeeded ? aboutMe || null : null,
           pictureUrl: employeeProfileNeeded ? pictureUrl || null : null,
           weeklySchedules: employeeProfileNeeded ? validScheduleBlocks : [],
+          centerIds: editCenterIds,
         }),
       });
       resetForm();
@@ -379,6 +387,7 @@ export default function AdminUsers() {
 
         {/* Search bar + status filter */}
         <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <CenterFilter centers={centers} value={centerFilter} onChange={setCenterFilter} style={{ ...inputStyle, width: "auto", minWidth: 180 }} />
         <div style={{ position: "relative", flex: "1 1 280px" }}>
           <div style={searchIconWrap}>
             <SearchIcon />
@@ -608,21 +617,35 @@ export default function AdminUsers() {
               {/* Section: Access */}
               <FormSection title="Center Assignment">
                 <div style={formGrid}>
-                  <Field label={editing ? "Assign Center (create only)" : "Assign Center"}>
-                    <select
-                      value={centerId}
-                      onChange={(e) => setCenterId(e.target.value)}
-                      style={inputStyle}
-                      disabled={!!editing}
-                    >
-                      <option value="">(none)</option>
-                      {centers.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
+                  {editing ? (
+                    <Field label="Assigned Centers">
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                        {centers.map((c) => (
+                          <label key={c.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14 }}>
+                            <input
+                              type="checkbox"
+                              checked={editCenterIds.includes(c.id)}
+                              onChange={(e) =>
+                                setEditCenterIds((ids) => (e.target.checked ? [...ids, c.id] : ids.filter((x) => x !== c.id)))
+                              }
+                            />
+                            {c.name}
+                          </label>
+                        ))}
+                      </div>
+                    </Field>
+                  ) : (
+                    <Field label="Assign Center">
+                      <select value={centerId} onChange={(e) => setCenterId(e.target.value)} style={inputStyle}>
+                        <option value="">(none)</option>
+                        {centers.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  )}
                 </div>
               </FormSection>
 

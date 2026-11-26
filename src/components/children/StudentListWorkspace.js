@@ -1,3 +1,4 @@
+import CenterFilter from "@/components/ui/CenterFilter";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
@@ -1703,6 +1704,22 @@ export default function StudentListWorkspace({ Layout, profileHref = (id) => `/a
           <>
         {/* Student List and Student Attendance (client mockup, sheet 2026-11-07). */}
         <div style={{ marginTop: 16 }}>
+          {/* Center filter (client sheet 10-29 (11), row 24): sets ?centerId=, which scopes the list. */}
+          {centers.length > 1 ? (
+            <div style={{ marginBottom: 12 }}>
+              <CenterFilter
+                centers={centers}
+                value={dashboardCenterId}
+                onChange={(id) => {
+                  const query = { ...router.query };
+                  if (id) query.centerId = id;
+                  else delete query.centerId;
+                  router.replace({ pathname: router.pathname, query }, undefined, { shallow: true });
+                }}
+                style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--admin-border)", background: "var(--admin-bg)", color: "var(--admin-text)", minWidth: 200 }}
+              />
+            </div>
+          ) : null}
           <StudentListTable
             children={scopedChildren}
             classes={classes}

@@ -91,6 +91,27 @@ test.describe("Users API @api", () => {
     createdUserIds.push(data.id);
   });
 
+  test("PUT /api/v1/users/:id changes the user's centers", async ({ request }) => {
+    // Client sheet 10-29 (11), row 48: edit the assigned center when editing a user.
+    const cookies = await loginAsAdmin(request);
+    const centers = await (await apiGet(request, "/api/v1/centers", cookies)).json();
+    expect(centers.length).toBeGreaterThan(1);
+    const [a, b] = [centerId, centers.find((c) => c.id !== centerId).id];
+    const created = await (
+      await apiPost(request, "/api/v1/users", { email: `center-user-${Date.now()}@example.com`, name: "Center User", middleInitial: "Q", password: "password123", roles: ["PARENT"], centerId: a }, cookies)
+    ).json();
+    expect(created.id, JSON.stringify(created)).toBeTruthy();
+    createdUserIds.push(created.id);
+    const put = (centerIds) => apiPut(request, `/api/v1/users/${created.id}`, { centerIds }, cookies);
+    let res = await put([a, b]);
+    expect(res.status(), await res.text()).toBe(200);
+    expect((await res.json()).centers.map((c) => c.centerId).sort()).toEqual([a, b].sort());
+    res = await put([b]);
+    expect((await res.json()).centers.map((c) => c.centerId)).toEqual([b]);
+    // A center outside the admin's account is refused.
+    expect((await put([b, "not-a-center"])).status()).toBe(400);
+  });
+
   test("PUT /api/v1/users/:id lets admin update email", async ({ request }) => {
     const cookies = await loginAsAdmin(request);
     const createRes = await apiPost(

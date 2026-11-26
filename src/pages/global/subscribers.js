@@ -3,7 +3,7 @@ import GlobalLayout from "@/components/global/GlobalLayout";
 import { apiJson } from "@/lib/api";
 import { ACCOUNT_STATUS_LABELS, ADD_ONS, ADD_ON_LABELS } from "@/lib/addOns";
 import CurriculumTypePicker from "@/components/curriculum/CurriculumTypePicker";
-import PricingCard from "@/components/global/PricingCard";
+import PricingCard, { PricingFields, previewQuote, pricingFormFrom, useCurrentPricingSet } from "@/components/global/PricingCard";
 import { curriculumTypeLabels } from "@/lib/curriculumTypes";
 import { useCurriculumTypes } from "@/lib/useCurriculumTypes";
 
@@ -111,18 +111,31 @@ function AddOnChecks({ value, onChange }) {
   );
 }
 
-function SubscriptionEditor({ detail, onSave, onCancel, saving }) {
+// Edit Subscription (client sheet 10-29 (11), rows 38-40): the pricing
+// choices (children, billing, order date, classrooms per age group, discount)
+// are here; the Curriculum Age Groups and per-center child limit fields are
+// gone (the limit follows the pricing range of the number of children).
+function SubscriptionEditor({ detail, onSave, onCancel, saving, onPreview }) {
   const [form, setForm] = useState(() => ({
     addOns: detail.addOns || [],
     curriculumTypes: detail.curriculumTypes || [],
-    curriculumAgeGroups: detail.curriculumAgeGroups || [],
     maxCenters: detail.maxCenters,
-    maxChildren: detail.maxChildren ?? "",
     startDate: dateInput(detail.startDate),
     renewalDate: dateInput(detail.renewalDate),
     autoRenew: detail.autoRenew,
   }));
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+  const pricing = useCurrentPricingSet();
+  const [pricingForm, setPricingForm] = useState(() => pricingFormFrom(detail));
+  const preview = useMemo(() => previewQuote(pricing, pricingForm, form.addOns), [pricing, pricingForm, form.addOns]);
+  useEffect(() => {
+    onPreview?.(preview);
+  }, [preview, onPreview]);
+  function save() {
+    const hasPricing = pricingForm.children !== "" && pricingForm.children != null;
+    // The age groups field is gone: every Ameris age group is offered (guess, row 39).
+    onSave({ ...form, curriculumAgeGroups: [], ...(hasPricing ? { pricingSelection: { ...pricingForm, children: Number(pricingForm.children) } } : {}) });
+  }
   return (
     <div className="space-y-4">
       <div>
@@ -133,18 +146,12 @@ function SubscriptionEditor({ detail, onSave, onCancel, saving }) {
         <div className="mb-2 text-sm font-bold text-gray-700 dark:text-gray-200">Curriculum Types</div>
         <CurriculumTypePicker value={form.curriculumTypes} onChange={(curriculumTypes) => set({ curriculumTypes })} idPrefix="edit-account-type" />
       </div>
-      <div>
-        <div className="mb-2 text-sm font-bold text-gray-700 dark:text-gray-200">Curriculum Age Groups</div>
-        <AgeGroupChecks value={form.curriculumAgeGroups} onChange={(curriculumAgeGroups) => set({ curriculumAgeGroups })} />
-      </div>
+      <PricingFields form={pricingForm} setForm={setPricingForm} pricing={pricing} curriculumOn={form.addOns.includes("CURRICULUM")} />
+      {preview?.error ? <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{preview.error}</p> : null}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="text-sm">
           <span className="mb-1 block font-semibold text-gray-700 dark:text-gray-200"># of Centers allowed</span>
           <input className={input} type="number" min="1" value={form.maxCenters} onChange={(e) => set({ maxCenters: e.target.value })} />
-        </label>
-        <label className="text-sm">
-          <span className="mb-1 block font-semibold text-gray-700 dark:text-gray-200"># of Children allowed per center (blank = no limit)</span>
-          <input className={input} type="number" min="1" value={form.maxChildren} onChange={(e) => set({ maxChildren: e.target.value })} />
         </label>
         <label className="text-sm">
           <span className="mb-1 block font-semibold text-gray-700 dark:text-gray-200">Start Date</span>
@@ -163,7 +170,7 @@ function SubscriptionEditor({ detail, onSave, onCancel, saving }) {
         <button type="button" className={button} onClick={onCancel} disabled={saving}>
           Cancel
         </button>
-        <button type="button" className={primary} onClick={() => onSave(form)} disabled={saving}>
+        <button type="button" className={primary} onClick={save} disabled={saving || Boolean(preview?.error)}>
           {saving ? "Saving..." : "Save"}
         </button>
       </div>
@@ -266,6 +273,8 @@ function Detail({ id, onChanged }) {
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
+  // The price of the choices being edited, shown on the Pricing card (row 38).
+  const [pricePreview, setPricePreview] = useState(null);
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState("");
 
@@ -330,7 +339,19 @@ function Detail({ id, onChanged }) {
           ) : null}
         </div>
         {editing ? (
-          <SubscriptionEditor detail={detail} saving={saving} onCancel={() => setEditing(false)} onSave={(form) => patch(form)} />
+          <SubscriptionEditor
+            detail={detail}
+            saving={saving}
+            onPreview={setPricePreview}
+            onCancel={() => {
+              setPricePreview(null);
+              setEditing(false);
+            }}
+            onSave={async (form) => {
+              const ok = await patch(form);
+              if (ok !== false) setPricePreview(null);
+            }}
+          />
         ) : (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
@@ -348,7 +369,6 @@ function Detail({ id, onChanged }) {
               <Row label="Renewal Date">{day(detail.renewalDate)}</Row>
               <Row label="Auto-Renew">{detail.autoRenew ? "Enabled" : "Off"}</Row>
               <Row label="Curriculum Types">{curriculumTypeLabels(detail.curriculumTypes, curriculumTypes) || "None"}</Row>
-              <Row label="Age Groups">{(detail.ageGroupNames || []).join(", ") || "None"}</Row>
             </div>
             <div>
               <div className="mb-1 text-sm font-bold text-gray-700 dark:text-gray-200">Purchased Add-Ons</div>
@@ -367,7 +387,7 @@ function Detail({ id, onChanged }) {
         )}
       </div>
 
-      <PricingCard detail={detail} saving={saving} onSave={(pricingSelection) => patch({ pricingSelection })} />
+      <PricingCard detail={detail} preview={editing ? pricePreview : null} />
 
       <div className={card}>
         <h3 className="mb-2 text-lg font-extrabold text-gray-900 dark:text-gray-100">Centers</h3>

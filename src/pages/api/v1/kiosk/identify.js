@@ -8,6 +8,7 @@ import {
   recordFailure,
   rejectIfLockedOut,
   staffStatusFor,
+  transportationFor,
 } from "@/lib/kiosk";
 import { findByPin, isValidPin } from "@/lib/kioskPins";
 import prisma from "@/lib/prisma";
@@ -38,8 +39,10 @@ export default async function handler(req, res) {
     : null;
   const children = await childrenFor(prisma, credential, centerId);
   const parent = children.length ? { children } : null;
+  // Bus drivers: sign carpool children in and out (client sheet 10-29 (11), rows 6-8).
+  const transportation = await transportationFor(prisma, credential.user, centerId);
 
-  if (!employee && !parent) {
+  if (!employee && !parent && !transportation) {
     return res.status(403).json({ error: "There is nothing for you to sign in at this center. Please see the front desk." });
   }
 
@@ -48,5 +51,6 @@ export default async function handler(req, res) {
     name: displayName(credential),
     employee,
     parent,
+    transportation,
   });
 }

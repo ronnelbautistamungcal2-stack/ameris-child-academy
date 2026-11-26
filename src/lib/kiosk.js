@@ -168,6 +168,11 @@ export async function childrenFor(prisma, credential, centerId) {
   } else {
     where = { centerId, pickupPeople: { some: { pickupPersonId: credential.pickupPerson.id } } };
   }
+  return kioskChildRows(prisma, where);
+}
+
+/** Enrolled children matching `where`, with today's sign-in status, for the kiosk. */
+async function kioskChildRows(prisma, where) {
   const children = await prisma.child.findMany({
     where: {
       AND: [where, { OR: [{ enrollmentEndDate: null }, { enrollmentEndDate: { gte: startOfDay() } }] }],
@@ -219,4 +224,25 @@ export async function staffStatusFor(prisma, user, centerId) {
     clockOut: record?.clockOut || null,
     centerMatches: !record || record.centerId === centerId,
   };
+}
+
+// ---- Transportation (client sheet 10-29 (11), rows 6-8) ----------------------
+// A bus driver at the center picks a carpool and signs its children in and
+// out. The carpools are set on the center (Edit Center > Carpools); a child's
+// carpool is set on the Student List.
+
+/** { carpools } when the person is a bus driver at this center, else null. */
+export async function transportationFor(prisma, user, centerId) {
+  if (!user || !userRoles(user).includes("BUS_DRIVER")) return null;
+  const membership = await prisma.centerUser.findUnique({ where: { userId_centerId: { userId: user.id, centerId } } });
+  if (!membership) return null;
+  const center = await prisma.center.findUnique({ where: { id: centerId }, select: { carpools: true } });
+  const carpools = Array.isArray(center?.carpools) ? center.carpools.filter((c) => typeof c === "string" && c.trim()) : [];
+  return { carpools };
+}
+
+/** The enrolled children of the center in this carpool, with today's status. */
+export async function carpoolChildren(prisma, centerId, carpool) {
+  if (!carpool) return [];
+  return kioskChildRows(prisma, { centerId, carpool: { equals: String(carpool), mode: "insensitive" } });
 }

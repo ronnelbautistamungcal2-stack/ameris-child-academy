@@ -23,6 +23,7 @@ const TABS = [
   { key: "basic", label: "Basic Information", icon: "\u{1F3E0}" },
   { key: "care", label: "Care & Schedule", icon: "\u{1F4C5}" },
   { key: "rates", label: "Ages & Rates", icon: "\u{1F465}" },
+  { key: "carpools", label: "Carpools", icon: "\u{1F68C}" },
   { key: "roles", label: "Roles", icon: "\u{1F464}" },
   { key: "grade", label: "Staff Grade & Pay", icon: "\u{1F4CA}" },
 ];
@@ -84,6 +85,7 @@ function formFromCenter(center) {
       hourly: r.hourly ?? "",
     })),
     enrollmentFee: center?.enrollmentFee ?? "",
+    carpools: Array.isArray(center?.carpools) ? center.carpools : [],
     roleAccess: center?.roleAccess || [],
     staffGradeWeights: { ...(center ? staffGradeWeightsFor(center) : DEFAULT_STAFF_GRADE_WEIGHTS) },
     payPeriodSettings: center ? payPeriodSettingsFor(center) : DEFAULT_PAY_PERIOD,
@@ -605,6 +607,39 @@ export default function CenterFormModal({ center, onClose, onSaved }) {
                 <input aria-label="Initial enrollment fee" inputMode="decimal" className={`${input} max-w-xs`} value={form.enrollmentFee} onChange={(e) => set({ enrollmentFee: e.target.value })} placeholder="$0.00" />
               </div>
             </>
+          ) : null}
+
+          {/* Carpools (client sheet 10-29 (11), row 5): they fill the Student
+              List carpool field and the kiosk Transportation screen. */}
+          {tab === "carpools" ? (
+            <Section
+              icon={"\u{1F68C}"}
+              title="Carpools"
+              description="Add as many carpools as you need. Children are put in a carpool on the Student List, and bus drivers sign them in and out at the kiosk."
+              action={
+                <button type="button" onClick={() => set({ carpools: [...form.carpools, ""] })} className="rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-sm font-semibold text-blue-800 hover:bg-blue-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">
+                  + Add Carpool
+                </button>
+              }
+            >
+              <div className="space-y-2 p-4">
+                {form.carpools.map((name, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input
+                      aria-label={`Carpool ${i + 1} name`}
+                      className={input}
+                      value={name}
+                      placeholder="e.g. Afterschool Carpool"
+                      onChange={(e) => set({ carpools: form.carpools.map((c, j) => (j === i ? e.target.value : c)) })}
+                    />
+                    <button type="button" className="text-red-600" aria-label={`Remove ${name || `carpool ${i + 1}`}`} onClick={() => set({ carpools: form.carpools.filter((_, j) => j !== i) })}>
+                      &#128465;
+                    </button>
+                  </div>
+                ))}
+                {form.carpools.length === 0 ? <p className="py-3 text-center text-sm text-gray-500">No carpools yet.</p> : null}
+              </div>
+            </Section>
           ) : null}
 
           {tab === "grade" ? (

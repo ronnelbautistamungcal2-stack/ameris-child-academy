@@ -77,7 +77,7 @@ function RowMenu({ child, profileHref, onEnrollment, onDelete }) {
  * onMoveToday(child, classRoomId) and onDelete(child) come from the Student
  * List page.
  */
-export default function StudentListTable({ children, classes, centerId, loading, profileHref, onChanged, onTimeSheet, onCheck, onMoveToday, onDelete, savingId }) {
+export default function StudentListTable({ children, classes, centers = [], centerId, loading, profileHref, onChanged, onTimeSheet, onCheck, onMoveToday, onDelete, savingId }) {
   const [view, setView] = useState("ENROLLED");
   const [name, setName] = useState("");
   const [parent, setParent] = useState("");
@@ -93,7 +93,13 @@ export default function StudentListTable({ children, classes, centerId, loading,
   const classById = useMemo(() => new Map(classes.map((c) => [c.id, c])), [classes]);
   const centerClasses = useMemo(() => classes.filter((c) => !centerId || c.centerId === centerId), [classes, centerId]);
   const parentNameOf = (c) => getLinkedParentUsers(c).map((p) => p.name || p.email).filter(Boolean).join(", ");
-  const carpools = useMemo(() => [...new Set(children.map((c) => c.carpool).filter(Boolean))].sort(), [children]);
+  // The centers' carpools (Edit Center > Carpools, client sheet 10-29 (11), row 5), plus any already on a child.
+  const carpoolsByCenter = useMemo(() => new Map(centers.map((c) => [c.id, Array.isArray(c.carpools) ? c.carpools : []])), [centers]);
+  const carpools = useMemo(
+    () => [...new Set([...centers.filter((c) => !centerId || c.id === centerId).flatMap((c) => (Array.isArray(c.carpools) ? c.carpools : [])), ...children.map((c) => c.carpool).filter(Boolean)])].sort(),
+    [children, centers, centerId],
+  );
+  const carpoolChoices = (child) => [...new Set([...(carpoolsByCenter.get(child.centerId) || []), ...(child.carpool ? [child.carpool] : [])])];
   const parents = useMemo(() => [...new Set(children.map(parentNameOf).filter(Boolean))].sort(), [children]);
   const ages = useMemo(() => [...new Set(children.map((c) => ageLabel(c.birthDate)).filter((a) => a !== "—"))].sort((a, b) => parseFloat(a) - parseFloat(b)), [children]);
 
@@ -208,7 +214,7 @@ export default function StudentListTable({ children, classes, centerId, loading,
                   <td className="px-3 py-1.5">
                     <select value={c.carpool || ""} onChange={(e) => saveField(c, { carpool: e.target.value })} aria-label={`Carpool for ${fullName(c)}`} className={`${control} w-44`}>
                       <option value="">None</option>
-                      {carpools.map((p) => <option key={p} value={p}>{p}</option>)}
+                      {carpoolChoices(c).map((p) => <option key={p} value={p}>{p}</option>)}
                     </select>
                   </td>
                   <td className="px-3 py-1.5">

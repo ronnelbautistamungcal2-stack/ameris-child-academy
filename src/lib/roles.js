@@ -7,6 +7,9 @@ export const ROLE_OPTIONS = [
   "STUDENT_SUPPORT",
   "PARENT",
   "COACH",
+  // Signs carpool children in and out at the kiosk; no portal pages (client
+  // sheet 10-29 (11), rows 6-8).
+  "BUS_DRIVER",
 ];
 
 /**
@@ -137,12 +140,16 @@ export function roleHomePath(role) {
       return "/coach/dashboard";
     case "PARENT":
       return "/dashboard";
+    // No portal of their own: they use the kiosk; Account Settings on the web.
+    case "BUS_DRIVER":
+      return "/settings";
     default:
       return "/dashboard";
   }
 }
 
 const ROLE_LABELS = {
+  BUS_DRIVER: "Bus Driver",
   GLOBAL_ADMIN: "Global Administrator",
   HR_STAFF: "HR Staff",
   STUDENT_SUPPORT: "Student Support Staff",

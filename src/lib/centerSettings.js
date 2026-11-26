@@ -139,6 +139,25 @@ function parseMeals(value) {
   return { value: out };
 }
 
+/** The center's carpools: names, as many as needed (client sheet 10-29 (11), row 5). */
+function parseCarpools(value) {
+  if (!Array.isArray(value)) return { error: "Carpools are invalid" };
+  const seen = new Set();
+  const out = [];
+  for (const raw of value) {
+    const name = text(raw, 80);
+    if (!name || seen.has(name.toLowerCase())) continue;
+    seen.add(name.toLowerCase());
+    out.push(name);
+  }
+  return { value: out.slice(0, 100) };
+}
+
+/** A center's carpool names. */
+export function centerCarpools(center) {
+  return Array.isArray(center?.carpools) ? center.carpools.filter((c) => typeof c === "string" && c.trim()) : [];
+}
+
 function parseAgeRates(value) {
   if (!Array.isArray(value)) return { error: "Age groups and rates are invalid" };
   const out = [];
@@ -206,6 +225,7 @@ export function parseCenterInput(body = {}, { partial = false } = {}) {
     ["mealAgeGroups", parseMealAgeGroups],
     ["meals", parseMeals],
     ["ageRates", parseAgeRates],
+    ["carpools", parseCarpools],
     ["staffGradeWeights", parseStaffGradeWeights],
     ["payPeriodSettings", parsePayPeriodSettings],
   ];

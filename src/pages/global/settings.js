@@ -22,7 +22,12 @@ const two = (v) => (v === "" || v == null || Number.isNaN(Number(v)) ? v : Numbe
 function withCents(data) {
   return {
     ...data,
-    baseRanges: data.baseRanges.map((r) => ({ ...r, price: two(r.price) })),
+    baseRanges: data.baseRanges.map((r) => ({
+      ...r,
+      price: two(r.price),
+      // Each range's own add-on prices (client sheet 10-29 (11), row 33); older sets use their single price.
+      addOns: Object.fromEntries(PRICED_ADD_ONS.map((a) => [a.key, two(r.addOns?.[a.key] ?? data.addOns?.[a.key] ?? 0)])),
+    })),
     addOns: Object.fromEntries(Object.entries(data.addOns).map(([k, v]) => [k, two(v)])),
     curriculumCenters: data.curriculumCenters.map((r) => ({ ...r, standard: two(r.standard), faithBased: two(r.faithBased) })),
     homeDaycare: data.homeDaycare.map((r) => ({ ...r, standard: two(r.standard), faithBased: two(r.faithBased) })),
@@ -87,17 +92,23 @@ function PricingEditor({ value, onChange }) {
   const setDiscount = (i, patch) => set({ discounts: value.discounts.map((d, j) => (j === i ? { ...d, ...patch } : d)) });
 
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-      <div className="space-y-4">
+    <div className="space-y-4">
         <section className={card}>
-          <h2 className={h2}>Base Program – Price Per Child</h2>
-          <table className="w-full text-sm">
+          <h2 className="text-2xl font-black text-[#16305e] dark:text-blue-100">Base Program</h2>
+          <div className="mb-2 text-lg font-bold text-[#16305e] dark:text-blue-100">Price Per Child</div>
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-sm">
             <thead>
-              <tr className="text-xs font-bold text-gray-600 dark:text-gray-300">
+              <tr className="bg-blue-50 text-xs font-bold text-[#16305e] dark:bg-gray-800 dark:text-blue-100">
                 <th className="w-8" />
-                <th className="pb-1">From (Children)</th>
-                <th className="pb-1">To (Children)</th>
-                <th className="pb-1">Price Per Child</th>
+                <th className="px-1 py-2">From (Children)</th>
+                <th className="px-1 py-2">To (Children)</th>
+                <th className="px-1 py-2">Price Per Child</th>
+                {PRICED_ADD_ONS.map((a) => (
+                  <th key={a.key} className="px-1 py-2">
+                    {a.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -122,13 +133,23 @@ function PricingEditor({ value, onChange }) {
                   <td className="py-0.5 pr-2">
                     <input type="number" min="1" aria-label="To (Children)" className={`${cell} text-center`} value={r.to} onChange={(e) => setRange(i, { to: e.target.value })} />
                   </td>
-                  <td className="py-0.5">
+                  <td className="py-0.5 pr-2">
                     <Money label={`Price per child ${r.from}–${r.to}`} value={r.price} onChange={(v) => setRange(i, { price: v })} />
                   </td>
+                  {PRICED_ADD_ONS.map((a) => (
+                    <td key={a.key} className="py-0.5 pr-2">
+                      <Money
+                        label={`${a.label} price per child ${r.from}–${r.to}`}
+                        value={r.addOns?.[a.key] ?? ""}
+                        onChange={(v) => setRange(i, { addOns: { ...(r.addOns || {}), [a.key]: v } })}
+                      />
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
           <div className="mt-2 flex justify-between gap-2">
             <button
               type="button"
@@ -136,7 +157,7 @@ function PricingEditor({ value, onChange }) {
               onClick={() => {
                 const last = ranges[ranges.length - 1];
                 const from = last ? Number(last.to) + 1 : 1;
-                set({ baseRanges: [...ranges, { from, to: from + 99, price: last?.price ?? 0 }] });
+                set({ baseRanges: [...ranges, { from, to: from + 99, price: last?.price ?? 0, addOns: { ...(last?.addOns || {}) } }] });
               }}
             >
               + Add Range
@@ -154,10 +175,11 @@ function PricingEditor({ value, onChange }) {
             </button>
           </div>
           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            A subscriber pays the range&apos;s To number × its price per child (15 children in 11–20 pays for 20).
+            A subscriber pays the range&apos;s To number × its price per child (15 children in 11–20 pays for 20), and the same for each add-on they have.
           </p>
         </section>
 
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.25fr_1fr_1fr]">
         <section className={card}>
           <div className="flex items-center justify-between">
             <h2 className={h2}>Discounts</h2>
@@ -229,22 +251,6 @@ function PricingEditor({ value, onChange }) {
               ))}
             </tbody>
           </table>
-        </section>
-      </div>
-
-      <div className="space-y-4">
-        <section className={card}>
-          <h2 className={h2}>Add-On Programs – Price Per Child</h2>
-          <div className="space-y-1">
-            {PRICED_ADD_ONS.map((a) => (
-              <div key={a.key} className="flex items-center justify-between gap-3 text-sm">
-                <span className="text-gray-800 dark:text-gray-200">{a.label}</span>
-                <div className="w-32">
-                  <Money label={`${a.label} price per child`} value={value.addOns[a.key]} onChange={(v) => set({ addOns: { ...value.addOns, [a.key]: v } })} />
-                </div>
-              </div>
-            ))}
-          </div>
         </section>
         <section className={card}>
           <h2 className={h2}>Curriculum – Centers – Price Per Classroom</h2>

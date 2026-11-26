@@ -161,13 +161,14 @@ test.describe("Checklist Manager, checklists and review @api", () => {
           assignedUserIds: [teacher.id],
           items: [
             { title: "Log diapers", directLink: "/teacher/logs", taskTime: "10:00" },
-            { title: "Other link", directLink: "/teacher/classroom", taskTime: "11:00" },
+            { title: "Other link", directLink: "/teacher/lessons", taskTime: "11:00" },
+            { title: "Check the classroom", directLink: "/teacher/classroom", taskTime: "12:00" },
           ],
         },
         coachCookies,
       )
     ).json();
-    const [logItem, otherItem] = created.items;
+    const [logItem, otherItem, classroomItem] = created.items;
     const teacherCookies = await loginAsTeacher(request);
 
     const before = (await (await apiGet(request, `/api/v1/daily-checklists?centerId=${center.id}&date=${today}`, teacherCookies)).json()).find((c) => c.id === created.id);
@@ -181,6 +182,14 @@ test.describe("Checklist Manager, checklists and review @api", () => {
 
     const after = (await (await apiGet(request, `/api/v1/daily-checklists?centerId=${center.id}&date=${today}`, teacherCookies)).json()).find((c) => c.id === created.id);
     expect(after.items[0].logActivityVisited).toBe(true);
+
+    // My Classroom links work the same way (client sheet 10-29 (11), row 69).
+    expect(before.items[2]).toMatchObject({ logActivityLink: true, logActivityVisited: false });
+    const blocked = await apiPost(request, "/api/v1/daily-checklists/complete", { itemId: classroomItem.id, date: today }, teacherCookies);
+    expect(blocked.status()).toBe(409);
+    expect((await blocked.json()).error).toMatch(/My Classroom/);
+    expect((await apiPost(request, "/api/v1/daily-checklists/visit", { itemId: classroomItem.id }, teacherCookies)).status()).toBe(200);
+    expect((await apiPost(request, "/api/v1/daily-checklists/complete", { itemId: classroomItem.id, date: today }, teacherCookies)).status()).toBe(200);
   });
 
   test("a teacher's chosen checklist is the one Checklist Review counts", async ({ request }) => {
@@ -240,6 +249,37 @@ test.describe("Checklist Manager, checklists and review @api", () => {
     // Someone else's checklist is still admin-only.
     expect((await apiGet(request, `/api/v1/daily-checklists?centerId=${center.id}&date=${today}&staffUserId=${teacher.id}`, coachCookies)).status()).toBe(403);
     expect((await apiGet(request, `/api/v1/daily-checklists?centerId=${center.id}&date=${today}&staffUserId=${teacher.id}`, await loginAsAdmin(request))).status()).toBe(200);
+  });
+
+  test("an admin who is also a teacher sees only Admin checklists on their own My Checklist", async ({ request }) => {
+    // Client sheet 10-29 (11), rows 56/57: the admin's checklist didn't show,
+    // and the teacher and other staff checklists did.
+    const bcrypt = require("bcryptjs");
+    const email = `qa-admin-teacher-${Date.now()}@checklist-test.local`;
+    const admin = await prisma.user.create({
+      data: { email, name: "QA Admin Teacher", password: await bcrypt.hash("Passw0rd!x", 10), role: "ADMIN", roles: ["ADMIN", "TEACHER", "OTHER_STAFF"] },
+    });
+    try {
+      await prisma.centerUser.create({ data: { userId: admin.id, centerId: center.id, role: "ADMIN" } });
+      await prisma.teacherClass.create({ data: { teacherId: admin.id, classId: room.id } });
+      const coachCookies = await loginAsCoach(request);
+      const make = (title, roles) =>
+        apiPost(request, "/api/v1/daily-checklists", { centerId: center.id, title, roles, classRoomIds: [], assignedUserIds: [admin.id], items: [{ title: "Do it", taskTime: "09:00" }] }, coachCookies);
+      for (const [title, roles] of [["QA Admin List", ["ADMIN"]], ["QA Teacher List", ["TEACHER"]], ["QA Other Staff List", ["OTHER_STAFF"]]]) {
+        const res = await make(title, roles);
+        expect(res.status(), await res.text()).toBe(201);
+      }
+      const { getAuthCookie } = require("../helpers/auth");
+      const cookies = await getAuthCookie(request, email, "Passw0rd!x");
+      const res = await apiGet(request, `/api/v1/daily-checklists?centerId=${center.id}&date=${today}&staffUserId=${admin.id}`, cookies);
+      expect(res.status(), await res.text()).toBe(200);
+      expect((await res.json()).map((c) => c.title).filter((t) => t.startsWith("QA ") && t.endsWith(" List"))).toEqual(["QA Admin List"]);
+    } finally {
+      await prisma.teacherClass.deleteMany({ where: { teacherId: admin.id } });
+      await prisma.dailyChecklist.deleteMany({ where: { centerId: center.id, title: { in: ["QA Admin List", "QA Teacher List", "QA Other Staff List"] } } });
+      await prisma.centerUser.deleteMany({ where: { userId: admin.id } });
+      await prisma.user.delete({ where: { id: admin.id } }).catch(() => {});
+    }
   });
 
   test("the kitchen shopping list counts next week's planned items and skips catered meals", async ({ request }) => {

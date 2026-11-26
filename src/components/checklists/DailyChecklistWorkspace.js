@@ -9,7 +9,7 @@ import { NAVY } from "@/components/reports/reportUi";
 import Skeleton from "@/components/ui/Skeleton";
 import useSyncedCenterId from "@/hooks/useSyncedCenterId";
 import { apiJson } from "@/lib/api";
-import { LOG_FIRST_MESSAGE, MENU_FIRST_MESSAGE, checklistItemHref } from "@/lib/checklistLinks";
+import { checklistItemHref, isClassroomLink, linkFirstMessage } from "@/lib/checklistLinks";
 import { collectChecklistLessonAttachments } from "@/lib/checklistLessonResources";
 import { formatDayKey, formatTaskTime, shiftDayKey, sortByTaskTime, todayKey } from "@/lib/checklistTime";
 import { getChecklistClassRooms } from "@/lib/dailyChecklistClassrooms";
@@ -88,6 +88,9 @@ export default function DailyChecklistWorkspace({ Layout, mode = "staff", title 
       .catch(() => setClasses([]));
   }, [mode, centerId]);
 
+  // Teachers, and staff on the Staff portal (client sheet 10-29 (11), row 55),
+  // pick which of their checklists they fill out; only that one counts.
+  const picksOne = mode === "teacher" || mode === "staff";
   const ready = status !== "loading" && !!userId && !!centerId && (mode !== "staff" || !!role || !staffRoles.length);
 
   const load = useCallback(
@@ -101,11 +104,11 @@ export default function DailyChecklistWorkspace({ Layout, mode = "staff", title 
         if (mode === "staff" && role) params.set("asRole", role);
         const [rows, choice] = await Promise.all([
           apiJson(`/api/v1/daily-checklists?${params.toString()}`),
-          mode === "teacher" ? apiJson(`/api/v1/daily-checklists/choice?date=${date}`) : Promise.resolve(null),
+          picksOne ? apiJson(`/api/v1/daily-checklists/choice?date=${date}`) : Promise.resolve(null),
         ]);
         const list = Array.isArray(rows) ? rows : [];
         setChecklists(list);
-        if (mode === "teacher") {
+        if (picksOne) {
           const routine = list.filter((c) => c.source !== "SCHEDULED_LESSON_PLAN");
           setChoiceId((current) => {
             if (choice?.checklistId && routine.some((c) => c.id === choice.checklistId)) return choice.checklistId;
@@ -125,7 +128,7 @@ export default function DailyChecklistWorkspace({ Layout, mode = "staff", title 
         setLoading(false);
       }
     },
-    [ready, centerId, date, mode, role, userId],
+    [ready, centerId, date, mode, role, userId, picksOne],
   );
 
   useEffect(() => {
@@ -134,7 +137,7 @@ export default function DailyChecklistWorkspace({ Layout, mode = "staff", title 
 
   const routineLists = checklists.filter((c) => c.source !== "SCHEDULED_LESSON_PLAN");
   const scheduledLists = checklists.filter((c) => c.source === "SCHEDULED_LESSON_PLAN");
-  const shown = mode === "teacher" ? routineLists.filter((c) => c.id === choiceId) : routineLists;
+  const shown = picksOne ? routineLists.filter((c) => c.id === choiceId) : routineLists;
   const isToday = date === todayKey();
   const canComplete = mode === "personal" || isToday;
 
@@ -216,7 +219,7 @@ export default function DailyChecklistWorkspace({ Layout, mode = "staff", title 
               ))}
             </select>
           </label>
-          {mode === "teacher" ? (
+          {picksOne ? (
             <label className="block w-64">
               <span className={`text-sm font-bold ${NAVY}`}>Checklist</span>
               <select value={choiceId} onChange={(e) => chooseChecklist(e.target.value)} className={selectClass} aria-label="Checklist" disabled={!routineLists.length}>
@@ -401,10 +404,10 @@ function ChecklistItems({ checklist, isDone, canComplete, busyItem, onToggle, on
                 </div>
               ) : null}
               {needsVisit && blockedId === item.id ? (
-                <div role="alert" className="mt-1 rounded border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700">{item.menuLink ? MENU_FIRST_MESSAGE : LOG_FIRST_MESSAGE}</div>
+                <div role="alert" className="mt-1 rounded border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700">{linkFirstMessage(item.directLink)}</div>
               ) : needsVisit ? (
                 <div className="mt-1 text-[11px] font-semibold text-amber-700">
-                  {item.menuLink ? "Click the menu link to open the menu before checking it off." : "Click the Log Activity link to log this activity before checking it off."}
+                  {item.menuLink ? "Click the menu link to open the menu before checking it off." : isClassroomLink(item.directLink) ? "Click the My Classroom link to open it before checking this off." : "Click the Log Activity link to log this activity before checking it off."}
                 </div>
               ) : null}
             </div>

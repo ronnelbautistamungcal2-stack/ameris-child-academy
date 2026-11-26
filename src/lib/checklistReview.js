@@ -82,7 +82,9 @@ function listsForDay({ member, checklists, teacherClassIds, key, choiceId, doneI
     .filter((c) => checklistVisibleToStaff(c, { roles, userId: member.id, teacherClassIds }))
     .map((c) => ({ ...c, items: c.items.filter((item) => itemMatchesDate(item, key, c)) }))
     .filter((c) => c.items.length);
-  if (!roles.includes("TEACHER") || due.length < 2) return due;
+  // Teachers, and staff since client sheet 10-29 (11), row 55, pick one.
+  const picksOne = roles.some((r) => r === "TEACHER" || STAFF_PORTAL_ROLES.includes(r));
+  if (!picksOne || due.length < 2) return due;
   const chosen = due.find((c) => c.id === choiceId);
   if (chosen) return [chosen];
   const ticked = (c) => c.items.filter((item) => doneIds.has(item.id)).length;

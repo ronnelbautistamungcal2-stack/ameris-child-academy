@@ -10,7 +10,7 @@ import {
   newId,
   offenseLabel,
 } from "@/lib/characterGuide";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 // Add / Edit Behavior popup (client mockups 40-01..07): the behavior's details
 // and its decision tree. Every box is editable; branches, offenses and
@@ -32,6 +32,18 @@ export default function BehaviorEditor({ behavior, categories, onClose, onSaved 
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Age choices: the age groups and age ranges on the account's classrooms.
+  const [ageOptions, setAgeOptions] = useState([]);
+  useEffect(() => {
+    apiJson("/api/v1/classes")
+      .then((rows) => {
+        const all = (Array.isArray(rows) ? rows : []).flatMap((c) => [c.curriculumAgeGroupId, c.ageRange]).map((v) => String(v || "").trim()).filter(Boolean);
+        const saved = form.tree.ages || [];
+        setAgeOptions([...new Set([...all, ...saved])].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })));
+      })
+      .catch(() => setAgeOptions(form.tree.ages || []));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const highlight = form.type === CHARACTER_HIGHLIGHT;
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
   const setTree = (fn) => setForm((f) => ({ ...f, tree: fn(f.tree) }));
@@ -114,16 +126,30 @@ export default function BehaviorEditor({ behavior, categories, onClose, onSaved 
               </div>
             </fieldset>
           </div>
-          <div className="grid gap-3 lg:grid-cols-[1fr_4fr]">
-            <label className={label}>Level <span className="text-red-600">*</span>
-              <select value={form.level} onChange={(e) => set({ level: Number(e.target.value) })} className={`${control} mt-1`}>
-                {BEHAVIOR_LEVELS.map((l) => <option key={l} value={l}>Level {l}</option>)}
-              </select>
-            </label>
-            <label className={label}>Description <span className="text-red-600">*</span>
-              <textarea value={form.description} onChange={(e) => set({ description: e.target.value })} rows={2} className={`${control} mt-1`} />
-            </label>
-          </div>
+          {/* The level is set on each branch below (client sheet 10-29 (11), row 30). */}
+          <label className={label}>Description <span className="text-red-600">*</span>
+            <textarea value={form.description} onChange={(e) => set({ description: e.target.value })} rows={2} className={`${control} mt-1`} />
+          </label>
+          {/* Ages (row 31): teachers see the behavior for these classroom ages only; none = every age. */}
+          <fieldset className={label}>
+            <legend>Age <span className="font-normal text-gray-500">(none checked = every age)</span></legend>
+            {ageOptions.length ? (
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                {ageOptions.map((a) => (
+                  <label key={a} className="inline-flex items-center gap-1.5 text-sm font-normal">
+                    <input
+                      type="checkbox"
+                      checked={(form.tree.ages || []).includes(a)}
+                      onChange={(e) => setTree((t) => ({ ...t, ages: e.target.checked ? [...(t.ages || []), a] : (t.ages || []).filter((x) => x !== a) }))}
+                    />
+                    {a}
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1 text-sm font-normal text-gray-500">Set an age range or age group on your classrooms to choose ages here.</p>
+            )}
+          </fieldset>
 
           <div className="rounded-xl border border-gray-200 bg-slate-50/60 p-4 dark:border-gray-700 dark:bg-gray-950/40">
             <div className="mx-auto max-w-xl space-y-0">
@@ -142,7 +168,7 @@ export default function BehaviorEditor({ behavior, categories, onClose, onSaved 
               {form.tree.branches.map((b, i) => (
                 <Branch
                   key={b.id}
-                  branch={b}
+                  branch={{ ...b, level: b.level || form.level || 1 }}
                   index={i}
                   highlight={highlight}
                   onChange={(fn) => setBranch(b.id, fn)}
@@ -188,6 +214,12 @@ function Branch({ branch, index, highlight, onChange, onRemove }) {
           {onRemove ? <Trash onClick={onRemove} label={`Remove ${name}`} /> : null}
         </div>
         <textarea value={branch.prompt} onChange={(e) => onChange((b) => ({ ...b, prompt: e.target.value }))} rows={2} placeholder="Question for the teacher..." aria-label={`${name} question`} className={`${boxInput} mt-1`} />
+        <label className="mt-1 flex items-center gap-2 text-xs font-bold text-[#0b2a5b] dark:text-blue-100">
+          Level
+          <select value={branch.level} onChange={(e) => onChange((b) => ({ ...b, level: Number(e.target.value) }))} aria-label={`${name} level`} className={boxInput}>
+            {BEHAVIOR_LEVELS.map((l) => <option key={l} value={l}>Level {l}</option>)}
+          </select>
+        </label>
       </div>
       {highlight ? <HighlightSteps branch={branch} tone={tone} name={name} onChange={onChange} /> : <Offenses branch={branch} tone={tone} name={name} onChange={onChange} />}
     </div>

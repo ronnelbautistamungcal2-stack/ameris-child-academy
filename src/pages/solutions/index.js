@@ -24,7 +24,7 @@ export default function SolutionsHome() {
             <Link href="/solutions/plans" className={`${BTN} py-3 text-base`}>
               View Plans &amp; Features
             </Link>
-            <Link href="/solutions/request-quote?demo=1" className={`${BTN_OUTLINE} py-3 text-base`}>
+            <Link href="/solutions/contact" className={`${BTN_OUTLINE} py-3 text-base`}>
               Request a Demo ›
             </Link>
           </div>

@@ -6,7 +6,7 @@ const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const { getAuthCookie } = require("../helpers/auth");
-const { apiGet, apiPost, apiPatch } = require("../helpers/api");
+const { apiGet, apiPost, apiPatch, apiDelete } = require("../helpers/api");
 
 const prisma = new PrismaClient();
 const stamp = Date.now();
@@ -74,6 +74,22 @@ test.describe("Sales & Leads @api", () => {
     const lead = await prisma.lead.findFirst({ where: { email: `ann@${domain}` } });
     expect(lead?.source).toBe("CONTACT_FORM");
     expect(lead?.about).toContain("Request a demo");
+  });
+
+  test("a lead can be deleted, but not once it is a subscriber", async ({ request }) => {
+    // Client sheet 10-29 (11), row 54.
+    const global = await getAuthCookie(request, globalEmail, password);
+    const lead = await prisma.lead.create({ data: { number: `L-del-${stamp}`, centerName: "Delete Me", contactName: "Del", email: `del@${domain}` } });
+    await prisma.leadActivity.create({ data: { leadId: lead.id, description: "note" } });
+    const res = await apiDelete(request, `/api/v1/global/leads/${lead.id}`, global);
+    expect(res.status(), await res.text()).toBe(200);
+    expect(await prisma.lead.count({ where: { id: lead.id } })).toBe(0);
+    expect(await prisma.leadActivity.count({ where: { leadId: lead.id } })).toBe(0);
+
+    const account = await prisma.subscriberAccount.findFirst({ select: { id: true } });
+    const won = await prisma.lead.create({ data: { number: `L-won-${stamp}`, centerName: "Won", contactName: "Won", email: `won@${domain}`, subscriberAccountId: account.id } });
+    expect((await apiDelete(request, `/api/v1/global/leads/${won.id}`, global)).status()).toBe(409);
+    expect(await prisma.lead.count({ where: { id: won.id } })).toBe(1);
   });
 
   test("Sales & Leads: list, save, Generate Quote, and the public quote page", async ({ request }) => {

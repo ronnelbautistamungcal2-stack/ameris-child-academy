@@ -61,6 +61,10 @@ export default async function handler(req, res) {
       const names = await ageRangeNames(centerId);
       const name = names.find((n) => n.toLowerCase() === ageRange.toLowerCase());
       if (!name) return res.status(400).json({ error: "Add this age range under Curriculum > Categories first" });
+      // No new "All types" planners (client sheet 10-29 (11), row 64); old ones still open.
+      if (type === "" && !(await prisma.curriculumPlan.findUnique({ where: { centerId_ageRange_type: { centerId, ageRange: name, type } } }))) {
+        return res.status(400).json({ error: "Choose a type" });
+      }
       const plan = await prisma.curriculumPlan.upsert({
         where: { centerId_ageRange_type: { centerId, ageRange: name, type } },
         create: { centerId, ageRange: name, type },

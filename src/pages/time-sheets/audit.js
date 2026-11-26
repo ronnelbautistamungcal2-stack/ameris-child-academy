@@ -44,6 +44,7 @@ export default function TimeSheetAuditPage() {
     <PrintableReport
       title={isChild ? "Child Time Sheet Audit Report" : "Employee Time Sheet Audit Report"}
       generatedAt={generatedAt}
+      centerName={subject.centerName}
       header={
         isChild ? (
           <div className="flex flex-wrap justify-between gap-4">

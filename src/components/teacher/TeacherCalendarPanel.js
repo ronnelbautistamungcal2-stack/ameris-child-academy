@@ -46,6 +46,10 @@ export default function TeacherCalendarPanel({
   showCenterSelect = true,
   title = "My Calendar",
   className,
+  // The day's details open in a window on top of the page instead of beside
+  // the calendar (dashboards: client sheet 10-29 (11), row 67, the panel
+  // opened behind Classrooms at a Glance).
+  detailPopup = false,
 }) {
   const controlled = typeof controlledCenterId === "string";
   const [centers, setCenters] = useState([]);
@@ -202,7 +206,7 @@ function getDayItems(day) {
         </div>
 
         {centerId ? (
-          <div style={{ display: "grid", gridTemplateColumns: selectedDay ? "1fr minmax(0, 300px)" : "1fr", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: selectedDay && !detailPopup ? "1fr minmax(0, 300px)" : "1fr", gap: 16 }}>
             <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, padding: 16 }}>
               <MonthlyCalendar
                 year={calYear}
@@ -215,6 +219,7 @@ function getDayItems(day) {
 
             {/* Day detail panel */}
             {selectedDay && (
+              <DayDetailFrame popup={detailPopup} onClose={() => setSelectedDay(null)}>
               <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, padding: 16, alignSelf: "start" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>
@@ -256,6 +261,7 @@ function getDayItems(day) {
                   </div>
                 ))}
               </div>
+              </DayDetailFrame>
             )}
           </div>
         ) : (
@@ -264,6 +270,28 @@ function getDayItems(day) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** The day's details: in place, or in a window over the page (popup). */
+function DayDetailFrame({ popup, onClose, children }) {
+  useEffect(() => {
+    if (!popup) return undefined;
+    const onKey = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [popup, onClose]);
+  if (!popup) return children;
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Day details"
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-xl shadow-2xl">{children}</div>
     </div>
   );
 }

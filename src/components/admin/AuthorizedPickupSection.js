@@ -1,3 +1,4 @@
+import ChildCopyPicker from "@/components/children/ChildCopyPicker";
 import { apiJson } from "@/lib/api";
 import { pickupPersonName } from "@/lib/personNames";
 import { useEffect, useState } from "react";
@@ -244,14 +245,7 @@ export default function AuthorizedPickupSection({ childId, centerId, otherChildr
 
       {otherChildren.length ? (
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
-          <select value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)} style={{ ...inputStyle, width: "auto", minWidth: 220 }}>
-            <option value="">Copy from another child...</option>
-            {otherChildren.map((child) => (
-              <option key={child.id} value={child.id}>
-                {[child.firstName, child.lastName].filter(Boolean).join(" ")}
-              </option>
-            ))}
-          </select>
+          <ChildCopyPicker label="Copy pickup list from" childList={otherChildren} value={copyFrom} onChange={setCopyFrom} style={{ ...inputStyle, width: "auto", minWidth: 220 }} />
           <button type="button" style={smallButton} disabled={busy || !copyFrom} onClick={copyList}>
             Copy list
           </button>

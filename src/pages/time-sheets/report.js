@@ -44,6 +44,7 @@ export default function TimeSheetReportPage() {
       title={isChild ? "Child Time Sheet Report" : "Employee Time Sheet Report"}
       subtitle={`${longDate(localDay(from))} – ${longDate(localDay(to))}`}
       generatedAt={generatedAt}
+      centerName={subject.centerName}
       header={
         isChild ? (
           <div className="flex flex-wrap justify-between gap-4">

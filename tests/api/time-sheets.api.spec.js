@@ -74,6 +74,12 @@ test.describe("Time sheets and audit @api", () => {
     // The time out must be on the same day as the time in.
     expect((await apiPost(request, base, { timeIn: localTime(2, 23, 0), timeOut: localTime(3, 1, 0) }, admin)).status()).toBe(400);
     expect((await apiPost(request, base, { timeIn: localTime(3, 9, 0), timeOut: localTime(3, 8, 0) }, admin)).status()).toBe(400);
+    // No clocking in or out in the future (client sheet 10-29 (11), rows 62/63).
+    const later = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    const future = await apiPost(request, base, { timeIn: later, timeOut: null }, admin);
+    expect(future.status()).toBe(400);
+    expect((await future.json()).error).toMatch(/future/);
+    expect((await apiPost(request, base, { timeIn: localTime(4, 8, 0), timeOut: new Date(Date.now() + 26 * 60 * 60 * 1000).toISOString() }, admin)).status()).toBe(400);
 
     const sheet = await (await apiGet(request, base, admin)).json();
     expect(sheet.subject.name).toBe("Timesheet Kid");

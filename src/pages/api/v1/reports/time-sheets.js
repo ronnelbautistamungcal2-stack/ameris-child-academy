@@ -17,6 +17,13 @@ const MAX_SUBJECTS = 400;
  * currently employed staff. The overview lists everyone signed in at all in
  * the range, even if they are no longer attending or employed.
  */
+// First and last name, for sorting the overview (client sheet 10-29 (11), row 70).
+function sortNames(kind, subject) {
+  if (kind === "child") return { firstName: subject.firstName || "", lastName: subject.lastName || "" };
+  const parts = String(subject.name || subject.email || "").trim().split(/\s+/);
+  return { firstName: parts[0] || "", lastName: parts.length > 1 ? parts[parts.length - 1] : parts[0] || "" };
+}
+
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
@@ -61,7 +68,8 @@ export default async function handler(req, res) {
         guardians: { include: { guardian: { select: { name: true } } } },
         center: { select: { name: true } },
       },
-      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+      // By last name (client sheet 10-29 (11), row 71).
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
       take: MAX_SUBJECTS,
     });
   } else {
@@ -87,7 +95,7 @@ export default async function handler(req, res) {
     const days = new Set(rows.filter((r) => r.timeIn).map((r) => new Date(r.day).toDateString())).size;
     const info = describeSubject(kind, subject);
     if (overview) {
-      people.push({ ...info, days, hours, current: kind === "child" ? !subject.enrollmentEndDate || subject.enrollmentEndDate >= start : subject.employmentStatus === "CURRENTLY_EMPLOYED" });
+      people.push({ ...info, ...sortNames(kind, subject), days, hours, current: kind === "child" ? !subject.enrollmentEndDate || subject.enrollmentEndDate >= start : subject.employmentStatus === "CURRENTLY_EMPLOYED" });
     } else {
       people.push({ ...info, rows, days, hours });
     }

@@ -87,7 +87,7 @@ export async function loadTimeSheetAccess(prisma, session, kind, subjectId, { al
         email: true,
         role: true,
         roles: true,
-        centers: { select: { centerId: true } },
+        centers: { select: { centerId: true, center: { select: { name: true } } } },
       },
     });
     subjectCenterIds = subject ? subject.centers.map((c) => c.centerId) : [];
@@ -120,7 +120,9 @@ export function describeSubject(kind, subject) {
       centerName: subject.center?.name || null,
     };
   }
-  return { id: subject.id, name: subject.name || subject.email, role: roleLabel(subject.role) };
+  // Staff can work at several centers: their center names, for the report heading.
+  const centerName = (subject.centers || []).map((c) => c.center?.name).filter(Boolean).join(", ") || null;
+  return { id: subject.id, name: subject.name || subject.email, role: roleLabel(subject.role), centerName };
 }
 
 function serializeRow(kind, config, row, positions) {
@@ -202,9 +204,17 @@ export class TimeSheetError extends Error {
   }
 }
 
+// A minute of slack for the device and server clocks.
+const FUTURE_SLACK_MS = 60 * 1000;
+
 function validateTimes(timeIn, timeOut) {
   if (timeIn === undefined || timeOut === undefined) throw new TimeSheetError(400, "Enter valid dates and times");
   if (timeIn && timeOut && timeOut < timeIn) throw new TimeSheetError(400, "The time out must be after the time in");
+  // No clocking in or out in the future (client sheet 10-29 (11), rows 62/63).
+  const latest = Date.now() + FUTURE_SLACK_MS;
+  if ((timeIn && timeIn.getTime() > latest) || (timeOut && timeOut.getTime() > latest)) {
+    throw new TimeSheetError(400, "Times can't be in the future");
+  }
 }
 
 /** Adds a missing day (the blank row at the bottom of the time sheet). Not audited. */

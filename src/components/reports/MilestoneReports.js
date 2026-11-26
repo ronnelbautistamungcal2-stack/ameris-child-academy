@@ -273,7 +273,8 @@ export function ChildStepsReport({ parent = false }) {
 
   return (
     <div className="space-y-4">
-      <ReportControls title="Child Steps of Progression Report">
+      {/* The Reports page's Print at the top prints it (client sheet 10-29 (11), row 14). */}
+      <ReportControls title="Child Steps of Progression Report" onPrint={false}>
         {!parent ? <CenterSelect centers={centers} centerId={centerId} setCenterId={setCenterId} /> : null}
         <label className="block text-sm font-bold">
           Child

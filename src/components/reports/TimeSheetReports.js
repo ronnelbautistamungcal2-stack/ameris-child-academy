@@ -2,7 +2,16 @@ import { CenterSelect, ReportControls, ReportMessage, input, monthRange, useRepo
 import TimeSheetReportBody, { localDay, longDate } from "@/components/timesheets/TimeSheetReportBody";
 import { apiJson } from "@/lib/api";
 import { roundHours } from "@/lib/timeSheetReport";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+// Sort choices for the overview (client sheet 10-29 (11), row 70).
+const OVERVIEW_SORTS = {
+  last: { label: "Last name", compare: (a, b) => byText(a.lastName, b.lastName) || byText(a.firstName, b.firstName) },
+  first: { label: "First name", compare: (a, b) => byText(a.firstName, b.firstName) || byText(a.lastName, b.lastName) },
+  hoursAsc: { label: "Hours, smallest to largest", compare: (a, b) => a.hours - b.hours || byText(a.lastName, b.lastName) },
+  hoursDesc: { label: "Hours, largest to smallest", compare: (a, b) => b.hours - a.hours || byText(a.lastName, b.lastName) },
+};
+const byText = (a, b) => String(a || "").localeCompare(String(b || ""), undefined, { sensitivity: "base" });
 
 // Student / Staff Time Sheets (every time sheet in one printable report) and
 // Student / Staff Time Overview (hours signed in per person) for a date range
@@ -13,6 +22,7 @@ export default function TimeSheetReports({ kind = "child", mode = "sheets" }) {
   const { centers, centerId, setCenterId } = useReportCenters();
   const [range, setRange] = useState(() => monthRange());
   const [population, setPopulation] = useState("CURRENT");
+  const [sort, setSort] = useState("last");
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const isChild = kind === "child";
@@ -27,6 +37,8 @@ export default function TimeSheetReports({ kind = "child", mode = "sheets" }) {
       .then(setData)
       .catch((e) => setError(e.message || "Failed to load the report"));
   }, [kind, mode, centerId, range, population]);
+
+  const overviewPeople = useMemo(() => [...(data?.people || [])].sort(OVERVIEW_SORTS[sort].compare), [data, sort]);
 
   const title = mode === "overview" ? `${who} Time Overview` : `${who} Time Sheets`;
   return (
@@ -50,7 +62,16 @@ export default function TimeSheetReports({ kind = "child", mode = "sheets" }) {
               <option value="ALL">{isChild ? "All children" : "All staff"}</option>
             </select>
           </label>
-        ) : null}
+        ) : (
+          <label className="block text-sm font-bold">
+            Sort by
+            <select value={sort} onChange={(e) => setSort(e.target.value)} className={input}>
+              {Object.entries(OVERVIEW_SORTS).map(([key, o]) => (
+                <option key={key} value={key}>{o.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
       </ReportControls>
       {error ? <ReportMessage tone="red">{error}</ReportMessage> : null}
       {!centerId ? (
@@ -72,7 +93,7 @@ export default function TimeSheetReports({ kind = "child", mode = "sheets" }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {data.people.map((p) => (
+              {overviewPeople.map((p) => (
                 <tr key={p.id}>
                   <td className="px-3 py-1.5">
                     {p.name}
@@ -100,6 +121,7 @@ export default function TimeSheetReports({ kind = "child", mode = "sheets" }) {
           {data.people.map((p) => (
             <section key={p.id} className="break-after-page rounded-2xl border border-gray-200 bg-white p-5 text-black dark:border-gray-700 print:break-after-page">
               <div className="mb-3 text-center">
+                {data.center?.name ? <div className="text-lg font-bold">{data.center.name}</div> : null}
                 <div className="text-xl font-bold">{isChild ? "Child Time Sheet Report" : "Employee Time Sheet Report"}</div>
                 <div className="text-sm">{longDate(localDay(data.from))} – {longDate(localDay(data.to))}</div>
               </div>

@@ -28,7 +28,9 @@ function readSavedFilters() {
 /**
  * categories: [{ label, icon, reports: [{ key, label, addOn?, ownExport? }] }]; a
  * report whose add-on the account lacks shows a lock and an upgrade notice;
- * ownExport hides the Export button here (the report has a better one).
+ * ownExport hides the Export button here (the report has a better one);
+ * ownPrint hides the Print button here (the report has its own, client
+ * sheet 10-29 (11), row 13).
  * selectedKey, hrefFor(key), children: the selected report.
  */
 export default function ReportsHub({ categories, selectedKey, hrefFor, children }) {
@@ -204,9 +206,11 @@ export default function ReportsHub({ categories, selectedKey, hrefFor, children 
           {selected ? (
             <div className="no-print mb-3 flex flex-wrap items-center justify-end gap-2">
               {exportError ? <span role="alert" className="mr-auto text-sm text-red-700">{exportError}</span> : null}
-              <button type="button" onClick={() => window.print()} className="rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 dark:bg-gray-900">
-                🖨 Print / PDF
-              </button>
+              {selected.ownPrint ? null : (
+                <button type="button" onClick={() => window.print()} className="rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50 dark:bg-gray-900">
+                  🖨 Print / PDF
+                </button>
+              )}
               {selected.ownExport ? null : (
                 <button type="button" onClick={exportExcel} className="rounded-lg border border-emerald-600 bg-white px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50 dark:bg-gray-900">
                   ⬇ Export to Excel

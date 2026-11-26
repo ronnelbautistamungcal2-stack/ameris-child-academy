@@ -101,7 +101,7 @@ export function ViewAll({ href, label = "View All" }) {
 export function DashboardCalendar({ centerId }) {
   return (
     <section className={panel}>
-      <TeacherCalendarPanel centerId={centerId} title="Calendar" />
+      <TeacherCalendarPanel centerId={centerId} title="Calendar" detailPopup />
     </section>
   );
 }

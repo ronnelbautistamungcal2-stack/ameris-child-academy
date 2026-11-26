@@ -1,3 +1,4 @@
+import { coachTeamUserIds, onCoachTeam } from "@/lib/coachTeam";
 import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import {
@@ -118,6 +119,10 @@ export default createApiHandler(async function handler(req, res) {
       if (teacherId) where.teacherId = teacherId;
       if (!centerId) where.centerId = await centerIdFilter(session.user.id, null);
     }
+
+    // A coach sees only their team's evaluations (client sheet 10-29 (11), row 11).
+    const team = mine ? null : await coachTeamUserIds(prisma, session);
+    if (team) where.teacherId = teacherId ? (team.has(teacherId) ? teacherId : "__none__") : { in: [...team] };
 
     const evaluations = await prisma.teacherEvaluation.findMany({
       where,

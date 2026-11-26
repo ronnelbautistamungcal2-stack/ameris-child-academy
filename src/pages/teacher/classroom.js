@@ -2,6 +2,7 @@ import TeacherLayout from "@/components/teacher/TeacherLayout";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
 import ActivityPhotos from "@/components/reports/ActivityPhotos";
+import useChecklistLinkVisit from "@/hooks/useChecklistLinkVisit";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -331,6 +332,8 @@ function performanceHref(childId) {
 }
 
 export default function TeacherClassroom() {
+  // Opened from a checklist item: that item can be ticked now (client sheet 10-29 (11), row 69).
+  useChecklistLinkVisit();
   const [attendanceFilter, setAttendanceFilter] = useState("all");
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");

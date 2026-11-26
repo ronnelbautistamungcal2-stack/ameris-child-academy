@@ -518,11 +518,15 @@ export default async function handler(req, res) {
       // My Checklist shows the checklists of the role you are signed in as:
       // a coach who is also a teacher sees only coach checklists there
       // (client request 2026-10-29). An admin previewing someone sees them all.
-      const ownRole = staffUser.id === session.user.id && staffRoles.includes(role) ? role : "";
+      // An admin's own My Checklist shows the Admin checklists assigned to
+      // them, not their Teacher / Other Staff ones (client sheet 10-29 (11),
+      // rows 56/57): Admin counts as one of their roles here.
+      const ownRoles = [staffUser.role, ...(staffUser.roles || [])].includes("ADMIN") ? [...staffRoles, "ADMIN"] : staffRoles;
+      const ownRole = staffUser.id === session.user.id && ownRoles.includes(role) ? role : "";
       const asRole = ownRole || String(req.query.asRole || "").trim();
       staffScope = {
         userId: staffUser.id,
-        roles: asRole && staffRoles.includes(asRole) ? [asRole] : staffRoles,
+        roles: ownRole ? [ownRole] : asRole && staffRoles.includes(asRole) ? [asRole] : staffRoles,
         teacherClassIds: await getTeacherClassIds(staffUser.id, centerId),
       };
     }

@@ -211,6 +211,30 @@ test.describe("Ameris curriculum for subscribers @api", () => {
     }
   });
 
+  test("the checklist's Supplies Needed lists next week's Lesson Calendar lessons", async ({ request }) => {
+    // Client sheet 10-29 (11), row 46: supplies only came from the old
+    // milestone checklist plans, not the Lesson Calendar's planner.
+    const room = await prisma.classRoom.create({ data: { name: `QA Supplies Room ${stamp}`, centerId: source.id, curriculumAgeGroupId: ageGroup } });
+    const supply = await prisma.lessonSupply.create({ data: { lessonId: ids.nd, name: `QA Glitter ${stamp}`, quantity: 3 } });
+    try {
+      const demo = await getAuthCookie(request, "admin@demo.com", "adminpass");
+      // Next Monday is Day 1, which has the ND lesson.
+      const d = new Date();
+      d.setDate(d.getDate() + (d.getDay() === 0 ? 1 : 8 - d.getDay()));
+      const monday = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      expect((await apiPut(request, "/api/v1/lesson-calendar", { centerId: source.id, classRoomId: room.id, startDate: monday, dayNumber: 1, closedDays: [] }, demo)).status()).toBe(200);
+      const res = await apiGet(request, `/api/v1/lessons/next-week-supplies?centerId=${source.id}&classRoomId=${room.id}`, demo);
+      expect(res.status(), await res.text()).toBe(200);
+      const found = (await res.json()).supplies.find((x) => x.name === supply.name);
+      expect(found).toMatchObject({ totalQuantity: 3 });
+      expect(found.lessons.map((l) => l.id)).toContain(ids.nd);
+    } finally {
+      await prisma.lessonSupply.delete({ where: { id: supply.id } }).catch(() => {});
+      await prisma.lessonCalendarAnchor.deleteMany({ where: { classRoomId: room.id } });
+      await prisma.classRoom.delete({ where: { id: room.id } }).catch(() => {});
+    }
+  });
+
   test("Ameris Academy's other centers follow the Ameris age-group planners too", async ({ request }) => {
     // Client sheet 10-29 (10), row 8: on Ameris Academy only one planner came
     // over. Its centers other than the curriculum center looked for planners

@@ -1,5 +1,32 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
+import { classroomCurriculum, plannedLessons } from "@/lib/curriculumSource";
+import { dayNumbersBetween, toDateKey } from "@/lib/lessonCalendar";
+import { loadCalendar } from "@/lib/lessonPlanAccess";
+import { buildActiveRows, rowLabel } from "@/lib/lessonPlanRows";
 import prisma from "@/lib/prisma";
+
+/**
+ * The lessons a classroom's Lesson Calendar has for next week: its day
+ * numbers on those dates and the planner it follows (client sheet 10-29 (11),
+ * row 46: supplies only came from the old milestone checklist plans).
+ */
+async function calendarLessons(centerId, classRoomId, nextMonday, nextSunday) {
+  if (!classRoomId) return {};
+  const room = await prisma.classRoom.findFirst({ where: { id: String(classRoomId), centerId: String(centerId) }, select: { id: true } });
+  if (!room) return {};
+  const calendar = await loadCalendar(String(centerId), room.id);
+  const days = dayNumbersBetween(calendar.anchors, calendar.closedDays, toDateKey(nextMonday), toDateKey(nextSunday));
+  const dayList = [...new Set(Object.values(days).map((d) => d.day).filter(Boolean))];
+  if (!dayList.length) return {};
+  const plan = await plannedLessons(await classroomCurriculum(room.id), dayList, { buildActiveRows, rowLabel });
+  const out = {};
+  for (const cells of Object.values(plan.byDay)) {
+    for (const cell of Object.values(cells)) {
+      if (cell.lessonId) out[cell.lessonId] = cell.title;
+    }
+  }
+  return out;
+}
 
 function startOfDay(date) {
   const d = new Date(date);
@@ -72,6 +99,10 @@ export default async function handler(req, res) {
         lessonMap[item.lessonId] = item.lesson.title;
       }
     }
+  }
+
+  for (const [id, title] of Object.entries(await calendarLessons(centerId, classRoomId, nextMonday, nextSunday))) {
+    if (!lessonMap[id]) lessonMap[id] = title;
   }
 
   const lessonIds = Object.keys(lessonMap);

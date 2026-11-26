@@ -1,4 +1,4 @@
-import { adminCanReachUser, getSession } from "@/lib/auth";
+import { accessibleCenterIds, adminCanReachUser, getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { pinStatusOf } from "@/lib/kioskPins";
@@ -197,12 +197,40 @@ export default async function handler(req, res) {
       updateData.mustChangePassword = session.user.id !== id;
     }
 
+    // centerIds: the centers the user is assigned to (client sheet 10-29 (11),
+    // row 48). An admin changes only the centers they can reach; the user's
+    // other centers stay.
+    let centerChange = null;
+    if ("centerIds" in body) {
+      if (session.user.role !== "ADMIN") return res.status(403).json({ error: "Only admins can change centers" });
+      const wanted = [...new Set((Array.isArray(body.centerIds) ? body.centerIds : []).map(String))];
+      const ids = await accessibleCenterIds(session.user.id);
+      // null: an admin with no account limit (legacy data).
+      const reachable = new Set(ids === null ? (await prisma.center.findMany({ select: { id: true } })).map((c) => c.id) : ids);
+      if (wanted.some((c) => !reachable.has(c))) return res.status(400).json({ error: "Invalid centerId" });
+      const current = await prisma.centerUser.findMany({ where: { userId: id }, select: { centerId: true } });
+      const have = new Set(current.map((c) => c.centerId));
+      centerChange = {
+        add: wanted.filter((c) => !have.has(c)),
+        remove: [...have].filter((c) => reachable.has(c) && !wanted.includes(c)),
+      };
+    }
+
     let user;
     try {
-      user = await prisma.user.update({
-        where: { id },
-        data: updateData,
-        include: { centers: true, weeklySchedules: true, kioskCredential: true },
+      user = await prisma.$transaction(async (tx) => {
+        if (centerChange) {
+          const roleForCenter = (assignedRoles && assignedRoles[0]) || (await tx.user.findUnique({ where: { id }, select: { role: true } }))?.role || "PARENT";
+          if (centerChange.remove.length) await tx.centerUser.deleteMany({ where: { userId: id, centerId: { in: centerChange.remove } } });
+          if (centerChange.add.length) {
+            await tx.centerUser.createMany({ data: centerChange.add.map((centerId) => ({ userId: id, centerId, role: roleForCenter })), skipDuplicates: true });
+          }
+        }
+        return tx.user.update({
+          where: { id },
+          data: updateData,
+          include: { centers: true, weeklySchedules: true, kioskCredential: true },
+        });
       });
     } catch (error) {
       if (error?.code === "P2002") {

@@ -1,6 +1,7 @@
 import EmploymentStatusModal from "@/components/timesheets/EmploymentStatusModal";
 import TimeSheetModal from "@/components/timesheets/TimeSheetModal";
 import { CURRENTLY_EMPLOYED, employmentStatusLabel } from "@/lib/employment";
+import CenterFilter, { useCenterFilter } from "@/components/ui/CenterFilter";
 import { apiJson } from "@/lib/api";
 import { useEffect, useState } from "react";
 
@@ -19,18 +20,28 @@ export default function StaffTimeSheetList() {
   const [openId, setOpenId] = useState(null);
   const [employmentId, setEmploymentId] = useState(null);
   const [employment, setEmployment] = useState("ACTIVE");
+  // Center filter (client sheet 10-29 (11), row 25).
+  const [centers, setCenters] = useState([]);
+  const [centerFilter, setCenterFilter] = useCenterFilter();
 
   async function load() {
     try {
-      setStaff(await apiJson("/api/v1/time-sheets/staff"));
+      setStaff(await apiJson(`/api/v1/time-sheets/staff${centerFilter ? `?centerId=${encodeURIComponent(centerFilter)}` : ""}`));
     } catch (e) {
       setError(e.message || "Failed to load staff");
     }
   }
 
   useEffect(() => {
-    load();
+    apiJson("/api/v1/centers")
+      .then((rows) => setCenters(Array.isArray(rows) ? rows : []))
+      .catch(() => setCenters([]));
   }, []);
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centerFilter]);
 
   const q = query.trim().toLowerCase();
   const visible = (staff || []).filter((s) => {
@@ -45,6 +56,7 @@ export default function StaffTimeSheetList() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-black text-gray-900 dark:text-white">Staff List</h2>
         <div className="flex flex-wrap gap-2">
+        <CenterFilter centers={centers} value={centerFilter} onChange={setCenterFilter} className="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
         <select
           value={employment}
           onChange={(e) => setEmployment(e.target.value)}

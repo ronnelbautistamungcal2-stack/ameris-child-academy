@@ -1,3 +1,4 @@
+import CenterFilter, { useCenterFilter } from "@/components/ui/CenterFilter";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { apiJson } from "@/lib/api";
@@ -28,6 +29,8 @@ export default function ClassroomListPage({ Layout }) {
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [expandedClassId, setExpandedClassId] = useState("");
   const [search, setSearch] = useState("");
+  // Center filter (client sheet 10-29 (11), row 27).
+  const [centerFilter, setCenterFilter] = useCenterFilter();
   const [ageFilter, setAgeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
@@ -64,11 +67,12 @@ export default function ClassroomListPage({ Layout }) {
       const full = cl.capacity != null && assigned >= cl.capacity;
       if (q && !`${cl.name} ${(cl.teachers || []).map((tc) => tc.teacher?.name || "").join(" ")}`.toLowerCase().includes(q)) return false;
       if (ageFilter && cl.ageRange !== ageFilter) return false;
+      if (centerFilter && cl.centerId !== centerFilter) return false;
       if (statusFilter === "FULL" && !full) return false;
       if (statusFilter === "OPEN" && full) return false;
       return true;
     });
-  }, [sorted, search, ageFilter, statusFilter]);
+  }, [sorted, search, ageFilter, statusFilter, centerFilter]);
   const sortedTeachers = useMemo(() => [...teachers].sort((a, b) => (a.email || "").localeCompare(b.email || "")), [teachers]);
 
   const effectiveCenterId = editing?.centerId || centerId || "";
@@ -336,7 +340,8 @@ export default function ClassroomListPage({ Layout }) {
         )}
 
         {/* Classroom List (client mockup 10-01) */}
-        <div className="mb-4 grid gap-3 sm:grid-cols-[2fr_1fr_1fr]">
+        <div className={`mb-4 grid gap-3 ${centers.length > 1 ? "sm:grid-cols-[1fr_2fr_1fr_1fr]" : "sm:grid-cols-[2fr_1fr_1fr]"}`}>
+          <CenterFilter centers={centers} value={centerFilter} onChange={setCenterFilter} className={listControl} />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search classrooms..." aria-label="Search classrooms" className={listControl} />
           <select value={ageFilter} onChange={(e) => setAgeFilter(e.target.value)} aria-label="Age group" className={listControl}>
             <option value="">All Age Groups</option>

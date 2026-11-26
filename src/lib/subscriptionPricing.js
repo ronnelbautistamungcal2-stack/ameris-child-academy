@@ -102,8 +102,15 @@ const slug = (s) => String(s || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, 
  */
 export function validatePricing(input) {
   const src = input && typeof input === "object" ? input : {};
+  // Each range has its own add-on prices too (client sheet 10-29 (11), row 33);
+  // a range without one uses the set's single add-on price, as before.
   const ranges = (Array.isArray(src.baseRanges) ? src.baseRanges : [])
-    .map((r) => ({ from: num(r.from), to: num(r.to), price: price(r.price) }))
+    .map((r) => ({
+      from: num(r.from),
+      to: num(r.to),
+      price: price(r.price),
+      addOns: Object.fromEntries(PRICED_ADD_ONS.map((a) => [a.key, price(r.addOns?.[a.key] ?? src.addOns?.[a.key] ?? 0)])),
+    }))
     .sort((a, b) => a.from - b.from);
   if (!ranges.length) return { error: "Add at least one Base Program range" };
   for (const [i, r] of ranges.entries()) {
@@ -111,6 +118,7 @@ export function validatePricing(input) {
       return { error: `Range ${i + 1}: From and To must be whole numbers, To at least From` };
     }
     if (!(r.price >= 0)) return { error: `Range ${r.from}–${r.to}: enter a price per child` };
+    for (const a of PRICED_ADD_ONS) if (!(r.addOns[a.key] >= 0)) return { error: `Range ${r.from}–${r.to}: enter the ${a.label} price per child` };
     if (i && r.from <= ranges[i - 1].to) return { error: `Ranges ${ranges[i - 1].from}–${ranges[i - 1].to} and ${r.from}–${r.to} overlap` };
   }
   const addOns = {};
@@ -210,7 +218,8 @@ export function quote(pricing, choice = {}) {
   const addOns = new Set(choice.addOns || []);
   for (const a of PRICED_ADD_ONS) {
     if (!addOns.has(a.key)) continue;
-    const per = cents(pricing?.addOns?.[a.key]);
+    // The range's own add-on price, else the set's single one (older sets).
+    const per = cents(range.addOns?.[a.key] ?? pricing?.addOns?.[a.key]);
     lines.push({ kind: "ADD_ON", label: a.label, detail: `${billed} × ${money(per)}`, amount: billed * per });
   }
 

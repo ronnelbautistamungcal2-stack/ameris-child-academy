@@ -78,6 +78,19 @@ test.describe("Subscription pricing @api", () => {
     expect(ok.status(), await ok.text()).toBe(200);
     const saved = (await ok.json()).sets.find((s) => s.id === newSetId);
     expect(saved.data.discounts.find((d) => d.id === "dccs")).toMatchObject({ name: "DCCS Partner", amount: 40 });
+
+    // Each range has its own add-on prices (client sheet 10-29 (11), row 33).
+    const perRange = {
+      ...saved.data,
+      baseRanges: [
+        { from: 1, to: 10, price: 2.5, addOns: { STEPS_OF_PROGRESSION: 1.25, TEACHER_TRAINING: 1.15, STAFF_MANAGEMENT: 1 } },
+        { from: 11, to: 20, price: 2, addOns: { STEPS_OF_PROGRESSION: 1.1, TEACHER_TRAINING: 1, STAFF_MANAGEMENT: 0.9 } },
+      ],
+    };
+    const put = await apiPut(request, `/api/v1/global/pricing-sets/${newSetId}`, { data: perRange }, global);
+    expect(put.status(), await put.text()).toBe(200);
+    const kept = (await put.json()).sets.find((x) => x.id === newSetId).data.baseRanges;
+    expect(kept[1].addOns).toEqual({ STEPS_OF_PROGRESSION: 1.1, TEACHER_TRAINING: 1, STAFF_MANAGEMENT: 0.9 });
   });
 
   test("a subscriber's price: range top x price per child, add-ons, classrooms x curriculum, one discount, half month after the 15th", async ({ request }) => {

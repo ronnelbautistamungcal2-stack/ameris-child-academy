@@ -110,7 +110,8 @@ function stepRow(s, p) {
     priorStepId: s.priorStepId,
     nextStepId: s.nextStepId,
     criteria: s.criteria || null,
-    level: p ? levelForStatus(p.status) : null,
+    // A step that was never assessed (or was unclicked) and isn't a goal has no level.
+    level: p && (p.assessedAt || p.active || p.status !== "NOT_STARTED") ? levelForStatus(p.status) : null,
     assessed: Boolean(p?.assessedAt),
     active: Boolean(p?.active),
     notes: p?.notes || "",
@@ -284,6 +285,14 @@ export async function saveLevels(child, items, user, { mode, generate = false })
     };
 
     for (const item of items) {
+      if (item.level === "CLEAR") {
+        // Unclicked on the assessment: no longer assessed (client sheet 10-29 (11), row 21).
+        const where = { childId_lessonId_goalIndex: { childId: child.id, lessonId: item.stepId, goalIndex: GOAL_INDEX } };
+        if (await tx.progress.findUnique({ where })) {
+          await tx.progress.update({ where, data: { status: "NOT_STARTED", achievedAt: null, assessedAt: null, ...(item.notes !== undefined ? { notes: String(item.notes || "").trim().slice(0, 500) || null } : {}) } });
+        }
+        continue;
+      }
       const status = statusForLevel(item.level);
       const data = {
         status,

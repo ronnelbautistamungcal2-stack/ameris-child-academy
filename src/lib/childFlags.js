@@ -1,3 +1,4 @@
+import { realListText } from "@/lib/noneText";
 const CHILD_DOCUMENT_TYPES = [
   { field: "healthAssessmentDocuments", label: "Health Assessment" },
   { field: "enrollmentDocuments", label: "Enrollment Documents" },
@@ -246,7 +247,7 @@ export function buildActiveChildFlags({
   for (const child of children) {
     if (!child) continue;
 
-    if (String(child.allergies || "").trim()) {
+    if (realListText(child.allergies)) {
       flags.push(
         buildFlag({
           flagKey: `allergy:${child.id}`,

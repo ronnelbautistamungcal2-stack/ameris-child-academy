@@ -196,6 +196,45 @@ test.describe("Messaging API @api", () => {
     expect(createdNotification.link).toContain(thread.id);
   });
 
+  test("a message to one of someone's roles notifies that role only", async ({ request }) => {
+    // Client sheet 10-29 (11), row 17: a message sent to someone's Teacher
+    // role still showed in every role.
+    const bcrypt = require("bcryptjs");
+    const { getAuthCookie } = require("../helpers/auth");
+    const email = `qa-two-roles-${Date.now()}@messaging-test.local`;
+    const center = await prisma.center.findFirst({ where: { name: "Demo Center" }, select: { id: true } });
+    const user = await prisma.user.create({
+      data: { email, name: "QA Two Roles", password: await bcrypt.hash("Passw0rd!x", 10), role: "PARENT", roles: ["PARENT", "TEACHER"], centers: { create: { centerId: center.id, role: "TEACHER" } } },
+    });
+    try {
+      const adminCookies = await loginAsAdmin(request);
+      const res = await apiPost(
+        request,
+        "/api/v1/messages/threads",
+        { participants: [{ id: user.id, role: "TEACHER" }], centerId: center.id, title: "QA to the teacher role", firstMessage: "For your classroom" },
+        adminCookies,
+      );
+      expect(res.status(), await res.text()).toBe(201);
+      const threadId = (await res.json()).threads[0].id;
+      const note = await prisma.notification.findFirst({ where: { recipientId: user.id, type: "MESSAGE" } });
+      expect(note.metadata.asRole).toBe("TEACHER");
+      expect(note.link).toBe(`/teacher/messages?threadId=${threadId}`);
+
+      // Signed in as a parent (their main role): neither the thread nor the notification.
+      const cookies = await getAuthCookie(request, email, "Passw0rd!x");
+      const asParent = await (await apiGet(request, "/api/v1/notifications?limit=20", cookies)).json();
+      expect(asParent.notifications.some((n) => n.id === note.id)).toBe(false);
+      expect(asParent.unreadCount).toBe(0);
+      const threads = await (await apiGet(request, "/api/v1/messages/threads", cookies)).json();
+      expect(threads.some((t) => t.id === threadId)).toBe(false);
+    } finally {
+      await prisma.notification.deleteMany({ where: { recipientId: user.id } });
+      await prisma.messageThread.deleteMany({ where: { participants: { some: { userId: user.id } } } });
+      await prisma.centerUser.deleteMany({ where: { userId: user.id } });
+      await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
+    }
+  });
+
   test("creating a thread with an audience selection expands recipients", async ({ request }) => {
     const adminCookies = await loginAsAdmin(request);
     const teacherUser = await prisma.user.findUnique({

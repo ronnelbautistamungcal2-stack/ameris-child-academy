@@ -1,7 +1,8 @@
+import { realListText } from "@/lib/noneText";
 export function getTeacherChildProfileFlags(child) {
   const flags = [];
 
-  if (child?.allergies) flags.push("Allergies");
+  if (realListText(child?.allergies)) flags.push("Allergies");
   if (!child?.birthDate) flags.push("Missing DOB");
   if (!child?.effectiveClassRoomId && !child?.defaultClassRoomId && !child?.classRoomId) {
     flags.push("Missing classroom");

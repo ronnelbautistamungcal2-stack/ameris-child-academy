@@ -1,5 +1,5 @@
 import IppPopup from "@/components/ipp/IppPopup";
-import ActivityLogEntry from "@/components/reports/ActivityLogEntry";
+import ActivityLogEntry, { ACTIVITY_TYPE_LABELS } from "@/components/reports/ActivityLogEntry";
 import ChildPhotos from "@/components/reports/ChildPhotos";
 import MilestonesTracker from "@/components/sop/MilestonesTracker";
 import AddOnGate from "@/components/subscription/AddOnGate";
@@ -76,6 +76,8 @@ export default function StudentPerformance({ childId, header = null, familyView 
   const [error, setError] = useState("");
   const [ippId, setIppId] = useState("");
   const [logDate, setLogDate] = useState("");
+  // Activity type filter (client sheet 10-29 (11), rows 9/10).
+  const [logType, setLogType] = useState("");
   const [activity, setActivity] = useState(null);
   const [logOpen, setLogOpen] = useState(!familyView);
   const citizenship = useRange();
@@ -119,7 +121,9 @@ export default function StudentPerformance({ childId, header = null, familyView 
   if (error) return <div role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>;
   if (!data) return <p className="text-sm text-gray-500">Loading the report...</p>;
 
-  const activityList = activity ?? data.activity;
+  const loadedActivity = activity ?? data.activity;
+  const logTypes = [...new Set((loadedActivity || []).map((a) => a.type).filter(Boolean))].sort((x, y) => (ACTIVITY_TYPE_LABELS[x] || x).localeCompare(ACTIVITY_TYPE_LABELS[y] || y));
+  const activityList = logType ? (loadedActivity || []).filter((a) => a.type === logType) : loadedActivity || [];
 
   return (
     <div className="space-y-4">
@@ -230,6 +234,17 @@ export default function StudentPerformance({ childId, header = null, familyView 
             )}
           </span>
         </label>
+        <label className="mt-3 block text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+          Activity Type
+          <select value={logType} onChange={(e) => setLogType(e.target.value)} className="mt-1 block rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-normal normal-case tracking-normal dark:border-gray-600 dark:bg-gray-800">
+            <option value="">All activity types</option>
+            {[...new Set([...logTypes, ...(logType ? [logType] : [])])].map((t) => (
+              <option key={t} value={t}>
+                {ACTIVITY_TYPE_LABELS[t] || t}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="mt-3 space-y-3">
           {groupByDay(activityList).map((group) => (
             <div key={group.key}>
@@ -241,7 +256,7 @@ export default function StudentPerformance({ childId, header = null, familyView 
               </div>
             </div>
           ))}
-          {!activityList.length && <p className="text-sm text-gray-500">{logDate ? "No activity logs for that date." : "No activity logs yet."}</p>}
+          {!activityList.length && <p className="text-sm text-gray-500">{logType ? "No activity logs of that type." : logDate ? "No activity logs for that date." : "No activity logs yet."}</p>}
         </div>
         </>
         ) : null}

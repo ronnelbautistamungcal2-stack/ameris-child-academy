@@ -1,3 +1,4 @@
+import { realListText } from "@/lib/noneText";
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import { changeStamps, profileTabData } from "@/lib/childProfile";
 import prisma from "@/lib/prisma";
@@ -194,7 +195,7 @@ export default async function handler(req, res) {
     const tabData = profileTabData(req.body, existing);
     const has = (key) => Object.prototype.hasOwnProperty.call(req.body, key);
     const stamps = changeStamps(existing, {
-      allergies: "allergies" in tabData ? tabData.allergies : has("allergies") ? (typeof allergies === "string" && allergies.trim()) || null : undefined,
+      allergies: "allergies" in tabData ? tabData.allergies : has("allergies") ? (typeof allergies === "string" && realListText(allergies)) || null : undefined,
       feedingPlan: "feedingPlan" in tabData ? tabData.feedingPlan : has("feedingPlan") ? normalizeFeedingPlan(feedingPlan) : undefined,
     });
 
@@ -233,9 +234,7 @@ export default async function handler(req, res) {
               ? legacyEmergencyContact
               : undefined,
           allergies: Object.prototype.hasOwnProperty.call(req.body, "allergies")
-            ? typeof allergies === "string" && allergies.trim()
-              ? allergies.trim()
-              : null
+            ? (typeof allergies === "string" && realListText(allergies)) || null
             : undefined,
           carpool: Object.prototype.hasOwnProperty.call(req.body, "carpool")
             ? typeof carpool === "string" && carpool.trim()

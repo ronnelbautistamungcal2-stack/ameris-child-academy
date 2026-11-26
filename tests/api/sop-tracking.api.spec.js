@@ -69,6 +69,15 @@ test.describe("SOP Tracking @api", () => {
     data = await save.json();
     expect(data.steps.find((s) => s.id === steps.walk)).toMatchObject({ level: "NOT_STARTED", notes: "Pulls to stand only", assessed: true, active: false });
 
+    // Unclicking a step (client sheet 10-29 (11), row 21): climbing marked by
+    // mistake, then cleared, has no level and isn't assessed.
+    await apiPut(request, url, { mode: "assessment", levels: [{ stepId: steps.climb, level: "EXPOSURE" }] }, admin);
+    const cleared = await apiPut(request, url, { mode: "assessment", levels: [{ stepId: steps.climb, level: "CLEAR" }] }, admin);
+    expect(cleared.status(), await cleared.text()).toBe(200);
+    expect((await cleared.json()).steps.find((s) => s.id === steps.climb)).toMatchObject({ level: null, assessed: false });
+    // Only the assessment can clear.
+    expect((await apiPut(request, url, { mode: "tracking", levels: [{ stepId: steps.climb, level: "CLEAR" }] }, admin)).status()).toBe(400);
+
     data = await (await apiPut(request, url, { mode: "assessment", levels: [], generate: true }, admin)).json();
     const active = data.steps.filter((s) => s.active).map((s) => s.reference);
     // Crawling is mastered, so its next step, walking, is the goal.

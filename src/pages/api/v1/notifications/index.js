@@ -8,24 +8,28 @@ export default createApiHandler(async function handler(req, res) {
   if (!session) throw unauthorized();
 
   const userId = session.user.id;
+  // A message notification for one of the user's other roles shows when they
+  // are signed in as that role (client sheet 10-29 (11), row 17).
+  const forThisRole = (n) => n.type !== "MESSAGE" || !n.metadata?.asRole || n.metadata.asRole === session.user.role;
 
   if (req.method === "GET") {
     const limit = Math.min(optionalNumber(req.query, "limit", { integer: true, min: 1, max: 100 }) || 50, 100);
     const cursor = optionalString(req.query, "cursor");
 
-    const [notifications, unreadCount] = await Promise.all([
+    const [notifications, unread] = await Promise.all([
       prisma.notification.findMany({
         where: { recipientId: userId },
         orderBy: { createdAt: "desc" },
-        take: limit,
+        take: limit * 2,
         ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
       }),
-      prisma.notification.count({
+      prisma.notification.findMany({
         where: { recipientId: userId, read: false },
+        select: { type: true, metadata: true },
       }),
     ]);
 
-    return res.status(200).json({ notifications, unreadCount });
+    return res.status(200).json({ notifications: notifications.filter(forThisRole).slice(0, limit), unreadCount: unread.filter(forThisRole).length });
   }
 
   const body = ensureObject(req.body || {});

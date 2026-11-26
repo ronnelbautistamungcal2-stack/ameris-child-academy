@@ -1723,6 +1723,7 @@ export default function StudentListWorkspace({ Layout, profileHref = (id) => `/a
           <StudentListTable
             children={scopedChildren}
             classes={classes}
+            centers={centers}
             centerId={dashboardCenterId}
             loading={loading}
             profileHref={profileHref}

@@ -272,6 +272,68 @@ test.describe("Front-desk kiosk @api", () => {
     expect((await signOut.json()).children.every((c) => !c.signedIn)).toBe(true);
   });
 
+  test("a bus driver signs a carpool's children in and out (Transportation)", async ({ request }) => {
+    // Client sheet 10-29 (11), rows 5-8.
+    const admin = await loginAsAdmin(request);
+    const stamp = Date.now();
+    const busA = `QA Bus A ${stamp}`;
+    const busB = `QA Bus B ${stamp}`;
+    const before = (await (await apiGet(request, `/api/v1/centers/${centerId}`, admin)).json()).carpools || [];
+    const { apiPut } = require("../helpers/api");
+    const setCarpools = (list) => apiPut(request, `/api/v1/centers/${centerId}`, { carpools: list }, admin);
+    expect((await setCarpools([...before, busA, busB, busA])).status()).toBe(200);
+    try {
+      const after = (await (await apiGet(request, `/api/v1/centers/${centerId}`, admin)).json()).carpools;
+      expect(after.filter((c) => c === busA)).toHaveLength(1); // duplicates dropped
+
+      const kid = async (firstName, carpool) => {
+        const res = await apiPost(request, "/api/v1/children", { firstName, lastName: "Rider", birthDate: "2020-04-04", centerId, carpool }, admin);
+        expect(res.status(), await res.text()).toBe(201);
+        const child = await res.json();
+        cleanup.children.push(child.id);
+        return child;
+      };
+      const rider = await kid(`Ada${stamp}`, busA);
+      const other = await kid(`Ben${stamp}`, busB);
+
+      const driver = await (
+        await apiPost(request, "/api/v1/users", { email: `bus-${stamp}@example.com`, name: "Bus Driver", middleInitial: "B", password: "password123", roles: ["BUS_DRIVER"], centerId }, admin)
+      ).json();
+      expect(driver.id).toBeTruthy();
+      cleanup.users.push(driver.id);
+      const { code } = await json(await apiPost(request, `/api/v1/users/${driver.id}/pin-reset`, {}, admin));
+      const { pin } = await registerPin(code);
+
+      const identity = await (await kiosk.post("/api/v1/kiosk/identify", { data: { pin } })).json();
+      expect(identity.employee).toBeNull();
+      expect(identity.parent).toBeNull();
+      expect(identity.transportation.carpools).toEqual(expect.arrayContaining([busA, busB]));
+
+      const list = await (await kiosk.post("/api/v1/kiosk/transportation", { data: { token: identity.token, carpool: busA } })).json();
+      expect(list.children.map((c) => c.id)).toEqual([rider.id]);
+
+      const signIn = await kiosk.post("/api/v1/kiosk/transportation", { data: { token: identity.token, carpool: busA, childIds: [rider.id], action: "in" } });
+      expect(signIn.status(), await signIn.text()).toBe(200);
+      expect((await signIn.json()).children[0].signedIn).toBe(true);
+      // A child of another carpool is refused on this one.
+      expect((await kiosk.post("/api/v1/kiosk/transportation", { data: { token: identity.token, carpool: busA, childIds: [other.id], action: "in" } })).status()).toBe(403);
+      const signOut = await kiosk.post("/api/v1/kiosk/transportation", { data: { token: identity.token, carpool: busA, childIds: [rider.id], action: "out" } });
+      expect((await signOut.json()).children[0].signedIn).toBe(false);
+
+      // Someone who isn't a bus driver can't use it.
+      const parentLike = await apiPost(request, "/api/v1/users", { email: `notbus-${stamp}@example.com`, name: "Not Bus", middleInitial: "N", password: "password123", roles: ["TEACHER"], centerId }, admin);
+      const notBus = await parentLike.json();
+      cleanup.users.push(notBus.id);
+      const { code: code2 } = await json(await apiPost(request, `/api/v1/users/${notBus.id}/pin-reset`, {}, admin));
+      const { pin: pin2 } = await registerPin(code2);
+      const teacherId = await (await kiosk.post("/api/v1/kiosk/identify", { data: { pin: pin2 } })).json();
+      expect(teacherId.transportation).toBeNull();
+      expect((await kiosk.post("/api/v1/kiosk/transportation", { data: { token: teacherId.token, carpool: busA } })).status()).toBe(403);
+    } finally {
+      await setCarpools(before);
+    }
+  });
+
   test("wrong PINs lock the device after five tries", async () => {
     // Runs last: it locks this test device, which afterAll then revokes.
     const statuses = [];

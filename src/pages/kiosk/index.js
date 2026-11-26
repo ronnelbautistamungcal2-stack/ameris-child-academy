@@ -16,8 +16,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 // Front-desk kiosk (client request 2026-10-02). Stays open on an enrolled
 // tablet with nobody signed in. Screens follow the client's mockups:
-// Front Screen #1 (PIN) -> #2 (Employee or Parent) -> Employee Screen #1/#2
-// (clock in/out) or Parent Screen #1/#2 (sign children in/out), plus Register
+// Front Screen #1 (PIN) -> #2 (Employee, Parent or Transportation) -> Employee
+// Screen #1/#2 (clock in/out), Parent Screen #1/#2 (sign children in/out) or
+// Transportation (a bus driver signs a carpool's children in/out, client sheet
+// 10-29 (11), rows 6-8), plus Register
 // PIN Screens #1-#4 for setting a PIN from an admin's registration number.
 
 const IDLE_MS = 45 * 1000;
@@ -51,6 +53,9 @@ export default function KioskPage() {
   // (client sheet 10-29 (9), row 9). { action, at }
   const [clocked, setClocked] = useState(null);
   const [selected, setSelected] = useState([]);
+  // Transportation: the chosen carpool and its children.
+  const [carpool, setCarpool] = useState("");
+  const [carpoolKids, setCarpoolKids] = useState(null);
   const [registration, setRegistration] = useState({ code: "", name: "", pin: "" });
   const idleTimer = useRef(null);
 
@@ -83,6 +88,8 @@ export default function KioskPage() {
     setDone(null);
     setSelected([]);
     setClocked(null);
+    setCarpool("");
+    setCarpoolKids(null);
     setRegistration({ code: "", name: "", pin: "" });
   }, []);
 
@@ -115,8 +122,9 @@ export default function KioskPage() {
       const data = await post("/api/v1/kiosk/identify", { pin });
       setPerson(data);
       setPin("");
-      if (data.employee && data.parent) goTo("choose");
-      else goTo(data.employee ? "employee" : "parent");
+      const options = [data.employee && "employee", data.parent && "parent", data.transportation && "transport"].filter(Boolean);
+      if (options.length > 1) goTo("choose");
+      else goTo(options[0]);
     } catch (e) {
       setError(e.message);
       setPin("");
@@ -171,6 +179,44 @@ export default function KioskPage() {
       setBusy(false);
     }
   }
+
+  async function chooseCarpool(name) {
+    setCarpool(name);
+    setSelected([]);
+    setCarpoolKids(null);
+    setError("");
+    if (!name) return;
+    try {
+      const data = await post("/api/v1/kiosk/transportation", { token: person.token, carpool: name });
+      setCarpoolKids(data.children);
+    } catch (e) {
+      setError(e.message);
+      if (e.status === 401) setTimeout(resetToStart, 2500);
+    }
+  }
+
+  async function signCarpool(inIds, outIds) {
+    setBusy(true);
+    setError("");
+    try {
+      let data = null;
+      if (inIds.length) data = await post("/api/v1/kiosk/transportation", { token: person.token, carpool, childIds: inIds, action: "in" });
+      if (outIds.length) data = await post("/api/v1/kiosk/transportation", { token: person.token, carpool, childIds: outIds, action: "out" });
+      setCarpoolKids(data.children);
+      setSelected([]);
+      setDone({ kind: "transport", action: inIds.length && outIds.length ? "both" : inIds.length ? "in" : "out", at: new Date(data.at) });
+      goTo("done");
+    } catch (e) {
+      setError(e.message);
+      if (e.status === 401) setTimeout(resetToStart, 2500);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Back from a screen: the choice screen when the person had more than one option.
+  const backToChoice = () =>
+    [person?.employee, person?.parent, person?.transportation].filter(Boolean).length > 1 ? goTo("choose") : resetToStart();
 
   async function checkRegistrationCode() {
     if (registration.code.length !== PIN_LENGTH || busy) return;
@@ -260,9 +306,10 @@ export default function KioskPage() {
     return (
       <KioskFrame showClock={false}>
         <h1 className={`font-serif text-5xl font-black ${NAVY}`}>How are you signing in today?</h1>
-        <div className="mt-10 grid grid-cols-2 gap-8">
-          <ChoiceCard label="Employee" icon="person" onClick={() => goTo("employee")} />
-          <ChoiceCard label="Parent" icon="family" onClick={() => goTo("parent")} />
+        <div className="mt-10 flex flex-wrap justify-center gap-8">
+          {person.employee ? <ChoiceCard label="Employee" icon="person" onClick={() => goTo("employee")} /> : null}
+          {person.parent ? <ChoiceCard label="Parent" icon="family" onClick={() => goTo("parent")} /> : null}
+          {person.transportation ? <ChoiceCard label="Transportation" icon="bus" onClick={() => goTo("transport")} /> : null}
         </div>
         <BackRow onBack={resetToStart} />
       </KioskFrame>
@@ -392,10 +439,105 @@ export default function KioskPage() {
         </div>
         <KioskError message={error} />
         <div className="mt-6 grid w-full max-w-4xl grid-cols-2 gap-6">
-          <KioskButton variant="secondary" onClick={() => (person.employee ? goTo("choose") : resetToStart())}>
+          <KioskButton variant="secondary" onClick={backToChoice}>
             Cancel
           </KioskButton>
           <KioskButton disabled={busy || !selectedKids.length} onClick={() => signSelected(inIds, outIds)}>
+            {busy ? "Saving..." : bulkLabel}
+          </KioskButton>
+        </div>
+      </KioskFrame>
+    );
+  }
+
+  if (screen === "transport") {
+    const carpools = person.transportation?.carpools || [];
+    const kids = carpoolKids || [];
+    const selectedKids = kids.filter((k) => selected.includes(k.id));
+    const inIds = selectedKids.filter((k) => !k.signedIn).map((k) => k.id);
+    const outIds = selectedKids.filter((k) => k.signedIn).map((k) => k.id);
+    const allSelected = kids.length > 0 && kids.every((k) => selected.includes(k.id));
+    const toggle = (id) => setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+    const bulkLabel = inIds.length && outIds.length ? "Sign In / Out Selected" : outIds.length ? "Sign Out Selected" : "Sign In Selected";
+    return (
+      <KioskFrame showClock={false} topLeft={null}>
+        <div className="flex w-full max-w-4xl items-end justify-between">
+          <h1 className={`font-serif text-4xl font-black ${NAVY}`}>&#x1F68C; Transportation – Sign Children In / Out</h1>
+          <div className="text-lg font-semibold text-[#1e4b8f]">{person.name}</div>
+        </div>
+        <label className="mt-6 flex w-full max-w-4xl items-center gap-4 rounded-2xl border border-sky-200 bg-sky-50 px-5 py-4">
+          <span className={`text-xl font-bold ${NAVY}`}>Select Carpool</span>
+          <select
+            value={carpool}
+            onChange={(e) => chooseCarpool(e.target.value)}
+            aria-label="Select carpool"
+            className={`min-w-[320px] rounded-xl border border-sky-200 bg-white px-4 py-3 text-xl font-semibold ${NAVY}`}
+          >
+            <option value="">{carpools.length ? "Choose a carpool..." : "No carpools set up"}</option>
+            {carpools.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </label>
+        {carpool ? (
+          <div className="mt-4 w-full max-w-4xl overflow-hidden rounded-2xl border border-sky-200 bg-white shadow-sm">
+            <div className="grid grid-cols-[minmax(0,1fr)_150px_170px] items-center bg-sky-50 px-4 py-3 text-base font-bold text-[#0b2f6b] lg:grid-cols-[minmax(0,1fr)_220px_200px]">
+              <span>Child</span>
+              <span>Current Status</span>
+              <button type="button" className="justify-self-start text-left text-sm font-bold text-[#1d5fd1] underline" onClick={() => setSelected(allSelected ? [] : kids.map((k) => k.id))}>
+                {allSelected ? "Clear All" : "Select All"}
+              </button>
+            </div>
+            <div className="max-h-[48vh] overflow-y-auto">
+              {carpoolKids === null ? <div className="px-4 py-6 text-center text-[#1e4b8f]">Loading...</div> : null}
+              {carpoolKids && !kids.length ? <div className="px-4 py-6 text-center text-[#1e4b8f]">No children are in this carpool.</div> : null}
+              {kids.map((kid) => (
+                <div key={kid.id} className={`grid grid-cols-[minmax(0,1fr)_150px_170px] items-center border-t border-sky-100 px-4 py-3 lg:grid-cols-[minmax(0,1fr)_220px_200px] ${selected.includes(kid.id) ? "bg-sky-50" : ""}`}>
+                  <div className="flex min-w-0 items-center gap-3 lg:gap-4">
+                    {kid.photoUrl ? (
+                      <img src={kid.photoUrl} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover lg:h-14 lg:w-14" />
+                    ) : (
+                      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xl font-black lg:h-14 lg:w-14 ${NAVY}`}>{kid.firstName?.[0]}</div>
+                    )}
+                    <div className="min-w-0">
+                      <div className={`truncate text-xl font-bold ${NAVY}`}>
+                        {kid.firstName} {kid.lastName ? `${kid.lastName[0]}` : ""}
+                      </div>
+                      <div className="truncate text-sm text-[#1e4b8f]">{[kid.age ? `Age ${kid.age}` : null, kid.classroom].filter(Boolean).join(" | ")}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className={`mt-1.5 h-3 w-3 rounded-full ${kid.signedIn ? "bg-green-500" : "bg-gray-400"}`} />
+                    <div>
+                      <div className={`font-semibold ${kid.signedIn ? "text-green-700" : "text-gray-600"}`}>{kid.signedIn ? "Signed In" : kid.checkedOutAt ? "Signed Out" : "Not Signed In"}</div>
+                      <div className="text-sm text-gray-500">
+                        {kid.signedIn ? `Today at ${formatKioskTime(new Date(kid.checkedInAt))}` : kid.checkedOutAt ? `Today at ${formatKioskTime(new Date(kid.checkedOutAt))}` : "—"}
+                      </div>
+                    </div>
+                  </div>
+                  <KioskButton
+                    variant={selected.includes(kid.id) ? "success" : kid.signedIn ? "danger" : "primary"}
+                    className="px-4 py-2.5 text-base"
+                    disabled={busy}
+                    aria-pressed={selected.includes(kid.id)}
+                    aria-label={`${kid.signedIn ? "Sign Out" : "Sign In"} ${kid.firstName}`}
+                    onClick={() => toggle(kid.id)}
+                  >
+                    {selected.includes(kid.id) ? (kid.signedIn ? "✓ Signing Out" : "✓ Signing In") : kid.signedIn ? "Sign Out" : "Sign In"}
+                  </KioskButton>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <KioskError message={error} />
+        <div className="mt-6 grid w-full max-w-4xl grid-cols-2 gap-6">
+          <KioskButton variant="secondary" onClick={backToChoice}>
+            Cancel
+          </KioskButton>
+          <KioskButton disabled={busy || !selectedKids.length} onClick={() => signCarpool(inIds, outIds)}>
             {busy ? "Saving..." : bulkLabel}
           </KioskButton>
         </div>
@@ -407,6 +549,12 @@ export default function KioskPage() {
     const message =
       done.kind === "employee"
         ? done.action === "in" ? "You’re Clocked In" : "You’re Clocked Out"
+        : done.kind === "transport"
+          ? done.action === "in"
+            ? "The children have been signed in."
+            : done.action === "both"
+              ? "The children have been signed in and out."
+              : "The children have been signed out."
         : done.action === "in"
           ? "Your child(ren) have been successfully signed in."
           : done.action === "both"
@@ -504,7 +652,7 @@ function ChoiceCard({ label, icon, onClick }) {
       onClick={onClick}
       className="flex h-60 w-72 flex-col items-center justify-center gap-5 rounded-2xl border-2 border-sky-200 bg-sky-50 shadow-sm transition hover:border-sky-400 active:bg-sky-100"
     >
-      <span className="text-8xl text-[#1d5fd1]" aria-hidden="true">{icon === "family" ? "\u{1F46A}" : "\u{1F464}"}</span>
+      <span className="text-8xl text-[#1d5fd1]" aria-hidden="true">{icon === "family" ? "\u{1F46A}" : icon === "bus" ? "\u{1F68C}" : "\u{1F464}"}</span>
       <span className={`text-4xl font-bold ${NAVY}`}>{label}</span>
     </button>
   );

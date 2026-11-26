@@ -19,6 +19,8 @@ enum Role {
   SUBSCRIBER
   // Ameris Solutions staff: manages subscriber accounts from /global.
   GLOBAL_ADMIN
+  // Signs carpool children in and out at the kiosk (client sheet 10-29 (11), rows 6-8).
+  BUS_DRIVER
 }
 
 enum ActivityType {
@@ -351,6 +353,7 @@ model Center {
   notes                       String?
   // Care & Schedule, Ages & Rates and Roles, validated by src/lib/centerSettings.js:
   careSchedule                Json? // { monday: { open, start, end }, ... }
+  carpools                    Json? // ["Afterschool Carpool", ...] (client sheet 10-29 (11), row 5)
   // Menu component titles the admin renamed, e.g. { grains: "Whole Grains" } (client 2026-10-29).
   menuComponentLabels         Json?
   mealAgeGroups               Json? // [{ fromMonths, toMonths }] served the same foods

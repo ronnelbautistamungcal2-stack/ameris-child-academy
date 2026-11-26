@@ -113,13 +113,14 @@ async function parentSave(req, res, child, user) {
   if (!levels.length || levels.length > 200 || levels.some((l) => !l?.stepId || !isLevel(l.level))) {
     return res.status(400).json({ error: "Each level needs a step and one of Not Started, Exposure, Competency or Mastery" });
   }
+  // Any category now (client sheet 10-29 (11), row 20; it was General only).
   const steps = await prisma.lesson.findMany({
     where: { ...(await childStepsWhere(child)), id: { in: levels.map((l) => String(l.stepId)) } },
-    select: { id: true, category: { select: { name: true } } },
+    select: { id: true },
   });
-  const general = new Set(steps.filter((s) => (s.category?.name || "General") === "General").map((s) => s.id));
-  if (levels.some((l) => !general.has(String(l.stepId)))) {
-    return res.status(403).json({ error: "Parents can only mark off goals in the General category" });
+  const known = new Set(steps.map((s) => s.id));
+  if (levels.some((l) => !known.has(String(l.stepId)))) {
+    return res.status(400).json({ error: "That step is not one of this child's goals" });
   }
   await saveLevels(child, levels.map((l) => ({ stepId: String(l.stepId), level: l.level })), user, { mode: "tracking" });
   return res.status(200).json({ saved: levels.length });

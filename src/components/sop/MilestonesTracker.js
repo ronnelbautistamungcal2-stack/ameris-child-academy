@@ -8,7 +8,7 @@ import { useState } from "react";
 // category its status mix and "N Active Goals"; opening a category shows a
 // slider per active goal, with that step's own Exposure / Competence / Mastery
 // wording from the Steps of Progression Bank under it (client sheet 10-29 (9),
-// row 6; the generic level hints are gone). canTrack: "ALL" (staff), "GENERAL" (parents mark off
+// row 6; the generic level hints are gone). canTrack: "ALL" (staff, and parents since sheet 10-29 (11) row 20), "GENERAL" (parents mark off
 // General goals only) or null (read only).
 
 const NAVY = "text-[#0b2a5b] dark:text-blue-100";

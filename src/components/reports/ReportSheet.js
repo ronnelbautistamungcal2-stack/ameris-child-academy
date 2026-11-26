@@ -110,7 +110,10 @@ export function ReportSheet({ heading = "", title, subtitle, meta = [], copyrigh
       <style jsx global>{`
         @media print {
           @page {
-            size: ${orientation};
+            /* !important: the Reports page around it defaults to portrait,
+               and the report's own orientation wins (client sheet 10-29 (11),
+               row 58: the wide Meal Claim was cut off). */
+            size: ${orientation} !important;
             margin: 8mm;
           }
           body * {

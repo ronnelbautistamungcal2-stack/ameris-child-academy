@@ -1,4 +1,5 @@
 import AuthorizedPickupSection from "@/components/admin/AuthorizedPickupSection";
+import ChildCopyPicker from "@/components/children/ChildCopyPicker";
 import { apiJson } from "@/lib/api";
 import { MAX_EMERGENCY_CONTACTS, MAX_PARENT_CONTACTS } from "@/lib/child-contacts";
 import {
@@ -443,10 +444,7 @@ function ScheduleTab({ form, set, siblings, centerId }) {
         </tbody>
       </table>
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <select value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)} aria-label="Copy schedule from" className={`${input} max-w-xs`}>
-          <option value="">Copy from another child...</option>
-          {siblings.map((c) => <option key={c.id} value={c.id}>{[c.firstName, c.lastName].filter(Boolean).join(" ")}</option>)}
-        </select>
+        <ChildCopyPicker label="Copy schedule from" childList={siblings} value={copyFrom} onChange={setCopyFrom} className={`${input} max-w-xs`} />
         <button type="button" onClick={copySchedule} disabled={!copyFrom} className="rounded-lg border border-blue-300 px-3 py-1.5 text-sm font-semibold text-blue-700 disabled:opacity-50">⧉ Copy from Another Child</button>
         <button type="button" onClick={() => set({ schedule: emptySchedule() })} className="rounded-lg border border-blue-300 px-3 py-1.5 text-sm font-semibold text-blue-700">↻ Reset Schedule</button>
         <button type="button" onClick={openingClosing} disabled={!centerId} className="rounded-lg border border-blue-300 px-3 py-1.5 text-sm font-semibold text-blue-700 disabled:opacity-50">🕒 Set to Opening &amp; Closing</button>
@@ -515,10 +513,7 @@ function ContactsTab({ form, set, siblings }) {
       </Section>
       {siblings.length ? (
         <div className="flex flex-wrap items-center gap-2">
-          <select value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)} aria-label="Copy contacts from" className={`${input} max-w-xs`}>
-            <option value="">Copy from another child...</option>
-            {siblings.map((c) => <option key={c.id} value={c.id}>{[c.firstName, c.lastName].filter(Boolean).join(" ")}</option>)}
-          </select>
+          <ChildCopyPicker label="Copy contacts from" childList={siblings} value={copyFrom} onChange={setCopyFrom} className={`${input} max-w-xs`} />
           <button type="button" onClick={copyContacts} disabled={!copyFrom} className="rounded-lg border border-blue-300 px-3 py-1.5 text-sm font-semibold text-blue-700 disabled:opacity-50">⧉ Copy from Another Child</button>
         </div>
       ) : null}

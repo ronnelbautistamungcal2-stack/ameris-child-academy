@@ -360,6 +360,15 @@ test.describe("Ameris curriculum for subscribers @api", () => {
     expect(list.ageRanges).toContain(ageGroup);
     expect(list.types.map((t) => t.value)).toEqual(["", "NON_DENOMINATIONAL", "NON_DENOMINATIONAL_CHRISTIAN", "OTHER"]);
     expect((await apiPost(request, "/api/v1/curriculum-plans", { centerId: source.id, ageRange: "Not on the list", type: "" }, ameris)).status()).toBe(400);
+    // No new "All types" planners (client sheet 10-29 (11), row 64); the existing one still opens.
+    const opened = await apiPost(request, "/api/v1/curriculum-plans", { centerId: source.id, ageRange: ageGroup, type: "" }, ameris);
+    expect((await opened.json()).id).toBe(planId);
+    const bare = await prisma.curriculumOption.create({ data: { centerId: source.id, kind: "AGE_RANGE", name: `QA No All ${stamp}` } });
+    try {
+      expect((await apiPost(request, "/api/v1/curriculum-plans", { centerId: source.id, ageRange: bare.name, type: "" }, ameris)).status()).toBe(400);
+    } finally {
+      await prisma.curriculumOption.delete({ where: { id: bare.id } });
+    }
 
     const created = await apiPost(request, "/api/v1/curriculum-plans", { centerId: source.id, ageRange: ageGroup, type: "NON_DENOMINATIONAL" }, ameris);
     expect(created.status(), await created.text()).toBe(200);

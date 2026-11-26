@@ -4,7 +4,7 @@ import { useForceLightTheme } from "@/hooks/useForceLightTheme";
 // Shared frame of the printable time sheet reports: logo and title, a Print
 // button that does not print, black text throughout (client request), and the
 // date and time the report was generated at the bottom.
-export default function PrintableReport({ title, subtitle, header, generatedAt, children }) {
+export default function PrintableReport({ title, subtitle, centerName, header, generatedAt, children }) {
   useForceLightTheme();
   return (
     <div className="min-h-screen bg-white text-black">
@@ -21,6 +21,8 @@ export default function PrintableReport({ title, subtitle, header, generatedAt, 
         <div className="flex items-center gap-6">
           <AmerisLogo size="md" showText={false} className="max-w-[160px]" />
           <div className="flex-1 text-center">
+            {/* The center's name at the top center (client sheet 10-29 (11), row 51). */}
+            {centerName ? <div className="mb-1 text-lg font-bold text-black">{centerName}</div> : null}
             <h1 className="font-serif text-3xl font-bold text-black">{title}</h1>
             {subtitle ? <div className="mt-1 text-base text-black">{subtitle}</div> : null}
           </div>

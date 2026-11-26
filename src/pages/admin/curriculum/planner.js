@@ -60,7 +60,9 @@ function PlanPicker({ picker, choices, ageRange, onAgeRange, planType, onPlanTyp
       <label className={`text-xs font-semibold ${NAVY}`}>
         Type
         <select className={`${pickerSelect} mt-1 block w-56`} value={planType} onChange={(e) => onPlanType(e.target.value)}>
-          {(choices.types.length ? choices.types : [{ value: "", label: "All types" }]).map((t) => (
+          {/* No "All types" choice (client sheet 10-29 (11), row 64), except to
+              show an old "All types" planner opened from the Planners list. */}
+          {[...(planType === "" ? [{ value: "", label: "All types" }] : []), ...realTypes(choices.types)].map((t) => (
             <option key={t.value || "all"} value={t.value}>
               {t.label}
             </option>
@@ -70,6 +72,11 @@ function PlanPicker({ picker, choices, ageRange, onAgeRange, planType, onPlanTyp
     </div>
   );
 }
+/** The planner types without "All types". */
+function realTypes(types) {
+  return (types || []).filter((t) => t.value);
+}
+
 function typeLabel(types, value) {
   return (types || []).find((t) => t.value === value)?.label || (value ? value : "All types");
 }
@@ -261,7 +268,8 @@ export default function LessonPlannerPage() {
       .then((data) => {
         setPlanChoices(data);
         setAgeRange(data.ageRanges.includes(saved.ageRange) ? saved.ageRange : data.ageRanges[0] || "");
-        setPlanType(data.types.some((t) => t.value === saved.type) ? saved.type : "");
+        const types = realTypes(data.types);
+        setPlanType(types.some((t) => t.value === saved.type) ? saved.type : types[0]?.value || "");
       })
       .catch((e) => setError(e.message || "Could not load the age groups"));
   }, [centerId]);

@@ -16,6 +16,8 @@ async function detail(id) {
  * PATCH /api/v1/global/leads/:id  { ...fields }  Save Changes (status changes logged)
  * POST  /api/v1/global/leads/:id  { note } adds to Activity History
  *                                 { generateQuote: true } prices it and saves the quote
+ * DELETE /api/v1/global/leads/:id  deletes the lead and its activity (client
+ *                                 sheet 10-29 (11), row 54); not once it is a subscriber
  */
 export default async function handler(req, res) {
   const session = await requireGlobalAdmin(req, res, "SALES_LEADS");
@@ -55,6 +57,15 @@ export default async function handler(req, res) {
     return res.status(200).json(await detail(id));
   }
 
-  res.setHeader("Allow", ["GET", "PATCH", "POST"]);
+  if (req.method === "DELETE") {
+    // A lead that enrolled is the record of that subscriber's quote and payment.
+    if (lead.subscriberAccountId || lead.enrollment?.paidAt) {
+      return res.status(409).json({ error: "This lead became a subscriber, so it can't be deleted" });
+    }
+    await prisma.lead.delete({ where: { id } });
+    return res.status(200).json({ ok: true });
+  }
+
+  res.setHeader("Allow", ["GET", "PATCH", "POST", "DELETE"]);
   return res.status(405).end();
 }

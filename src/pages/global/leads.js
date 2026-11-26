@@ -361,7 +361,7 @@ function AddLeadDialog({ pricing, onClose, onCreated }) {
   );
 }
 
-function Detail({ id, pricing, onChanged }) {
+function Detail({ id, pricing, onChanged, onDeleted }) {
   const [lead, setLead] = useState(null);
   const [form, setForm] = useState(null);
   const [dirty, setDirty] = useState(false);
@@ -410,6 +410,20 @@ function Detail({ id, pricing, onChanged }) {
     }
   }
 
+  // Delete a lead (client sheet 10-29 (11), row 54).
+  async function remove() {
+    if (!window.confirm(`Delete the lead for ${lead.centerName}? Its activity history is deleted too. This can't be undone.`)) return;
+    setSaving(true);
+    setError("");
+    try {
+      await apiJson(`/api/v1/global/leads/${id}`, { method: "DELETE" });
+      onDeleted();
+    } catch (e) {
+      setError(e.message || "Could not delete the lead");
+      setSaving(false);
+    }
+  }
+
   if (!lead || !form) return <div className={`${card} p-6`}>{error || "Loading..."}</div>;
   const quoteUrl = lead.quoteToken ? `${typeof window !== "undefined" ? window.location.origin : ""}/solutions/quote/${lead.quoteToken}` : "";
 
@@ -433,6 +447,16 @@ function Detail({ id, pricing, onChanged }) {
           <button type="button" className={primary} disabled={!dirty || saving} onClick={() => call("PATCH", bodyFrom(form), "Saved.")}>
             {saving ? "Saving..." : "Save Changes"}
           </button>
+          {lead.subscriberAccountId ? null : (
+            <button
+              type="button"
+              className="rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-50 dark:bg-gray-900"
+              disabled={saving}
+              onClick={remove}
+            >
+              Delete Lead
+            </button>
+          )}
         </div>
       </div>
       {error ? <div className="mx-4 mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
@@ -622,7 +646,16 @@ export default function GlobalLeadsPage() {
             {leads && !leads.length ? <li className="py-6 text-center text-sm text-gray-500">No leads yet.</li> : null}
           </ul>
         </div>
-        <div>{selected ? <Detail key={selected} id={selected} pricing={pricing} onChanged={load} /> : <div className={`${card} p-6 text-sm text-gray-500`}>Select a lead.</div>}</div>
+        <div>{selected ? <Detail
+              key={selected}
+              id={selected}
+              pricing={pricing}
+              onChanged={load}
+              onDeleted={() => {
+                setSelected("");
+                load();
+              }}
+            /> : <div className={`${card} p-6 text-sm text-gray-500`}>Select a lead.</div>}</div>
       </div>
       {adding ? (
         <AddLeadDialog

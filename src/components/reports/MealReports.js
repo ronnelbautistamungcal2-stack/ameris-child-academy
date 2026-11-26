@@ -390,6 +390,86 @@ const SORTS = [
 // Widths of the pinned child columns, so each sticks just right of the last.
 const PIN = [{ left: 0, w: 110 }, { left: 110, w: 110 }, { left: 220, w: 90 }, { left: 310, w: 44 }, { left: 354, w: 120 }];
 
+// Days per printed block: a month of days is far wider than a page, and a
+// browser only prints what fits across (client sheet 10-29 (11), row 58).
+const PRINT_DAYS = 5;
+
+/**
+ * The Meal Claim as printed: the dates in blocks of PRINT_DAYS, one table per
+ * block with the child columns repeated, then the totals. ReportSheet prints it landscape.
+ */
+function ClaimPrintBlocks({ data, rows, letters, dayLabel }) {
+  const blocks = [];
+  for (let i = 0; i < data.dates.length; i += PRINT_DAYS) blocks.push(data.dates.slice(i, i + PRINT_DAYS));
+  const th = "border border-gray-400 bg-[#16305e] px-1 py-0.5 text-center font-bold text-white";
+  const td = "border border-gray-300 px-1 py-0.5 text-center";
+  const name = "border border-gray-300 whitespace-nowrap px-1 py-0.5 text-left";
+  const childCells = (r) => [r.firstName, r.lastName, r.birthDate ? new Date(r.birthDate).toLocaleDateString("en-US", { timeZone: "UTC" }) : "", r.age, r.classroom];
+  const childHead = ["First Name", "Last Name", "Date of Birth", "Age", "Classroom"];
+  const table = (key, head, sub, body, totals, any) => (
+    <table key={key} className="meal-claim-print-block mb-4 w-full border-collapse text-[9px] text-black">
+      <thead>
+        <tr>
+          {childHead.map((h) => <th key={h} rowSpan={sub ? 2 : 1} className={th}>{h}</th>)}
+          {head}
+        </tr>
+        {sub ? <tr>{sub}</tr> : null}
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.id}>
+            {childCells(r).map((v, i) => <td key={i} className={name}>{v}</td>)}
+            {body(r)}
+          </tr>
+        ))}
+        <tr className="font-bold">
+          <td colSpan={5} className={name}>TOTAL MEALS SERVED</td>
+          {totals}
+        </tr>
+        {any ? (
+          <tr className="font-semibold">
+            <td colSpan={5} className={name}>ANY MEAL SERVED THAT DAY (1 / blank)</td>
+            {any}
+          </tr>
+        ) : null}
+      </tbody>
+    </table>
+  );
+  return (
+    <div className="meal-claim-print hidden px-2 print:block">
+      {blocks.map((dates) =>
+        table(
+          dates[0],
+          dates.map((d) => <th key={d} colSpan={letters.length} className={th}>{dayLabel(d)}</th>),
+          dates.map((d) => letters.map((m) => <th key={`${d}-${m.key}`} className={th}>{m.letter}</th>)),
+          (r) => dates.map((d) => letters.map((m) => <td key={`${d}-${m.key}`} className={td}>{r.cells[`${d}|${m.key}`] ? 1 : ""}</td>)),
+          dates.map((d) => letters.map((m) => <td key={`${d}-${m.key}`} className={td}>{data.dayTotals[`${d}|${m.key}`]}</td>)),
+          dates.map((d) => <td key={d} colSpan={letters.length} className={td}>{data.anyMealDays.includes(d) ? 1 : ""}</td>),
+        ),
+      )}
+      {table(
+        "totals",
+        letters.map((m) => <th key={m.key} className={th}>{m.label} Total</th>),
+        null,
+        (r) => letters.map((m) => <td key={m.key} className={`${td} font-semibold`}>{r.totals[m.key]}</td>),
+        data.summary.meals.map((m) => <td key={m.meal} className={td}>{m.total}</td>),
+        null,
+      )}
+      <style jsx global>{`
+        .meal-claim-print-block {
+          break-inside: auto;
+        }
+        .meal-claim-print-block thead {
+          display: table-header-group;
+        }
+        .meal-claim-print-block tr {
+          break-inside: avoid;
+        }
+      `}</style>
+    </div>
+  );
+}
+
 function MealClaimSheet({ data, classroom = "", heading = "" }) {
   const letters = data.meals;
   const [sort, setSort] = useState({ key: "firstName", dir: 1 });
@@ -408,7 +488,7 @@ function MealClaimSheet({ data, classroom = "", heading = "" }) {
     <ReportSheet heading={heading} title="Meal Claim" subtitle={`${longDate(data.from)} – ${longDate(data.to)}`}>
       {/* Child columns stay put when scrolling across the dates, and the date and
           meal headings stay put when scrolling down (client request 2026-10-29). */}
-      <div className="max-h-[75vh] overflow-auto print:max-h-none print:overflow-visible">
+      <div className="max-h-[75vh] overflow-auto print:hidden">
       <table className="border-separate border-spacing-0 text-xs">
         <thead className="sticky top-0 z-20 print:static">
           <tr className={HEAD}>
@@ -457,6 +537,7 @@ function MealClaimSheet({ data, classroom = "", heading = "" }) {
         </tbody>
       </table>
       </div>
+      <ClaimPrintBlocks data={data} rows={rows} letters={letters} dayLabel={dayLabel} />
       <p className={`px-6 py-2 text-xs text-gray-500 ${NAVY}`}>A 1 means a teacher logged that meal or snack for the child on Log Activity. B Breakfast · A AM Snack · L Lunch · P PM Snack · D Dinner · E Evening Snack.</p>
     </ReportSheet>
   );

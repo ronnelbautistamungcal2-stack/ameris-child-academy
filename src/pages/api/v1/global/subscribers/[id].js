@@ -1,3 +1,5 @@
+import { currentPricingSet } from "@/lib/pricingServer";
+import { rangeFor } from "@/lib/subscriptionPricing";
 import { loadCurriculumTypes } from "@/lib/curriculumTypesServer";
 import prisma from "@/lib/prisma";
 import { ACCOUNT_STATUS_LABELS, ADD_ON_LABELS } from "@/lib/addOns";
@@ -99,6 +101,12 @@ export default async function handler(req, res) {
       const pricing = parsePricingSelection(body.pricingSelection);
       if (pricing.error) return res.status(400).json({ error: pricing.error });
       data.pricingSelection = pricing.data;
+      // The child limit per center follows the pricing range of the number of
+      // children (client sheet 10-29 (11), row 40), as at enrollment.
+      if (body.maxChildren === undefined) {
+        const set = await currentPricingSet();
+        data.maxChildren = (set && rangeFor(set.data, pricing.data.children)?.to) || pricing.data.children || null;
+      }
     }
 
     const notes = describeChanges(before, { ...data, ageGroupNames }, curriculumTypes);

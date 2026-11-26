@@ -114,6 +114,21 @@ test.describe("Time sheets and audit @api", () => {
     expect((await apiDelete(request, `${base}/${secondId}`, admin)).status()).toBe(204);
   });
 
+  test("the Student Audit Report lists children with changed time sheets", async ({ request }) => {
+    // Client sheet 10-29 (11), rows 59/60. The test above changed and deleted this child's rows.
+    const admin = await loginAsAdmin(request);
+    const q = new URLSearchParams({ kind: "child", centerId, from: localDate(10), to: localDate(0) });
+    const res = await apiGet(request, `/api/v1/reports/time-sheet-audits?${q}`, admin);
+    expect(res.status(), await res.text()).toBe(200);
+    const me = (await res.json()).people.find((p) => p.id === child.id);
+    expect(me.entries.length).toBeGreaterThan(0);
+    expect(me.entries.map((e) => e.action)).toContain("DELETED");
+    // Staff: the same report for employees; teachers can't see it.
+    q.set("kind", "staff");
+    expect((await apiGet(request, `/api/v1/reports/time-sheet-audits?${q}`, admin)).status()).toBe(200);
+    expect((await apiGet(request, `/api/v1/reports/time-sheet-audits?${q}`, await loginAsTeacher(request))).status()).toBe(403);
+  });
+
   test("the report date range limits the rows", async ({ request }) => {
     const admin = await loginAsAdmin(request);
     const base = `/api/v1/time-sheets/child/${child.id}`;

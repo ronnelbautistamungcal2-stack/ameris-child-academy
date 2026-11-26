@@ -43,6 +43,12 @@ export function ShiftIcon({ className = "h-12 w-12" }) {
   );
 }
 
+/** Today as YYYY-MM-DD in this browser's time. */
+function todayKeyLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export default function ShiftSchedulesWorkspace({ Layout, layoutProps = {} }) {
   const [centers, setCenters] = useState([]);
   const [centerId, setCenterId] = useState("");
@@ -84,6 +90,11 @@ export default function ShiftSchedulesWorkspace({ Layout, layoutProps = {} }) {
     if (!centerId) return;
     setLoading(true);
     try {
+      // This week and later weeks get each person's weekly schedule (set on
+      // their profile) without pressing Apply (client sheet 10-29 (11), row 68).
+      if (days[6] >= todayKeyLocal()) {
+        await apiJson("/api/v1/shifts/generate", { method: "POST", body: JSON.stringify({ centerId, weekStart }) }).catch(() => null);
+      }
       const rows = await apiJson(`/api/v1/shifts?centerId=${encodeURIComponent(centerId)}&from=${days[0]}&to=${days[6]}`);
       setShifts(Array.isArray(rows) ? rows : []);
     } catch (e) {
@@ -91,7 +102,7 @@ export default function ShiftSchedulesWorkspace({ Layout, layoutProps = {} }) {
     } finally {
       setLoading(false);
     }
-  }, [centerId, days]);
+  }, [centerId, days, weekStart]);
 
   useEffect(() => {
     loadShifts();

@@ -1,6 +1,6 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { canManageShifts } from "@/lib/roles";
+import { canManageShifts, roleLabel, userRoles } from "@/lib/roles";
 import { EMPLOYED_WHERE } from "@/lib/employment";
 
 function parseMonday(value) {
@@ -42,7 +42,7 @@ export default async function handler(req, res) {
 
     const staff = await prisma.user.findMany({
       where: { centers: { some: { centerId } }, ...EMPLOYED_WHERE },
-      select: { id: true, weeklySchedules: true },
+      select: { id: true, role: true, roles: true, weeklySchedules: true },
     });
 
     const staffWithSchedules = staff.filter((u) => u.weeklySchedules.length > 0);
@@ -50,33 +50,45 @@ export default async function handler(req, res) {
       return res.status(200).json({ generated: 0 });
     }
 
+    // A week already filled from someone's schedule is filled again only when
+    // their schedule changed since, so shifts deleted by hand stay deleted
+    // (client sheet 10-29 (11), row 68: only some schedules came over).
     const already = await prisma.shiftScheduleGeneration.findMany({
       where: {
         centerId,
         weekStart: monday,
         userId: { in: staffWithSchedules.map((u) => u.id) },
       },
-      select: { userId: true },
+      select: { userId: true, createdAt: true },
     });
-    const alreadySet = new Set(already.map((a) => a.userId));
-
-    const toGenerate = staffWithSchedules.filter((u) => !alreadySet.has(u.id));
+    const generatedAt = new Map(already.map((a) => [a.userId, a.createdAt]));
+    const changedSince = (u) => u.weeklySchedules.some((b) => b.updatedAt > generatedAt.get(u.id) || b.createdAt > generatedAt.get(u.id));
+    const toGenerate = staffWithSchedules.filter((u) => !generatedAt.has(u.id) || changedSince(u));
     if (!toGenerate.length) {
       return res.status(200).json({ generated: 0 });
     }
 
+    // Days that already have a shift (set or edited by hand) are left as they are.
+    const existing = await prisma.shiftSchedule.findMany({
+      where: { centerId, userId: { in: toGenerate.map((u) => u.id) }, date: { gte: weekDates[0], lte: weekDates[6] } },
+      select: { userId: true, date: true },
+    });
+    const taken = new Set(existing.map((s) => `${s.userId}|${s.date.toISOString().slice(0, 10)}`));
+
     const shiftsToCreate = [];
     for (const user of toGenerate) {
+      // The position is the person's own role, not always Teacher.
+      const role = userRoles(user).find((r) => !["PARENT", "GLOBAL_ADMIN"].includes(r)) || user.role;
       for (const block of user.weeklySchedules) {
         for (const date of weekDates) {
-          if (block.daysOfWeek.includes(date.getUTCDay())) {
+          if (block.daysOfWeek.includes(date.getUTCDay()) && !taken.has(`${user.id}|${date.toISOString().slice(0, 10)}`)) {
             shiftsToCreate.push({
               centerId,
               userId: user.id,
               date,
               startTime: block.startTime,
               endTime: block.endTime,
-              position: "Teacher",
+              position: roleLabel(role),
             });
           }
         }
@@ -87,6 +99,8 @@ export default async function handler(req, res) {
       await prisma.shiftSchedule.createMany({ data: shiftsToCreate, skipDuplicates: true });
     }
 
+    // Mark the week as filled now (createdAt is when it was last filled).
+    await prisma.shiftScheduleGeneration.deleteMany({ where: { centerId, weekStart: monday, userId: { in: toGenerate.map((u) => u.id) } } });
     await prisma.shiftScheduleGeneration.createMany({
       data: toGenerate.map((u) => ({ userId: u.id, centerId, weekStart: monday })),
       skipDuplicates: true,

@@ -32,6 +32,25 @@ function AddUserDialog({ roles, onClose, onAdded }) {
           try {
             onAdded(await apiJson("/api/v1/global/users", { method: "POST", body: JSON.stringify(form) }));
           } catch (err) {
+            // The email already has an account (client sheet 10-29 (11), row 61):
+            // offer to add the Global admin role to it.
+            const existing = err.data?.existing;
+            if (
+              err.status === 409 &&
+              existing &&
+              window.confirm(
+                `${existing.name || form.email} already has an account (${existing.roles.join(", ")}). Add them to the Ameris Solutions team with this role? They keep their password and their other roles, and switch to Global admin from the role menu after they next sign in.`,
+              )
+            ) {
+              try {
+                onAdded(await apiJson("/api/v1/global/users", { method: "POST", body: JSON.stringify({ ...form, addExisting: true }) }));
+                return;
+              } catch (err2) {
+                setError(err2.message || "Could not add the user");
+                setSaving(false);
+                return;
+              }
+            }
             setError(err.message || "Could not add the user");
             setSaving(false);
           }
@@ -109,11 +128,19 @@ export default function GlobalUsersPage() {
   };
   const current = users.find((u) => u.id === selected);
   const shown = current ? view(current) : null;
-  const isAdminRole = shown?.teamRole === "GLOBAL_ADMINISTRATOR";
+  const isAdminRole = (shown?.teamRoles || [shown?.teamRole]).includes("GLOBAL_ADMINISTRATOR");
 
-  function setRole(u, teamRole) {
-    // A new role starts from that role's rights unless the matrix was customised.
-    draft(u.id, { teamRole, permissions: data.roleDefaults[teamRole], custom: false });
+  // Several roles per person (client sheet 10-29 (11), row 32): their rights
+  // start as every right any of the roles has.
+  function setRoles(u, teamRoles) {
+    if (!teamRoles.length) return;
+    const union = Object.fromEntries(
+      Object.keys(data.roleDefaults[teamRoles[0]] || {}).map((section) => [
+        section,
+        ACTIONS.filter((a) => teamRoles.some((r) => (data.roleDefaults[r]?.[section] || []).includes(a))),
+      ]),
+    );
+    draft(u.id, { teamRoles, teamRole: teamRoles.includes("GLOBAL_ADMINISTRATOR") ? "GLOBAL_ADMINISTRATOR" : teamRoles[0], permissions: union, custom: false });
   }
 
   function toggle(section, action) {
@@ -134,10 +161,10 @@ export default function GlobalUsersPage() {
     try {
       for (const [id, d] of Object.entries(drafts)) {
         const body = {};
-        if (d.teamRole !== undefined) body.teamRole = d.teamRole;
+        if (d.teamRoles !== undefined) body.teamRoles = d.teamRoles;
         if (d.disabled !== undefined) body.disabled = d.disabled;
         if (d.custom) body.permissions = d.permissions;
-        else if (d.teamRole !== undefined) body.resetPermissions = true;
+        else if (d.teamRoles !== undefined) body.resetPermissions = true;
         await apiJson(`/api/v1/global/users/${id}`, { method: "PATCH", body: JSON.stringify(body) });
       }
       await load();
@@ -190,13 +217,21 @@ export default function GlobalUsersPage() {
                         <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">{u.name || "—"}</td>
                         <td className="px-3 py-2">{u.email}</td>
                         <td className="px-3 py-2">
-                          <select className={input} aria-label={`Role for ${u.name || u.email}`} value={u.teamRole} disabled={self} onChange={(e) => setRole(u, e.target.value)}>
-                            {data.roles.map((r) => (
-                              <option key={r.value} value={r.value}>
-                                {r.label}
-                              </option>
-                            ))}
-                          </select>
+                          <fieldset aria-label={`Roles for ${u.name || u.email}`} className="flex flex-col gap-0.5" disabled={self}>
+                            {data.roles.map((r) => {
+                              const roles = u.teamRoles || [u.teamRole];
+                              return (
+                                <label key={r.value} className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs">
+                                  <input
+                                    type="checkbox"
+                                    checked={roles.includes(r.value)}
+                                    onChange={(e) => setRoles(u, e.target.checked ? [...roles, r.value] : roles.filter((x) => x !== r.value))}
+                                  />
+                                  {r.label}
+                                </label>
+                              );
+                            })}
+                          </fieldset>
                         </td>
                         <td className="px-3 py-2">
                           <select
@@ -247,7 +282,7 @@ export default function GlobalUsersPage() {
               {shown ? (
                 <div className="rounded-xl border border-gray-200 dark:border-gray-700">
                   <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-3 font-serif text-lg font-bold text-[#0b2a5b] dark:border-gray-800 dark:text-blue-100">
-                    {shown.name || shown.email} <span aria-hidden="true">|</span> Role: {roleLabel(shown.teamRole)}
+                    {shown.name || shown.email} <span aria-hidden="true">|</span> Role{(shown.teamRoles || []).length > 1 ? "s" : ""}: {(shown.teamRoles || [shown.teamRole]).map(roleLabel).join(", ")}
                   </div>
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 text-xs font-bold text-gray-700 dark:bg-gray-800 dark:text-gray-200">
@@ -282,8 +317,8 @@ export default function GlobalUsersPage() {
                   </table>
                   <p className="border-t border-gray-100 px-4 py-2 text-xs text-gray-500 dark:border-gray-800 dark:text-gray-400">
                     {isAdminRole
-                      ? "Global Administrators have every permission and manage Permissions & Users."
-                      : `Changing the role resets these to the role's defaults${shown.customPermissions ? " (this user has custom permissions)" : ""}.`}
+                      ? "Global Administrators have every permission and manage Permissions & Users. Untick Global Administrator in the Roles column to choose the permissions one by one."
+                      : `Click a box to give or take away a permission. Changing the roles resets these to the roles' defaults${shown.customPermissions ? " (this user has custom permissions)" : ""}.`}
                   </p>
                 </div>
               ) : null}

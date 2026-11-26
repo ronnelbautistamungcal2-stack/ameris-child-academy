@@ -71,7 +71,7 @@ export default function MilestonesTracker({ childId, milestones, percent, canTra
           const canEdit = editable(m.name);
           return (
             <div key={m.name} className="rounded-xl border border-gray-200 dark:border-gray-700">
-              <button type="button" onClick={() => setOpen({ ...open, [m.name]: !isOpen })} aria-expanded={isOpen} className="flex w-full flex-wrap items-center gap-3 px-3 py-2 text-left">
+              <button type="button" onClick={() => setOpen({ ...open, [m.name]: !isOpen })} aria-expanded={isOpen} className="print-keep flex w-full flex-wrap items-center gap-3 px-3 py-2 text-left">
                 <span className="w-52">
                   <span className={`block text-lg font-black ${NAVY}`}>
                     <span aria-hidden className="mr-1">{isOpen ? "▾" : "›"}</span>

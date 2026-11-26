@@ -195,7 +195,9 @@ export default function AdminBillingWorkspace() {
                                     <td className="px-2 py-1.5">
                                       <input type="checkbox" checked={inv.verified} disabled={!data.canVerify} onChange={(e) => setVerified(inv, e.target.checked)} aria-label={`Verified ${inv.number}`} className="h-4 w-4" />
                                     </td>
-                                    <td className="px-2 py-1.5">
+                                    <td className="whitespace-nowrap px-2 py-1.5">
+                                      {/* Edit or delete the invoice's charges (client sheet 10-29 (11), row 16). */}
+                                      <button type="button" onClick={() => setViewing(inv.id)} className="mr-1 rounded border border-blue-300 px-2 py-0.5 font-semibold text-blue-700">✎ Edit Charges</button>
                                       {data.canVerify && inv.balanceCents > 0 ? (
                                         <button type="button" onClick={() => setPaying(inv)} className="rounded border border-blue-300 px-2 py-0.5 font-semibold text-blue-700">Record Payment</button>
                                       ) : null}

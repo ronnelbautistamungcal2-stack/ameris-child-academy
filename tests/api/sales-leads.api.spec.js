@@ -74,6 +74,17 @@ test.describe("Sales & Leads @api", () => {
     const lead = await prisma.lead.findFirst({ where: { email: `ann@${domain}` } });
     expect(lead?.source).toBe("CONTACT_FORM");
     expect(lead?.about).toContain("Request a demo");
+
+    // It shows on Website Messages, not Sales & Leads, until moved there
+    // (client sheet 10-29 (11), row 53).
+    const global = await getAuthCookie(request, globalEmail, password);
+    const inLeads = async () => (await (await apiGet(request, `/api/v1/global/leads?q=${encodeURIComponent(`ann@${domain}`)}`, global)).json()).leads.some((l) => l.id === lead.id);
+    expect(await inLeads()).toBe(false);
+    const listed = await (await apiGet(request, `/api/v1/global/website-messages?q=${encodeURIComponent(`ann@${domain}`)}`, global)).json();
+    expect(listed.messages.map((m) => m.id)).toContain(lead.id);
+    expect((await apiPatch(request, "/api/v1/global/website-messages", { id: lead.id, action: "toLead" }, global)).status()).toBe(200);
+    expect(await inLeads()).toBe(true);
+    expect((await (await apiGet(request, `/api/v1/global/website-messages?q=${encodeURIComponent(`ann@${domain}`)}`, global)).json()).messages).toEqual([]);
   });
 
   test("a lead can be deleted, but not once it is a subscriber", async ({ request }) => {

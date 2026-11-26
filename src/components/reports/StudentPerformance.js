@@ -1,4 +1,5 @@
 import IppPopup from "@/components/ipp/IppPopup";
+import LessonDetailView from "@/components/lessons/LessonDetailView";
 import ActivityLogEntry, { ACTIVITY_TYPE_LABELS } from "@/components/reports/ActivityLogEntry";
 import ChildPhotos from "@/components/reports/ChildPhotos";
 import MilestonesTracker from "@/components/sop/MilestonesTracker";
@@ -76,6 +77,16 @@ export default function StudentPerformance({ childId, header = null, familyView 
   const [error, setError] = useState("");
   const [ippId, setIppId] = useState("");
   const [logDate, setLogDate] = useState("");
+  // The lesson opened from an active goal (client sheet 10-29 (11), row 49).
+  const [goalLesson, setGoalLesson] = useState(null);
+  async function openGoalLesson(lessonId) {
+    setGoalLesson({ id: lessonId });
+    try {
+      setGoalLesson({ id: lessonId, lesson: await apiJson(`/api/v1/lessons/${encodeURIComponent(lessonId)}`) });
+    } catch (e) {
+      setGoalLesson({ id: lessonId, error: e.message || "Could not load the lesson" });
+    }
+  }
   // Activity type filter (client sheet 10-29 (11), rows 9/10).
   const [logType, setLogType] = useState("");
   const [activity, setActivity] = useState(null);
@@ -154,7 +165,15 @@ export default function StudentPerformance({ childId, header = null, familyView 
           {data.activeGoals.length ? (
             <ul className="divide-y divide-gray-100 dark:divide-gray-800">
               {data.activeGoals.map((g) => (
-                <li key={g.id} className="py-2 text-[17px] text-blue-800 dark:text-blue-200">{g.title}</li>
+                <li key={g.id} className="py-2 text-[17px] text-blue-800 dark:text-blue-200">
+                  {g.lessonId && !familyView ? (
+                    <button type="button" onClick={() => openGoalLesson(g.lessonId)} className="print-keep text-left underline decoration-dotted underline-offset-4 hover:text-blue-600" title="Open the lesson for this goal">
+                      {g.title}
+                    </button>
+                  ) : (
+                    g.title
+                  )}
+                </li>
               ))}
             </ul>
           ) : (
@@ -195,7 +214,7 @@ export default function StudentPerformance({ childId, header = null, familyView 
               <ul className="divide-y divide-gray-100 dark:divide-gray-800">
                 {data.ipps.map((p) => (
                   <li key={p.id}>
-                    <button type="button" onClick={() => setIppId(p.id)} className={`flex w-full items-center justify-between py-2 text-left text-lg hover:underline ${NAVY}`}>
+                    <button type="button" onClick={() => setIppId(p.id)} className={`print-keep flex w-full items-center justify-between py-2 text-left text-lg hover:underline ${NAVY}`}>
                       <span>{p.title}</span>
                       <span>{shortDate(p.date)}</span>
                     </button>
@@ -211,7 +230,7 @@ export default function StudentPerformance({ childId, header = null, familyView 
 
       <section className={card}>
         {familyView ? (
-          <button type="button" onClick={() => setLogOpen((o) => !o)} aria-expanded={logOpen} className="flex w-full items-center justify-between text-left">
+          <button type="button" onClick={() => setLogOpen((o) => !o)} aria-expanded={logOpen} className="print-keep flex w-full items-center justify-between text-left">
             <span className="text-base font-black text-gray-900 dark:text-gray-100">Student Activity Log</span>
             <span aria-hidden className={`text-lg text-blue-700 transition ${logOpen ? "rotate-180" : ""}`}>▾</span>
           </button>
@@ -265,6 +284,20 @@ export default function StudentPerformance({ childId, header = null, familyView 
       {familyView ? <ChildPhotos childId={childId} childName={[data.child?.firstName, data.child?.lastName].filter(Boolean).join(" ")} /> : null}
 
       {ippId && <IppPopup planId={ippId} onClose={() => setIppId("")} />}
+
+      {goalLesson ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setGoalLesson(null)} role="dialog" aria-modal="true" aria-label="Lesson">
+          <div className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white p-5 shadow-xl dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
+            {goalLesson.error ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{goalLesson.error}</div>
+            ) : goalLesson.lesson ? (
+              <LessonDetailView lesson={goalLesson.lesson} onClose={() => setGoalLesson(null)} />
+            ) : (
+              <div className="py-8 text-center text-sm text-gray-500">Loading...</div>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

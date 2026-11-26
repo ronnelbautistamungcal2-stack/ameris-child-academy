@@ -30,7 +30,8 @@ export default async function handler(req, res) {
   const { id } = req.query;
 
   if (req.method === "GET") {
-    if (!["ADMIN", "TEACHER", "COACH"].includes(session.user.role)) {
+    // Student Support too: they open a goal's lesson (client sheet 10-29 (11), row 49).
+    if (!["ADMIN", "TEACHER", "COACH", "STUDENT_SUPPORT"].includes(session.user.role)) {
       return res.status(403).json({ error: "Forbidden" });
     }
 

@@ -296,9 +296,16 @@ async function activity(range) {
   ]);
   const who = (u, fallback) => u?.name || u?.email || fallback;
   const rows = [
-    ...notes.map((n) => ({ at: n.createdAt, area: "Subscribers", about: `${n.account.accountNumber} ${n.account.name}`, staff: who(n.author, "System"), description: n.description })),
-    ...leadActs.map((a) => ({ at: a.createdAt, area: "Sales & Leads", about: `${a.lead.number} ${a.lead.centerName}`, staff: who(a.staff, "Website"), description: a.description })),
-    ...ticketEvents.map((m) => ({ at: m.createdAt, area: "Customer Support", about: `${m.ticket.number} ${m.ticket.account?.name || ""}`.trim(), staff: who(m.author, "System"), description: m.body })),
+    ...notes.map((n) => ({ at: n.createdAt, area: "Subscribers", about: `${n.account.accountNumber} ${n.account.name}`, account: `${n.account.accountNumber} ${n.account.name}`, staff: who(n.author, "System"), description: n.description })),
+    ...leadActs.map((a) => ({ at: a.createdAt, area: "Sales & Leads", about: `${a.lead.number} ${a.lead.centerName}`, account: "", staff: who(a.staff, "Website"), description: a.description })),
+    ...ticketEvents.map((m) => ({
+      at: m.createdAt,
+      area: "Customer Support",
+      about: `${m.ticket.number} ${m.ticket.account?.name || ""}`.trim(),
+      account: m.ticket.account ? `${m.ticket.account.accountNumber} ${m.ticket.account.name}` : "",
+      staff: who(m.author, "System"),
+      description: m.body,
+    })),
   ]
     .sort((a, b) => new Date(b.at) - new Date(a.at))
     .map((r) => ({ ...r, at: new Date(r.at).toISOString().slice(0, 16).replace("T", " ") }));

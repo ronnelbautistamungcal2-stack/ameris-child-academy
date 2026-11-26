@@ -274,7 +274,10 @@ export default function ReportsHub({ categories, selectedKey, hrefFor, children 
                 top: 0;
                 width: 100%;
               }
-              #reports-print-area button,
+              /* .print-keep: buttons that hold report content, e.g. a
+                 milestone row and its coloured line (client sheet 10-29 (11),
+                 row 15). */
+              #reports-print-area button:not(.print-keep),
               #reports-print-area select,
               #reports-print-area input[type="search"],
               #reports-print-area .no-print {

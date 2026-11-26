@@ -82,7 +82,7 @@ export default async function handler(req, res) {
           status: true,
           active: true,
           assessedAt: true,
-          lesson: { select: { id: true, title: true, description: true, criteria: true, subCategory: true, ageYears: true, ageMonths: true, maxAgeYears: true, maxAgeMonths: true, category: { select: { name: true } } } },
+          lesson: { select: { id: true, title: true, linkedLessonId: true, description: true, criteria: true, subCategory: true, ageYears: true, ageMonths: true, maxAgeYears: true, maxAgeMonths: true, category: { select: { name: true } } } },
         },
       }),
       prisma.activityLog.findMany({
@@ -154,7 +154,8 @@ export default async function handler(req, res) {
         .filter((l) => l.details?.kind === "DAILY_GRADE" && Number.isFinite(Number(l.details?.grade ?? l.details?.domainAvg)))
         .map((l) => ({ date: dayKey(l.createdAt), score: Number(l.details.grade ?? l.details.domainAvg) }))
         .reverse(),
-      activeGoals: goals.filter((g) => g.active).map((g) => ({ id: g.step.id, title: g.step.title })),
+      // lessonId: the step's lesson, opened from the goal (client sheet 10-29 (11), row 49).
+      activeGoals: goals.filter((g) => g.active).map((g) => ({ id: g.step.id, title: g.step.title, lessonId: g.step.linkedLessonId || null })),
       milestones,
       milestonePct: sopPercent(goals, child.birthDate),
       canTrack,

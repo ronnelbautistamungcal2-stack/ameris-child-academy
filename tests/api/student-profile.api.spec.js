@@ -76,6 +76,28 @@ test.describe("Student profile and Edit Child tabs (Phase 7b) @api", () => {
     expect(profile.access).toEqual({ editAll: true, editFamily: true });
   });
 
+  test("None or N/A in Allergies is not an allergy", async ({ request }) => {
+    // Client sheet 10-29 (11), row 44.
+    const admin = await loginAsAdmin(request);
+    const made = await apiPost(request, "/api/v1/children", { firstName: "Nora", lastName: "None", birthDate: "2024-05-05", centerId: center.id, allergies: "None" }, admin);
+    expect(made.status(), await made.text()).toBe(201);
+    const id = (await made.json()).id;
+    try {
+      expect((await prisma.child.findUnique({ where: { id } })).allergies).toBeNull();
+      let res = await apiPut(request, `/api/v1/children/${id}`, { healthInfo: { allergies: ["N/A", "Peanuts"], conditions: ["none"] } }, admin);
+      expect(res.status(), await res.text()).toBe(200);
+      let row = await prisma.child.findUnique({ where: { id } });
+      expect(row.allergies).toBe("Peanuts");
+      expect(row.healthInfo).toMatchObject({ allergies: ["Peanuts"], conditions: [] });
+      res = await apiPut(request, `/api/v1/children/${id}`, { healthInfo: { noAllergies: true, allergies: ["Peanuts"] } }, admin);
+      row = await prisma.child.findUnique({ where: { id } });
+      expect(row.allergies).toBeNull();
+      expect(row.healthInfo).toMatchObject({ allergies: [], noAllergies: true });
+    } finally {
+      await prisma.child.delete({ where: { id } }).catch(() => {});
+    }
+  });
+
   test("teachers view the profile but cannot change the child", async ({ request }) => {
     const teacherCookies = await loginAsTeacher(request);
     const res = await apiGet(request, `/api/v1/children/${childId}/profile`, teacherCookies);

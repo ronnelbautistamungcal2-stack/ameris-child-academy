@@ -61,7 +61,9 @@ export default async function handler(req, res) {
     if (req.method === "PUT") {
       const mode = req.body?.mode === "tracking" ? "tracking" : "assessment";
       const levels = Array.isArray(req.body?.levels) ? req.body.levels : [];
-      if (levels.some((l) => !l?.stepId || !isLevel(l.level))) return res.status(400).json({ error: "Each level needs a step and one of Not Started, Exposure, Competency or Mastery" });
+      // "CLEAR" unclicks a step on the assessment (client sheet 10-29 (11), row 21).
+      const okLevel = (l) => isLevel(l.level) || (mode === "assessment" && l.level === "CLEAR");
+      if (levels.some((l) => !l?.stepId || !okLevel(l))) return res.status(400).json({ error: "Each level needs a step and one of Not Started, Exposure, Competency or Mastery" });
       if (levels.length > 1000) return res.status(400).json({ error: "Too many steps in one save" });
       const stepIds = new Set(
         (await prisma.lesson.findMany({ where: { ...(await childStepsWhere(child)), id: { in: levels.map((l) => String(l.stepId)) } }, select: { id: true } })).map((s) => s.id),

@@ -1,3 +1,4 @@
+import { isNoneText, realListText } from "@/lib/noneText";
 // Student Profile and the Edit Child tabs (client mockups 07-01..11): the
 // weekly schedule, Health & Safety, the Care Plan, and the profile's Red Flags.
 // Shared by the pages and the API.
@@ -64,8 +65,12 @@ export function normalizeHealthInfo(value) {
   return {
     emergencyTreatmentPermission: source.emergencyTreatmentPermission === true,
     transportationPermission: source.transportationPermission === true,
-    allergies: list(source.allergies),
-    conditions: list(source.conditions),
+    // "None" / "N/A" entries aren't allergies or conditions (client sheet
+    // 10-29 (11), row 44); the None boxes say there are none.
+    allergies: source.noAllergies === true ? [] : list(source.allergies).filter((v) => !isNoneText(v)),
+    conditions: source.noConditions === true ? [] : list(source.conditions).filter((v) => !isNoneText(v)),
+    noAllergies: source.noAllergies === true,
+    noConditions: source.noConditions === true,
     notes: text(source.notes, 2000),
     pediatrician: { name: text(pediatrician.name, 120), phone: text(pediatrician.phone, 40) },
   };
@@ -129,7 +134,7 @@ export function normalizeCarePlan(value) {
 export function redFlags(child, openPlans = []) {
   const health = normalizeHealthInfo(child?.healthInfo);
   const flags = [];
-  const allergies = health.allergies.length ? health.allergies : String(child?.allergies || "").split(/[,;\n]/).map((s) => s.trim()).filter(Boolean);
+  const allergies = health.allergies.length ? health.allergies : realListText(child?.allergies).split(", ").filter(Boolean);
   for (const a of allergies) flags.push({ kind: "ALLERGY", text: `Allergy - ${a}` });
   for (const c of health.conditions) flags.push({ kind: "CONDITION", text: c });
   if (health.notes) flags.push({ kind: "REQUEST", text: health.notes });

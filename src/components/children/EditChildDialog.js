@@ -1,3 +1,4 @@
+import { realListText } from "@/lib/noneText";
 import AuthorizedPickupSection from "@/components/admin/AuthorizedPickupSection";
 import { apiJson } from "@/lib/api";
 import { MAX_EMERGENCY_CONTACTS, MAX_PARENT_CONTACTS } from "@/lib/child-contacts";
@@ -96,7 +97,7 @@ function formFromChild(child, defaults) {
     outOfAreaContact: { name: "", phone: "", address: "", ...(child?.outOfAreaContact || {}) },
     healthInfo: (() => {
       const h = normalizeHealthInfo(child?.healthInfo);
-      if (!h.allergies.length && child?.allergies) h.allergies = String(child.allergies).split(/[,;\n]/).map((s) => s.trim()).filter(Boolean);
+      if (!h.allergies.length && !h.noAllergies && child?.allergies) h.allergies = realListText(child.allergies).split(", ").filter(Boolean);
       return h;
     })(),
     docs,
@@ -557,12 +558,23 @@ function HealthTab({ form, set }) {
             <div key={key} className={box}>
               <div className={band}>{title}</div>
               <div className="space-y-1.5 p-3">
-                {lines(h[key]).map((value, i) => (
-                  <label key={i} className="flex items-center gap-2 text-sm">
-                    <span className="w-5 text-right font-semibold">{i + 1}.</span>
-                    <input value={value} onChange={(e) => setLine(key, i, e.target.value)} aria-label={`${title} ${i + 1}`} className={input} />
-                  </label>
-                ))}
+                {/* None (client sheet 10-29 (11), row 44): typing "none" listed it as an allergy. */}
+                <label className="flex items-center gap-2 text-sm font-semibold">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(h[key === "allergies" ? "noAllergies" : "noConditions"])}
+                    onChange={(e) => setH({ [key === "allergies" ? "noAllergies" : "noConditions"]: e.target.checked, ...(e.target.checked ? { [key]: [] } : {}) })}
+                  />
+                  None
+                </label>
+                {h[key === "allergies" ? "noAllergies" : "noConditions"]
+                  ? null
+                  : lines(h[key]).map((value, i) => (
+                      <label key={i} className="flex items-center gap-2 text-sm">
+                        <span className="w-5 text-right font-semibold">{i + 1}.</span>
+                        <input value={value} onChange={(e) => setLine(key, i, e.target.value)} aria-label={`${title} ${i + 1}`} className={input} />
+                      </label>
+                    ))}
               </div>
             </div>
           ))}

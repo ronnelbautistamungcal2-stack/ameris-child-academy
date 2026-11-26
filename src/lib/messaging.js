@@ -63,7 +63,7 @@ export async function notifyMessageRecipients({
   const uniqueRecipientIds = [...new Set((recipientIds || []).filter(Boolean))];
   if (!uniqueRecipientIds.length) return [];
 
-  const [preferences, recipients] = await Promise.all([
+  const [preferences, recipients, participants] = await Promise.all([
     prisma.notificationPreference.findMany({
       where: { userId: { in: uniqueRecipientIds }, type: "MESSAGE" },
     }),
@@ -71,7 +71,16 @@ export async function notifyMessageRecipients({
       where: { id: { in: uniqueRecipientIds } },
       select: { id: true, role: true },
     }),
+    // The role each person is in the conversation as (client sheet 10-29 (11),
+    // row 17: a message to someone's Teacher role showed in all their roles).
+    threadId
+      ? prisma.threadParticipant.findMany({
+          where: { threadId, userId: { in: uniqueRecipientIds } },
+          select: { userId: true, asRole: true },
+        })
+      : [],
   ]);
+  const asRoleById = Object.fromEntries(participants.filter((p) => p.asRole).map((p) => [p.userId, p.asRole]));
 
   const disabledIds = new Set(
     preferences.filter((preference) => !preference.enabled).map((preference) => preference.userId),
@@ -85,14 +94,15 @@ export async function notifyMessageRecipients({
   const notificationsToCreate = uniqueRecipientIds
     .filter((recipientId) => !disabledIds.has(recipientId))
     .map((recipientId) => {
-      const basePath = MESSAGE_ROLE_PATHS[recipientRoleById[recipientId]] || "/parent/messages";
+      const asRole = asRoleById[recipientId] || null;
+      const basePath = MESSAGE_ROLE_PATHS[asRole || recipientRoleById[recipientId]] || "/parent/messages";
       return {
         recipientId,
         type: "MESSAGE",
         title: `New message from ${senderName}`,
         body: preview,
         link: `${basePath}?threadId=${threadId}`,
-        metadata: { threadId, senderId: sender?.id || null },
+        metadata: { threadId, senderId: sender?.id || null, asRole },
       };
     });
 

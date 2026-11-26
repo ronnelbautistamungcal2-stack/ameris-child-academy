@@ -1,3 +1,4 @@
+import { realListText } from "@/lib/noneText";
 import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
 import { assertChildLimit } from "@/lib/subscriberAccounts";
 import { sendApiError } from "@/lib/api-error";
@@ -283,10 +284,7 @@ export default async function handler(req, res) {
           parentContacts: normalizedParentContacts,
           emergencyContacts: normalizedEmergencyContacts,
           emergencyContact: legacyEmergencyContact,
-          allergies:
-            typeof allergies === "string" && allergies.trim()
-              ? allergies.trim()
-              : null,
+          allergies: (typeof allergies === "string" && realListText(allergies)) || null,
           carpool:
             typeof carpool === "string" && carpool.trim()
               ? carpool.trim()
@@ -307,7 +305,7 @@ export default async function handler(req, res) {
           // Edit Child tabs (schedule, health & safety, care plan, ...).
           ...newTabData,
           ...changeStamps({}, {
-            allergies: "allergies" in newTabData ? newTabData.allergies : (typeof allergies === "string" && allergies.trim()) || null,
+            allergies: "allergies" in newTabData ? newTabData.allergies : (typeof allergies === "string" && realListText(allergies)) || null,
             feedingPlan: "feedingPlan" in newTabData ? newTabData.feedingPlan : normalizeFeedingPlan(feedingPlan),
           }),
         },

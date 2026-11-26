@@ -1246,20 +1246,40 @@ export function ComposeDialog({ seed, userId, role, workflowView, suggestedConta
 
         {workflowView ? (
           <div className="space-y-2 rounded-lg bg-gray-50 p-3 dark:bg-gray-900/40">
-            <div className={`text-sm font-semibold ${NAVY}`}>Send to group (role)</div>
+            {/* "Send to group" with a dropdown of the groups (client sheet 10-29 (11), row 18). */}
+            <label htmlFor="compose-group" className={`block text-sm font-semibold ${NAVY}`}>Send to group</label>
             {audiences.length ? (
-              <div className="grid gap-1 sm:grid-cols-2">
-                {audiences.map((a) => (
-                  <label key={a.key} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={audienceKeys.includes(a.key)}
-                      onChange={(e) => setAudienceKeys(e.target.checked ? [...audienceKeys, a.key] : audienceKeys.filter((k) => k !== a.key))}
-                    />
-                    {a.label} <span className="text-xs text-gray-500">({a.count})</span>
-                  </label>
-                ))}
-              </div>
+              <>
+                <select
+                  id="compose-group"
+                  value=""
+                  onChange={(e) => e.target.value && setAudienceKeys([...audienceKeys, e.target.value])}
+                  className={FIELD}
+                >
+                  <option value="">{audienceKeys.length < audiences.length ? "Choose a group..." : "Every group is added"}</option>
+                  {audiences
+                    .filter((a) => !audienceKeys.includes(a.key))
+                    .map((a) => (
+                      <option key={a.key} value={a.key}>
+                        {a.label} ({a.count})
+                      </option>
+                    ))}
+                </select>
+                {audienceKeys.length ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {audiences
+                      .filter((a) => audienceKeys.includes(a.key))
+                      .map((a) => (
+                        <span key={a.key} className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-sm dark:border-sky-800 dark:bg-sky-900/30">
+                          {a.label} <span className="text-xs text-gray-500">({a.count})</span>
+                          <button type="button" onClick={() => setAudienceKeys(audienceKeys.filter((k) => k !== a.key))} aria-label={`Remove ${a.label}`} className="text-xs font-bold text-[#1a73e8]">
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                  </div>
+                ) : null}
+              </>
             ) : null}
           </div>
         ) : null}

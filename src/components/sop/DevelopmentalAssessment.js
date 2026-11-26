@@ -127,7 +127,11 @@ export default function DevelopmentalAssessment() {
 
   const steps = useMemo(() => data?.steps || [], [data]);
   const byId = useMemo(() => ({ ...known, ...Object.fromEntries(steps.map((s) => [s.id, s])) }), [known, steps]);
-  const levelOf = (s) => edits[s.id]?.level ?? s.level;
+  // "CLEAR" = unclicked (client sheet 10-29 (11), row 21); saved as not assessed.
+  const levelOf = (s) => {
+    const level = edits[s.id]?.level ?? s.level;
+    return level === "CLEAR" ? null : level;
+  };
   const notesOf = (s) => edits[s.id]?.notes ?? s.notes;
   const categories = useMemo(() => data?.tabs || [], [data]);
   const currentTab = data?.category || categories[0];
@@ -151,7 +155,18 @@ export default function DevelopmentalAssessment() {
 
   function setLevel(step, level) {
     setNotice("");
-    setEdits((prev) => ({ ...prev, [step.id]: { ...prev[step.id], level } }));
+    setEdits((prev) => {
+      const current = prev[step.id]?.level ?? step.level;
+      if (current !== level) return { ...prev, [step.id]: { ...prev[step.id], level } };
+      // The same level again unclicks it: back to no level (cleared on save
+      // when the step had a saved one).
+      const { level: _dropped, ...rest } = prev[step.id] || {};
+      if (step.level) return { ...prev, [step.id]: { ...rest, level: "CLEAR" } };
+      const next = { ...prev };
+      if (Object.keys(rest).length) next[step.id] = rest;
+      else delete next[step.id];
+      return next;
+    });
   }
   function setNotes(step, notes) {
     setEdits((prev) => ({ ...prev, [step.id]: { ...prev[step.id], notes } }));

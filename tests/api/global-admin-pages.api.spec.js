@@ -98,6 +98,16 @@ test.describe("Global admin pages @api", () => {
     expect(updated.customPermissions).toBe(true);
     expect((await apiGet(request, "/api/v1/global/reports", salesCookie)).status()).toBe(403);
 
+    // Several roles (client sheet 10-29 (11), row 32): Sales + Customer Service
+    // get the rights of both; Customer Service can add support tickets.
+    const both = await apiPatch(request, `/api/v1/global/users/${sales.id}`, { teamRoles: ["SALES", "CUSTOMER_SERVICE"], resetPermissions: true }, admin);
+    expect(both.status(), await both.text()).toBe(200);
+    const bothUser = await both.json();
+    expect(bothUser.teamRoles).toEqual(["CUSTOMER_SERVICE", "SALES"]);
+    expect(bothUser.permissions.SALES_LEADS).toEqual(["VIEW", "ADD", "EDIT", "DELETE"]);
+    expect(bothUser.permissions.CUSTOMER_SUPPORT).toEqual(["VIEW", "ADD", "EDIT", "DELETE"]);
+    expect((await apiPatch(request, `/api/v1/global/users/${sales.id}`, { teamRoles: [] }, admin)).status()).toBe(400);
+
     // Disabled team members lose access.
     await apiPatch(request, `/api/v1/global/users/${sales.id}`, { disabled: true }, admin);
     expect((await apiGet(request, "/api/v1/global/leads", salesCookie)).status()).toBe(403);
@@ -106,6 +116,26 @@ test.describe("Global admin pages @api", () => {
     const meUser = await prisma.user.findUnique({ where: { email: adminEmail } });
     const self = await apiPatch(request, `/api/v1/global/users/${meUser?.id}`, { teamRole: "SALES" }, admin);
     expect(self.status()).toBe(400);
+  });
+
+  test("an email that already has an account can be added to the team", async ({ request }) => {
+    // Client sheet 10-29 (11), row 61.
+    const admin = await getAuthCookie(request, adminEmail, password);
+    const email = `gap-center-admin-${stamp}@gap-test.local`;
+    const existing = await prisma.user.create({ data: { email, name: "Center Admin", password: await bcrypt.hash(password, 10), role: "ADMIN", roles: ["ADMIN"] } });
+    userIds.push(existing.id);
+    const body = { name: "Center Admin", email, password: "temporary-1", teamRole: "SALES" };
+    const first = await apiPost(request, "/api/v1/global/users", body, admin);
+    expect(first.status()).toBe(409);
+    expect((await first.json()).existing.roles).toEqual(["Admin"]);
+    const added = await apiPost(request, "/api/v1/global/users", { ...body, addExisting: true }, admin);
+    expect(added.status(), await added.text()).toBe(200);
+    const row = await prisma.user.findUnique({ where: { id: existing.id } });
+    expect(row.roles).toEqual(["ADMIN", "GLOBAL_ADMIN"]);
+    expect(row.globalTeamRole).toBe("SALES");
+    expect(row.role).toBe("ADMIN");
+    expect(await bcrypt.compare(password, row.password)).toBe(true); // keeps their password
+    expect((await apiPost(request, "/api/v1/global/users", { ...body, addExisting: true }, admin)).status()).toBe(409);
   });
 
   test("Settings > General saves company, email, templates and agreements", async ({ request }) => {

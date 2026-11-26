@@ -57,18 +57,43 @@ const ROLE_DEFAULTS = {
   },
 };
 
+// A person can have several team roles (client sheet 10-29 (11), row 32). They
+// are kept in User.globalTeamRole as a comma list ("SALES,CUSTOMER_SERVICE");
+// a single value reads the same as before.
+
+/** The person's team roles, in the TEAM_ROLES order; none set = Global Administrator. */
+export function teamRolesOf(user) {
+  const wanted = new Set(String(user?.globalTeamRole || "").split(",").map((r) => r.trim()).filter(Boolean));
+  const roles = TEAM_ROLES.map((r) => r.value).filter((v) => wanted.has(v));
+  return roles.length ? roles : ["GLOBAL_ADMINISTRATOR"];
+}
+
+/** Valid team roles from a list (or one role), in TEAM_ROLES order; [] if none. */
+export function normalizeTeamRoles(input) {
+  const wanted = new Set((Array.isArray(input) ? input : [input]).map((r) => String(r || "").trim()));
+  return TEAM_ROLES.map((r) => r.value).filter((v) => wanted.has(v));
+}
+
+/** The main team role: Global Administrator when they have it, else the first. */
 export function teamRoleOf(user) {
-  return TEAM_ROLES.some((r) => r.value === user?.globalTeamRole) ? user.globalTeamRole : "GLOBAL_ADMINISTRATOR";
+  const roles = teamRolesOf(user);
+  return roles.includes("GLOBAL_ADMINISTRATOR") ? "GLOBAL_ADMINISTRATOR" : roles[0];
 }
 
 export function isGlobalAdministrator(user) {
-  return teamRoleOf(user) === "GLOBAL_ADMINISTRATOR";
+  return teamRolesOf(user).includes("GLOBAL_ADMINISTRATOR");
 }
 
-/** The role's starting matrix { SECTION: [actions] }. */
-export function roleDefaults(role) {
-  if (role === "GLOBAL_ADMINISTRATOR" || !ROLE_DEFAULTS[role]) return Object.fromEntries(GLOBAL_SECTIONS.map((s) => [s.key, ALL]));
-  return Object.fromEntries(GLOBAL_SECTIONS.map((s) => [s.key, [...(ROLE_DEFAULTS[role][s.key] || [])]]));
+/** The starting matrix { SECTION: [actions] } of a role, or of several roles together (every right any of them has). */
+export function roleDefaults(roleOrRoles) {
+  const roles = Array.isArray(roleOrRoles) ? roleOrRoles : [roleOrRoles];
+  if (!roles.length || roles.some((r) => r === "GLOBAL_ADMINISTRATOR" || !ROLE_DEFAULTS[r])) return Object.fromEntries(GLOBAL_SECTIONS.map((s) => [s.key, ALL]));
+  return Object.fromEntries(
+    GLOBAL_SECTIONS.map((s) => {
+      const union = new Set(roles.flatMap((r) => ROLE_DEFAULTS[r][s.key] || []));
+      return [s.key, ACTIONS.filter((a) => union.has(a))];
+    }),
+  );
 }
 
 /** Tidies a matrix from the page: only known sections and actions; ADD/EDIT/DELETE imply VIEW. */
@@ -85,9 +110,9 @@ export function normalizeMatrix(input) {
 
 /** The user's effective rights. */
 export function permissionsOf(user) {
-  const role = teamRoleOf(user);
-  if (role === "GLOBAL_ADMINISTRATOR") return roleDefaults(role);
-  return user?.globalPermissions ? normalizeMatrix(user.globalPermissions) : roleDefaults(role);
+  const roles = teamRolesOf(user);
+  if (roles.includes("GLOBAL_ADMINISTRATOR")) return roleDefaults("GLOBAL_ADMINISTRATOR");
+  return user?.globalPermissions ? normalizeMatrix(user.globalPermissions) : roleDefaults(roles);
 }
 
 export function can(user, section, action = "VIEW") {

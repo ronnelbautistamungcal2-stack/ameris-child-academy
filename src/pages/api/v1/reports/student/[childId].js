@@ -138,7 +138,8 @@ export default async function handler(req, res) {
     // Parents mark off goals in the General category only; staff who track
     // the child can mark every category (client request 2026-10-23).
     const trackAll = await canUseChild(session.user, child);
-    const canTrack = trackAll ? "ALL" : session.user.role === "PARENT" ? "GENERAL" : null;
+    // Parents move the line for any category (client sheet 10-29 (11), row 20).
+    const canTrack = trackAll || session.user.role === "PARENT" ? "ALL" : null;
 
     return res.status(200).json({
       child: {

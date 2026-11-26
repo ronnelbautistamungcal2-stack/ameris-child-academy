@@ -38,7 +38,9 @@ const TABS = [
   { key: "pickup", label: "Authorized Pickup", icon: "🧑‍🤝‍🧑" },
   { key: "care", label: "Care Plan", icon: "📋" },
 ];
-const PARENT_TABS = ["profile", "contacts", "pickup"];
+// Parents edit the schedule, contacts, Health & Safety and the Care Plan; the
+// Authorized Pickup list is view only (client sheet 10-29 (11), row 19).
+const PARENT_TABS = ["profile", "schedule", "contacts", "health", "pickup", "care"];
 
 const DOCUMENT_TYPES = [
   { field: "healthAssessmentDocuments", label: "Health Assessment" },
@@ -179,7 +181,14 @@ export default function EditChildDialog({ childId, mode = "admin", defaultCenter
       if (isParent) {
         await apiJson(`/api/v1/children/${childId}/family`, {
           method: "PUT",
-          body: JSON.stringify({ parentContacts: form.parentContacts, emergencyContacts: form.emergencyContacts, outOfAreaContact: form.outOfAreaContact }),
+          body: JSON.stringify({
+            parentContacts: form.parentContacts,
+            emergencyContacts: form.emergencyContacts,
+            outOfAreaContact: form.outOfAreaContact,
+            schedule: form.schedule,
+            healthInfo: form.healthInfo,
+            carePlan: form.carePlan,
+          }),
         });
         await apiJson(`/api/v1/children/${childId}/snapshot`, { method: "PUT", body: JSON.stringify({ photoUrl: form.photoUrl || null }) });
       } else {

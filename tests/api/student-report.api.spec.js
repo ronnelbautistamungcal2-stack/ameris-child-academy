@@ -125,15 +125,16 @@ test.describe("Student Performance Report @api", () => {
     expect((await apiGet(request, `/api/v1/reports/student/${childId}`, await loginAsKitchenStaff(request))).status()).toBe(404);
   });
 
-  test("a parent can mark off General goals only", async ({ request }) => {
+  test("a parent can move the line for a goal in any category", async ({ request }) => {
     const parentUser = await prisma.user.findUnique({ where: { email: "parent@demo.com" } });
     await prisma.child.update({ where: { id: childId }, data: { parentId: parentUser.id } });
     const parent = await loginAsParent(request);
     const r = await (await apiGet(request, `/api/v1/reports/student/${childId}`, parent)).json();
-    expect(r.canTrack).toBe("GENERAL");
+    // Any category (client sheet 10-29 (11), row 20; it was General only).
+    expect(r.canTrack).toBe("ALL");
 
-    const blocked = await apiPut(request, `/api/v1/sop/${childId}`, { mode: "tracking", levels: [{ stepId: devStep, level: "EXPOSURE" }] }, parent);
-    expect(blocked.status()).toBe(403);
+    const other = await apiPut(request, `/api/v1/sop/${childId}`, { mode: "tracking", levels: [{ stepId: devStep, level: "EXPOSURE" }] }, parent);
+    expect(other.status(), await other.text()).toBe(200);
     const ok = await apiPut(request, `/api/v1/sop/${childId}`, { mode: "tracking", levels: [{ stepId: walk, level: "COMPETENCY" }] }, parent);
     expect(ok.status(), await ok.text()).toBe(200);
     const after = await (await apiGet(request, `/api/v1/reports/student/${childId}`, parent)).json();

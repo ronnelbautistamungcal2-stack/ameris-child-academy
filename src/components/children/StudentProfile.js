@@ -122,6 +122,8 @@ export default function StudentProfile({ childId, backHref, backLabel, title = "
         <div className="flex items-center gap-2">
           {access.editAll ? (
             <button type="button" onClick={() => setEditing("admin")} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700">✎ Edit Profile</button>
+          ) : canFamily ? (
+            <button type="button" onClick={() => setEditing("parent")} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700">✎ Edit Profile</button>
           ) : null}
         </div>
       </div>

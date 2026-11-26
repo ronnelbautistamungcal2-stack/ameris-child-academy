@@ -13,6 +13,7 @@ import StaffPerformanceReport from "@/components/reports/StaffPerformanceReport"
 import StaffTrainingReport from "@/components/reports/StaffTrainingReport";
 import StudentReportWorkspace from "@/components/reports/StudentReportWorkspace";
 import TimeSheetReports from "@/components/reports/TimeSheetReports";
+import TimeSheetAuditReport from "@/components/reports/TimeSheetAuditReport";
 import { useRouter } from "next/router";
 import { useEffect } from "react";
 
@@ -43,6 +44,12 @@ const REPORTS = {
   "student-time-overview": { label: "Student Time Overview", addOn: "STAFF_MANAGEMENT", render: () => <TimeSheetReports kind="child" mode="overview" /> },
   "staff-time-sheets": { label: "Staff Time Sheets", addOn: "STAFF_MANAGEMENT", render: () => <TimeSheetReports kind="staff" mode="sheets" /> },
   "staff-time-overview": { label: "Staff Time Overview", addOn: "STAFF_MANAGEMENT", render: () => <TimeSheetReports kind="staff" mode="overview" /> },
+
+  // Student / Staff Audit Report (client sheet 10-29 (11), rows 59/60).
+
+  "student-audit": { label: "Student Audit Report", addOn: "STAFF_MANAGEMENT", render: () => <TimeSheetAuditReport kind="child" /> },
+
+  "staff-audit": { label: "Staff Audit Report", addOn: "STAFF_MANAGEMENT", render: () => <TimeSheetAuditReport kind="staff" /> },
   query: { label: "Custom Query", render: () => <AdminReportsWorkspace reportKey="query" /> },
 };
 
@@ -53,7 +60,7 @@ const CATEGORIES = [
   { label: "Children & Development", icon: "🧒", keys: ["overview", "students", "class-performance", "milestone-progress", "child-steps", "milestone-changes", "carpool"] },
   { label: "Meals", icon: "🍽️", keys: ["infant-feeding-plan", "infant-feeding", "meal-production", "meal-claim"] },
   { label: "Staff", icon: "👥", keys: ["staff-overview", "staff-performance", "staff-training"] },
-  { label: "Time Sheets", icon: "🕒", keys: ["student-time-sheets", "student-time-overview", "staff-time-sheets", "staff-time-overview"] },
+  { label: "Time Sheets", icon: "🕒", keys: ["student-time-sheets", "student-time-overview", "staff-time-sheets", "staff-time-overview", "student-audit", "staff-audit"] },
   { label: "Custom", icon: "🔎", keys: ["query"] },
 ].map((cat) => ({ ...cat, reports: cat.keys.map((key) => ({ key, label: REPORTS[key].label, addOn: REPORTS[key].addOn, ownExport: REPORTS[key].ownExport, ownPrint: REPORTS[key].ownPrint })) }));
 

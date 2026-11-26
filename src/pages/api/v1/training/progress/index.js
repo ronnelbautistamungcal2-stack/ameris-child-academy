@@ -1,3 +1,5 @@
+import prisma from "@/lib/prisma";
+import { coachTeamUserIds, onCoachTeam } from "@/lib/coachTeam";
 import { getSession } from "@/lib/auth";
 import { centerStaff, loadPathways, loadProgress, staffProgressRows, trainingAccess } from "@/lib/trainingServer";
 
@@ -18,7 +20,9 @@ export default async function handler(req, res) {
   if (!access.ok) return res.status(access.status).json({ error: access.error });
   if (!access.canTrack) return res.status(403).json({ error: "Forbidden" });
 
-  const [staff, pathways] = await Promise.all([centerStaff(centerId), loadPathways(centerId, { active: true })]);
+  const [allStaff, pathways, team] = await Promise.all([centerStaff(centerId), loadPathways(centerId, { active: true }), coachTeamUserIds(prisma, session)]);
+  // A coach sees only their team (client sheet 10-29 (11), row 11).
+  const staff = onCoachTeam(allStaff, team);
   const progress = await loadProgress(staff.map((s) => s.id), pathways.flatMap((p) => p.items.map((i) => i.id)));
   return res.status(200).json(staffProgressRows(staff, pathways, progress));
 }

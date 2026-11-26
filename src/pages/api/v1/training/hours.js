@@ -1,3 +1,4 @@
+import { coachTeamUserIds, onCoachTeam } from "@/lib/coachTeam";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { roleLabel } from "@/lib/roles";
@@ -35,6 +36,10 @@ export default async function handler(req, res) {
   if (!access.ok) return res.status(access.status).json({ error: access.error });
   const userId = req.query.userId ? String(req.query.userId) : "";
   if (!access.canTrack && userId !== session.user.id) return res.status(403).json({ error: "Forbidden" });
+  if (userId && userId !== session.user.id) {
+    const team = await coachTeamUserIds(prisma, session);
+    if (team && !team.has(userId)) return res.status(404).json({ error: "Not found" });
+  }
   const date = dateRange(req.query);
 
   if (userId) {
@@ -46,7 +51,8 @@ export default async function handler(req, res) {
     return res.status(200).json({ user, logs, totals: totals(logs) });
   }
 
-  const staff = await centerStaff(centerId);
+  // A coach sees only their team (client sheet 10-29 (11), row 11).
+  const staff = onCoachTeam(await centerStaff(centerId), await coachTeamUserIds(prisma, session));
   // includeLogs=1: each person's trainings too (Staff Training report, every staff member at once).
   const includeLogs = req.query.includeLogs === "1";
   const logs = await prisma.trainingLog.findMany({

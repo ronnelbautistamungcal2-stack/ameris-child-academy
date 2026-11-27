@@ -1,5 +1,14 @@
 // Character Guide decision trees (client mockups 40-01..13), shared by the
 // admin editor, the API and the Daily Log.
+
+/**
+ * A Character Guide API url; under Global admin > Lesson Bank & SOP Bank it
+ * works on the Global Character Guide (client sheet 10-29 (11), row 66).
+ */
+export function guideApi(path, global = false) {
+  if (!global) return path;
+  return `${path}${path.includes("?") ? "&" : "?"}guide=global`;
+}
 //
 // Course Correction tree:
 //   { intro, question: { title, prompt },

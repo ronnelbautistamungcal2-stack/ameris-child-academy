@@ -22,6 +22,8 @@ export const GLOBAL_TAB_HREFS = {
   bank: "/global/curriculum/bank",
   categories: "/global/curriculum/categories",
   steps: "/global/curriculum/steps",
+  // The Global Character Guide (client sheet 10-29 (11), row 66).
+  characterGuide: "/global/curriculum/character-guide",
 };
 
 const ADMIN_SCOPE = { global: false, Layout: AdminLayout, centers: null, tabHrefs: ADMIN_TAB_HREFS };

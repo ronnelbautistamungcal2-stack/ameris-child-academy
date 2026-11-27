@@ -1,26 +1,27 @@
 import { getSession } from "@/lib/auth";
 import { parseBehavior } from "@/lib/characterGuide";
 import prisma from "@/lib/prisma";
-import { guideAccountId, guideWhere } from "@/lib/characterGuideServer";
-import { EMPLOYEE_ROLES, hasAnyRole } from "@/lib/roles";
+import { guideScope } from "@/lib/characterGuideServer";
 import { BEHAVIOR_INCLUDE } from "./index";
 
 /**
  * GET    /api/v1/character-guide/behaviors/:id   staff
  * PUT    /api/v1/character-guide/behaviors/:id   admins (whole behavior)
  * DELETE /api/v1/character-guide/behaviors/:id   admins
+ * ?guide=global: the Global Character Guide (Global admins, row 66).
  */
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
-  if (!hasAnyRole(session.user, EMPLOYEE_ROLES)) return res.status(403).json({ error: "Forbidden" });
-  // Only behaviors of the user's own account's guide (step D).
-  const mine = guideWhere(await guideAccountId(session.user));
+  // Only behaviors of the user's own account's guide (step D), or the Global one.
+  const scope = await guideScope(req, session);
+  if (!scope?.canRead) return res.status(403).json({ error: "Forbidden" });
+  const mine = scope.where;
   const behavior = await prisma.characterBehavior.findFirst({ where: { id: String(req.query.id), ...mine }, include: BEHAVIOR_INCLUDE });
   if (!behavior) return res.status(404).json({ error: "Behavior not found" });
 
   if (req.method === "GET") return res.status(200).json(behavior);
-  if (session.user.role !== "ADMIN") return res.status(403).json({ error: "Forbidden" });
+  if (!scope.canEdit) return res.status(403).json({ error: "Forbidden" });
 
   if (req.method === "PUT") {
     const parsed = parseBehavior(req.body || {});

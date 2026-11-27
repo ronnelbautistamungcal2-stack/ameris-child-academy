@@ -46,7 +46,7 @@ export const GLOBAL_NAV_ITEMS = [
   {
     href: "/global/curriculum",
     // Its tabs (client sheet 10-29 (9), row 4).
-    alsoActive: ["/global/curriculum/bank", "/global/curriculum/categories", "/global/curriculum/steps"],
+    alsoActive: ["/global/curriculum/bank", "/global/curriculum/categories", "/global/curriculum/steps", "/global/curriculum/character-guide"],
     section: "LESSON_BANK|SOP_BANK",
     label: "Lesson Bank & SOP Bank",
     icon: (

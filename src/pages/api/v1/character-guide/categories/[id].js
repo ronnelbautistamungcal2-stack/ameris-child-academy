@@ -1,18 +1,19 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { guideAccountId, guideWhere } from "@/lib/characterGuideServer";
+import { guideScope } from "@/lib/characterGuideServer";
 
 /**
  * PUT    /api/v1/character-guide/categories/:id { name?, description? }
  * DELETE /api/v1/character-guide/categories/:id   only when no behavior uses it
- * Admins only.
+ * Admins only; ?guide=global: the Global Character Guide (Global admins, row 66).
  */
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
-  if (session.user.role !== "ADMIN") return res.status(403).json({ error: "Forbidden" });
-  // Only categories of the admin's own account's guide (step D).
-  const mine = guideWhere(await guideAccountId(session.user));
+  // Only categories of the admin's own account's guide (step D), or the Global one.
+  const scope = await guideScope(req, session);
+  if (!scope?.canEdit) return res.status(403).json({ error: "Forbidden" });
+  const mine = scope.where;
   const category = await prisma.characterCategory.findFirst({ where: { id: String(req.query.id), ...mine }, include: { _count: { select: { behaviors: true } } } });
   if (!category) return res.status(404).json({ error: "Category not found" });
 

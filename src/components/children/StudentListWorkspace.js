@@ -19,7 +19,7 @@ import {
 } from "@/lib/child-contacts";
 import { useToast } from "@/contexts/ToastContext";
 import { useRouter } from "next/router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import EditChildDialog from "@/components/children/EditChildDialog";
 import StudentListTable from "@/components/children/StudentListTable";
 import TimeSheetModal from "@/components/timesheets/TimeSheetModal";
@@ -453,12 +453,17 @@ export default function StudentListWorkspace({ Layout, profileHref = (id) => `/a
     refreshFlags();
   }, [flagsView, refreshFlags]);
 
+  // The profile closed last, so the effect below doesn't open it again.
+  const closedChildIdRef = useRef("");
   useEffect(() => {
     if (!router.isReady) return;
     const childId =
       typeof router.query.childId === "string" ? router.query.childId : "";
+    if (!childId) closedChildIdRef.current = "";
     if (!childId || !children.some((child) => child.id === childId)) return;
     if (profileChild?.id === childId || profileLoading) return;
+    // Just closed: the address still has ?childId= until router.replace lands.
+    if (closedChildIdRef.current === childId) return;
     openProfile(childId);
   }, [
     children,
@@ -1124,6 +1129,18 @@ export default function StudentListWorkspace({ Layout, profileHref = (id) => `/a
   }
 
   function closeProfile() {
+    // Drop ?childId= so the profile does not open again by itself (the effect
+    // above opens it while ?childId= is in the address). This fix was first
+    // made directly on the production server.
+    const nextQuery = { ...router.query };
+    if (nextQuery.childId) {
+      closedChildIdRef.current = String(nextQuery.childId);
+      delete nextQuery.childId;
+      router.replace({ pathname: router.pathname, query: nextQuery }, undefined, {
+        shallow: true,
+      }).catch(() => {});
+    }
+
     setProfileChild(null);
     setProfileLoading(false);
     setProfileTransferClassRoomId("");

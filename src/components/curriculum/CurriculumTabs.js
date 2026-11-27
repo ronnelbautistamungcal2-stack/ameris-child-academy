@@ -10,6 +10,8 @@ export const CURRICULUM_TABS = [
   { key: "bank", label: "Lesson Bank", href: "/admin/lessons" },
   { key: "categories", label: "Categories", href: "/admin/curriculum?tab=categories" },
   { key: "steps", label: "Steps of Progression Bank", href: "/admin/curriculum?tab=lessons" },
+  // Global admin only (row 66); admins have Character Guide in their menu.
+  { key: "characterGuide", label: "Character Guide", href: "/global/curriculum/character-guide", globalOnly: true },
 ];
 
 export default function CurriculumTabs({ active }) {
@@ -22,7 +24,7 @@ export default function CurriculumTabs({ active }) {
     ? CURRICULUM_TABS.filter((t) => scope.tabHrefs[t.key]).map((t) => ({ ...t, href: scope.tabHrefs[t.key] }))
     : account?.amerisCurriculum || account?.curriculumOwner
       ? CURRICULUM_TABS.filter((t) => t.key === "calendar")
-      : CURRICULUM_TABS;
+      : CURRICULUM_TABS.filter((t) => !t.globalOnly);
   if (tabs.length === 1) return null;
   return (
     <nav aria-label="Curriculum" className="overflow-x-auto">

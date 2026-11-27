@@ -1,3 +1,4 @@
+import { useCurriculumScope } from "@/components/curriculum/CurriculumScope";
 import { apiJson } from "@/lib/api";
 import {
   BEHAVIOR_LEVELS,
@@ -7,6 +8,7 @@ import {
   COURSE_CORRECTION,
   DEFAULT_REWARDS,
   emptyTree,
+  guideApi,
   newId,
   offenseLabel,
 } from "@/lib/characterGuide";
@@ -22,6 +24,7 @@ const boxInput = "w-full rounded-md border border-white/80 bg-white/90 px-2 py-1
 
 export default function BehaviorEditor({ behavior, categories, onClose, onSaved }) {
   const isNew = !behavior?.id;
+  const { global } = useCurriculumScope();
   const [form, setForm] = useState(() => ({
     type: behavior?.type || COURSE_CORRECTION,
     name: behavior?.name || "",
@@ -32,12 +35,16 @@ export default function BehaviorEditor({ behavior, categories, onClose, onSaved 
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  // Age choices: the age groups and age ranges on the account's classrooms.
+  // Age choices: the age groups and age ranges on the account's classrooms;
+  // for the Global guide, the Ameris curriculum's age groups.
   const [ageOptions, setAgeOptions] = useState([]);
   useEffect(() => {
-    apiJson("/api/v1/classes")
-      .then((rows) => {
-        const all = (Array.isArray(rows) ? rows : []).flatMap((c) => [c.curriculumAgeGroupId, c.ageRange]).map((v) => String(v || "").trim()).filter(Boolean);
+    const load = global
+      ? apiJson("/api/v1/global/curriculum").then((data) => (data.ageGroups || []).map((g) => g.name))
+      : apiJson("/api/v1/classes").then((rows) => (Array.isArray(rows) ? rows : []).flatMap((c) => [c.curriculumAgeGroupId, c.ageRange]));
+    load
+      .then((values) => {
+        const all = values.map((v) => String(v || "").trim()).filter(Boolean);
         const saved = form.tree.ages || [];
         setAgeOptions([...new Set([...all, ...saved])].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })));
       })
@@ -68,8 +75,8 @@ export default function BehaviorEditor({ behavior, categories, onClose, onSaved 
     try {
       const body = JSON.stringify(form);
       const saved = isNew
-        ? await apiJson("/api/v1/character-guide/behaviors", { method: "POST", body })
-        : await apiJson(`/api/v1/character-guide/behaviors/${behavior.id}`, { method: "PUT", body });
+        ? await apiJson(guideApi("/api/v1/character-guide/behaviors", global), { method: "POST", body })
+        : await apiJson(guideApi(`/api/v1/character-guide/behaviors/${behavior.id}`, global), { method: "PUT", body });
       onSaved(saved);
     } catch (e) {
       setError(e.message || "Failed to save");

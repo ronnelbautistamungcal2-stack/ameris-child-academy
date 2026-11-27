@@ -1,19 +1,19 @@
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { guideAccountId, guideWhere } from "@/lib/characterGuideServer";
-import { EMPLOYEE_ROLES, hasAnyRole } from "@/lib/roles";
+import { guideScope } from "@/lib/characterGuideServer";
 
 /**
  * GET  /api/v1/character-guide/categories   staff (Daily Log, Character Guide)
  * POST /api/v1/character-guide/categories { name, description }   admins
+ * ?guide=global: the Global Character Guide (Global admins, row 66).
  */
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
-  if (!hasAnyRole(session.user, EMPLOYEE_ROLES)) return res.status(403).json({ error: "Forbidden" });
-  // Each subscriber account has its own guide (step D).
-  const accountId = await guideAccountId(session.user);
-  const mine = guideWhere(accountId);
+  // Each subscriber account has its own guide (step D); Global admins edit the Global one.
+  const scope = await guideScope(req, session);
+  if (!scope?.canRead) return res.status(403).json({ error: "Forbidden" });
+  const mine = scope.where;
 
   if (req.method === "GET") {
     const rows = await prisma.characterCategory.findMany({
@@ -25,7 +25,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    if (session.user.role !== "ADMIN") return res.status(403).json({ error: "Forbidden" });
+    if (!scope.canEdit) return res.status(403).json({ error: "Forbidden" });
     const name = String(req.body?.name || "").trim().slice(0, 80);
     if (!name) return res.status(400).json({ error: "Category name is required" });
     if (await prisma.characterCategory.findFirst({ where: { ...mine, name: { equals: name, mode: "insensitive" } } })) {
@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     }
     const last = await prisma.characterCategory.aggregate({ where: mine, _max: { sortOrder: true } });
     const created = await prisma.characterCategory.create({
-      data: { subscriberAccountId: accountId || null, name, description: String(req.body?.description || "").trim().slice(0, 500) || null, sortOrder: (last._max.sortOrder ?? -1) + 1 },
+      data: { ...scope.data, name, description: String(req.body?.description || "").trim().slice(0, 500) || null, sortOrder: (last._max.sortOrder ?? -1) + 1 },
     });
     return res.status(201).json({ ...created, behaviorCount: 0 });
   }

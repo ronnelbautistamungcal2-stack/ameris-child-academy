@@ -201,6 +201,7 @@ export default async function handler(req, res) {
           await prisma.characterCategory.findMany({
             // The classroom's account's Character Guide (step D).
             where: {
+              isGlobal: false,
               subscriberAccountId:
                 (await prisma.center.findUnique({ where: { id: room.centerId }, select: { subscriberAccountId: true } }))?.subscriberAccountId || null,
             },

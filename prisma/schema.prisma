@@ -2875,6 +2875,9 @@ model CharacterCategory {
   // Each subscriber account has its own guide (step D); null = legacy rows.
   subscriberAccount   SubscriberAccount?  @relation(fields: [subscriberAccountId], references: [id], onDelete: Cascade)
   subscriberAccountId String?
+  // The Global Character Guide (client sheet 10-29 (11), row 66): edited by
+  // Global admins, the guide every account copies from. Never an account's.
+  isGlobal            Boolean             @default(false)
   name                String
   description         String?
   sortOrder           Int                 @default(0)
@@ -2897,6 +2900,8 @@ model CharacterBehavior {
   // Same account as its category (step D), kept here for simple filtering.
   subscriberAccount   SubscriberAccount? @relation(fields: [subscriberAccountId], references: [id], onDelete: Cascade)
   subscriberAccountId String?
+  // Part of the Global Character Guide (row 66), like its category.
+  isGlobal            Boolean            @default(false)
   // The Ameris behavior this one was imported from, and when it was last
   // copied: Import again brings in Ameris changes made after that (client
   // 2026-11-11).
@@ -2909,6 +2914,7 @@ model CharacterBehavior {
   @@index([categoryId])
   @@index([type])
   @@index([subscriberAccountId])
+  @@index([isGlobal])
 }
 
 // Terms people agree to with an "I agree" box (client 2026-11-11): the

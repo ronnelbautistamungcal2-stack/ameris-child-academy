@@ -1,22 +1,22 @@
 import { getSession } from "@/lib/auth";
 import { parseBehavior } from "@/lib/characterGuide";
 import prisma from "@/lib/prisma";
-import { guideAccountId, guideWhere } from "@/lib/characterGuideServer";
-import { EMPLOYEE_ROLES, hasAnyRole } from "@/lib/roles";
+import { guideScope } from "@/lib/characterGuideServer";
 
 export const BEHAVIOR_INCLUDE = { category: { select: { id: true, name: true } } };
 
 /**
  * GET  /api/v1/character-guide/behaviors[?type=&categoryId=&q=]   staff (with trees)
  * POST /api/v1/character-guide/behaviors { type, name, categoryId, level, description, tree }   admins
+ * ?guide=global: the Global Character Guide (Global admins, row 66).
  */
 export default async function handler(req, res) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
-  if (!hasAnyRole(session.user, EMPLOYEE_ROLES)) return res.status(403).json({ error: "Forbidden" });
-  // Each subscriber account has its own guide (step D).
-  const accountId = await guideAccountId(session.user);
-  const mine = guideWhere(accountId);
+  // Each subscriber account has its own guide (step D); Global admins edit the Global one.
+  const scope = await guideScope(req, session);
+  if (!scope?.canRead) return res.status(403).json({ error: "Forbidden" });
+  const mine = scope.where;
 
   if (req.method === "GET") {
     const q = String(req.query.q || "").trim();
@@ -34,12 +34,12 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    if (session.user.role !== "ADMIN") return res.status(403).json({ error: "Forbidden" });
+    if (!scope.canEdit) return res.status(403).json({ error: "Forbidden" });
     const parsed = parseBehavior(req.body || {});
     if (parsed.error) return res.status(400).json({ error: parsed.error });
     if (!(await prisma.characterCategory.findFirst({ where: { id: parsed.data.categoryId, ...mine } }))) return res.status(400).json({ error: "Category not found" });
     const created = await prisma.characterBehavior.create({
-      data: { ...parsed.data, subscriberAccountId: accountId || null, updatedById: session.user.id },
+      data: { ...parsed.data, ...scope.data, updatedById: session.user.id },
       include: BEHAVIOR_INCLUDE,
     });
     return res.status(201).json(created);

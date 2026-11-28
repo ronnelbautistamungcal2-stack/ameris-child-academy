@@ -406,6 +406,7 @@ export default function DevelopmentalAssessment() {
                                 );
                               })}
                             </div>
+                            <LevelCriteria criteria={row.step.criteria} />
                           </td>
                           <td className="px-3 py-2">
                             <input
@@ -427,6 +428,23 @@ export default function DevelopmentalAssessment() {
           </section>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * The step's own wording for Exposure, Competency and Mastery (Steps of
+ * Progression Bank), under those buttons (client sheet 10-29 (12), row 4).
+ */
+export function LevelCriteria({ criteria }) {
+  const c = criteria || {};
+  if (!c.exposure && !c.competency && !c.mastery) return null;
+  return (
+    <div className="mt-1 grid grid-cols-4 gap-1.5 text-center text-[10px] leading-snug text-gray-600 dark:text-gray-300">
+      <div />
+      <div>{c.exposure}</div>
+      <div>{c.competency}</div>
+      <div>{c.mastery}</div>
     </div>
   );
 }

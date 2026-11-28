@@ -136,3 +136,29 @@ export function childMatchesAgeGroup(template, child, now = new Date()) {
   }
   return true;
 }
+
+/**
+ * Who a parent form goes to (client sheet 10-29 (12), row 19): chosen parents
+ * (every child of theirs) and/or chosen children. null = every family.
+ */
+export function normalizeRecipients(value) {
+  if (!value || typeof value !== "object") return null;
+  const ids = (list) => [...new Set((Array.isArray(list) ? list : []).map((v) => String(v || "").trim()).filter(Boolean))].slice(0, 500);
+  const parentIds = ids(value.parentIds);
+  const childIds = ids(value.childIds);
+  return parentIds.length || childIds.length ? { parentIds, childIds } : null;
+}
+
+/** Does the form go to this child? parentIds = the child's linked parent accounts. */
+export function recipientsAllowChild(template, childId, parentIds = []) {
+  const r = normalizeRecipients(template?.recipients);
+  if (!r) return true;
+  return r.childIds.includes(childId) || parentIds.some((id) => r.parentIds.includes(id));
+}
+
+/** Does a whole-family form go to this family (its parents and children)? */
+export function recipientsAllowFamily(template, parentIds = [], childIds = []) {
+  const r = normalizeRecipients(template?.recipients);
+  if (!r) return true;
+  return parentIds.some((id) => r.parentIds.includes(id)) || childIds.some((id) => r.childIds.includes(id));
+}

@@ -280,6 +280,18 @@ export default function ProgressionTracking({ profileHref }) {
                                     className="sop-slider relative w-full"
                                   />
                                 </div>
+                                {/* The step's own wording for each level (client sheet 10-29 (12), row 5). */}
+                                {g.criteria && (g.criteria.exposure || g.criteria.competency || g.criteria.mastery) ? (
+                                  <>
+                                    <div />
+                                    <div className="-mt-1 mb-1 grid grid-cols-4 gap-1 border-b border-gray-100 pb-2 text-center text-[10px] leading-snug text-gray-600 dark:border-gray-800 dark:text-gray-300">
+                                      <div />
+                                      <div>{g.criteria.exposure}</div>
+                                      <div>{g.criteria.competency}</div>
+                                      <div>{g.criteria.mastery}</div>
+                                    </div>
+                                  </>
+                                ) : null}
                               </div>
                             );
                           })}

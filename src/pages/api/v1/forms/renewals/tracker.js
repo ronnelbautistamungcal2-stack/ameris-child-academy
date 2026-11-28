@@ -1,5 +1,5 @@
 import { centerIdFilter, getSession, hasAccessToCenter } from "@/lib/auth";
-import { childMatchesAgeGroup, normalizeAssignmentType } from "@/lib/formAssignments";
+import { childMatchesAgeGroup, normalizeAssignmentType, recipientsAllowChild, recipientsAllowFamily } from "@/lib/formAssignments";
 import prisma from "@/lib/prisma";
 import { accountOwnedWhere, ownsAccountDocument } from "@/lib/subscriberAccounts";
 
@@ -79,31 +79,82 @@ export default async function handler(req, res) {
         lastName: true,
         birthDate: true,
         centerId: true,
+        parentId: true,
         parent: { select: { name: true } },
-        guardians: { select: { guardian: { select: { name: true } } } },
+        guardians: { select: { guardianId: true, guardian: { select: { name: true } } } },
       },
       orderBy: [{ firstName: "asc" }],
     }),
   ]);
   const templateIds = templates.map((t) => t.id);
   const childIds = children.map((c) => c.id);
+  const parentIdsOf = (child) => [...new Set([child.parentId, ...child.guardians.map((g) => g.guardianId)].filter(Boolean))];
   const [submissions, notes] = await Promise.all([
     prisma.formSubmission.findMany({
-      where: { templateId: { in: templateIds }, childId: { in: childIds } },
-      select: { id: true, templateId: true, childId: true, expiresAt: true, createdAt: true, data: true },
+      // Child forms by child; whole-family forms (no child) by the parent who sent them.
+      where: {
+        templateId: { in: templateIds },
+        OR: [{ childId: { in: childIds } }, { childId: null, submittedById: { in: [...new Set(children.flatMap(parentIdsOf))] } }],
+      },
+      select: { id: true, templateId: true, childId: true, submittedById: true, expiresAt: true, createdAt: true, data: true },
       orderBy: { createdAt: "desc" },
     }),
     prisma.formRenewalNote.findMany({ where: { templateId: { in: templateIds }, childId: { in: childIds } } }),
   ]);
 
+  // Families: children who share a linked parent account, for whole-family forms.
+  const families = [];
+  for (const child of children) {
+    const ids = parentIdsOf(child);
+    const family = families.find((f) => f.centerId === child.centerId && ids.some((id) => f.parentIds.has(id)));
+    if (family) {
+      family.children.push(child);
+      ids.forEach((id) => family.parentIds.add(id));
+    } else families.push({ centerId: child.centerId, parentIds: new Set(ids), children: [child] });
+  }
+
   const rows = [];
+  const rowFor = (template, child, latest, label) => {
+    const expiration = latest?.expiresAt || template.dueDate || null;
+    const days = expiration ? Math.round((new Date(expiration).setHours(0, 0, 0, 0) - startOfToday.getTime()) / DAY) : null;
+    const status = !latest && !expiration ? "OVERDUE" : days < 0 ? "OVERDUE" : days <= 30 ? "DUE_SOON" : "CURRENT";
+    return {
+      key: `${template.id}|${child.id}`,
+      templateId: template.id,
+      formType: template.title,
+      childId: child.id,
+      child: label,
+      parent: parentName(child),
+      expiration,
+      daysUntilDue: days,
+      status,
+      submitted: Boolean(latest),
+      submissionId: latest?.id || null,
+      signedBy: latest?.data?.certification?.signedName || null,
+      signedAt: latest?.data?.certification?.signedAt || null,
+      note: notes.find((n) => n.templateId === template.id && n.childId === child.id)?.note || "",
+    };
+  };
   for (const template of templates) {
     const type = normalizeAssignmentType(template.assignmentType);
+    if (type === "FAMILY") {
+      // One row per family (client sheet 10-29 (12), row 19); notes go on the first child.
+      for (const family of families) {
+        if (template.centerId && template.centerId !== family.centerId) continue;
+        const parentIds = [...family.parentIds];
+        if (!recipientsAllowFamily(template, parentIds, family.children.map((c) => c.id))) continue;
+        const latest = submissions.find((s) => s.templateId === template.id && !s.childId && parentIds.includes(s.submittedById));
+        const names = family.children.map((c) => c.firstName).filter(Boolean).join(", ");
+        rows.push(rowFor(template, family.children[0], latest, `Family: ${names}`));
+      }
+      continue;
+    }
     for (const child of children) {
       if (template.centerId && template.centerId !== child.centerId) continue;
       if (type === "AGE_GROUP" && !childMatchesAgeGroup(template, child)) continue;
-      // Family-wide forms are sent once per family, without a child.
       if (!["CHILD", "AGE_GROUP"].includes(type)) continue;
+      // Sent to chosen parents or children only (row 19).
+      if (!recipientsAllowChild(template, child.id, parentIdsOf(child))) continue;
       const latest = submissions.find((s) => s.templateId === template.id && s.childId === child.id);
       const expiration = latest?.expiresAt || template.dueDate || null;
       const days = expiration ? Math.round((new Date(expiration).setHours(0, 0, 0, 0) - startOfToday.getTime()) / DAY) : null;

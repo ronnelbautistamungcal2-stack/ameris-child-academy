@@ -166,7 +166,7 @@ export default function MonthlyCalendar({
       </div>
 
       {/* Day-of-week headers */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: "2px solid var(--admin-border)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", borderBottom: "2px solid var(--admin-border)" }}>
         {DAY_LABELS.map((label, i) => (
           <div key={label} style={{
             padding: "8px 0", textAlign: "center", fontSize: 11, fontWeight: 700,
@@ -179,7 +179,7 @@ export default function MonthlyCalendar({
       </div>
 
       {/* Calendar grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
         {cells.map((cell) => {
           if (cell.outside) {
             return (

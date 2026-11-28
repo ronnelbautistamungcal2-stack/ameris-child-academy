@@ -278,8 +278,41 @@ function fileToBase64(file) {
   });
 }
 
+const personName = (u) => u?.name || u?.email || "Parent";
+const kidName = (c) => [c.firstName, c.lastName].filter(Boolean).join(" ");
+
 function AddFormDialog({ centerId, onClose, onSaved }) {
   const [form, setForm] = useState({ type: "", otherType: "", days: "", attachment: null });
+  // Who it goes to (client sheet 10-29 (12), row 19): a form for each child or
+  // one for the whole family, to every family or chosen parents / children.
+  const [forWhom, setForWhom] = useState("CHILD");
+  const [sendTo, setSendTo] = useState("ALL");
+  const [picked, setPicked] = useState([]);
+  const [query, setQuery] = useState("");
+  const [kids, setKids] = useState(null);
+  useEffect(() => {
+    apiJson(`/api/v1/children${centerId ? `?centerId=${encodeURIComponent(centerId)}` : ""}`)
+      .then((rows) => setKids(Array.isArray(rows) ? rows : []))
+      .catch(() => setKids([]));
+  }, [centerId]);
+  const parents = useMemo(() => {
+    const byId = new Map();
+    for (const c of kids || []) {
+      for (const p of [c.parent, ...(c.guardians || []).map((g) => g.guardian)]) {
+        if (!p?.id) continue;
+        const entry = byId.get(p.id) || { id: p.id, name: personName(p), children: [] };
+        if (!entry.children.includes(c.firstName)) entry.children.push(c.firstName);
+        byId.set(p.id, entry);
+      }
+    }
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [kids]);
+  const choices = sendTo === "PARENTS"
+    ? parents.map((p) => ({ id: p.id, label: p.name, sub: p.children.filter(Boolean).join(", ") }))
+    : (kids || []).map((c) => ({ id: c.id, label: kidName(c), sub: personName(c.parent) })).sort((a, b) => a.label.localeCompare(b.label));
+  const q = query.trim().toLowerCase();
+  const shown = choices.filter((c) => !q || `${c.label} ${c.sub}`.toLowerCase().includes(q));
+  const toggle = (id) => setPicked((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -305,6 +338,7 @@ function AddFormDialog({ centerId, onClose, onSaved }) {
     if (!title) return setError("Select a form type.");
     if (!form.days) return setError("Select how often it expires.");
     if (!form.attachment) return setError("Upload the form.");
+    if (sendTo !== "ALL" && !picked.length) return setError(sendTo === "PARENTS" ? "Choose at least one parent." : "Choose at least one child.");
     setSaving(true);
     setError("");
     try {
@@ -313,7 +347,8 @@ function AddFormDialog({ centerId, onClose, onSaved }) {
         body: JSON.stringify({
           title,
           targetRole: "PARENT",
-          assignmentType: "CHILD",
+          assignmentType: forWhom,
+          recipients: sendTo === "PARENTS" ? { parentIds: picked } : sendTo === "CHILDREN" ? { childIds: picked } : null,
           active: true,
           requiresRenewal: true,
           renewalPeriodDays: Number(form.days),
@@ -363,6 +398,65 @@ function AddFormDialog({ centerId, onClose, onSaved }) {
             {FREQUENCIES.map((f) => <option key={f.days} value={f.days}>{f.label}</option>)}
           </select>
         </label>
+        <fieldset>
+          <legend className={label}>Who fills it out?</legend>
+          <div className="mt-1 flex flex-wrap gap-4 text-sm">
+            {[["CHILD", "Each child (one form per child)"], ["FAMILY", "The whole family (one form per family)"]].map(([value, text]) => (
+              <label key={value} className="flex items-center gap-2">
+                <input type="radio" name="form-for" checked={forWhom === value} onChange={() => setForWhom(value)} />
+                {text}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend className={label}>Send to</legend>
+          <div className="mt-1 flex flex-wrap gap-4 text-sm">
+            {[["ALL", "All parents"], ["PARENTS", "Choose parents"], ["CHILDREN", "Choose children"]].map(([value, text]) => (
+              <label key={value} className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="form-send-to"
+                  checked={sendTo === value}
+                  onChange={() => {
+                    setSendTo(value);
+                    setPicked([]);
+                    setQuery("");
+                  }}
+                />
+                {text}
+              </label>
+            ))}
+          </div>
+          {sendTo !== "ALL" ? (
+            <div className="mt-2 rounded-lg border border-gray-200 p-2 dark:border-gray-700">
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={sendTo === "PARENTS" ? "Search parents..." : "Search children..."}
+                aria-label={sendTo === "PARENTS" ? "Search parents" : "Search children"}
+                className={control}
+              />
+              <div className="mt-2 max-h-48 space-y-1 overflow-y-auto text-sm">
+                {kids === null ? (
+                  <p className="text-gray-500">Loading...</p>
+                ) : shown.length ? (
+                  shown.map((c) => (
+                    <label key={c.id} className="flex items-center gap-2 rounded px-1 py-0.5 hover:bg-blue-50 dark:hover:bg-gray-800">
+                      <input type="checkbox" checked={picked.includes(c.id)} onChange={() => toggle(c.id)} />
+                      <span className="font-semibold">{c.label}</span>
+                      {c.sub ? <span className="text-xs text-gray-500">{c.sub}</span> : null}
+                    </label>
+                  ))
+                ) : (
+                  <p className="text-gray-500">No one matches.</p>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-gray-500">{picked.length} chosen</p>
+            </div>
+          ) : null}
+        </fieldset>
         <div>
           <div className={label}>Upload Attachment <span className="text-red-500">*</span></div>
           <label
@@ -380,7 +474,11 @@ function AddFormDialog({ centerId, onClose, onSaved }) {
             <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="hidden" onChange={(e) => upload(e.target.files?.[0])} />
           </label>
         </div>
-        <p className="text-xs text-gray-500">The form appears on every family&apos;s Forms &amp; Renewals page{centerId ? " at this center" : ""}.</p>
+        <p className="text-xs text-gray-500">
+          {sendTo === "ALL"
+            ? `The form appears on every family's Forms & Renewals page${centerId ? " at this center" : ""}.`
+            : "The form appears only on the chosen families' Forms & Renewals page."}
+        </p>
       </div>
     </Modal>
   );

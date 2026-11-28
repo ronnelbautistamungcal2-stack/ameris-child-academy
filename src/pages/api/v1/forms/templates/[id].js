@@ -3,7 +3,9 @@ import {
   normalizeAssignmentType,
   normalizeStaffRoles,
   targetRoleForAssignment,
+  normalizeRecipients,
 } from "@/lib/formAssignments";
+import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { ownsAccountDocument } from "@/lib/subscriberAccounts";
 
@@ -67,8 +69,11 @@ export default async function handler(req, res) {
       attachmentName,
       attachmentSize,
       dueDate,
+      recipients,
     } = req.body || {};
     const data = {};
+    // Who it goes to (row 19); null = every family.
+    if (recipients !== undefined) data.recipients = normalizeRecipients(recipients) ?? Prisma.DbNull;
 
     if (typeof title === "string") data.title = title;
     if (typeof description === "string" || description === null) data.description = description;

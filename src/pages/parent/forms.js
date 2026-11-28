@@ -1070,6 +1070,8 @@ function templatesForScope(templates, scope) {
     .filter((template) => {
       const type = normalizeAssignmentType(template.assignmentType);
       if (scope.kind === "FAMILY") return type === "FAMILY";
+      // Sent to chosen children only (client sheet 10-29 (12), row 19).
+      if (Array.isArray(template.forChildIds) && !template.forChildIds.includes(scope.child?.id)) return false;
       if (type === "CHILD") return true;
       if (type === "AGE_GROUP") return childMatchesAgeGroup(template, scope.child);
       return false;

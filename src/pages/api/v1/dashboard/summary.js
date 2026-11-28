@@ -105,7 +105,10 @@ async function adminView(centerId, today) {
 async function coachView(centerId, today) {
   const since = new Date(today.getTime() - RED_FLAG_DAYS * DAY);
   const [pendingTimeOff, children, plans, corrections] = await Promise.all([
-    prisma.timeOffRequest.count({ where: { centerId, status: "PENDING" } }),
+    // Same window as the Time Off page's list (client sheet 10-29 (12), row 29).
+    prisma.timeOffRequest.count({
+      where: { centerId, status: "PENDING", endDate: { gte: startOfDay(today) }, startDate: { lte: new Date(startOfDay(today).getTime() + 61 * DAY - 1) } },
+    }),
     prisma.child.findMany({ where: { centerId, OR: [{ enrollmentEndDate: null }, { enrollmentEndDate: { gte: startOfDay(today) } }] }, select: { id: true, allergies: true, healthInfo: true } }),
     prisma.behaviorPlan.findMany({ where: { child: { centerId }, status: { in: CURRENT_IPP_STATUSES } }, select: { childId: true } }),
     prisma.activityLog.findMany({ where: { child: { centerId }, type: "BEHAVIOR", createdAt: { gte: since } }, select: { childId: true, details: true } }),

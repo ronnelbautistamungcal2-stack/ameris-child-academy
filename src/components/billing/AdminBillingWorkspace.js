@@ -70,6 +70,23 @@ export default function AdminBillingWorkspace() {
     return () => clearTimeout(timer);
   }, [load]);
 
+  // Delete the invoice's charges from the list (client sheet 10-29 (12), row 9).
+  async function deleteCharges(invoice) {
+    const count = invoice.charges.length;
+    const what = count === 1 ? `"${invoice.charges[0].description}" (${money(invoice.charges[0].amountCents)})` : `all ${count} charges (${money(invoice.totalCents)})`;
+    const paid = invoice.paidCents > 0 ? ` Payments of ${money(invoice.paidCents)} recorded on it stay recorded.` : "";
+    if (!window.confirm(`Delete ${what} on invoice ${invoice.number}?${paid}`)) return;
+    try {
+      for (const c of invoice.charges) {
+        await apiJson(`/api/v1/billing/charges/${c.id}`, { method: "DELETE" });
+      }
+      await load();
+    } catch (e) {
+      setError(e.message || "Failed to delete the charge");
+      await load();
+    }
+  }
+
   async function setVerified(invoice, verified) {
     try {
       await apiJson(`/api/v1/billing/invoices/${invoice.id}`, { method: "PUT", body: JSON.stringify({ verified }) });
@@ -198,6 +215,7 @@ export default function AdminBillingWorkspace() {
                                     <td className="whitespace-nowrap px-2 py-1.5">
                                       {/* Edit or delete the invoice's charges (client sheet 10-29 (11), row 16). */}
                                       <button type="button" onClick={() => setViewing(inv.id)} className="mr-1 rounded border border-blue-300 px-2 py-0.5 font-semibold text-blue-700">✎ Edit Charges</button>
+                                      <button type="button" onClick={() => deleteCharges(inv)} aria-label={`Delete charges on ${inv.number}`} className="mr-1 rounded border border-red-300 px-2 py-0.5 font-semibold text-red-700">🗑 Delete</button>
                                       {data.canVerify && inv.balanceCents > 0 ? (
                                         <button type="button" onClick={() => setPaying(inv)} className="rounded border border-blue-300 px-2 py-0.5 font-semibold text-blue-700">Record Payment</button>
                                       ) : null}

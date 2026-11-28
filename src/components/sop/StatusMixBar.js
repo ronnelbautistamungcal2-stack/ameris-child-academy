@@ -18,7 +18,8 @@ export default function StatusMixBar({ distribution, className = "", onSegment }
               onClick={onSegment ? () => onSegment(s.value) : undefined}
               title={`${s.label}: ${distribution?.[s.value] ?? 0}%`}
               aria-label={onSegment ? `Show ${s.label}` : undefined}
-              className={`${s.bar} ${total ? "" : "opacity-30"} ${onSegment ? "cursor-pointer hover:brightness-110" : ""}`}
+              // print-keep: the report print hides buttons, not these bars (sheet 10-29 (12), row 8).
+              className={`${s.bar} ${total ? "" : "opacity-30"} ${onSegment ? "print-keep cursor-pointer hover:brightness-110" : ""}`}
               style={{ width: `${share}%` }}
             />
           );

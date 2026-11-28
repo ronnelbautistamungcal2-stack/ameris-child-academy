@@ -4,6 +4,7 @@ import { hasAnyRole } from "@/lib/roles";
 import { ageRangeNames, normalizePlanType, planTypes } from "@/lib/curriculumPlans";
 import { loadCurriculumTypes } from "@/lib/curriculumTypesServer";
 import { PLAN_VIEW_ROLES } from "@/lib/lessonPlanAccess";
+import { planFollowers } from "@/lib/curriculumSource";
 
 /**
  * Curriculum plans (client sheet 10-29, rows 3/4): the Lesson Planner per age
@@ -44,7 +45,11 @@ export default async function handler(req, res) {
         const key = r.curriculumAgeGroupId.trim().toLowerCase();
         (followers[key] ||= []).push(multiCenter ? `${r.name} (${r.center?.name})` : r.name);
       }
+      // The Ameris curriculum center's planners list the centers that follow
+      // each one through their subscription (client sheet 10-29 (12), row 31).
+      const isSource = Boolean((await prisma.center.findUnique({ where: { id: centerId }, select: { curriculumSource: true } }))?.curriculumSource);
       return res.status(200).json({
+        ...(isSource ? { followingCenters: await planFollowers() } : {}),
         ageRanges,
         types: planTypes(curriculumTypes),
         plans: plans.map((p) => ({ id: p.id, ageRange: p.ageRange, type: p.type, dayCount: p.dayCount, lessons: p._count.cells })),

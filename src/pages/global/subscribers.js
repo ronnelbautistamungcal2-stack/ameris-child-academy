@@ -166,6 +166,8 @@ function SubscriptionEditor({ detail, onSave, onCancel, saving, onPreview }) {
         <input type="checkbox" checked={form.autoRenew} onChange={(e) => set({ autoRenew: e.target.checked })} />
         Auto-Renew
       </label>
+      {/* How the price is worked out and the total, in this section (row 23). */}
+      <PricingCard detail={detail} preview={preview} embedded />
       <div className="flex justify-end gap-2">
         <button type="button" className={button} onClick={onCancel} disabled={saving}>
           Cancel
@@ -274,7 +276,6 @@ function Detail({ id, onChanged }) {
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
   // The price of the choices being edited, shown on the Pricing card (row 38).
-  const [pricePreview, setPricePreview] = useState(null);
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState("");
 
@@ -342,15 +343,10 @@ function Detail({ id, onChanged }) {
           <SubscriptionEditor
             detail={detail}
             saving={saving}
-            onPreview={setPricePreview}
             onCancel={() => {
-              setPricePreview(null);
               setEditing(false);
             }}
-            onSave={async (form) => {
-              const ok = await patch(form);
-              if (ok !== false) setPricePreview(null);
-            }}
+            onSave={(form) => patch(form)}
           />
         ) : (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -383,11 +379,12 @@ function Detail({ id, onChanged }) {
                 </div>
               ))}
             </div>
+            <div className="md:col-span-2">
+              <PricingCard detail={detail} embedded />
+            </div>
           </div>
         )}
       </div>
-
-      <PricingCard detail={detail} preview={editing ? pricePreview : null} />
 
       <div className={card}>
         <h3 className="mb-2 text-lg font-extrabold text-gray-900 dark:text-gray-100">Centers</h3>

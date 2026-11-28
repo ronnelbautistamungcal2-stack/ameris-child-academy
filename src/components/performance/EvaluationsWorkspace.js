@@ -59,7 +59,7 @@ export default function EvaluationsWorkspace({ Layout, layoutProps = {} }) {
   useEffect(() => {
     if (!centerId) return;
     Promise.all([
-      apiJson(`/api/v1/users?employedOnly=true&centerId=${encodeURIComponent(centerId)}&roles=${STAFF_ROLES}`),
+      apiJson(`/api/v1/users?employedOnly=true&staffOnly=true&centerId=${encodeURIComponent(centerId)}&roles=${STAFF_ROLES}`),
       apiJson(`/api/v1/evaluation-category-config?centerId=${encodeURIComponent(centerId)}`).catch(() => null),
     ])
       .then(([users, config]) => {

@@ -2,8 +2,9 @@ import { useRouter } from "next/router";
 import { useCallback, useEffect, useState } from "react";
 
 // The "Center" filter on list pages (client sheet 10-29 (11), rows 23-29):
-// "All centers" or one center, remembered in this browser per portal. It is
-// hidden when the user has only one center.
+// "All centers" or one center, remembered in this browser per portal. Shown
+// even with one center (client sheet 10-29 (12): with one center it looked
+// missing).
 
 function storageKey(pathname) {
   const portal = String(pathname || "/").split("/").filter(Boolean)[0] || "global";
@@ -42,7 +43,7 @@ export default function CenterFilter({ centers = [], value, onChange, style, cla
   useEffect(() => {
     if (value && centers.length && !known) onChange("");
   }, [value, centers.length, known, onChange]);
-  if (centers.length < 2) return null;
+  if (!centers.length) return null;
   return (
     <select aria-label="Center" value={known ? value : ""} onChange={(e) => onChange(e.target.value)} style={style} className={className}>
       <option value="">All centers</option>

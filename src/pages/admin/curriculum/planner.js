@@ -89,6 +89,8 @@ function typeLabel(types, value) {
 function PlannersList({ choices, current, busy, onOpen, onDelete }) {
   const plans = choices.plans || [];
   const followers = choices.followers || {};
+  // The Ameris curriculum's planners: the centers following each (row 31).
+  const centers = choices.followingCenters || null;
   return (
     <section className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
       <h2 className={`text-xl font-black ${NAVY}`}>Planners</h2>
@@ -107,13 +109,13 @@ function PlannersList({ choices, current, busy, onOpen, onDelete }) {
                 <th className="py-2 pr-3">Type</th>
                 <th className="py-2 pr-3">Days</th>
                 <th className="py-2 pr-3">Lessons</th>
-                <th className="py-2 pr-3">Followed by</th>
+                <th className="py-2 pr-3">{centers ? "Followed by (centers)" : "Followed by"}</th>
                 <th className="py-2" />
               </tr>
             </thead>
             <tbody>
               {plans.map((plan) => {
-                const rooms = followers[plan.ageRange.toLowerCase()] || [];
+                const rooms = centers ? centers[plan.id] || [] : followers[plan.ageRange.toLowerCase()] || [];
                 const empty = !plan.lessons;
                 return (
                   <tr key={plan.id} className={`border-b border-gray-100 dark:border-gray-800 ${plan.id === current ? "bg-blue-50 dark:bg-gray-800" : ""}`}>

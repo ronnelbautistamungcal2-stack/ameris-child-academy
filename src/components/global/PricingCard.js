@@ -199,13 +199,17 @@ export function PricingFields({ form, setForm, pricing, curriculumOn }) {
   );
 }
 
-/** Global admin > a subscriber > Pricing: the price calculation only (row 38). */
-export default function PricingCard({ detail, preview = null }) {
+/**
+ * Global admin > a subscriber: the price calculation (row 38). embedded: shown
+ * inside the Subscription section, with how it's worked out and the total
+ * (client sheet 10-29 (12), row 23).
+ */
+export default function PricingCard({ detail, preview = null, embedded = false }) {
   const q = preview || detail.quote;
   return (
-    <div className={card}>
+    <div className={embedded ? "rounded-xl border border-gray-200 p-3 dark:border-gray-700" : card}>
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-lg font-extrabold text-gray-900 dark:text-gray-100">Pricing</h3>
+        <h3 className={embedded ? "text-base font-extrabold text-gray-900 dark:text-gray-100" : "text-lg font-extrabold text-gray-900 dark:text-gray-100"}>{embedded ? "Price" : "Pricing"}</h3>
         {preview ? <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-900">Not saved yet</span> : null}
       </div>
       {!detail.pricingSelection && !preview ? (

@@ -1276,6 +1276,9 @@ model FormTemplate {
   ageMinMonths        Int?
   ageMaxMonths        Int?
   staffRoles          Json?
+  // Who a parent form goes to (client sheet 10-29 (12), row 19):
+  // { parentIds, childIds }; null = every family at its center(s).
+  recipients          Json?
   attachmentUrl       String?
   attachmentName      String?
   attachmentSize      Int?

@@ -1,9 +1,13 @@
 import { getSession, hasAccessToCenter } from "@/lib/auth";
 import {
   normalizeAssignmentType,
+  normalizeRecipients,
   normalizeStaffRoles,
+  recipientsAllowChild,
+  recipientsAllowFamily,
   targetRoleForAssignment,
 } from "@/lib/formAssignments";
+import { buildParentLinkedChildWhere, getLinkedParentIds, linkedParentAccountsInclude } from "@/lib/child-parent-links";
 import prisma from "@/lib/prisma";
 import { accountIdForUser, accountOwnedWhere } from "@/lib/subscriberAccounts";
 import { assertSubscriptionFeature } from "@/lib/subscriptions";
@@ -80,7 +84,25 @@ export default async function handler(req, res) {
       orderBy: { createdAt: "desc" },
       take: 100,
     });
-    return res.status(200).json(templates);
+    if (user.role !== "PARENT") return res.status(200).json(templates);
+    // A form sent to chosen parents or children (row 19) reaches only those
+    // families; forChildIds = which of this parent's children it is for.
+    const kids = await prisma.child.findMany({ where: buildParentLinkedChildWhere(user.id), include: linkedParentAccountsInclude });
+    const familyParents = [...new Set([user.id, ...kids.flatMap((k) => getLinkedParentIds(k))])];
+    const mine = [];
+    for (const t of templates) {
+      if (!normalizeRecipients(t.recipients)) {
+        mine.push({ ...t, forChildIds: null });
+        continue;
+      }
+      if (normalizeAssignmentType(t.assignmentType) === "FAMILY") {
+        if (recipientsAllowFamily(t, familyParents, kids.map((k) => k.id))) mine.push({ ...t, forChildIds: null });
+        continue;
+      }
+      const forChildIds = kids.filter((k) => recipientsAllowChild(t, k.id, getLinkedParentIds(k))).map((k) => k.id);
+      if (forChildIds.length) mine.push({ ...t, forChildIds });
+    }
+    return res.status(200).json(mine);
   }
 
   if (req.method === "POST") {
@@ -106,6 +128,7 @@ export default async function handler(req, res) {
       attachmentName,
       attachmentSize,
       dueDate,
+      recipients,
     } = req.body || {};
     if (!title) {
       return res.status(400).json({ error: "title is required" });
@@ -177,6 +200,7 @@ export default async function handler(req, res) {
         ageMinMonths: assignment === "AGE_GROUP" ? minMonths : null,
         ageMaxMonths: assignment === "AGE_GROUP" ? maxMonths : null,
         staffRoles: assignment === "STAFF" && roles.length ? roles : null,
+        recipients: assignment === "STAFF" ? null : normalizeRecipients(recipients) ?? undefined,
         attachmentUrl: attachmentUrl || null,
         attachmentName: attachmentName || null,
         attachmentSize: Number.isFinite(Number(attachmentSize)) ? Number(attachmentSize) : null,

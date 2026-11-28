@@ -210,8 +210,18 @@ export default function GlobalReportsPage() {
         </nav>
 
         <section id="global-report-print" className={`${card} p-5`}>
+          {/* Printed heading (client sheet 10-29 (12), row 26). */}
+          <div className="mb-3 hidden grid-cols-[1fr_auto_1fr] items-center border-b border-gray-300 pb-2 print:grid">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/ameris-solutions-logo.png" alt="Ameris Solutions" className="h-14 w-auto" />
+            <div className="text-center">
+              <div className="font-serif text-2xl font-bold text-[#0b2a5b]">Ameris Solutions</div>
+              <div className="text-base font-semibold text-[#0b2a5b]">{report?.label || list.find((r) => r.key === key)?.label || "Report"}</div>
+            </div>
+            <div />
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-serif text-2xl font-bold text-[#0b2a5b] dark:text-blue-100">{report?.label || list.find((r) => r.key === key)?.label || "Report"}</h2>
+            <h2 className="font-serif text-2xl font-bold text-[#0b2a5b] print:hidden dark:text-blue-100">{report?.label || list.find((r) => r.key === key)?.label || "Report"}</h2>
             <div className="flex flex-wrap items-center gap-2 print:hidden">
               <label className="flex items-center gap-1 text-sm">
                 <span className="sr-only">From</span>

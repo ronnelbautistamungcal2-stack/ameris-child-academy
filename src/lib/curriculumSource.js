@@ -158,6 +158,31 @@ export async function classroomCurriculum(classRoomId, db = prisma) {
 }
 
 /**
+ * Which centers read each of the curriculum center's planners (client sheet
+ * 10-29 (12), row 31): { [planId]: [center name] }. Worked out with the same
+ * rule a classroom uses to pick its planner (its account's subscription:
+ * age group and curriculum types), for every classroom of every center.
+ */
+export async function planFollowers(db = prisma) {
+  const source = await curriculumSourceCenter(db);
+  if (!source) return {};
+  const rooms = await db.classRoom.findMany({ select: { id: true, center: { select: { name: true } } } });
+  const out = {};
+  for (let i = 0; i < rooms.length; i += 10) {
+    const chunk = rooms.slice(i, i + 10);
+    const found = await Promise.all(chunk.map((r) => classroomCurriculum(r.id, db).catch(() => null)));
+    chunk.forEach((room, n) => {
+      const c = found[n];
+      if (!c?.planId || c.plannerCenterId !== source.id) return;
+      const names = (out[c.planId] ||= []);
+      if (room.center?.name && !names.includes(room.center.name)) names.push(room.center.name);
+    });
+  }
+  for (const names of Object.values(out)) names.sort((a, b) => a.localeCompare(b));
+  return out;
+}
+
+/**
  * The lessons a classroom's planner has on the given day numbers:
  * { rows: [{rowIndex,label}], theme, byDay: { [day]: { [rowIndex]: cell } } }.
  * Cells pointing at a lesson of a type the account doesn't have are left out.

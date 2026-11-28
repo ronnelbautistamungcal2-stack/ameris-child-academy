@@ -481,6 +481,13 @@ function ContactsTab({ form, set, siblings }) {
   const row = "grid grid-cols-[6rem_1fr] items-start gap-2";
   return (
     <div className="space-y-4">
+      {/* At the top, in view (client sheet 10-29 (12), row 30). */}
+      {siblings.length ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <ChildCopyPicker label="Copy contacts from" childList={siblings} value={copyFrom} onChange={setCopyFrom} className={`${input} max-w-xs`} />
+          <button type="button" onClick={copyContacts} disabled={!copyFrom} className="rounded-lg border border-blue-300 px-3 py-1.5 text-sm font-semibold text-blue-700 disabled:opacity-50">⧉ Copy from Another Child</button>
+        </div>
+      ) : null}
       <Section title="Contacts" icon="👥">
         <div className="grid gap-3 md:grid-cols-2">
           {form.parentContacts.map((p, i) => (
@@ -521,12 +528,6 @@ function ContactsTab({ form, set, siblings }) {
           ))}
         </div>
       </Section>
-      {siblings.length ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <ChildCopyPicker label="Copy contacts from" childList={siblings} value={copyFrom} onChange={setCopyFrom} className={`${input} max-w-xs`} />
-          <button type="button" onClick={copyContacts} disabled={!copyFrom} className="rounded-lg border border-blue-300 px-3 py-1.5 text-sm font-semibold text-blue-700 disabled:opacity-50">⧉ Copy from Another Child</button>
-        </div>
-      ) : null}
     </div>
   );
 }

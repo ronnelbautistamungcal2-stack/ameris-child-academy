@@ -187,11 +187,11 @@ export default async function handler(req, res) {
 
     const children = await prisma.child.findMany({
       where,
-      include: {
-        progress: true,
-        activities: true,
-        ...linkedParentAccountsInclude,
-      },
+      // Not every child's Daily Log entries and progress rows: nothing reads
+      // them from this list (the profile, Daily Log and progress pages load
+      // their own), and they made the list several MB on production, sent
+      // again after every sign-in on the Student List (2026-11-28).
+      include: linkedParentAccountsInclude,
     });
     return res
       .status(200)
